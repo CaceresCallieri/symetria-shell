@@ -24,8 +24,8 @@ StyledClippingRect {
 
     property real blur: onSpecial ? 1 : 0
 
-    implicitWidth: Config.bar.sizes.innerWidth
-    implicitHeight: layout.implicitHeight + Appearance.padding.small * 2
+    implicitHeight: Config.bar.sizes.innerWidth
+    implicitWidth: layout.implicitWidth + Appearance.padding.small * 2
 
     color: Colours.tPalette.m3surfaceContainer
     radius: Appearance.rounding.full
@@ -56,7 +56,7 @@ StyledClippingRect {
             }
         }
 
-        ColumnLayout {
+        RowLayout {
             id: layout
 
             anchors.centerIn: parent
@@ -76,7 +76,7 @@ StyledClippingRect {
         }
 
         Loader {
-            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
             active: Config.bar.workspaces.activeIndicator
             asynchronous: true
 

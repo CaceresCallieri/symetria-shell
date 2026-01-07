@@ -165,8 +165,8 @@ Item {
         required property string name
         readonly property bool shouldBeActive: root.wrapper.currentName === name
 
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: parent.right
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
 
         opacity: 0
         scale: 0.8

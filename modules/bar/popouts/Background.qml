@@ -14,7 +14,7 @@ ShapePath {
     readonly property real roundingX: flatten ? wrapper.width / 2 : rounding
     property real ibr: invertBottomRounding ? -1 : 1
 
-    property real sideRounding: startX > 0 ? -1 : 1
+    property real sideRounding: wrapper.y < rounding ? 1 : -1
 
     strokeWidth: -1
     fillColor: Colours.palette.m3surface
@@ -32,13 +32,14 @@ ShapePath {
     }
     PathArc {
         relativeX: root.roundingX
-        relativeY: root.rounding
+        relativeY: root.rounding * root.sideRounding
         radiusX: Math.min(root.rounding, root.wrapper.width)
         radiusY: root.rounding
+        direction: root.sideRounding < 0 ? PathArc.Clockwise : PathArc.Counterclockwise
     }
     PathLine {
         relativeX: 0
-        relativeY: root.wrapper.height - root.rounding * 2
+        relativeY: root.wrapper.height - root.rounding * (1 + root.sideRounding)
     }
     PathArc {
         relativeX: -root.roundingX * root.ibr
@@ -53,10 +54,9 @@ ShapePath {
     }
     PathArc {
         relativeX: -root.roundingX
-        relativeY: root.rounding * root.sideRounding
+        relativeY: -root.rounding
         radiusX: Math.min(root.rounding, root.wrapper.width)
         radiusY: root.rounding
-        direction: root.sideRounding < 0 ? PathArc.Clockwise : PathArc.Counterclockwise
     }
 
     Behavior on fillColor {

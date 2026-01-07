@@ -5,7 +5,7 @@ import qs.services
 import qs.config
 import QtQuick
 
-Column {
+Row {
     id: root
 
     property color colour: Colours.palette.m3tertiary
@@ -13,7 +13,7 @@ Column {
     spacing: Appearance.spacing.small
 
     Loader {
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
 
         active: Config.bar.clock.showIcon
         visible: active
@@ -28,10 +28,10 @@ Column {
     StyledText {
         id: text
 
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
 
         horizontalAlignment: StyledText.AlignHCenter
-        text: Time.format(Config.services.useTwelveHourClock ? "hh\nmm\nA" : "hh\nmm")
+        text: Time.format(Config.services.useTwelveHourClock ? "hh:mm A" : "hh:mm")
         font.pointSize: Appearance.font.size.smaller
         font.family: Appearance.font.family.mono
         color: root.colour
