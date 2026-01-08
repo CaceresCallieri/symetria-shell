@@ -211,8 +211,7 @@ Singleton {
                 trayMenuWidth: bar.sizes.trayMenuWidth,
                 batteryWidth: bar.sizes.batteryWidth,
                 networkWidth: bar.sizes.networkWidth
-            },
-            entries: bar.entries
+            }
         };
     }
 
