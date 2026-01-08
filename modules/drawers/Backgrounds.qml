@@ -62,8 +62,8 @@ Shape {
         wrapper: root.panels.popouts
         invertBottomRounding: wrapper.y + wrapper.height + 1 >= root.height
 
-        startX: wrapper.x
-        startY: wrapper.y - rounding * sideRounding
+        startX: wrapper.x - rounding
+        startY: wrapper.y - roundingY * topRounding
     }
 
     Utilities.Background {
