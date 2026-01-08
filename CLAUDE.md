@@ -8,6 +8,38 @@ Caelestia Shell is a Quickshell-based desktop shell for Hyprland. It provides a 
 
 **Upstream:** https://github.com/caelestia-dots/shell
 
+## Branch Structure
+
+| Branch | Purpose | Tracks |
+|--------|---------|--------|
+| `main` | Active development with customizations | `origin/main` |
+| `base` | Original upstream shell code (reference) | `upstream/main` |
+| `feature/*` | Feature branches for significant changes | - |
+
+### Comparing Against Upstream
+
+```bash
+# See all customizations vs original shell
+git diff base..main
+
+# List commits that diverge from upstream
+git log base..main --oneline
+
+# Update base to latest upstream
+git fetch upstream
+# (base automatically updates since it tracks upstream/main)
+```
+
+### Working with Feature Branches
+
+For significant changes, create a feature branch from `main`:
+```bash
+git checkout -b feature/my-feature main
+# ... make changes ...
+git checkout main
+git merge feature/my-feature
+```
+
 ## Build Commands
 
 ```bash
@@ -82,9 +114,18 @@ Key paths:
 ## Updating from Upstream
 
 ```bash
+# Fetch latest upstream changes (also updates 'base' branch)
 git fetch upstream
+
+# Merge upstream changes into main
+git checkout main
 git merge upstream/main
+
+# Alternatively, rebase to keep linear history
+git rebase upstream/main
 ```
+
+**Note:** The `base` branch automatically tracks `upstream/main`, so after `git fetch upstream`, you can use `git diff base..main` to see how your customizations compare to the latest upstream.
 
 ---
 
