@@ -90,7 +90,7 @@ Item {
     Loader {
         id: content
 
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.left: parent.left
         anchors.bottom: parent.bottom
 
         visible: false

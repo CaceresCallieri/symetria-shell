@@ -82,7 +82,7 @@ Item {
 
         visibilities: root.visibilities
 
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.left: parent.left
         anchors.top: parent.top
     }
 
