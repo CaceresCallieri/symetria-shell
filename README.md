@@ -400,10 +400,7 @@ default, you must create it manually.
                 }
             ]
         },
-        "excludedScreens": [""],
-        "activeWindow": {
-            "inverted": false
-        }
+        "excludedScreens": [""]
     },
     "border": {
         "rounding": 25,

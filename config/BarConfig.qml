@@ -81,7 +81,6 @@ JsonObject {
     }
 
     component ActiveWindow: JsonObject {
-        property bool inverted: false
     }
 
     component Tray: JsonObject {
