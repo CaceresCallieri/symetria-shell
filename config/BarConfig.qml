@@ -19,6 +19,10 @@ JsonObject {
             enabled: true
         },
         {
+            id: "clock",
+            enabled: true
+        },
+        {
             id: "spacer",
             enabled: true
         },
@@ -32,10 +36,6 @@ JsonObject {
         },
         {
             id: "tray",
-            enabled: true
-        },
-        {
-            id: "clock",
             enabled: true
         },
         {
