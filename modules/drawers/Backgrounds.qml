@@ -63,7 +63,7 @@ Shape {
         invertBottomRounding: wrapper.y + wrapper.height + 1 >= root.height
 
         startX: wrapper.x - rounding
-        startY: wrapper.y - roundingY * topRounding
+        startY: wrapper.y
     }
 
     Utilities.Background {
