@@ -104,9 +104,24 @@ Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `d
 
 ## Configuration
 
-User config: `~/.config/caelestia/shell.json` (not created by default)
+### Two-Layer System
 
-Key paths:
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| QML defaults | `config/*.qml` | Structure, schemas, defaults (version-controlled) |
+| JSON overrides | `~/.config/caelestia/shell.json` | User preferences (NOT version-controlled) |
+
+**⚠️ Key Gotcha:** JSON overrides always win. If you edit a QML default but the value exists in shell.json, your change won't take effect. Check shell.json first when debugging config issues.
+
+### What's Controlled Where
+
+| Control | Location | How to Change |
+|---------|----------|---------------|
+| Bar layout (entries order) | `config/BarConfig.qml` only | Edit QML directly |
+| User preferences | `shell.json` | Control center UI or edit JSON |
+
+### Key Paths
+- User config: `~/.config/caelestia/shell.json`
 - Profile picture: `~/.face`
 - Wallpapers: `~/Pictures/Wallpapers/` (configurable via `paths.wallpaperDir`)
 - Hyprland user config: `~/.config/caelestia/hypr-user.conf`
