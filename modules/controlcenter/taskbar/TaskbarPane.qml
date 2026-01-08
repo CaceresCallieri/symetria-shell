@@ -41,7 +41,6 @@ Item {
     property bool scrollWorkspaces: Config.bar.scrollActions.workspaces ?? true
     property bool scrollVolume: Config.bar.scrollActions.volume ?? true
     property bool scrollBrightness: Config.bar.scrollActions.brightness ?? true
-    property bool popoutActiveWindow: Config.bar.popouts.activeWindow ?? true
     property bool popoutTray: Config.bar.popouts.tray ?? true
     property bool popoutStatusIcons: Config.bar.popouts.statusIcons ?? true
 
@@ -83,7 +82,6 @@ Item {
         Config.bar.scrollActions.workspaces = root.scrollWorkspaces;
         Config.bar.scrollActions.volume = root.scrollVolume;
         Config.bar.scrollActions.brightness = root.scrollBrightness;
-        Config.bar.popouts.activeWindow = root.popoutActiveWindow;
         Config.bar.popouts.tray = root.popoutTray;
         Config.bar.popouts.statusIcons = root.popoutStatusIcons;
 
@@ -558,15 +556,6 @@ Item {
                             StyledText {
                                 text: qsTr("Popouts")
                                 font.pointSize: Appearance.font.size.normal
-                            }
-
-                            SwitchRow {
-                                label: qsTr("Active window")
-                                checked: root.popoutActiveWindow
-                                onToggled: checked => {
-                                    root.popoutActiveWindow = checked;
-                                    root.saveConfig();
-                                }
                             }
 
                             SwitchRow {

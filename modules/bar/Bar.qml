@@ -68,10 +68,6 @@ RowLayout {
                 popouts.hasCurrent = false;
                 item.expanded = true;
             }
-        } else if (id === "activeWindow" && Config.bar.popouts.activeWindow) {
-            popouts.currentName = id.toLowerCase();
-            popouts.currentCenter = item.mapToItem(root, itemWidth / 2, 0).x;
-            popouts.hasCurrent = true;
         }
     }
 
@@ -128,15 +124,6 @@ RowLayout {
                 delegate: WrappedLoader {
                     sourceComponent: Workspaces {
                         screen: root.screen
-                    }
-                }
-            }
-            DelegateChoice {
-                roleValue: "activeWindow"
-                delegate: WrappedLoader {
-                    sourceComponent: ActiveWindow {
-                        bar: root
-                        monitor: Brightness.getMonitorForScreen(root.screen)
                     }
                 }
             }

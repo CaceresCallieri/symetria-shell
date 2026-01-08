@@ -171,7 +171,6 @@ Singleton {
                 brightness: bar.scrollActions.brightness
             },
             popouts: {
-                activeWindow: bar.popouts.activeWindow,
                 tray: bar.popouts.tray,
                 statusIcons: bar.popouts.statusIcons
             },
@@ -209,7 +208,6 @@ Singleton {
             },
             sizes: {
                 innerWidth: bar.sizes.innerWidth,
-                windowPreviewSize: bar.sizes.windowPreviewSize,
                 trayMenuWidth: bar.sizes.trayMenuWidth,
                 batteryWidth: bar.sizes.batteryWidth,
                 networkWidth: bar.sizes.networkWidth

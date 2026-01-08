@@ -332,14 +332,6 @@ default, you must create it manually.
                 "enabled": true
             },
             {
-                "id": "activeWindow",
-                "enabled": true
-            },
-            {
-                "id": "spacer",
-                "enabled": true
-            },
-            {
                 "id": "tray",
                 "enabled": true
             },
@@ -358,7 +350,6 @@ default, you must create it manually.
         ],
         "persistent": true,
         "popouts": {
-            "activeWindow": true,
             "statusIcons": true,
             "tray": true
         },

@@ -7,7 +7,6 @@ JsonObject {
     property ScrollActions scrollActions: ScrollActions {}
     property Popouts popouts: Popouts {}
     property Workspaces workspaces: Workspaces {}
-    property ActiveWindow activeWindow: ActiveWindow {}
     property Tray tray: Tray {}
     property Status status: Status {}
     property Clock clock: Clock {}
@@ -21,14 +20,6 @@ JsonObject {
         },
         {
             id: "workspaces",
-            enabled: true
-        },
-        {
-            id: "spacer",
-            enabled: true
-        },
-        {
-            id: "activeWindow",
             enabled: true
         },
         {
@@ -60,7 +51,6 @@ JsonObject {
     }
 
     component Popouts: JsonObject {
-        property bool activeWindow: true
         property bool tray: true
         property bool statusIcons: true
     }
@@ -78,9 +68,6 @@ JsonObject {
         property string activeLabel: "󰮯"
         property string capitalisation: "preserve" // upper, lower, or preserve - relevant only if label is empty
         property list<var> specialWorkspaceIcons: []
-    }
-
-    component ActiveWindow: JsonObject {
     }
 
     component Tray: JsonObject {
@@ -106,7 +93,6 @@ JsonObject {
 
     component Sizes: JsonObject {
         property int innerWidth: 40
-        property int windowPreviewSize: 400
         property int trayMenuWidth: 300
         property int batteryWidth: 250
         property int networkWidth: 320
