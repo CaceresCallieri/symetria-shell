@@ -324,6 +324,10 @@ default, you must create it manually.
                 "enabled": true
             },
             {
+                "id": "spacer",
+                "enabled": true
+            },
+            {
                 "id": "workspaces",
                 "enabled": true
             },
