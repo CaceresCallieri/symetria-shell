@@ -67,7 +67,11 @@ JsonObject {
         property bool showWindowsOnSpecialWorkspaces: showWindows
         property bool activeTrail: false
         property bool perMonitorWorkspaces: true
-        property list<var> specialWorkspaceIcons: []
+        property list<var> specialWorkspaceIcons: [
+            { name: "special", icon: "" },
+            { name: "communications", icon: "" },
+            { name: "note-taking", icon: "" }
+        ]
     }
 
     component Tray: JsonObject {
