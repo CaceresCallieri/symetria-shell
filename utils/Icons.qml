@@ -207,6 +207,15 @@ Singleton {
         return name[0].toUpperCase();
     }
 
+    function getNamedWsIcon(name: string): string {
+        for (const iconConfig of Config.bar.workspaces.namedWorkspaceIcons) {
+            if (iconConfig.name === name) {
+                return iconConfig.icon;
+            }
+        }
+        return "";
+    }
+
     function romanize(num: int): string {
         // Validate input - only positive integers supported
         if (typeof num !== 'number' || isNaN(num)) return "";

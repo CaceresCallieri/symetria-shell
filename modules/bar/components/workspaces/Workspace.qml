@@ -34,7 +34,14 @@ RowLayout {
         Layout.preferredWidth: Config.bar.sizes.innerWidth - Appearance.padding.small * 2
 
         animate: true
-        text: Icons.romanize(root.ws)
+        text: {
+            const ws = Hypr.workspaces.values.find(w => w.id === root.ws);
+            if (ws) {
+                const customIcon = Icons.getNamedWsIcon(ws.name);
+                if (customIcon) return customIcon;
+            }
+            return Icons.romanize(root.ws);
+        }
         color: Config.bar.workspaces.occupiedBg || root.isOccupied || root.activeWsId === root.ws ? Colours.palette.m3onSurface : Colours.layer(Colours.palette.m3outlineVariant, 2)
         horizontalAlignment: Qt.AlignHCenter
     }

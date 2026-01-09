@@ -47,7 +47,6 @@ JsonObject {
             enabled: true
         }
     ]
-
     component ScrollActions: JsonObject {
         property bool workspaces: true
         property bool volume: true
@@ -72,8 +71,12 @@ JsonObject {
             { name: "communications", icon: "" },
             { name: "note-taking", icon: "" }
         ]
+        property list<var> namedWorkspaceIcons: [
+            { name: "gaming", icon: "󰊗" },
+            { name: "music", icon: "" },
+            { name: "theater", icon: "󰟞" }
+        ]
     }
-
     component Tray: JsonObject {
         property bool background: false
         property bool recolour: false
