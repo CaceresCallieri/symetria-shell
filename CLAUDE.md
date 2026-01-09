@@ -126,6 +126,19 @@ Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `d
 - Wallpapers: `~/Pictures/Wallpapers/` (configurable via `paths.wallpaperDir`)
 - Hyprland user config: `~/.config/caelestia/hypr-user.conf`
 
+### Custom Color Scheme (Deviation from Upstream)
+
+**Note:** The color scheme path has been customized from upstream for version control.
+
+| Location | Path |
+|----------|------|
+| QML reads from | `config/color-scheme.json` (version-controlled) |
+| CLI writes to | `~/.local/state/caelestia/scheme.json` (not connected) |
+
+**Implication:** CLI commands like `caelestia scheme set` won't affect the shell. The custom warm-neutral scheme is tracked in git.
+
+**To restore CLI compatibility:** See [GitHub Issue #2](https://github.com/CaceresCallieri/symetria-shell/issues/2) for symlink solution.
+
 ## Updating from Upstream
 
 ```bash
