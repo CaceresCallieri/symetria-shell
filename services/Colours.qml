@@ -12,7 +12,8 @@ Singleton {
     id: root
 
     // Tweak this value to adjust general panel background color
-    readonly property color generalBackground: Qt.rgba(1, 1, 1, 0.25)
+    // Using warm almond tint (#eee5da) to match AGS warm neutral palette
+    readonly property color generalBackground: Qt.alpha("#eee5da", 0.25)
 
     property bool showPreview
     property string scheme
@@ -82,7 +83,7 @@ Singleton {
     }
 
     FileView {
-        path: `${Paths.state}/scheme.json`
+        path: Qt.resolvedUrl("../config/color-scheme.json")
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root.load(text(), false)
@@ -208,6 +209,7 @@ Singleton {
         property color m3onSuccess: "#213528"
         property color m3successContainer: "#374B3E"
         property color m3onSuccessContainer: "#D1E9D6"
+        property color m3powerButton: "#E0685F"
         property color m3primaryFixed: "#ffd9e3"
         property color m3primaryFixedDim: "#ffb0ca"
         property color m3onPrimaryFixed: "#39071f"
