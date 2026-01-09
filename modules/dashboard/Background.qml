@@ -13,7 +13,7 @@ ShapePath {
     readonly property real roundingY: flatten ? wrapper.height / 2 : rounding
 
     strokeWidth: -1
-    fillColor: Colours.palette.m3surface
+    fillColor: Colours.generalBackground
 
     // Left-edge panel: straight left side, original rounded right side
     // Start at top-left (0, 0), draw clockwise

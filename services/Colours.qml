@@ -11,6 +11,9 @@ import QtQuick
 Singleton {
     id: root
 
+    // Tweak this value to adjust general panel background color
+    readonly property color generalBackground: Qt.rgba(1, 1, 1, 0.25)
+
     property bool showPreview
     property string scheme
     property string flavour

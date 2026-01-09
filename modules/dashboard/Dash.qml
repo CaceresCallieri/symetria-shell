@@ -100,6 +100,6 @@ GridLayout {
     }
 
     component Rect: StyledRect {
-        color: Colours.tPalette.m3surfaceContainer
+        color: Colours.palette.m3surfaceContainer
     }
 }
