@@ -207,6 +207,24 @@ Singleton {
         return name[0].toUpperCase();
     }
 
+    function romanize(num: int): string {
+        // Validate input - only positive integers supported
+        if (typeof num !== 'number' || isNaN(num)) return "";
+        num = Math.floor(num);
+        if (num <= 0) return "";
+
+        const key = [
+            "", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM",
+            "", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC",
+            "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"
+        ];
+        let digits = String(num).split("");
+        let roman = "";
+        let i = 3;
+        while (i--) roman = (key[+digits.pop() + i * 10] || "") + roman;
+        return Array(+digits.join("") + 1).join("M") + roman;
+    }
+
     function getTrayIcon(id: string, icon: string): string {
         for (const sub of Config.bar.tray.iconSubs)
             if (sub.id === id)
