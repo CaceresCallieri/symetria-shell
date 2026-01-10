@@ -71,6 +71,10 @@ JsonObject {
         property bool showWindowsOnSpecialWorkspaces: showWindows
         property bool activeTrail: false
         property bool perMonitorWorkspaces: true
+        // App icon features (ported from AGS bar)
+        property bool useActualAppIcons: true      // Use .desktop file icons instead of Material category icons
+        property bool terminalAppDetection: true   // Detect apps running in terminals (nvim, yazi, etc.)
+        property bool appIconsClickToFocus: true   // Click on icon to focus that window
         property list<var> specialWorkspaceIcons: [
             { name: "special", icon: "" },
             { name: "communications", icon: "" },

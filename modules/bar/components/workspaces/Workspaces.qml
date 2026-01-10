@@ -114,6 +114,7 @@ StyledClippingRect {
             anchors.verticalCenter: parent.verticalCenter
             active: Config.bar.workspaces.activeIndicator
             asynchronous: true
+            z: -1  // Render behind workspace content so icons aren't muted
 
             sourceComponent: ActiveIndicator {
                 activeWsId: root.activeWsId

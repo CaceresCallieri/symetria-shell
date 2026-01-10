@@ -57,7 +57,13 @@ RowLayout {
             }
             return Icons.romanize(root.ws);
         }
-        color: Config.bar.workspaces.occupiedBg || root.isOccupied || root.isActive ? Colours.palette.m3onSurface : Colours.layer(Colours.palette.m3outlineVariant, 2)
+        color: {
+            if (root.isActive)
+                return Colours.palette.m3onPrimary;
+            if (Config.bar.workspaces.occupiedBg || root.isOccupied)
+                return Colours.palette.m3onSurface;
+            return Colours.layer(Colours.palette.m3outlineVariant, 2);
+        }
         horizontalAlignment: Qt.AlignHCenter
     }
 
@@ -72,42 +78,8 @@ RowLayout {
         active: root.hasWindows
         asynchronous: true
 
-        sourceComponent: Row {
-            spacing: 0
-
-            add: Transition {
-                Anim {
-                    properties: "scale"
-                    from: 0
-                    to: 1
-                    easing.bezierCurve: Appearance.anim.curves.standardDecel
-                }
-            }
-
-            move: Transition {
-                Anim {
-                    properties: "scale"
-                    to: 1
-                    easing.bezierCurve: Appearance.anim.curves.standardDecel
-                }
-                Anim {
-                    properties: "x,y"
-                }
-            }
-
-            Repeater {
-                model: ScriptModel {
-                    values: Hypr.toplevels.values.filter(c => c.workspace?.id === root.ws)
-                }
-
-                MaterialIcon {
-                    required property var modelData
-
-                    grade: 0
-                    text: Icons.getAppCategoryIcon(modelData.lastIpcObject.class, "terminal")
-                    color: Colours.palette.m3onSurfaceVariant
-                }
-            }
+        sourceComponent: WorkspaceAppIcons {
+            workspaceId: root.ws
         }
     }
 

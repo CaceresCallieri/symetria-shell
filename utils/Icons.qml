@@ -8,6 +8,62 @@ import QtQuick
 Singleton {
     id: root
 
+    // Terminal emulator window classes for terminal app detection (all lowercase for efficient lookup)
+    readonly property var terminalClasses: new Set([
+        "com.mitchellh.ghostty", "ghostty", "kitty", "alacritty",
+        "foot", "wezterm", "org.wezfurlong.wezterm", "gnome-terminal",
+        "org.gnome.terminal", "konsole", "org.kde.konsole", "xterm",
+        "urxvt", "st-256color", "st", "termite", "tilix"
+    ])
+
+    // Map of terminal app title keywords to their icon names
+    // The first word of the terminal title is matched against these
+    readonly property var terminalApps: ({
+        // Editors
+        "nvim": "nvim",
+        "vim": "vim",
+        "vi": "vim",
+        "v": "nvim",
+        "hx": "helix",
+        "helix": "helix",
+        "nano": "text-editor",
+        "emacs": "emacs",
+        // File managers
+        "yazi": "yazi",
+        "ranger": "ranger",
+        "lf": "lf",
+        "mc": "mc",
+        "nnn": "nnn",
+        "vifm": "vifm",
+        // System monitors
+        "htop": "htop",
+        "btop": "btop",
+        "top": "utilities-system-monitor",
+        "nvtop": "nvtop",
+        "gotop": "gotop",
+        // Git tools
+        "lazygit": "git",
+        "tig": "git",
+        "gitui": "git",
+        // Docker/containers
+        "lazydocker": "docker",
+        "docker": "docker",
+        "podman": "podman",
+        // Programming languages/REPLs
+        "python": "python",
+        "python3": "python",
+        "node": "nodejs",
+        "ruby": "ruby",
+        "irb": "ruby",
+        "lua": "lua",
+        "ghci": "haskell",
+        // Other tools
+        "man": "help-contents",
+        "less": "text-x-generic",
+        "ssh": "utilities-terminal",
+        "sudo": "system-lock-screen"
+    })
+
     readonly property var weatherIcons: ({
             "0": "clear_day",
             "1": "clear_day",
@@ -94,6 +150,42 @@ Singleton {
                 if (categories.includes(key))
                     return value;
         return fallback;
+    }
+
+    // Check if a window class represents a terminal emulator
+    function isTerminal(windowClass: string): bool {
+        if (!windowClass) return false;
+        return terminalClasses.has(windowClass.toLowerCase());
+    }
+
+    // Resolve the appropriate icon for a window based on class and title
+    // For terminals, attempts to detect the running app from the title
+    // Returns the icon path (via Quickshell.iconPath) ready for use in IconImage
+    function resolveWindowIcon(windowClass: string, windowTitle: string): string {
+        // Terminal app detection
+        if (isTerminal(windowClass) && windowTitle) {
+            // Extract first word from title (handles formats like "nvim: file.ts" or "nvim file.ts")
+            const firstWord = windowTitle.split(/[\s:\-\|]+/)[0]?.toLowerCase();
+            if (firstWord && terminalApps.hasOwnProperty(firstWord)) {
+                const appIconName = terminalApps[firstWord];
+                // Try to get the app's actual icon
+                const appIcon = DesktopEntries.heuristicLookup(appIconName)?.icon;
+                if (appIcon) {
+                    return Quickshell.iconPath(appIcon, windowClass);
+                }
+                // Fallback: try the icon name directly
+                return Quickshell.iconPath(appIconName, windowClass);
+            }
+        }
+
+        // Standard desktop entry lookup
+        const entry = DesktopEntries.heuristicLookup(windowClass);
+        if (entry?.icon) {
+            return Quickshell.iconPath(entry.icon, "application-x-executable");
+        }
+
+        // Final fallback
+        return Quickshell.iconPath(windowClass, "application-x-executable");
     }
 
     function getNetworkIcon(strength: int, isSecure = false): string {
