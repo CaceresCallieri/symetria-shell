@@ -240,6 +240,7 @@ Item {
                 case "logo": return logoComp;
                 case "tray": return trayComp;
                 case "clock": return clockComp;
+                case "date": return dateComp;
                 case "statusIcons": return statusIconsComp;
                 case "power": return powerComp;
                 default: return null;
@@ -261,6 +262,11 @@ Item {
     Component {
         id: clockComp
         Clock {}
+    }
+
+    Component {
+        id: dateComp
+        Date {}
     }
 
     Component {
