@@ -9,16 +9,15 @@ import QtQuick.Layouts
 RowLayout {
     id: root
 
-    required property int index
+    required property int wsId
     required property int activeWsId
     required property var occupied
-    required property int groupOffset
 
     readonly property bool isWorkspace: true // Flag for finding workspace children
     // Unanimated prop for others to use as reference
     readonly property int size: implicitWidth + (hasWindows ? Appearance.padding.small : 0)
 
-    readonly property int ws: groupOffset + index + 1
+    readonly property int ws: wsId
     readonly property bool isOccupied: occupied[ws] ?? false
     readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows
 
@@ -39,6 +38,8 @@ RowLayout {
             if (ws) {
                 const customIcon = Icons.getNamedWsIcon(ws.name);
                 if (customIcon) return customIcon;
+                // For named workspaces (negative IDs), show first letter of name as fallback
+                if (root.ws < 0 && ws.name) return ws.name[0].toUpperCase();
             }
             return Icons.romanize(root.ws);
         }

@@ -60,6 +60,7 @@ JsonObject {
 
     component Workspaces: JsonObject {
         property int shown: 5
+        property bool showOnlyOccupied: false
         property bool activeIndicator: true
         property bool occupiedBg: false
         property bool showWindows: true

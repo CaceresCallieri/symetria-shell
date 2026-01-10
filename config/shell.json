@@ -121,7 +121,8 @@
       "statusIcons": true
     },
     "workspaces": {
-      "shown": 5,
+      "shown": 10,
+      "showOnlyOccupied": true,
       "activeIndicator": true,
       "occupiedBg": false,
       "showWindows": true,

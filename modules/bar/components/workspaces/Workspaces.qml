@@ -22,6 +22,36 @@ StyledClippingRect {
     }, {})
     readonly property int groupOffset: Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown
 
+    readonly property var displayedWorkspaces: {
+        if (!Config.bar.workspaces.showOnlyOccupied) {
+            // Legacy fixed mode - return array [1, 2, ..., shown]
+            return Array.from({length: Config.bar.workspaces.shown}, (_, i) => groupOffset + i + 1)
+        }
+
+        // Dynamic mode - occupied + active + named workspaces
+        // Exclude special workspaces (name starts with "special:") but keep named workspaces (which also have negative IDs)
+        const validWorkspaces = Hypr.workspaces.values.filter(w => !w.name.startsWith("special:"))
+        const occupiedWs = validWorkspaces.filter(w => w.lastIpcObject.windows > 0)
+        const activeId = root.activeWsId
+
+        // Get configured named workspace names
+        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)
+
+        // Find named workspaces (always show these even if empty)
+        const namedWs = validWorkspaces.filter(w => namedWsNames.includes(w.name))
+
+        // Collect workspace IDs: occupied + named
+        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])]
+
+        // Ensure active workspace is included even if empty
+        if (!ids.includes(activeId)) {
+            ids.push(activeId)
+        }
+
+        // Sort ascending: negative IDs (named workspaces) first, then positive IDs
+        return ids.sort((a, b) => a - b)
+    }
+
     property real blur: onSpecial ? 1 : 0
 
     implicitHeight: Config.bar.sizes.innerWidth
@@ -43,7 +73,8 @@ StyledClippingRect {
         }
 
         Loader {
-            active: Config.bar.workspaces.occupiedBg
+            // OccupiedBg is only relevant in fixed mode - in dynamic mode all visible workspaces are occupied/active
+            active: Config.bar.workspaces.occupiedBg && !Config.bar.workspaces.showOnlyOccupied
             asynchronous: true
 
             anchors.fill: parent
@@ -65,12 +96,16 @@ StyledClippingRect {
             Repeater {
                 id: workspaces
 
-                model: Config.bar.workspaces.shown
+                model: ScriptModel {
+                    values: root.displayedWorkspaces
+                }
 
                 Workspace {
+                    required property int modelData
+
+                    wsId: modelData
                     activeWsId: root.activeWsId
                     occupied: root.occupied
-                    groupOffset: root.groupOffset
                 }
             }
         }
@@ -90,11 +125,20 @@ StyledClippingRect {
         MouseArea {
             anchors.fill: layout
             onClicked: event => {
-                const ws = layout.childAt(event.x, event.y).ws;
-                if (Hypr.activeWsId !== ws)
-                    Hypr.dispatch(`workspace ${ws}`);
-                else
+                const child = layout.childAt(event.x, event.y);
+                if (!child || !child.isWorkspace) return;
+                const wsId = child.ws;
+                if (Hypr.activeWsId !== wsId) {
+                    // Named workspaces (negative IDs) need "workspace name:<name>" syntax
+                    if (wsId < 0) {
+                        const wsObj = Hypr.workspaces.values.find(w => w.id === wsId);
+                        if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
+                    } else {
+                        Hypr.dispatch(`workspace ${wsId}`);
+                    }
+                } else {
                     Hypr.dispatch("togglespecialworkspace special");
+                }
             }
         }
 

@@ -12,11 +12,17 @@ StyledRect {
     required property Item mask
 
     readonly property int currentWsIdx: {
-        let i = activeWsId - 1;
-        while (i < 0)
-            i += Config.bar.workspaces.shown;
-        return i % Config.bar.workspaces.shown;
+        // Find the index of the active workspace in the repeater
+        for (let i = 0; i < workspaces.count; i++) {
+            const item = workspaces.itemAt(i)
+            if (item && item.ws === activeWsId) {
+                return i
+            }
+        }
+        return -1  // Not found - indicator will be hidden
     }
+
+    visible: currentWsIdx >= 0
 
     property real leading: workspaces.itemAt(currentWsIdx)?.x ?? 0
     property real trailing: workspaces.itemAt(currentWsIdx)?.x ?? 0
