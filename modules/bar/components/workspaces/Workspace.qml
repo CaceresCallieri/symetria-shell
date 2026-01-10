@@ -19,7 +19,7 @@ RowLayout {
 
     readonly property int ws: wsId
     readonly property bool isOccupied: occupied[ws] ?? false
-    readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows
+    readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && activeWsId === ws
 
     Layout.alignment: Qt.AlignVCenter
     Layout.preferredWidth: size
