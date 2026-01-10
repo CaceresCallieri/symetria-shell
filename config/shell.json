@@ -11,10 +11,10 @@
 		},
 		"font": {
 			"family": {
-				"sans": "Rubik",
-				"mono": "CaskaydiaCove NF",
+				"sans": "JetBrainsMono Nerd Font Propo",
+				"mono": "JetBrainsMono Nerd Font Propo",
 				"material": "Material Symbols Rounded",
-				"clock": "Rubik"
+				"clock": "JetBrainsMono Nerd Font Propo"
 			},
 			"size": {
 				"scale": 0.9
