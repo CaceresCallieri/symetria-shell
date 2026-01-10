@@ -489,7 +489,7 @@
   "services": {
     "weatherLocation": "",
     "useFahrenheit": true,
-    "useTwelveHourClock": true,
+    "useTwelveHourClock": false,
     "gpuType": "",
     "visualiserBars": 45,
     "audioIncrement": 0.1,
