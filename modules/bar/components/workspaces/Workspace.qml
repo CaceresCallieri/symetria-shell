@@ -14,15 +14,29 @@ RowLayout {
     required property var occupied
 
     readonly property bool isWorkspace: true // Flag for finding workspace children
-    // Unanimated prop for others to use as reference
-    readonly property int size: implicitWidth + (hasWindows ? Appearance.padding.small : 0)
+    readonly property bool isActive: activeWsId === ws
+    // Padding = space inside the selector pill (both sides)
+    readonly property int activePadding: Appearance.padding.large
+    // Margin = configurable gap outside the selector pill (both sides)
+    // Set to 0 for no gap, or use Appearance.padding.* values for visible separation
+    readonly property int activeMargin: 0
+    // Content size: actual visual width of workspace content (indicator text + window icons)
+    readonly property int contentSize: implicitWidth + (hasWindows ? Appearance.padding.small : 0)
+    // Indicator offset: how far left the indicator extends from workspace.x
+    // Used by ActiveIndicator to position itself correctly
+    readonly property int indicatorOffset: isActive ? activePadding : 0
+    // Indicator size: total width the indicator pill should be
+    // Used by ActiveIndicator to set its width
+    readonly property int indicatorSize: contentSize + (isActive ? activePadding * 2 : 0)
 
     readonly property int ws: wsId
     readonly property bool isOccupied: occupied[ws] ?? false
-    readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && activeWsId === ws
+    readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && isActive
 
     Layout.alignment: Qt.AlignVCenter
-    Layout.preferredWidth: size
+    Layout.preferredWidth: contentSize
+    Layout.leftMargin: isActive ? activePadding + activeMargin : 0
+    Layout.rightMargin: isActive ? activePadding + activeMargin : 0
 
     spacing: 0
 
@@ -43,7 +57,7 @@ RowLayout {
             }
             return Icons.romanize(root.ws);
         }
-        color: Config.bar.workspaces.occupiedBg || root.isOccupied || root.activeWsId === root.ws ? Colours.palette.m3onSurface : Colours.layer(Colours.palette.m3outlineVariant, 2)
+        color: Config.bar.workspaces.occupiedBg || root.isOccupied || root.isActive ? Colours.palette.m3onSurface : Colours.layer(Colours.palette.m3outlineVariant, 2)
         horizontalAlignment: Qt.AlignHCenter
     }
 
@@ -98,6 +112,14 @@ RowLayout {
     }
 
     Behavior on Layout.preferredWidth {
+        Anim {}
+    }
+
+    Behavior on Layout.leftMargin {
+        Anim {}
+    }
+
+    Behavior on Layout.rightMargin {
         Anim {}
     }
 }

@@ -24,26 +24,34 @@ StyledRect {
 
     visible: currentWsIdx >= 0
 
-    property real leading: workspaces.itemAt(currentWsIdx)?.x ?? 0
-    property real trailing: workspaces.itemAt(currentWsIdx)?.x ?? 0
-    property real currentSize: workspaces.itemAt(currentWsIdx)?.size ?? 0
-    property real offset: Math.min(leading, trailing)
+    // Cache the current workspace item to avoid repeated lookups
+    readonly property var currentWs: currentWsIdx >= 0 ? workspaces.itemAt(currentWsIdx) : null
+
+    property real leading: currentWs?.x ?? 0
+    property real trailing: currentWs?.x ?? 0
+    property real currentSize: currentWs?.indicatorSize ?? 0
+    property real indicatorOffset: currentWs?.indicatorOffset ?? 0
+    property real offset: Math.min(leading, trailing) - indicatorOffset
     property real size: {
         const s = Math.abs(leading - trailing) + currentSize;
-        if (Config.bar.workspaces.activeTrail && lastWs > currentWsIdx) {
-            const ws = workspaces.itemAt(lastWs);
-            // console.log(ws, lastWs);
-            return ws ? Math.min(ws.x + ws.size - offset, s) : 0;
+        // Handle activeTrail animation: extend indicator to cover previous workspace
+        if (Config.bar.workspaces.activeTrail &&
+            previousWsIdx !== undefined &&
+            previousWsIdx >= 0 &&
+            previousWsIdx > currentWsIdx) {
+            const prevWs = workspaces.itemAt(previousWsIdx);
+            return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
         }
         return s;
     }
 
-    property int cWs
-    property int lastWs
+    // Track workspace index changes for trail animation
+    property int currentWsIdxTracked: -1  // Current workspace index being tracked
+    property int previousWsIdx: -1        // Previous workspace for trail animation
 
     onCurrentWsIdxChanged: {
-        lastWs = cWs;
-        cWs = currentWsIdx;
+        previousWsIdx = currentWsIdxTracked;
+        currentWsIdxTracked = currentWsIdx;
     }
 
     clip: true
@@ -58,7 +66,7 @@ StyledRect {
         sourceColor: Colours.palette.m3onSurface
         colorizationColor: Colours.palette.m3onPrimary
 
-        x: -parent.offset
+        x: -root.offset
         y: 0
         implicitWidth: root.mask.implicitWidth
         implicitHeight: root.mask.implicitHeight
