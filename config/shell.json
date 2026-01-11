@@ -121,29 +121,29 @@
 			"specialWorkspaceIcons": [
 				{
 					"name": "special",
-					"icon": ""
+					"icon": "mat:lightbulb"
 				},
 				{
 					"name": "communications",
-					"icon": ""
+					"icon": "mat:phone"
 				},
 				{
 					"name": "note-taking",
-					"icon": ""
+					"icon": "mat:auto_stories"
 				}
 			],
 			"namedWorkspaceIcons": [
 				{
 					"name": "gaming",
-					"icon": "󰊗"
+					"icon": "mat:sports_esports"
 				},
 				{
 					"name": "music",
-					"icon": ""
+					"icon": "mat:library_music"
 				},
 				{
 					"name": "theater",
-					"icon": "󰟞"
+					"icon": "mat:theater_comedy"
 				}
 			]
 		},

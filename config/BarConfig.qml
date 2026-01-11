@@ -77,14 +77,14 @@ JsonObject {
         property bool terminalAppDetection: true   // Detect apps running in terminals (nvim, yazi, etc.)
         property bool appIconsClickToFocus: true   // Click on icon to focus that window
         property list<var> specialWorkspaceIcons: [
-            { name: "special", icon: "" },
-            { name: "communications", icon: "" },
-            { name: "note-taking", icon: "" }
+            { name: "special", icon: "mat:lightbulb" },
+            { name: "communications", icon: "mat:phone" },
+            { name: "note-taking", icon: "mat:auto_stories" }
         ]
         property list<var> namedWorkspaceIcons: [
-            { name: "gaming", icon: "󰊗" },
-            { name: "music", icon: "" },
-            { name: "theater", icon: "󰟞" }
+            { name: "gaming", icon: "mat:sports_esports" },
+            { name: "music", icon: "mat:library_music" },
+            { name: "theater", icon: "mat:theater_comedy" }
         ]
     }
     component Tray: JsonObject {
