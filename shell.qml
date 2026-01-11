@@ -8,8 +8,16 @@ import "modules/background"
 import "modules/areapicker"
 import "modules/lock"
 import Quickshell
+import QtQuick
 
 ShellRoot {
+    // Disable hot reload - deferred to avoid "Non-existent attached object" error
+    Timer {
+        interval: 0
+        running: true
+        onTriggered: Quickshell.watchFiles = false
+    }
+
     Background {}
     Drawers {}
     AreaPicker {}
