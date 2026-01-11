@@ -168,15 +168,19 @@ Item {
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
                 Layout.preferredWidth: Config.bar.sizes.indicatorHeight
 
-                asynchronous: true
-                sourceComponent: ws.icon.length === 1 ? letterComp : iconComp
+                // Parse icon using centralized helper (handles prefix stripping and validation)
+                readonly property var parsedIcon: Icons.parseIcon(ws.icon)
+                readonly property bool useMaterialIcon: parsedIcon.useMaterial
+                readonly property string iconText: parsedIcon.iconText
+
+                sourceComponent: useMaterialIcon ? iconComp : letterComp
 
                 Component {
                     id: iconComp
 
                     MaterialIcon {
                         fill: 1
-                        text: ws.icon
+                        text: label.iconText
                         horizontalAlignment: Qt.AlignHCenter
                     }
                 }
@@ -185,7 +189,7 @@ Item {
                     id: letterComp
 
                     StyledText {
-                        text: ws.icon
+                        text: label.iconText
                         horizontalAlignment: Qt.AlignHCenter
                     }
                 }

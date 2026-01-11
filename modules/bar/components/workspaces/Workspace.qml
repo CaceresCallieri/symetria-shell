@@ -43,31 +43,63 @@ RowLayout {
 
     spacing: 0
 
-    StyledText {
+    // Workspace indicator: roman numeral, letter, or icon
+    // Uses Loader to render MaterialIcon for named icons (e.g., "mat:sports_esports")
+    // or StyledText for single characters and roman numerals
+    Loader {
         id: indicator
 
         Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
         Layout.preferredWidth: Config.bar.sizes.indicatorHeight
 
-        animate: true
-        text: {
-            // Use cached workspace reference
+        // Raw icon value from config or fallback
+        readonly property string rawIcon: {
             if (root.currentWorkspace) {
                 const customIcon = Icons.getNamedWsIcon(root.currentWorkspace.name);
-                if (customIcon) return customIcon;
+                // Validate icon is not empty or just the prefix
+                if (customIcon && customIcon !== Icons.materialIconPrefix) return customIcon;
                 // For named workspaces (negative IDs), show first letter of name as fallback
                 if (root.ws < 0 && root.currentWorkspace.name) return root.currentWorkspace.name[0].toUpperCase();
             }
             return Icons.romanize(root.ws);
         }
-        color: {
+
+        // Parse icon using centralized helper (handles prefix stripping and validation)
+        readonly property var parsedIcon: Icons.parseIcon(rawIcon)
+        readonly property bool useMaterialIcon: parsedIcon.useMaterial
+        readonly property string iconText: parsedIcon.iconText
+
+        readonly property color indicatorColor: {
             if (root.isActive)
                 return Colours.palette.m3onPrimary;
             if (Config.bar.workspaces.occupiedBg || root.isOccupied)
                 return Colours.palette.m3onSurface;
             return Colours.layer(Colours.palette.m3outlineVariant, 2);
         }
-        horizontalAlignment: Qt.AlignHCenter
+
+        sourceComponent: useMaterialIcon ? materialIconComp : styledTextComp
+
+        Component {
+            id: materialIconComp
+
+            MaterialIcon {
+                fill: 1
+                text: indicator.iconText
+                color: indicator.indicatorColor
+                horizontalAlignment: Qt.AlignHCenter
+            }
+        }
+
+        Component {
+            id: styledTextComp
+
+            StyledText {
+                animate: true
+                text: indicator.iconText
+                color: indicator.indicatorColor
+                horizontalAlignment: Qt.AlignHCenter
+            }
+        }
     }
 
     Loader {
