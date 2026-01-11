@@ -13,11 +13,16 @@ Item {
     id: root
 
     required property var client // HyprlandToplevel
+    property bool animateEntry: true // Whether to animate entry (disabled for grouped icons)
+
+    // Hide when client data becomes invalid (prevents fallback icon flash on close)
+    readonly property bool hasValidClient: (client?.lastIpcObject?.class ?? "") !== ""
+    visible: hasValidClient
 
     // Whether this client is the currently focused window
     readonly property bool isActive: {
         const activeAddr = Hypr.activeToplevel?.lastIpcObject?.address;
-        const thisAddr = client.lastIpcObject?.address;
+        const thisAddr = client?.lastIpcObject?.address;
         return activeAddr && thisAddr && activeAddr === thisAddr;
     }
     // Hover state for tooltip
@@ -25,6 +30,17 @@ Item {
 
     implicitWidth: Config.bar.sizes.innerWidth * 0.65
     implicitHeight: Config.bar.sizes.innerWidth * 0.65
+
+    // Entry animation - scale in when added (only for ungrouped icons)
+    scale: animateEntry ? 0 : 1
+    Component.onCompleted: if (animateEntry) scale = 1
+
+    Behavior on scale {
+        enabled: root.animateEntry
+        Anim {
+            easing.bezierCurve: Appearance.anim.curves.standardDecel
+        }
+    }
 
     // Actual app icon from .desktop files
     IconImage {
@@ -34,8 +50,8 @@ Item {
         anchors.centerIn: parent
         implicitSize: Config.bar.sizes.innerWidth * 0.65
         source: Icons.resolveWindowIcon(
-            root.client.lastIpcObject.class,
-            Config.bar.workspaces.terminalAppDetection ? root.client.lastIpcObject.title : ""
+            root.client?.lastIpcObject?.class ?? "",
+            Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : ""
         )
 
         // Visual indicator for active window
@@ -55,7 +71,7 @@ Item {
         visible: !Config.bar.workspaces.useActualAppIcons
         anchors.centerIn: parent
         grade: 0
-        text: Icons.getAppCategoryIcon(root.client.lastIpcObject.class, "terminal")
+        text: Icons.getAppCategoryIcon(root.client?.lastIpcObject?.class ?? "", "terminal")
         color: Colours.palette.m3onSurfaceVariant
 
         opacity: root.isActive ? 1.0 : 0.7
@@ -73,7 +89,8 @@ Item {
         enabled: Config.bar.workspaces.appIconsClickToFocus
         cursorShape: Config.bar.workspaces.appIconsClickToFocus ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: {
-            Hypr.dispatch(`focuswindow address:${root.client.lastIpcObject.address}`)
+            const addr = root.client?.lastIpcObject?.address;
+            if (addr) Hypr.dispatch(`focuswindow address:${addr}`)
         }
     }
 
@@ -89,7 +106,7 @@ Item {
 
         sourceComponent: Tooltip {
             target: root
-            text: root.client.lastIpcObject.title || root.client.lastIpcObject.class
+            text: root.client?.lastIpcObject?.title || root.client?.lastIpcObject?.class || ""
         }
     }
 }
