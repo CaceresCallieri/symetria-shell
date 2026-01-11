@@ -8,6 +8,20 @@ import QtQuick
 Singleton {
     id: root
 
+    // Material Icon prefix convention for workspace icons
+    // Use "mat:icon_name" in config to render via MaterialIcon component
+    readonly property string materialIconPrefix: "mat:"
+
+    // Parse icon string, stripping mat: prefix if present
+    // Returns { useMaterial: bool, iconText: string }
+    function parseIcon(icon: string): var {
+        const usesMaterial = icon.startsWith(materialIconPrefix);
+        const text = usesMaterial && icon.length > materialIconPrefix.length
+            ? icon.slice(materialIconPrefix.length)
+            : (usesMaterial ? "" : icon);
+        return { useMaterial: usesMaterial, iconText: text };
+    }
+
     // Terminal emulator window classes for terminal app detection (all lowercase for efficient lookup)
     readonly property var terminalClasses: new Set([
         "com.mitchellh.ghostty", "ghostty", "kitty", "alacritty",
@@ -277,35 +291,33 @@ Singleton {
         return "mic_off";
     }
 
+    // Private helper for icon lookup in config arrays
+    function _lookupIconInList(name: string, iconList: list<var>): string {
+        for (const iconConfig of iconList) {
+            if (iconConfig.name === name) return iconConfig.icon;
+        }
+        return "";
+    }
+
     function getSpecialWsIcon(name: string): string {
         name = name.toLowerCase().slice("special:".length);
 
-        for (const iconConfig of Config.bar.workspaces.specialWorkspaceIcons) {
-            if (iconConfig.name === name) {
-                return iconConfig.icon;
-            }
-        }
+        const configIcon = _lookupIconInList(name, Config.bar.workspaces.specialWorkspaceIcons);
+        if (configIcon) return configIcon;
 
-        if (name === "special")
-            return "star";
-        if (name === "communication")
-            return "forum";
-        if (name === "music")
-            return "music_cast";
-        if (name === "todo")
-            return "checklist";
-        if (name === "sysmon")
-            return "monitor_heart";
-        return name[0].toUpperCase();
+        // Fallbacks for common special workspace names
+        const fallbacks = {
+            "special": "mat:star",
+            "communication": "mat:forum",
+            "music": "mat:music_cast",
+            "todo": "mat:checklist",
+            "sysmon": "mat:monitor_heart"
+        };
+        return fallbacks[name] ?? name[0]?.toUpperCase() ?? "mat:star";
     }
 
     function getNamedWsIcon(name: string): string {
-        for (const iconConfig of Config.bar.workspaces.namedWorkspaceIcons) {
-            if (iconConfig.name === name) {
-                return iconConfig.icon;
-            }
-        }
-        return "";
+        return _lookupIconInList(name, Config.bar.workspaces.namedWorkspaceIcons);
     }
 
     function romanize(num: int): string {
