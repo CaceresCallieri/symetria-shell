@@ -45,16 +45,29 @@ Row {
         // Filter out swallowed windows
         const filtered = clients.filter(c => !swallowedAddresses.has(c.lastIpcObject?.address));
 
-        // Sort by X position first, then Y (like AGS)
-        // IMPORTANT: Stable sort preserves hyprctl's native order for grouped/tabbed windows
-        // (which all have identical positions). This ensures tabs appear in creation order.
+        // Sort by X, then Y, then tab index for grouped windows
         filtered.sort((a, b) => {
             const ax = a.lastIpcObject?.at?.[0] ?? 0;
             const bx = b.lastIpcObject?.at?.[0] ?? 0;
-            if (ax === bx) {
-                return (a.lastIpcObject?.at?.[1] ?? 0) - (b.lastIpcObject?.at?.[1] ?? 0);
+            if (ax !== bx) return ax - bx;
+
+            const ay = a.lastIpcObject?.at?.[1] ?? 0;
+            const by = b.lastIpcObject?.at?.[1] ?? 0;
+            if (ay !== by) return ay - by;
+
+            // Same position = grouped windows. Use grouped[] array for tab order.
+            // Hyprland invariant: All windows in a group have identical grouped[]
+            // arrays containing the same addresses in the same tab order.
+            const grouped = a.lastIpcObject?.grouped ?? [];
+            if (grouped.length > 0) {
+                const aIdx = grouped.indexOf(a.lastIpcObject?.address);
+                const bIdx = grouped.indexOf(b.lastIpcObject?.address);
+                // Defensive: if address not found, maintain current order
+                if (aIdx === -1 || bIdx === -1) return 0;
+                return aIdx - bIdx;
             }
-            return ax - bx;
+
+            return 0;
         });
 
         root.cachedClients = filtered;
