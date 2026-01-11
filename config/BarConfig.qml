@@ -1,4 +1,5 @@
 import Quickshell.Io
+import qs.config
 
 JsonObject {
     property bool persistent: true
@@ -109,6 +110,8 @@ JsonObject {
 
     component Sizes: JsonObject {
         property int innerWidth: 40
+        readonly property int indicatorHeight: innerWidth - Appearance.padding.small * 2
+        property int iconSize: 18
         property int trayMenuWidth: 300
         property int batteryWidth: 250
         property int networkWidth: 320

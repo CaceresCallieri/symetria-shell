@@ -28,8 +28,8 @@ Item {
     // Hover state for tooltip
     property bool hovered: hoverHandler.hovered
 
-    implicitWidth: Config.bar.sizes.innerWidth * 0.65
-    implicitHeight: Config.bar.sizes.innerWidth * 0.65
+    implicitWidth: Config.bar.sizes.iconSize
+    implicitHeight: Config.bar.sizes.iconSize
 
     // Entry animation - scale in when added (only for ungrouped icons)
     scale: animateEntry ? 0 : 1
@@ -48,7 +48,7 @@ Item {
 
         visible: Config.bar.workspaces.useActualAppIcons
         anchors.centerIn: parent
-        implicitSize: Config.bar.sizes.innerWidth * 0.65
+        implicitSize: Config.bar.sizes.iconSize
         source: Icons.resolveWindowIcon(
             root.client?.lastIpcObject?.class ?? "",
             Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : ""

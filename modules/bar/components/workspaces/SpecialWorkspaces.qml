@@ -166,7 +166,7 @@ Item {
                 id: label
 
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
-                Layout.preferredWidth: Config.bar.sizes.innerWidth - Appearance.padding.small * 2
+                Layout.preferredWidth: Config.bar.sizes.indicatorHeight
 
                 asynchronous: true
                 sourceComponent: ws.icon.length === 1 ? letterComp : iconComp

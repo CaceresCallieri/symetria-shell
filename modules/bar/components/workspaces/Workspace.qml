@@ -44,7 +44,7 @@ RowLayout {
         id: indicator
 
         Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
-        Layout.preferredWidth: Config.bar.sizes.innerWidth - Appearance.padding.small * 2
+        Layout.preferredWidth: Config.bar.sizes.indicatorHeight
 
         animate: true
         text: {

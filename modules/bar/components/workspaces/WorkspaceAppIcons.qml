@@ -158,7 +158,7 @@ Row {
                     id: container
 
                     implicitWidth: groupRow.implicitWidth + Appearance.padding.normal * 2
-                    implicitHeight: groupRow.implicitHeight
+                    implicitHeight: Config.bar.sizes.indicatorHeight
 
                     color: Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
                     radius: Appearance.rounding.full

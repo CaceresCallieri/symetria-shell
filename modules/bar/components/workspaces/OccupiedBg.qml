@@ -61,7 +61,7 @@ Item {
             anchors.verticalCenter: root.verticalCenter
 
             x: (start?.x ?? 0) - 1
-            implicitHeight: Config.bar.sizes.innerWidth - Appearance.padding.small * 2 + 2
+            implicitHeight: Config.bar.sizes.indicatorHeight + 2
             implicitWidth: start && end ? end.x + end.size - start.x + 2 : 0
 
             color: Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
