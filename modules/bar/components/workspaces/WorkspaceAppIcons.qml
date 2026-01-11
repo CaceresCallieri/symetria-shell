@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import qs.components
 import qs.services
 import qs.utils
@@ -105,10 +107,12 @@ Row {
     Component.onCompleted: updateDebounce.restart()
     onWorkspaceIdChanged: updateDebounce.restart()
 
-    // Debounce timer - coalesces rapid events into single update
+    // Debounce timer - coalesces rapid Hyprland events into single update
+    // 50ms chosen empirically: fast enough for responsive UI, slow enough to batch
+    // rapid event bursts (e.g., togglegroup emits multiple events in quick succession)
     Timer {
         id: updateDebounce
-        interval: 50  // Small delay to let Quickshell process the event
+        interval: 50
         onTriggered: root.updateClients()
     }
 
