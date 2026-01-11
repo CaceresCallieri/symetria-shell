@@ -173,7 +173,7 @@ Row {
                     Row {
                         id: groupRow
                         anchors.centerIn: parent
-                        spacing: 0
+                        spacing: Appearance.padding.small
 
                         // No add/move transitions - container is recreated on model change
                         // so all icons would animate on every update
