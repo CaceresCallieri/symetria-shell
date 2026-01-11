@@ -4,42 +4,75 @@ import qs.services
 import qs.config
 import QtQuick
 
+// Unified active workspace indicator supporting both Repeater and ListView modes.
+// - Repeater mode: Used by numbered/named workspaces (searches by activeWsId)
+//   Item requirements: ws, x, indicatorSize, indicatorOffset
+// - ListView mode: Used by special workspaces (uses currentItem directly)
+//   Item requirements: x, size
 StyledRect {
     id: root
 
-    required property int activeWsId
-    required property Repeater workspaces
+    // --- Repeater mode properties (for numbered/named workspaces) ---
+    property int activeWsId: -1
+    property Repeater workspaces: null
+
+    // --- ListView mode properties (for special workspaces) ---
+    property ListView listView: null
+
+    // --- Common required property ---
     required property Item mask
 
+    // --- Color customization (special workspaces use tertiary colors) ---
+    property color indicatorColor: Colours.palette.m3primary
+    property color textColor: Colours.palette.m3onPrimary
+
+    // --- Mode detection ---
+    readonly property bool useListView: listView !== null
+
+    // --- Repeater mode: find active workspace index ---
     readonly property int currentWsIdx: {
-        // Find the index of the active workspace in the repeater
+        if (useListView) return -1;
+        if (!workspaces) return -1;
         for (let i = 0; i < workspaces.count; i++) {
-            const item = workspaces.itemAt(i)
+            const item = workspaces.itemAt(i);
             if (item && item.ws === activeWsId) {
-                return i
+                return i;
             }
         }
-        return -1  // Not found - indicator will be hidden
+        return -1;  // Not found - indicator will be hidden
     }
 
-    visible: currentWsIdx >= 0
+    // --- Unified current item access ---
+    readonly property var currentWs: {
+        if (useListView) return listView?.currentItem ?? null;
+        return currentWsIdx >= 0 ? workspaces.itemAt(currentWsIdx) : null;
+    }
 
-    // Cache the current workspace item to avoid repeated lookups
-    readonly property var currentWs: currentWsIdx >= 0 ? workspaces.itemAt(currentWsIdx) : null
+    visible: currentWs !== null
 
-    property real leading: currentWs?.x ?? 0
-    property real trailing: currentWs?.x ?? 0
-    property real currentSize: currentWs?.indicatorSize ?? 0
-    property real indicatorOffset: currentWs?.indicatorOffset ?? 0
+    // --- Position and size properties ---
+    // For ListView mode, account for scroll offset (contentX)
+    readonly property real contentOffset: useListView ? (listView?.contentX ?? 0) : 0
+    // Item size: Repeater uses indicatorSize, ListView uses size
+    readonly property real itemSize: currentWs?.indicatorSize ?? currentWs?.size ?? 0
+    // Item offset: only Repeater mode has indicatorOffset (active padding)
+    readonly property real itemOffset: currentWs?.indicatorOffset ?? 0
+
+    property real leading: (currentWs?.x ?? 0) - contentOffset
+    property real trailing: (currentWs?.x ?? 0) - contentOffset
+    property real currentSize: itemSize
+    property real indicatorOffset: itemOffset
     property real offset: Math.min(leading, trailing) - indicatorOffset
     property real size: {
         const s = Math.abs(leading - trailing) + currentSize;
         // Handle activeTrail animation: extend indicator to cover previous workspace
-        if (Config.bar.workspaces.activeTrail &&
+        // (only applicable in Repeater mode - ListView mode doesn't support trail)
+        if (!useListView &&
+            Config.bar.workspaces.activeTrail &&
             previousWsIdx !== undefined &&
             previousWsIdx >= 0 &&
             previousWsIdx > currentWsIdx) {
-            const prevWs = workspaces.itemAt(previousWsIdx);
+            const prevWs = workspaces?.itemAt(previousWsIdx);
             return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
         }
         return s;
@@ -59,12 +92,12 @@ StyledRect {
     implicitHeight: Config.bar.sizes.indicatorHeight
     implicitWidth: size
     radius: Appearance.rounding.full
-    color: Colours.palette.m3primary
+    color: root.indicatorColor
 
     Colouriser {
         source: root.mask
         sourceColor: Colours.palette.m3onSurface
-        colorizationColor: Colours.palette.m3onPrimary
+        colorizationColor: root.textColor
 
         x: -root.offset
         y: 0
@@ -75,13 +108,13 @@ StyledRect {
     }
 
     Behavior on leading {
-        enabled: Config.bar.workspaces.activeTrail
+        enabled: !useListView && Config.bar.workspaces.activeTrail
 
         EAnim {}
     }
 
     Behavior on trailing {
-        enabled: Config.bar.workspaces.activeTrail
+        enabled: !useListView && Config.bar.workspaces.activeTrail
 
         EAnim {
             duration: Appearance.anim.durations.normal * 2
@@ -89,19 +122,21 @@ StyledRect {
     }
 
     Behavior on currentSize {
-        enabled: Config.bar.workspaces.activeTrail
+        enabled: !useListView && Config.bar.workspaces.activeTrail
 
         EAnim {}
     }
 
     Behavior on offset {
-        enabled: !Config.bar.workspaces.activeTrail
+        // ListView mode always uses standard animation (no trail support)
+        enabled: useListView || !Config.bar.workspaces.activeTrail
 
         EAnim {}
     }
 
     Behavior on size {
-        enabled: !Config.bar.workspaces.activeTrail
+        // ListView mode always uses standard animation (no trail support)
+        enabled: useListView || !Config.bar.workspaces.activeTrail
 
         EAnim {}
     }

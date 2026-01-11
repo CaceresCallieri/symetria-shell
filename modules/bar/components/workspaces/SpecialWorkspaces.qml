@@ -202,42 +202,8 @@ Item {
                 active: ws.hasWindows
                 asynchronous: true
 
-                sourceComponent: Row {
-                    spacing: 0
-
-                    add: Transition {
-                        Anim {
-                            properties: "scale"
-                            from: 0
-                            to: 1
-                            easing.bezierCurve: Appearance.anim.curves.standardDecel
-                        }
-                    }
-
-                    move: Transition {
-                        Anim {
-                            properties: "scale"
-                            to: 1
-                            easing.bezierCurve: Appearance.anim.curves.standardDecel
-                        }
-                        Anim {
-                            properties: "x,y"
-                        }
-                    }
-
-                    Repeater {
-                        model: ScriptModel {
-                            values: Hypr.toplevels.values.filter(c => c.workspace?.id === ws.wsId)
-                        }
-
-                        MaterialIcon {
-                            required property var modelData
-
-                            grade: 0
-                            text: Icons.getAppCategoryIcon(modelData.lastIpcObject.class, "terminal")
-                            color: Colours.palette.m3onSurfaceVariant
-                        }
-                    }
+                sourceComponent: WorkspaceAppIcons {
+                    workspaceId: ws.wsId
                 }
 
                 Behavior on Layout.preferredWidth {
@@ -294,46 +260,14 @@ Item {
     Loader {
         active: Config.bar.workspaces.activeIndicator
         asynchronous: true
-        anchors.fill: parent
+        anchors.verticalCenter: parent.verticalCenter
+        z: -1  // Render behind workspace content so icons aren't muted
 
-        sourceComponent: Item {
-            StyledClippingRect {
-                id: indicator
-
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-
-                x: (view.currentItem?.x ?? 0) - view.contentX
-                implicitWidth: view.currentItem?.size ?? 0
-
-                color: Colours.palette.m3tertiary
-                radius: Appearance.rounding.full
-
-                Colouriser {
-                    source: view
-                    sourceColor: Colours.palette.m3onSurface
-                    colorizationColor: Colours.palette.m3onTertiary
-
-                    anchors.verticalCenter: parent.verticalCenter
-
-                    x: -indicator.x
-                    y: 0
-                    implicitWidth: view.width
-                    implicitHeight: view.height
-                }
-
-                Behavior on x {
-                    Anim {
-                        easing.bezierCurve: Appearance.anim.curves.emphasized
-                    }
-                }
-
-                Behavior on implicitWidth {
-                    Anim {
-                        easing.bezierCurve: Appearance.anim.curves.emphasized
-                    }
-                }
-            }
+        sourceComponent: ActiveIndicator {
+            listView: view
+            mask: view
+            indicatorColor: Colours.palette.m3tertiary
+            textColor: Colours.palette.m3onTertiary
         }
     }
 
