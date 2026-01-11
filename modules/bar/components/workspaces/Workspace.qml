@@ -33,6 +33,9 @@ RowLayout {
     readonly property bool isOccupied: occupied[ws] ?? false
     readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && isActive
 
+    // Cached workspace reference to avoid repeated find() lookups
+    readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
+
     Layout.alignment: Qt.AlignVCenter
     Layout.preferredWidth: contentSize
     Layout.leftMargin: isActive ? activePadding + activeMargin : 0
@@ -48,12 +51,12 @@ RowLayout {
 
         animate: true
         text: {
-            const ws = Hypr.workspaces.values.find(w => w.id === root.ws);
-            if (ws) {
-                const customIcon = Icons.getNamedWsIcon(ws.name);
+            // Use cached workspace reference
+            if (root.currentWorkspace) {
+                const customIcon = Icons.getNamedWsIcon(root.currentWorkspace.name);
                 if (customIcon) return customIcon;
                 // For named workspaces (negative IDs), show first letter of name as fallback
-                if (root.ws < 0 && ws.name) return ws.name[0].toUpperCase();
+                if (root.ws < 0 && root.currentWorkspace.name) return root.currentWorkspace.name[0].toUpperCase();
             }
             return Icons.romanize(root.ws);
         }
@@ -81,6 +84,44 @@ RowLayout {
         sourceComponent: WorkspaceAppIcons {
             workspaceId: root.ws
         }
+    }
+
+    // Fullscreen/Maximize indicator - shows at end of active workspace
+    MaterialIcon {
+        id: fullscreenIndicator
+
+        // Detect maximize mode (fullscreen 1) on this workspace
+        // Note: Intentionally excludes true fullscreen (mode 2) as those typically hide the bar
+        readonly property bool hasMaximized: {
+            // Use cached workspace with explicit null safety
+            if (!root.currentWorkspace?.toplevels?.values) return false;
+
+            // Manual iteration for better reactivity and null safety
+            for (const toplevel of root.currentWorkspace.toplevels.values) {
+                if (toplevel?.lastIpcObject?.fullscreen === 1) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Combined condition for cleaner bindings
+        readonly property bool shouldShow: hasMaximized && root.isActive
+
+        Layout.alignment: Qt.AlignVCenter
+        Layout.leftMargin: shouldShow ? Appearance.spacing.small : 0
+
+        visible: hasMaximized  // Only allocate layout space when needed
+        scale: shouldShow ? 1 : 0
+        opacity: shouldShow ? 1 : 0
+
+        text: "fullscreen"
+        color: Colours.palette.m3onPrimary
+        font.pointSize: Appearance.font.size.small
+
+        Behavior on opacity { Anim {} }
+        Behavior on scale { Anim {} }
+        Behavior on Layout.leftMargin { Anim {} }
     }
 
     Behavior on Layout.preferredWidth {
