@@ -1,8 +1,8 @@
 # Blur Effect Research for Caelestia Shell
 
-## Status: Not Working (as of 2026-01-09)
+## Status: ✅ Working (as of 2026-01-11)
 
-Blur effects have not been successfully enabled on Hyprland 0.52.2. Further investigation needed.
+Blur effects successfully enabled on Hyprland 0.53.1.
 
 ---
 
@@ -148,16 +148,37 @@ hyprctl reload
 
 ## Current System Info
 
-- **Hyprland Version**: 0.52.2 (Dec 3, 2025)
-- **Latest Available**: 0.53.1 (Jan 2, 2026)
+- **Hyprland Version**: 0.53.1 (Jan 2, 2026)
 - **Shell Config**: `~/.config/caelestia/shell.json`
 - **Hyprland Rules**: `~/.hyprdots/.config/hypr/windowrules.conf`
 
 ---
 
-## Next Steps to Try
+## Working Configuration
 
-1. **Upgrade to Hyprland 0.53.1**: `paru -Syu hyprland`
-2. **Update all layer rules** to new 0.53 syntax
-3. **Check if QML needs blur passthrough** - May need to investigate Quickshell/QML layer configuration
-4. **Test with simpler config** - Try just `layerrule = blur, caelestia-drawers` alone
+### Key Fix: ignore_alpha Threshold
+
+The critical issue was the `ignore_alpha` value. The shell renders with:
+- `transparency.layers = 0.2` (20% alpha on colors)
+- `opacity: 0.6` at the Item level in Drawers.qml
+- **Effective alpha**: `0.2 × 0.6 = 0.12` (12%)
+
+Original config used `ignore_alpha 0.57`, which told Hyprland to skip pixels below 57% alpha - effectively ignoring all shell elements!
+
+**Solution**: Use `ignore_alpha 0.1` to only skip nearly-transparent pixels.
+
+### Working Layer Rules
+
+```conf
+# Caelestia Shell - Blur rules
+layerrule = blur on, match:namespace caelestia-.*
+layerrule = blur on, match:namespace qs-.*
+layerrule = blur on, match:namespace quickshell
+layerrule = blur_popups on, match:namespace caelestia-.*
+layerrule = ignore_alpha 0.1, match:namespace caelestia-.*
+```
+
+### Notes on Regex Patterns
+
+- Hyprland 0.53 `match:namespace` works with simple patterns like `caelestia-.*`
+- Anchored regexes `^(...)$` may cause issues - simpler patterns are preferred
