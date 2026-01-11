@@ -16,6 +16,7 @@ Row {
 
     spacing: Appearance.padding.small
     visible: cachedModel.length > 0
+    height: Config.bar.sizes.indicatorHeight
 
     // Events that affect window positions or lifecycle (Set for O(1) lookup)
     // Explicitly excludes: fullscreen, activewindow, activewindowv2 (don't affect layout)
@@ -140,6 +141,7 @@ Row {
         Loader {
             required property var modelData
 
+            anchors.verticalCenter: parent.verticalCenter
             sourceComponent: modelData.isGroup ? groupedContainer : singleIcon
 
             Component {
