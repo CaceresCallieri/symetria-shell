@@ -20,7 +20,7 @@ Row {
         asynchronous: true
 
         sourceComponent: MaterialIcon {
-            text: "calendar_month"
+            text: "schedule"
             color: root.colour
         }
     }

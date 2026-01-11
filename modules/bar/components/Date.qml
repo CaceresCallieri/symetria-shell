@@ -12,6 +12,19 @@ Row {
 
     spacing: Appearance.spacing.small
 
+    Loader {
+        anchors.verticalCenter: parent.verticalCenter
+
+        active: Config.bar.clock.showIcon
+        visible: active
+        asynchronous: true
+
+        sourceComponent: MaterialIcon {
+            text: "calendar_month"
+            color: root.colour
+        }
+    }
+
     StyledText {
         anchors.verticalCenter: parent.verticalCenter
 
