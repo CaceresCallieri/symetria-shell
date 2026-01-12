@@ -240,6 +240,48 @@ The utilities BR corner was changed from a union arc to squared because:
 2. Arc fill direction ambiguity caused rendering artifacts
 3. A squared corner provides clean, predictable geometry at the shell's absolute bottom-right
 
+## Layer-Based Transparency
+
+The Backgrounds use a layer-based transparency approach to prevent double-opacity artifacts.
+
+### The Problem
+
+When transparent backgrounds overlap using standard alpha blending:
+```
+result_alpha = source_alpha + dest_alpha × (1 - source_alpha)
+```
+Two 25% opacity layers overlapping = ~44% opacity (darker region).
+
+### The Solution
+
+Wrap all ShapePaths in a layered container:
+```qml
+Item {
+    layer.enabled: true  // Render children to texture first
+    opacity: Colours.generalBackgroundAlpha  // Apply transparency once
+
+    Shape {
+        ShapePath { fillColor: Colours.generalBackgroundOpaque }  // Opaque!
+        ShapePath { fillColor: Colours.generalBackgroundOpaque }
+    }
+}
+```
+
+### How It Works
+
+1. All shapes render to an **offscreen texture** at full opacity
+2. Overlapping regions fill with the same opaque color (no compounding)
+3. The texture is composited with **single opacity value**
+4. Result: uniform transparency everywhere, no dark overlap regions
+
+### Properties in Colours.qml
+
+| Property | Value | Usage |
+|----------|-------|-------|
+| `generalBackground` | `Qt.alpha("#eee5da", 0.25)` | Legacy: isolated components |
+| `generalBackgroundOpaque` | `"#eee5da"` | Layer-based: overlapping shapes |
+| `generalBackgroundAlpha` | `0.25` | Layer-based: container opacity |
+
 ## Summary
 
 The corner union system requires careful coordination between Border and Backgrounds:
@@ -250,3 +292,4 @@ The corner union system requires careful coordination between Border and Backgro
 4. **Counterclockwise** arcs curve outward for union effects
 5. **Height clamping** handles edge cases when panels collapse
 6. **Squared corners** are an alternative when union arcs cause issues
+7. **Layer-based transparency** prevents double-opacity where shapes overlap

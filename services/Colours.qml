@@ -11,9 +11,16 @@ import QtQuick
 Singleton {
     id: root
 
-    // Tweak this value to adjust general panel background color
-    // Using warm almond tint (#eee5da) to match AGS warm neutral palette
+    // General panel background color - warm almond tint (#eee5da)
+    // NOTE: Keep alpha value (0.25) in sync with generalBackgroundAlpha below
+    // Legacy: Use for isolated components where overlap is impossible
     readonly property color generalBackground: Qt.alpha("#eee5da", 0.25)
+
+    // Layer-based transparency: Use when multiple shapes may overlap
+    // Container applies transparency via layer.enabled + opacity, preventing
+    // double-opacity artifacts where shapes would otherwise compound alpha
+    readonly property color generalBackgroundOpaque: "#eee5da"
+    readonly property real generalBackgroundAlpha: 0.25
 
     property bool showPreview
     property string scheme

@@ -14,7 +14,7 @@ ShapePath {
     readonly property real roundingY: flatten ? wrapper.height / 2 : rounding
 
     strokeWidth: -1
-    fillColor: Colours.generalBackground
+    fillColor: Colours.generalBackgroundOpaque
 
     // Path drawing: Counterclockwise arcs curve OUTWARD (union with border/panels)
     // Start at (width - rounding, height), draw around panel, return via BR corner union

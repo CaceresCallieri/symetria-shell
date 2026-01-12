@@ -11,7 +11,10 @@ import qs.modules.sidebar as Sidebar
 import QtQuick
 import QtQuick.Shapes
 
-Shape {
+// Layer-based transparency: render all shapes to texture at full opacity,
+// then apply transparency once to the entire layer. This prevents
+// double-opacity artifacts where shapes overlap.
+Item {
     id: root
 
     required property Panels panels
@@ -20,66 +23,76 @@ Shape {
     anchors.fill: parent
     anchors.margins: Config.border.thickness
     anchors.topMargin: bar.implicitHeight
-    preferredRendererType: Shape.CurveRenderer
 
-    Osd.Background {
-        wrapper: root.panels.osd
+    // Enable layer rendering to prevent overlap artifacts
+    layer.enabled: true
+    opacity: Colours.generalBackgroundAlpha
 
-        startX: root.width - root.panels.session.width - root.panels.sidebar.width
-        startY: (root.height - wrapper.height) / 2 - rounding
-    }
+    Shape {
+        id: shape
 
-    Notifications.Background {
-        wrapper: root.panels.notifications
-        sidebar: sidebar
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
 
-        startX: root.width - rounding  // Start at TR corner's inner edge for union arc
-        startY: 0
-    }
+        Osd.Background {
+            wrapper: root.panels.osd
 
-    Session.Background {
-        wrapper: root.panels.session
+            startX: shape.width - root.panels.session.width - root.panels.sidebar.width
+            startY: (shape.height - wrapper.height) / 2 - rounding
+        }
 
-        startX: root.width - root.panels.sidebar.width
-        startY: (root.height - wrapper.height) / 2 - rounding
-    }
+        Notifications.Background {
+            wrapper: root.panels.notifications
+            sidebar: sidebar
 
-    Launcher.Background {
-        wrapper: root.panels.launcher
+            startX: shape.width - rounding  // Start at TR corner's inner edge for union arc
+            startY: 0
+        }
 
-        startX: (root.width - wrapper.width) / 2 - rounding
-        startY: root.height
-    }
+        Session.Background {
+            wrapper: root.panels.session
 
-    Dashboard.Background {
-        wrapper: root.panels.dashboard
+            startX: shape.width - root.panels.sidebar.width
+            startY: (shape.height - wrapper.height) / 2 - rounding
+        }
 
-        startX: 0
-        startY: 0
-    }
+        Launcher.Background {
+            wrapper: root.panels.launcher
 
-    BarPopouts.Background {
-        wrapper: root.panels.popouts
+            startX: (shape.width - wrapper.width) / 2 - rounding
+            startY: shape.height
+        }
 
-        startX: wrapper.x - rounding
-        startY: wrapper.y
-    }
+        Dashboard.Background {
+            wrapper: root.panels.dashboard
 
-    Utilities.Background {
-        wrapper: root.panels.utilities
-        sidebar: sidebar
+            startX: rounding  // Start at (rounding, 0) to allow TL arc to curve left into corner
+            startY: 0
+        }
 
-        startX: root.width - rounding  // Start at BR corner's inner edge for union arc
-        startY: root.height
-    }
+        BarPopouts.Background {
+            wrapper: root.panels.popouts
 
-    Sidebar.Background {
-        id: sidebar
+            startX: wrapper.x - rounding
+            startY: wrapper.y
+        }
 
-        wrapper: root.panels.sidebar
-        panels: root.panels
+        Utilities.Background {
+            wrapper: root.panels.utilities
+            sidebar: sidebar
 
-        startX: root.width
-        startY: root.panels.notifications.height
+            startX: shape.width - rounding  // Start at BR corner's inner edge for union arc
+            startY: shape.height
+        }
+
+        Sidebar.Background {
+            id: sidebar
+
+            wrapper: root.panels.sidebar
+            panels: root.panels
+
+            startX: shape.width
+            startY: root.panels.notifications.height
+        }
     }
 }

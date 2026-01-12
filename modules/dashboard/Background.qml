@@ -13,15 +13,24 @@ ShapePath {
     readonly property real roundingY: flatten ? wrapper.height / 2 : rounding
 
     strokeWidth: -1
-    fillColor: Colours.generalBackground
+    fillColor: Colours.generalBackgroundOpaque
 
-    // Left-edge panel: straight left side, original rounded right side
-    // Start at top-left (0, 0), draw clockwise
+    // Left-edge panel: start at (rounding, 0) with rounded TL corner (outward/union)
+    // Path: TL arc → down left edge → BL arc → right → BR arc → up → TR arc → close
+
+    // Arc: Top-left corner (outward curve - union effect like BL)
+    PathArc {
+        relativeX: -root.rounding
+        relativeY: root.roundingY
+        radiusX: root.rounding
+        radiusY: Math.min(root.rounding, root.wrapper.height)
+        direction: PathArc.Counterclockwise
+    }
 
     // Line 1: Down the left edge (stop before BL corner arc)
     PathLine {
         relativeX: 0
-        relativeY: root.wrapper.height - root.roundingY
+        relativeY: root.wrapper.height - root.roundingY * 2
     }
 
     // Arc: Bottom-left corner (union effect - curves outward into shell)
@@ -39,7 +48,7 @@ ShapePath {
         relativeY: 0
     }
 
-    // Arc 1: Bottom-right corner (original parameters)
+    // Arc: Bottom-right corner (outward curve)
     PathArc {
         relativeX: root.rounding
         relativeY: -root.roundingY
@@ -54,7 +63,7 @@ ShapePath {
         relativeY: -(root.wrapper.height - root.roundingY * 2)
     }
 
-    // Arc 2: Top-right corner (original parameters)
+    // Arc: Top-right corner (inward curve - standard rounded corner, not a union)
     PathArc {
         relativeX: root.rounding
         relativeY: -root.roundingY
@@ -62,7 +71,7 @@ ShapePath {
         radiusY: Math.min(root.rounding, root.wrapper.height)
     }
 
-    // Auto-closes back to (0, 0) along top edge
+    // Path auto-closes along top edge back to start at (rounding, 0)
 
     Behavior on fillColor {
         CAnim {}
