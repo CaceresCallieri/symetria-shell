@@ -33,7 +33,7 @@ Shape {
         wrapper: root.panels.notifications
         sidebar: sidebar
 
-        startX: root.width
+        startX: root.width - rounding  // Start at TR corner's inner edge for union arc
         startY: 0
     }
 
@@ -69,7 +69,7 @@ Shape {
         wrapper: root.panels.utilities
         sidebar: sidebar
 
-        startX: root.width
+        startX: root.width - rounding  // Start at BR corner's inner edge for union arc
         startY: root.height
     }
 

@@ -38,7 +38,11 @@ Item {
             anchors.fill: parent
             anchors.margins: Config.border.thickness
             anchors.topMargin: root.bar.implicitHeight
-            radius: Config.border.rounding
+            // Left corners rounded by Border, right corners handled by Backgrounds
+            topLeftRadius: Config.border.rounding
+            topRightRadius: 0
+            bottomLeftRadius: Config.border.rounding
+            bottomRightRadius: 0
         }
     }
 }
