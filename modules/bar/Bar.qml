@@ -241,6 +241,8 @@ Item {
                 case "tray": return trayComp;
                 case "clock": return clockComp;
                 case "date": return dateComp;
+                case "cpuStatus": return cpuStatusComp;
+                case "ramUsage": return ramUsageComp;
                 case "statusIcons": return statusIconsComp;
                 case "power": return powerComp;
                 default: return null;
@@ -267,6 +269,16 @@ Item {
     Component {
         id: dateComp
         Date {}
+    }
+
+    Component {
+        id: cpuStatusComp
+        CpuStatus {}
+    }
+
+    Component {
+        id: ramUsageComp
+        RamUsage {}
     }
 
     Component {

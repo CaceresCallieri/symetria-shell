@@ -28,6 +28,14 @@ JsonObject {
             enabled: true
         },
         {
+            id: "cpuStatus",
+            enabled: true
+        },
+        {
+            id: "ramUsage",
+            enabled: true
+        },
+        {
             id: "spacer",
             enabled: true
         },
