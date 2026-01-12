@@ -63,22 +63,14 @@ ShapePath {
         direction: PathArc.Counterclockwise
     }
 
-    // Line 4: Down the right edge to BR corner
+    // Line 4: Down the right edge to bottom
     PathLine {
         relativeX: 0
-        relativeY: root.wrapper.height
+        relativeY: root.wrapper.height + root.rounding
     }
 
-    // Arc: BR corner union (curves outward into border corner)
-    PathArc {
-        relativeX: -root.rounding
-        relativeY: root.rounding
-        radiusX: root.rounding
-        radiusY: Math.min(root.rounding, root.wrapper.height)
-        direction: PathArc.Counterclockwise
-    }
-
-    // Path closes back to start at (width - rounding, height)
+    // Path auto-closes with horizontal line from (width, height) to start at (width - rounding, height)
+    // This creates a squared BR corner
 
     Behavior on fillColor {
         CAnim {}
