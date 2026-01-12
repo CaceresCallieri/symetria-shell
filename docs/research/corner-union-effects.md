@@ -187,16 +187,66 @@ When Notifications/Utilities draw union arcs, ensure their paths don't extend th
 | `modules/drawers/Backgrounds.qml` | Shape containing all panel ShapePaths |
 | `modules/dashboard/Background.qml` | Left-side panel with BL/BR unions |
 | `modules/notifications/Background.qml` | Top-right panel with TR union |
-| `modules/utilities/Background.qml` | Bottom-right panel with BR union |
+| `modules/utilities/Background.qml` | Bottom-right panel with BL union, squared BR |
 | `modules/sidebar/Background.qml` | Right-side connector (no corner unions) |
 | `config/BorderConfig.qml` | Configuration for border.rounding, border.thickness |
+
+## Squared Corners
+
+Sometimes a squared (90°) corner is preferable to a union arc. This is useful when:
+- The union arc geometry doesn't align properly with the border
+- A simpler, cleaner visual is desired
+- The corner doesn't need to fill a border's rounded cutout
+
+### How to Create a Squared Corner
+
+Instead of using a `PathArc` to curve around the corner, extend the line past where the arc would begin and let the path auto-close:
+
+```qml
+// BEFORE: Rounded BR corner with union arc
+PathLine {
+    relativeX: 0
+    relativeY: root.wrapper.height  // Stop at (width, height - rounding)
+}
+PathArc {
+    relativeX: -root.rounding
+    relativeY: root.rounding
+    radiusX: root.rounding
+    radiusY: root.rounding
+}
+
+// AFTER: Squared BR corner
+PathLine {
+    relativeX: 0
+    relativeY: root.wrapper.height + root.rounding  // Extend to (width, height)
+}
+// Path auto-closes with horizontal line to start point
+// This creates a 90° squared corner
+```
+
+### Current Corner Configuration
+
+| Panel | Corner | Type | Reason |
+|-------|--------|------|--------|
+| Dashboard | BL | Union arc | Fills border's rounded BL corner |
+| Notifications | TR | Union arc | Fills border's rounded TR corner |
+| Utilities | BL | Union arc | Creates smooth transition at bottom edge |
+| Utilities | BR | **Squared** | Simpler geometry, avoids fill direction issues |
+
+### Why Utilities BR is Squared
+
+The utilities BR corner was changed from a union arc to squared because:
+1. The union arc created a visual gap when the utilities popout was triggered
+2. Arc fill direction ambiguity caused rendering artifacts
+3. A squared corner provides clean, predictable geometry at the shell's absolute bottom-right
 
 ## Summary
 
 The corner union system requires careful coordination between Border and Backgrounds:
 
 1. **Border** owns left corners (rounded via Rectangle radii)
-2. **Backgrounds** own right corners (filled via ShapePath union arcs)
+2. **Backgrounds** own right corners (filled via ShapePath union arcs or squared)
 3. **No overlap** = no transparency artifacts
 4. **Counterclockwise** arcs curve outward for union effects
 5. **Height clamping** handles edge cases when panels collapse
+6. **Squared corners** are an alternative when union arcs cause issues
