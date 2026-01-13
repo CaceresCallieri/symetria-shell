@@ -32,6 +32,10 @@ JsonObject {
             enabled: true
         },
         {
+            id: "availableUpdates",
+            enabled: true
+        },
+        {
             id: "spacer",
             enabled: true
         },

@@ -243,6 +243,7 @@ Item {
                 case "date": return dateComp;
                 case "cpuStatus": return cpuStatusComp;
                 case "ramUsage": return ramUsageComp;
+                case "availableUpdates": return availableUpdatesComp;
                 case "statusIcons": return statusIconsComp;
                 case "power": return powerComp;
                 default: return null;
@@ -279,6 +280,11 @@ Item {
     Component {
         id: ramUsageComp
         RamUsage {}
+    }
+
+    Component {
+        id: availableUpdatesComp
+        AvailableUpdates {}
     }
 
     Component {
