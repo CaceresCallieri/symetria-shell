@@ -26,13 +26,18 @@ StyledRect {
     property color indicatorColor: Colours.palette.m3primary
     property color textColor: Colours.palette.m3onPrimary
 
+    // --- Glassmorphism styling (strong intensity for active indicator) ---
+    readonly property var glassStyle: Colours.glassmorphism(indicatorColor, Colours.glass.strong)
+
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
 
     // --- Repeater mode: find active workspace index ---
     readonly property int currentWsIdx: {
-        if (useListView) return -1;
-        if (!workspaces) return -1;
+        if (useListView)
+            return -1;
+        if (!workspaces)
+            return -1;
         for (let i = 0; i < workspaces.count; i++) {
             const item = workspaces.itemAt(i);
             if (item && item.ws === activeWsId) {
@@ -44,7 +49,8 @@ StyledRect {
 
     // --- Unified current item access ---
     readonly property var currentWs: {
-        if (useListView) return listView?.currentItem ?? null;
+        if (useListView)
+            return listView?.currentItem ?? null;
         return currentWsIdx >= 0 ? workspaces.itemAt(currentWsIdx) : null;
     }
 
@@ -67,11 +73,7 @@ StyledRect {
         const s = Math.abs(leading - trailing) + currentSize;
         // Handle activeTrail animation: extend indicator to cover previous workspace
         // (only applicable in Repeater mode - ListView mode doesn't support trail)
-        if (!useListView &&
-            Config.bar.workspaces.activeTrail &&
-            previousWsIdx !== undefined &&
-            previousWsIdx >= 0 &&
-            previousWsIdx > currentWsIdx) {
+        if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx !== undefined && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
             const prevWs = workspaces?.itemAt(previousWsIdx);
             return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
         }
@@ -92,7 +94,9 @@ StyledRect {
     implicitHeight: Config.bar.sizes.indicatorHeight
     implicitWidth: size
     radius: Appearance.rounding.full
-    color: root.indicatorColor
+    color: glassStyle.background
+    border.width: 1
+    border.color: glassStyle.border
 
     Colouriser {
         source: root.mask

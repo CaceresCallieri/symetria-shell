@@ -66,6 +66,87 @@ Singleton {
         return Qt.hsla(c.hslHue, c.hslSaturation, 0.1, 1);
     }
 
+    // Glassmorphism constants - tuned for visual coherence across intensity levels
+    readonly property QtObject glassConstants: QtObject {
+        // Maximum layer depth for most subtle glass (intensity = 0)
+        // Higher values = darker/more transparent background
+        readonly property real maxLayerDepth: 3
+
+        // Layer depth reduction per intensity unit
+        // Formula: layerDepth = maxLayerDepth - (intensity * depthRange)
+        readonly property real depthRange: 2
+
+        // Border brightness ratio relative to background layer depth
+        // 0.2 = border uses 20% of background's layer depth (80% brighter)
+        readonly property real borderBrightnessRatio: 0.2
+
+        // Border opacity adjustment after layering
+        // 0.35 provides subtle glass edge across all intensities
+        readonly property real borderOpacity: 0.35
+
+        // Border base color (dark mode optimized)
+        // TODO: Consider theme-aware border when light mode is fully supported
+        readonly property color borderBaseColor: "#ffffff"
+    }
+
+    // Glassmorphism helper: returns consistent background + border colors
+    //
+    // @param baseColor: M3 palette color for glass base (e.g., m3surfaceContainerHigh, m3primary)
+    // @param intensity: Glass brightness from 0 (subtle/dark) to 1 (strong/bright)
+    // @returns: { background: color, border: color }
+    //
+    // Design: Background and border scale proportionally maintaining visual relationship
+    function glassmorphism(baseColor: color, intensity: real) {
+        // Clamp intensity to valid range [0, 1]
+        const clampedIntensity = Math.max(0, Math.min(1, intensity));
+
+        // Calculate layer depths
+        const layerDepth = glassConstants.maxLayerDepth - (clampedIntensity * glassConstants.depthRange);
+        const borderLayerDepth = layerDepth * glassConstants.borderBrightnessRatio;
+
+        // Apply layering system
+        const backgroundColor = layer(baseColor, layerDepth);
+        const borderColor = Qt.alpha(
+            layer(glassConstants.borderBaseColor, borderLayerDepth),
+            glassConstants.borderOpacity
+        );
+
+        return {
+            background: backgroundColor,
+            border: borderColor
+        };
+    }
+
+    // Glassmorphism intensity presets for common use cases
+    //
+    // Usage Guidelines - Base Color Selection:
+    //
+    // BACKGROUND elements (subtle/medium):
+    //   Use: Colours.palette.m3surfaceContainerHigh
+    //   Examples: Workspace pills, grouped window containers, panels
+    //
+    // SEMANTIC elements (strong/veryStrong):
+    //   Use: Colours.palette.m3primary (or m3secondary, m3tertiary, etc.)
+    //   Examples: Active workspace indicator, focused window, notification badges
+    //
+    readonly property QtObject glass: QtObject {
+        // Subtle: background elements, grouped pills
+        // Layer depth: 2.4
+        readonly property real subtle: 0.3
+
+        // Medium: standard UI elements
+        // Layer depth: 2.0
+        readonly property real medium: 0.5
+
+        // Strong: active/focused elements, indicators
+        // Layer depth: 1.6
+        readonly property real strong: 0.7
+
+        // Very strong: prominent interactive elements
+        // Layer depth: 1.2
+        readonly property real veryStrong: 0.9
+    }
+
     function load(data: string, isPreview: bool): void {
         const colours = isPreview ? preview : current;
         const scheme = JSON.parse(data);

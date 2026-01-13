@@ -163,13 +163,19 @@ Row {
                 Rectangle {
                     id: container
 
+                    // Glassmorphism styling (subtle intensity for background element)
+                    readonly property var glassStyle: Colours.glassmorphism(
+                        Colours.palette.m3surfaceContainerHigh,
+                        Colours.glass.subtle
+                    )
+
                     implicitWidth: groupRow.implicitWidth + Appearance.padding.normal * 2
                     implicitHeight: Config.bar.sizes.indicatorHeight
 
-                    color: Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
+                    color: glassStyle.background
                     radius: Appearance.rounding.full
                     border.width: 1
-                    border.color: Qt.alpha(Colours.palette.m3outline, 0.3)
+                    border.color: glassStyle.border
 
                     // Smooth width animation when icons are added/removed
                     Behavior on implicitWidth {

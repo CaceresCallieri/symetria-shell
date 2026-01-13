@@ -51,6 +51,12 @@ Item {
             readonly property Workspace start: root.workspaces.itemAt(getWsIdx(modelData.start)) ?? null
             readonly property Workspace end: root.workspaces.itemAt(getWsIdx(modelData.end)) ?? null
 
+            // Glassmorphism styling (subtle intensity for background pill)
+            readonly property var glassStyle: Colours.glassmorphism(
+                Colours.palette.m3surfaceContainerHigh,
+                Colours.glass.subtle
+            )
+
             function getWsIdx(ws: int): int {
                 let i = ws - 1;
                 while (i < 0)
@@ -64,8 +70,10 @@ Item {
             implicitHeight: Config.bar.sizes.indicatorHeight + 2
             implicitWidth: start && end ? end.x + end.size - start.x + 2 : 0
 
-            color: Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
+            color: glassStyle.background
             radius: Appearance.rounding.full
+            border.width: 1
+            border.color: glassStyle.border
 
             scale: 0
             Component.onCompleted: scale = 1
