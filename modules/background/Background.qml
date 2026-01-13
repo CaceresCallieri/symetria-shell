@@ -33,6 +33,7 @@ Loader {
 
             Wallpaper {
                 id: wallpaper
+                screen: win.modelData
             }
 
             Visualiser {

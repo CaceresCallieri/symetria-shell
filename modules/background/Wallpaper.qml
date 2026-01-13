@@ -6,12 +6,40 @@ import qs.components.filedialog
 import qs.services
 import qs.config
 import qs.utils
+import Quickshell
+import Quickshell.Hyprland
 import QtQuick
 
 Item {
     id: root
 
-    property string source: Wallpapers.current
+    // Screen property for per-monitor workspace tracking
+    required property ShellScreen screen
+
+    // Workspace tracking - direct lookup like bar/Workspaces.qml pattern
+    readonly property int workspaceId: Hypr.monitorFor(screen).activeWorkspace?.id ?? 1
+    readonly property string workspaceName: Hypr.monitorFor(screen).activeWorkspace?.name ?? ""
+
+    // Fix 2: Readiness checks to prevent race condition during initialization
+    readonly property bool workspaceDataReady: Hypr.monitorFor(screen).activeWorkspace !== null
+    readonly property bool mapReady: Wallpapers.workspaceMapVersion > 0 || !Config.background.perWorkspaceWallpapers.enabled
+
+    // Source depends on per-workspace setting
+    property string source: {
+        // Force re-evaluation when map updates by referencing version
+        const _ = Wallpapers.workspaceMapVersion;
+
+        // Safe fallback during initialization
+        if (Config.background.perWorkspaceWallpapers.enabled && (!workspaceDataReady || !mapReady))
+            return Wallpapers.actualCurrent;
+
+        if (Wallpapers.showPreview)
+            return Wallpapers.previewPath;
+        if (Config.background.perWorkspaceWallpapers.enabled)
+            return Wallpapers.getWallpaperForWorkspace(workspaceId, workspaceName);
+        return Wallpapers.actualCurrent;
+    }
+
     property Image current: one
 
     anchors.fill: parent
