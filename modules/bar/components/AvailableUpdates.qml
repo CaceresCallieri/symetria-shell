@@ -43,7 +43,7 @@ MouseArea {
         MaterialIcon {
             anchors.verticalCenter: parent.verticalCenter
 
-            text: Updates.totalUpdates === 0 ? "verified" : "download"
+            text: Updates.totalUpdates === 0 ? "check_box" : "download"
             color: root.colour
         }
 

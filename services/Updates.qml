@@ -2,6 +2,7 @@ pragma Singleton
 
 import qs.config
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
 
@@ -23,9 +24,14 @@ Singleton {
     // Reference counting for lazy initialization
     property int refCount: 0
 
+    // Track if update check is in progress (prevents process spam)
+    property bool updateInProgress: false
+
     // Trigger a manual refresh (useful after system update)
     function refresh(): void {
-        updateProcess.running = true;
+        if (!updateInProgress) {
+            updateProcess.running = true;
+        }
     }
 
     Timer {
@@ -36,8 +42,22 @@ Singleton {
         onTriggered: updateProcess.running = true
     }
 
+    // Listen for custom Hyprland event to refresh after system update
+    Connections {
+        target: Hyprland
+
+        function onRawEvent(event: HyprlandEvent): void {
+            // Custom events dispatched via: hyprctl dispatch custom system-updated
+            if (event.name === "custom" && event.data === "system-updated") {
+                root.refresh();
+            }
+        }
+    }
+
     Process {
         id: updateProcess
+
+        onRunningChanged: root.updateInProgress = running
 
         command: ["sh", "-c", String.raw`
             pacman_updates=$(checkupdates 2>/dev/null | wc -l)
@@ -55,15 +75,26 @@ Singleton {
         `]
         stdout: StdioCollector {
             onStreamFinished: {
+                if (!text || text.trim() === "") {
+                    console.warn("Updates: Empty output from update check");
+                    return;
+                }
                 try {
                     const data = JSON.parse(text.trim());
-                    root.pacmanUpdates = data.pacman || 0;
-                    root.aurUpdates = data.aur || 0;
-                    root.flatpakUpdates = data.flatpak || 0;
-                    root.flatpakInstalled = data.flatpakInstalled || false;
+                    root.pacmanUpdates = data.pacman;
+                    root.aurUpdates = data.aur;
+                    root.flatpakUpdates = data.flatpak;
+                    root.flatpakInstalled = data.flatpakInstalled;
                     root.hasData = true;
                 } catch (e) {
                     console.error("Updates: Failed to parse update data:", e, text);
+                }
+            }
+        }
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() !== "") {
+                    console.warn("Updates: stderr:", text.trim());
                 }
             }
         }
