@@ -20,10 +20,7 @@ StyledRect {
 
     // Glassmorphism styling (subtle intensity for background containers,
     // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
-    readonly property var glassStyle: Colours.glassmorphism(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
+    readonly property var glassStyle: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     // Width calculation: In non-compact mode, Row's implicitWidth includes
     // leftPadding + rightPadding. In compact mode, we manually calculate

@@ -125,13 +125,21 @@ Item {
                 }
             } else if (id === "tray" && Config.bar.popouts.tray) {
                 if (!Config.bar.tray.compact || (item.expanded && !item.expandIcon.contains(mapToItem(item.expandIcon, x, item.implicitHeight / 2)))) {
-                    const index = Math.floor(((x - left - item.padding * 2 + item.spacing) / item.layout.implicitWidth) * item.items.count);
-                    const trayItem = item.items.itemAt(index);
-                    if (trayItem) {
-                        popouts.currentName = `traymenu${index}`;
-                        popouts.currentCenter = Qt.binding(() => trayItem.mapToItem(root, trayItem.implicitWidth / 2, 0).x);
-                        popouts.hasCurrent = true;
-                        return;
+                    // Map x to layout's coordinate space and find child at that position
+                    // (more robust than geometric calculation, matches StatusIcons approach)
+                    const layoutX = mapToItem(item.layout, x, 0).x;
+                    const child = item.layout.childAt(layoutX, item.layout.height / 2);
+
+                    if (child) {
+                        // Find the index of this child in the items Repeater
+                        for (let i = 0; i < item.items.count; i++) {
+                            if (item.items.itemAt(i) === child) {
+                                popouts.currentName = `traymenu${i}`;
+                                popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
+                                popouts.hasCurrent = true;
+                                return;
+                            }
+                        }
                     }
                 } else {
                     popouts.hasCurrent = false;
