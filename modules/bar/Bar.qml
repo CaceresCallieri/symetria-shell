@@ -148,7 +148,7 @@ Item {
      * Finds which bar entry (BarLoader) contains the given x coordinate.
      * Searches both left and right sections.
      */
-    function findBarEntryAt(x: real) {
+    function findBarEntryAt(x: real): var {
         const sections = [
             { section: leftSection, repeater: leftRepeater },
             { section: rightSection, repeater: rightRepeater }
