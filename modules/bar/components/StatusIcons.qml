@@ -14,7 +14,9 @@ StyledRect {
     id: root
 
     property color colour: Colours.palette.m3secondary
-    readonly property alias items: iconColumn
+
+    // Popout interface: container with named WrappedLoader children (each has 'name' property)
+    readonly property alias iconContainer: iconColumn
 
     // Glassmorphism styling (subtle intensity for background containers,
     // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)

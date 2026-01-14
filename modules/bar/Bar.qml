@@ -75,77 +75,136 @@ Item {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Popout Detection System
+    //
+    // Components that support popouts must expose:
+    //   - StatusIcons: property alias iconContainer (RowLayout with named children)
+    //     Each child must have: property string name
+    //   - Tray: property alias trayContainer (Row), property alias trayItems (Repeater)
+    //     property alias expandIcon (Loader), property bool expanded
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Unified hit-testing for popout detection using childAt().
+     * Maps cursor position to container's coordinate space and finds the child element.
+     *
+     * @param container - The layout container (Row/RowLayout) to search in
+     * @param x - Cursor x position in Bar's coordinate space
+     * @param nameResolver - Function(child) => string|null that returns popout name for a child
+     * @returns true if popout was activated, false otherwise
+     */
+    function detectChildPopout(container: Item, x: real, nameResolver): bool {
+        if (!container) return false;
+
+        const childX = mapToItem(container, x, 0).x;
+        const child = container.childAt(childX, container.height / 2);
+
+        if (!child) return false;
+
+        const popoutName = nameResolver(child);
+        if (!popoutName) return false;
+
+        popouts.currentName = popoutName;
+        popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
+        popouts.hasCurrent = true;
+        return true;
+    }
+
+    /**
+     * Determines if tray should show popout or expand (compact mode only).
+     * In non-compact mode, always shows popout.
+     * In compact mode, shows popout only if expanded AND cursor not over expand icon.
+     */
+    function shouldShowTrayPopout(trayItem: Item, x: real): bool {
+        // Non-compact mode: always show popouts
+        if (!Config.bar.tray.compact) return true;
+
+        // Compact mode: only show if expanded
+        if (!trayItem?.expanded) return false;
+
+        // Don't show popout if cursor is over the expand icon
+        const expandIcon = trayItem.expandIcon;
+        if (!expandIcon) return true;
+
+        const iconCoords = mapToItem(expandIcon, x, trayItem.implicitHeight / 2);
+        return !expandIcon.contains(iconCoords);
+    }
+
+    /**
+     * Finds the index of a child element in a Repeater.
+     * Used to generate tray popout names like "traymenu0", "traymenu1", etc.
+     */
+    function findRepeaterIndex(repeater, child: Item): int {
+        if (!repeater) return -1;
+
+        for (let i = 0; i < repeater.count; i++) {
+            if (repeater.itemAt(i) === child) return i;
+        }
+        return -1;
+    }
+
+    /**
+     * Finds which bar entry (BarLoader) contains the given x coordinate.
+     * Searches both left and right sections.
+     */
+    function findBarEntryAt(x: real) {
+        const sections = [
+            { section: leftSection, repeater: leftRepeater },
+            { section: rightSection, repeater: rightRepeater }
+        ];
+
+        for (const { section, repeater } of sections) {
+            if (x >= section.x && x <= section.x + section.width) {
+                const relX = x - section.x;
+                for (let i = 0; i < repeater.count; i++) {
+                    const entry = repeater.itemAt(i);
+                    if (entry?.enabled && relX >= entry.x && relX <= entry.x + entry.width) {
+                        return { entry, section };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     function checkPopout(x: real): void {
-        let targetChild = null;
-        let targetSection = null;
+        const target = findBarEntryAt(x);
 
-        // Check left section first
-        if (x >= leftSection.x && x <= leftSection.x + leftSection.width) {
-            const relX = x - leftSection.x;
-            for (let i = 0; i < leftRepeater.count; i++) {
-                const item = leftRepeater.itemAt(i);
-                if (item?.enabled && relX >= item.x && relX <= item.x + item.width) {
-                    targetChild = item;
-                    targetSection = leftSection;
-                    break;
-                }
-            }
-        }
-
-        // Check right section if not found in left
-        if (!targetChild && x >= rightSection.x) {
-            const relX = x - rightSection.x;
-            for (let i = 0; i < rightRepeater.count; i++) {
-                const item = rightRepeater.itemAt(i);
-                if (item?.enabled && relX >= item.x && relX <= item.x + item.width) {
-                    targetChild = item;
-                    targetSection = rightSection;
-                    break;
-                }
-            }
-        }
-
-        if (targetChild?.entryId !== "tray")
+        if (target?.entry?.entryId !== "tray")
             closeTray();
 
-        if (targetChild) {
-            const id = targetChild.entryId;
-            const left = targetChild.x + targetSection.x;
-            const item = targetChild.item;
-            const itemWidth = item?.implicitWidth ?? 0;
+        if (!target) {
+            popouts.hasCurrent = false;
+            return;
+        }
 
-            if (id === "statusIcons" && Config.bar.popouts.statusIcons) {
-                const items = item.items;
-                const icon = items.childAt(mapToItem(items, x, 0).x, items.height / 2);
-                if (icon) {
-                    popouts.currentName = icon.name;
-                    popouts.currentCenter = Qt.binding(() => icon.mapToItem(root, icon.implicitWidth / 2, 0).x);
-                    popouts.hasCurrent = true;
-                    return;
-                }
-            } else if (id === "tray" && Config.bar.popouts.tray) {
-                if (!Config.bar.tray.compact || (item.expanded && !item.expandIcon.contains(mapToItem(item.expandIcon, x, item.implicitHeight / 2)))) {
-                    // Map x to layout's coordinate space and find child at that position
-                    // (more robust than geometric calculation, matches StatusIcons approach)
-                    const layoutX = mapToItem(item.layout, x, 0).x;
-                    const child = item.layout.childAt(layoutX, item.layout.height / 2);
+        const { entry } = target;
+        const id = entry.entryId;
+        const item = entry.item;
 
-                    if (child) {
-                        // Find the index of this child in the items Repeater
-                        for (let i = 0; i < item.items.count; i++) {
-                            if (item.items.itemAt(i) === child) {
-                                popouts.currentName = `traymenu${i}`;
-                                popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
-                                popouts.hasCurrent = true;
-                                return;
-                            }
-                        }
-                    }
-                } else {
-                    popouts.hasCurrent = false;
-                    item.expanded = true;
+        // StatusIcons: use iconContainer with named children
+        if (id === "statusIcons" && Config.bar.popouts.statusIcons) {
+            const container = item?.iconContainer;
+            if (detectChildPopout(container, x, (icon) => icon?.name ?? null))
+                return;
+        }
+
+        // Tray: use trayContainer with indexed children
+        if (id === "tray" && Config.bar.popouts.tray) {
+            if (shouldShowTrayPopout(item, x)) {
+                const container = item?.trayContainer;
+                const repeater = item?.trayItems;
+                if (detectChildPopout(container, x, (child) => {
+                    const idx = findRepeaterIndex(repeater, child);
+                    return idx >= 0 ? `traymenu${idx}` : null;
+                }))
                     return;
-                }
+            } else {
+                // Compact mode: expand tray instead of showing popout
+                popouts.hasCurrent = false;
+                if (item) item.expanded = true;
+                return;
             }
         }
 

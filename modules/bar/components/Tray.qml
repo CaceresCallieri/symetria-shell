@@ -9,8 +9,9 @@ import QtQuick
 StyledRect {
     id: root
 
-    readonly property alias layout: layout
-    readonly property alias items: items
+    // Popout interface: trayContainer is the Row, trayItems is the Repeater
+    readonly property alias trayContainer: layout
+    readonly property alias trayItems: items
     readonly property alias expandIcon: expandIcon
 
     readonly property int pillPadding: Appearance.spacing.large
