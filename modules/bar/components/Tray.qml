@@ -13,15 +13,25 @@ StyledRect {
     readonly property alias items: items
     readonly property alias expandIcon: expandIcon
 
-    readonly property int padding: Config.bar.tray.background ? Appearance.padding.normal : Appearance.padding.small
-    readonly property int spacing: Config.bar.tray.background ? Appearance.spacing.small : 0
+    readonly property int pillPadding: Appearance.spacing.large
+    readonly property int spacing: Appearance.spacing.small
 
     property bool expanded
 
+    // Glassmorphism styling (subtle intensity for background containers,
+    // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
+    readonly property var glassStyle: Colours.glassmorphism(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.subtle
+    )
+
+    // Width calculation: In non-compact mode, Row's implicitWidth includes
+    // leftPadding + rightPadding. In compact mode, we manually calculate
+    // based on expanded state and add padding for the expand icon area.
     readonly property real nonAnimWidth: {
         if (!Config.bar.tray.compact)
-            return layout.implicitWidth + padding * 2;
-        return (expanded ? expandIcon.implicitWidth + layout.implicitWidth + spacing : expandIcon.implicitWidth) + padding * 2;
+            return layout.implicitWidth;
+        return (expanded ? expandIcon.implicitWidth + layout.implicitWidth + spacing : expandIcon.implicitWidth) + pillPadding * 2;
     }
 
     clip: true
@@ -30,16 +40,20 @@ StyledRect {
     implicitHeight: Config.bar.sizes.innerWidth
     implicitWidth: nonAnimWidth
 
-    color: Qt.alpha(Colours.tPalette.m3surfaceContainer, (Config.bar.tray.background && items.count > 0) ? Colours.tPalette.m3surfaceContainer.a : 0)
+    color: items.count > 0 ? glassStyle.background : "transparent"
     radius: Appearance.rounding.full
+    border.width: items.count > 0 ? 1 : 0
+    border.color: glassStyle.border
 
     Row {
         id: layout
 
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.left: parent.left
-        anchors.leftMargin: root.padding
+        anchors.centerIn: parent
         spacing: Appearance.spacing.small
+
+        // Row has built-in padding properties (unlike RowLayout)
+        leftPadding: root.pillPadding
+        rightPadding: root.pillPadding
 
         opacity: root.expanded || !Config.bar.tray.compact ? 1 : 0
 
@@ -93,7 +107,7 @@ StyledRect {
 
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
-                anchors.rightMargin: Config.bar.tray.background ? Appearance.padding.small : -Appearance.padding.small
+                anchors.rightMargin: Appearance.padding.small
                 text: "expand_less"
                 font.pointSize: Appearance.font.size.large
                 rotation: root.expanded ? 90 : -90

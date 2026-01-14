@@ -16,6 +16,8 @@ Item {
     required property PersistentProperties visibilities
     required property BarPopouts.Wrapper popouts
     readonly property int hPadding: Appearance.padding.large
+    // External margin between glassmorphism pill components and adjacent bar entries
+    readonly property int pillExternalMargin: Appearance.spacing.small
 
     // Split entries into left, center, right sections based on workspaces position
     // Single-pass processing for efficiency
@@ -39,14 +41,22 @@ Item {
         // Spacers are ignored (no longer needed in three-section layout)
         for (let i = 0; i < entries.length; i++) {
             const entry = entries[i];
-            if (entry.id === "spacer") continue;
-            if (i === centerIndex) continue;
+            if (entry.id === "spacer")
+                continue;
+            if (i === centerIndex)
+                continue;
 
-            if (centerIndex === -1 || i < centerIndex) left.push(entry);
-            else right.push(entry);
+            if (centerIndex === -1 || i < centerIndex)
+                left.push(entry);
+            else
+                right.push(entry);
         }
 
-        return { left, center, right };
+        return {
+            left,
+            center,
+            right
+        };
     }
 
     readonly property var leftEntries: _splitEntries.left
@@ -231,22 +241,38 @@ Item {
         property bool isFirst: false
         property bool isLast: false
 
+        // Glassmorphism pill entries that need external margins for visual separation
+        // Add new pill component IDs here when extending the bar
+        readonly property bool hasPillMargins: entryId === "tray" || entryId === "statusIcons"
+
         Layout.alignment: Qt.AlignVCenter
+        Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
+        Layout.rightMargin: hasPillMargins ? root.pillExternalMargin : 0
         visible: enabled
         active: enabled
 
         sourceComponent: {
             switch (entryId) {
-                case "logo": return logoComp;
-                case "tray": return trayComp;
-                case "clock": return clockComp;
-                case "date": return dateComp;
-                case "cpuStatus": return cpuStatusComp;
-                case "ramUsage": return ramUsageComp;
-                case "availableUpdates": return availableUpdatesComp;
-                case "statusIcons": return statusIconsComp;
-                case "power": return powerComp;
-                default: return null;
+            case "logo":
+                return logoComp;
+            case "tray":
+                return trayComp;
+            case "clock":
+                return clockComp;
+            case "date":
+                return dateComp;
+            case "cpuStatus":
+                return cpuStatusComp;
+            case "ramUsage":
+                return ramUsageComp;
+            case "availableUpdates":
+                return availableUpdatesComp;
+            case "statusIcons":
+                return statusIconsComp;
+            case "power":
+                return powerComp;
+            default:
+                return null;
             }
         }
     }

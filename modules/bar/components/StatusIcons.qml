@@ -16,22 +16,40 @@ StyledRect {
     property color colour: Colours.palette.m3secondary
     readonly property alias items: iconColumn
 
-    color: Colours.tPalette.m3surfaceContainer
+    // Glassmorphism styling (subtle intensity for background containers,
+    // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
+    readonly property var glassStyle: Colours.glassmorphism(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.subtle
+    )
+
+    color: glassStyle.background
     radius: Appearance.rounding.full
+    border.width: 1
+    border.color: glassStyle.border
+
+    // Internal padding for the pill (left and right edges)
+    readonly property int pillPadding: Appearance.spacing.large
 
     clip: true
     implicitHeight: Config.bar.sizes.innerWidth
-    implicitWidth: iconColumn.implicitWidth + Appearance.padding.normal * 2 - (Config.bar.status.showLockStatus && !Hypr.capsLock && !Hypr.numLock ? iconColumn.spacing : 0)
+    // Width is determined by iconColumn which includes padding spacers.
+    // Subtract spacing when lockStatus loader is active but both indicators are hidden
+    // to prevent extra gap at the start of the pill.
+    implicitWidth: iconColumn.implicitWidth - (Config.bar.status.showLockStatus && !Hypr.capsLock && !Hypr.numLock ? iconColumn.spacing : 0)
 
     RowLayout {
         id: iconColumn
 
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        anchors.rightMargin: Appearance.padding.normal
+        anchors.centerIn: parent
 
         spacing: Appearance.spacing.smaller / 2
+
+        // Left padding spacer
+        Item {
+            implicitWidth: root.pillPadding
+            implicitHeight: 1
+        }
 
         // Lock keys status
         WrappedLoader {
@@ -258,6 +276,12 @@ StyledRect {
                 color: !UPower.onBattery || UPower.displayDevice.percentage > 0.2 ? root.colour : Colours.palette.m3error
                 fill: 1
             }
+        }
+
+        // Right padding spacer
+        Item {
+            implicitWidth: root.pillPadding
+            implicitHeight: 1
         }
     }
 
