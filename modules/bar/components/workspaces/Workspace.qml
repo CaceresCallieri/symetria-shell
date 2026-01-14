@@ -71,7 +71,7 @@ RowLayout {
 
         readonly property color indicatorColor: {
             if (root.isActive)
-                return Colours.palette.m3onPrimary;
+                return Colours.palette.m3onSurface;
             if (Config.bar.workspaces.occupiedBg || root.isOccupied)
                 return Colours.palette.m3onSurface;
             return Colours.layer(Colours.palette.m3outlineVariant, 2);
@@ -148,7 +148,7 @@ RowLayout {
         opacity: shouldShow ? 1 : 0
 
         text: "fullscreen"
-        color: Colours.palette.m3onPrimary
+        color: Colours.palette.m3onSurface
         font.pointSize: Appearance.font.size.small
 
         Behavior on opacity { Anim {} }
