@@ -10,35 +10,17 @@ import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+// Status icons pill - shows system status indicators (audio, network, bluetooth, battery, etc.).
+// Uses PillContainer base for consistent styling with other bar pills.
+
+PillContainer {
     id: root
 
+    // Use secondary color to distinguish status pills from info pills (tertiary).
     property color colour: Colours.palette.m3secondary
 
     // Popout interface: container with named WrappedLoader children (each has 'name' property)
-    readonly property alias iconContainer: iconColumn
-
-    // Glassmorphism styling (subtle intensity for background containers,
-    // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
-    readonly property var glassStyle: Colours.glassmorphism(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
-    color: glassStyle.background
-    radius: Appearance.rounding.full
-    border.width: 1
-    border.color: glassStyle.border
-
-    // Internal padding for the pill (left and right edges)
-    readonly property int pillPadding: Appearance.spacing.large
-
-    clip: true
-    implicitHeight: Config.bar.sizes.innerWidth
-    // Width is determined by iconColumn which includes padding spacers.
-    // Subtract spacing when lockStatus loader is active but both indicators are hidden
-    // to prevent extra gap at the start of the pill.
-    implicitWidth: iconColumn.implicitWidth - (Config.bar.status.showLockStatus && !Hypr.capsLock && !Hypr.numLock ? iconColumn.spacing : 0)
+    iconContainer: iconColumn
 
     RowLayout {
         id: iconColumn
@@ -53,10 +35,14 @@ StyledRect {
             implicitHeight: 1
         }
 
-        // Lock keys status
-        WrappedLoader {
+        // Lock keys status - collapse left margin when both indicators are hidden
+        // to prevent extra gap at the start of the pill
+        PillContainer.WrappedLoader {
             name: "lockstatus"
             active: Config.bar.status.showLockStatus
+
+            // Collapse spacing when loader is active but no lock icons are visible
+            Layout.leftMargin: (Config.bar.status.showLockStatus && !Hypr.capsLock && !Hypr.numLock) ? -iconColumn.spacing : 0
 
             sourceComponent: RowLayout {
                 spacing: 0
@@ -124,7 +110,7 @@ StyledRect {
         }
 
         // Audio icon
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "audio"
             active: Config.bar.status.showAudio
 
@@ -136,7 +122,7 @@ StyledRect {
         }
 
         // Microphone icon
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "audio"
             active: Config.bar.status.showMicrophone
 
@@ -148,7 +134,7 @@ StyledRect {
         }
 
         // Keyboard layout icon
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "kblayout"
             active: Config.bar.status.showKbLayout
 
@@ -161,7 +147,7 @@ StyledRect {
         }
 
         // Network icon
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "network"
             active: Config.bar.status.showNetwork
 
@@ -173,7 +159,7 @@ StyledRect {
         }
 
         // Ethernet icon
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "ethernet"
             active: Config.bar.status.showNetwork && Nmcli.activeEthernet
 
@@ -185,7 +171,7 @@ StyledRect {
         }
 
         // Bluetooth section
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             Layout.preferredWidth: implicitWidth
 
             name: "bluetooth"
@@ -251,7 +237,7 @@ StyledRect {
         }
 
         // Battery icon
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "battery"
             active: Config.bar.status.showBattery
 
@@ -285,13 +271,5 @@ StyledRect {
             implicitWidth: root.pillPadding
             implicitHeight: 1
         }
-    }
-
-    component WrappedLoader: Loader {
-        required property string name
-
-        Layout.alignment: Qt.AlignVCenter
-        asynchronous: true
-        visible: active
     }
 }

@@ -92,24 +92,27 @@ qs -c caelestia
 
 **Colours:** `services/Colours.qml` provides the M3 (Material 3) color palette with support for light/dark modes and transparency layers.
 
-**Bar Pill Pattern:** Bar components can be grouped into glassmorphism "pill" containers for visual cohesion. The pattern uses:
+**Bar Pill Pattern:** Bar components can be grouped into glassmorphism "pill" containers for visual cohesion. The base component `PillContainer.qml` provides:
 - `StyledRect` with `Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)`
 - `radius: Appearance.rounding.full` for pill shape
-- `RowLayout` with padding spacers for internal content
+- `pillPadding` constant for internal spacing
 - `WrappedLoader` component with `name` property for child elements (enables popout detection)
+- `customWidth` property for special width calculations (used by StatusIcons)
 
 Current pills:
-| Component | Contents | Color | Popouts |
-|-----------|----------|-------|---------|
-| `StatusIcons.qml` | Audio, Network, Bluetooth, Battery | m3secondary | Yes |
-| `Tray.qml` | System tray items | m3surfaceContainerHigh | Yes |
-| `TimePill.qml` | Clock, Date | m3tertiary | Planned (calendar) |
-| `SystemPill.qml` | CPU, RAM, Updates | m3tertiary | No |
+| Component | Base | Contents | Color | Popouts |
+|-----------|------|----------|-------|---------|
+| `StatusIcons.qml` | PillContainer | Audio, Network, Bluetooth, Battery | m3secondary | Yes |
+| `Tray.qml` | StyledRect | System tray items | m3surfaceContainerHigh | Yes |
+| `TimePill.qml` | PillContainer | Clock, Date | m3tertiary | Planned (calendar) |
+| `SystemPill.qml` | PillContainer | CPU, RAM, Updates | m3tertiary | No |
 
-To create a new pill, use `StatusIcons.qml` as the reference implementation. Pills must be registered in `Bar.qml`:
-1. Add entry ID to `hasPillMargins` property check
-2. Add switch case in `BarLoader.sourceComponent`
-3. Add Component definition
+Note: `Tray.qml` doesn't use PillContainer due to unique requirements (conditional styling, compact mode, expand/collapse).
+
+To create a new pill:
+1. Extend `PillContainer` and set `colour`, `iconContainer` (optional), `visible` binding
+2. Add `RowLayout` with padding spacers and `PillContainer.WrappedLoader` children
+3. Register in `Bar.qml`: add to `hasPillMargins`, switch case, and Component definition
 
 ### C++ Plugin Modules
 Located in `plugin/src/Caelestia/`:
