@@ -24,6 +24,27 @@ Searcher {
     property var workspaceWallpaperMap: ({})
     property int workspaceMapVersion: 0  // Incremented to force binding updates
 
+    // Race condition guard: FileSystemModel scans directories asynchronously, so
+    // Component.onCompleted fires before entries are populated. This flag ensures
+    // the empty-directory check runs exactly once via either onEntriesChanged
+    // (normal case) or the fallback timer (empty/missing directory case).
+    property bool _workspaceCheckDone: false
+    readonly property int _workspaceCheckTimeoutMs: 500
+
+    // Validates workspace wallpaper directory after FileSystemModel scan completes.
+    // Called by both onEntriesChanged (happy path) and fallback timer (empty dir).
+    // Note: FileSystemModel doesn't emit entriesChanged when directory is empty/missing
+    // because its C++ applyChanges() returns early when oldPaths == newPaths (both empty).
+    function _checkWorkspaceWallpapers(): void {
+        if (_workspaceCheckDone) return;
+        _workspaceCheckDone = true;
+        workspaceCheckTimer.stop();
+
+        if (Config.background.perWorkspaceWallpapers.enabled && workspaceWallpapers.entries.length === 0) {
+            console.warn(`Per-workspace wallpapers enabled but directory is empty or missing: ${workspaceWallpaperDir}`);
+        }
+    }
+
     function getWallpaperForWorkspace(workspaceId: int, workspaceName: string): string {
         if (!Config.background.perWorkspaceWallpapers.enabled)
             return actualCurrent;
@@ -88,13 +109,10 @@ Searcher {
         workspaceMapVersion++;
     }
 
-    // Fix 1: Directory existence warning on startup
+    // Build workspace map after component initialization (Qt.callLater ensures all properties are ready)
     Component.onCompleted: {
         Qt.callLater(() => {
             rebuildWorkspaceMap();
-            if (Config.background.perWorkspaceWallpapers.enabled && workspaceWallpapers.entries.length === 0) {
-                console.warn(`Per-workspace wallpapers enabled but directory is empty or missing: ${workspaceWallpaperDir}`);
-            }
         });
     }
 
@@ -165,7 +183,20 @@ Searcher {
         path: root.workspaceWallpaperDir
         filter: FileSystemModel.Images
         watchChanges: true
-        onEntriesChanged: root.rebuildWorkspaceMap()
+        onEntriesChanged: {
+            root.rebuildWorkspaceMap();
+            root._checkWorkspaceWallpapers();
+        }
+    }
+
+    // Fallback timer for empty/missing directories where FileSystemModel's entriesChanged
+    // doesn't fire (oldPaths == newPaths in C++ applyChanges causes early return)
+    Timer {
+        id: workspaceCheckTimer
+        interval: root._workspaceCheckTimeoutMs
+        repeat: false
+        running: Config.background.perWorkspaceWallpapers.enabled && !root._workspaceCheckDone
+        onTriggered: root._checkWorkspaceWallpapers()
     }
 
     Process {
