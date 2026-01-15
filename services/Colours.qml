@@ -96,7 +96,7 @@ Singleton {
     // @returns: { background: color, border: color }
     //
     // Design: Background and border scale proportionally maintaining visual relationship
-    function glassmorphism(baseColor: color, intensity: real) {
+    function glassmorphism(baseColor: color, intensity: real): var {
         // Clamp intensity to valid range [0, 1]
         const clampedIntensity = Math.max(0, Math.min(1, intensity));
 

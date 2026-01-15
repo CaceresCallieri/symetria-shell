@@ -25,7 +25,7 @@ Item {
     readonly property bool isActive: {
         const activeAddr = Hypr.activeToplevel?.lastIpcObject?.address;
         const thisAddr = client?.lastIpcObject?.address;
-        return activeAddr && thisAddr && activeAddr === thisAddr;
+        return Boolean(activeAddr && thisAddr && activeAddr === thisAddr);
     }
     // Hover state for tooltip
     property bool hovered: hoverHandler.hovered
