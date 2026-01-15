@@ -10,12 +10,13 @@ import QtQuick
 Searcher {
     id: root
 
-    readonly property string currentNamePath: `${Paths.state}/wallpaper/path.txt`
     readonly property list<string> smartArg: Config.services.smartScheme ? [] : ["--no-smart"]
 
     property bool showPreview: false
     readonly property string current: showPreview ? previewPath : actualCurrent
     property string previewPath
+    // Not initialized from file - remains empty until setWallpaper() is called.
+    // Fallback logic uses workspace wallpapers or shows "missing wallpaper" UI.
     property string actualCurrent
     property bool previewColourLock
 
@@ -49,7 +50,7 @@ Searcher {
         if (!Config.background.perWorkspaceWallpapers.enabled)
             return actualCurrent;
 
-        // Fix 5: Special workspaces (negative IDs) use global wallpaper
+        // Fix 5: Special workspaces (negative IDs) use actualCurrent (manually set wallpaper)
         if (workspaceId < 0)
             return actualCurrent;
 
@@ -155,16 +156,6 @@ Searcher {
 
         function list(): string {
             return root.list.map(w => w.path).join("\n");
-        }
-    }
-
-    FileView {
-        path: root.currentNamePath
-        watchChanges: true
-        onFileChanged: reload()
-        onLoaded: {
-            root.actualCurrent = text().trim();
-            root.previewColourLock = false;
         }
     }
 

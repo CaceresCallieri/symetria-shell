@@ -21,7 +21,9 @@ JsonObject {
     component PerWorkspaceWallpapers: JsonObject {
         property bool enabled: true
         property string directory: "Workspaces"
-        property string fallbackBehavior: "global"
+        // Default "first" uses first workspace wallpaper for unmapped workspaces.
+        // Changed from upstream "global" since path.txt state file was removed.
+        property string fallbackBehavior: "first"
 
         // Fix 4: Validate fallbackBehavior enum values
         readonly property var validFallbacks: ["global", "first", "none"]
