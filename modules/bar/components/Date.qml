@@ -15,7 +15,7 @@ Row {
     Loader {
         anchors.verticalCenter: parent.verticalCenter
 
-        active: Config.bar.clock.showIcon
+        active: Config.bar.date.showIcon
         visible: active
         asynchronous: true
 

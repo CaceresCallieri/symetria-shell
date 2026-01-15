@@ -310,7 +310,10 @@ Item {
 
         // Glassmorphism pill entries that need external margins for visual separation
         // Add new pill component IDs here when extending the bar
-        readonly property bool hasPillMargins: entryId === "tray" || entryId === "statusIcons"
+        readonly property bool hasPillMargins: entryId === "tray"
+            || entryId === "statusIcons"
+            || entryId === "timePill"
+            || entryId === "systemPill"
 
         Layout.alignment: Qt.AlignVCenter
         Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
@@ -324,16 +327,10 @@ Item {
                 return logoComp;
             case "tray":
                 return trayComp;
-            case "clock":
-                return clockComp;
-            case "date":
-                return dateComp;
-            case "cpuStatus":
-                return cpuStatusComp;
-            case "ramUsage":
-                return ramUsageComp;
-            case "availableUpdates":
-                return availableUpdatesComp;
+            case "timePill":
+                return timePillComp;
+            case "systemPill":
+                return systemPillComp;
             case "statusIcons":
                 return statusIconsComp;
             case "power":
@@ -356,28 +353,13 @@ Item {
     }
 
     Component {
-        id: clockComp
-        Clock {}
+        id: timePillComp
+        TimePill {}
     }
 
     Component {
-        id: dateComp
-        Date {}
-    }
-
-    Component {
-        id: cpuStatusComp
-        CpuStatus {}
-    }
-
-    Component {
-        id: ramUsageComp
-        RamUsage {}
-    }
-
-    Component {
-        id: availableUpdatesComp
-        AvailableUpdates {}
+        id: systemPillComp
+        SystemPill {}
     }
 
     Component {

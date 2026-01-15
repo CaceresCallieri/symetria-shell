@@ -11,28 +11,19 @@ JsonObject {
     property Tray tray: Tray {}
     property Status status: Status {}
     property Clock clock: Clock {}
+    property Date date: Date {}
+    property TimePill timePill: TimePill {}
+    property SystemPill systemPill: SystemPill {}
     property Sizes sizes: Sizes {}
     property list<string> excludedScreens: []
 
     property list<var> entries: [
         {
-            id: "clock",
+            id: "timePill",
             enabled: true
         },
         {
-            id: "date",
-            enabled: true
-        },
-        {
-            id: "cpuStatus",
-            enabled: true
-        },
-        {
-            id: "ramUsage",
-            enabled: true
-        },
-        {
-            id: "availableUpdates",
+            id: "systemPill",
             enabled: true
         },
         {
@@ -113,7 +104,22 @@ JsonObject {
     }
 
     component Clock: JsonObject {
-        property bool showIcon: true
+        property bool showIcon: true  // Display clock icon (schedule)
+    }
+
+    component Date: JsonObject {
+        property bool showIcon: true  // Display calendar icon (calendar_month)
+    }
+
+    component TimePill: JsonObject {
+        property bool showClock: true
+        property bool showDate: true
+    }
+
+    component SystemPill: JsonObject {
+        property bool showCpu: true
+        property bool showRam: true
+        property bool showUpdates: true
     }
 
     component Sizes: JsonObject {
