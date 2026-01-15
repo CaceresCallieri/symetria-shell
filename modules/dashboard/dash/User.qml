@@ -39,6 +39,7 @@ Row {
 
             anchors.fill: parent
             path: `${Paths.home}/.face`
+            opacity: status === Image.Ready ? 1 : 0
         }
 
         MouseArea {

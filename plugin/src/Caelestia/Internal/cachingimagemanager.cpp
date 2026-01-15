@@ -88,7 +88,8 @@ void CachingImageManager::setPath(const QString& path) {
     m_path = path;
     emit pathChanged();
 
-    if (!path.isEmpty()) {
+    // Only attempt to load if file exists (prevents warnings for missing files)
+    if (!path.isEmpty() && QFile::exists(path)) {
         updateSource(path);
     }
 }
@@ -98,8 +99,8 @@ void CachingImageManager::updateSource() {
 }
 
 void CachingImageManager::updateSource(const QString& path) {
-    if (path.isEmpty() || path == m_shaPath) {
-        // Path is empty or already calculating sha for path
+    if (path.isEmpty() || path == m_shaPath || !QFile::exists(path)) {
+        // Path is empty, already calculating sha, or file doesn't exist
         return;
     }
 
