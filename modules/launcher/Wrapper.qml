@@ -58,6 +58,8 @@ Item {
         id: hideAnim
 
         ScriptAction {
+            // Break the binding established by showAnim to prevent binding loops
+            // during the hide animation. Assigns current value without reactive binding.
             script: root.implicitHeight = root.implicitHeight
         }
         Anim {

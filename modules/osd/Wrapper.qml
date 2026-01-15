@@ -23,7 +23,7 @@ Item {
 
     function show(): void {
         visibilities.osd = true;
-        timer.restart();
+        autoHideTimer.restart();
     }
 
     Component.onCompleted: {
@@ -38,37 +38,47 @@ Item {
     implicitWidth: 0
     implicitHeight: content.implicitHeight
 
-    states: State {
-        name: "visible"
-        when: root.shouldBeActive
-
-        PropertyChanges {
-            root.implicitWidth: content.implicitWidth
+    onShouldBeActiveChanged: {
+        if (shouldBeActive) {
+            hideAnim.stop();
+            showAnim.start();
+        } else {
+            showAnim.stop();
+            hideAnim.start();
         }
     }
 
-    transitions: [
-        Transition {
-            from: ""
-            to: "visible"
+    SequentialAnimation {
+        id: showAnim
 
-            Anim {
-                target: root
-                property: "implicitWidth"
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-        },
-        Transition {
-            from: "visible"
-            to: ""
-
-            Anim {
-                target: root
-                property: "implicitWidth"
-                easing.bezierCurve: Appearance.anim.curves.emphasized
-            }
+        Anim {
+            target: root
+            property: "implicitWidth"
+            to: content.implicitWidth
+            duration: Appearance.anim.durations.expressiveDefaultSpatial
+            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
         }
-    ]
+        ScriptAction {
+            script: root.implicitWidth = Qt.binding(() => content.implicitWidth)
+        }
+    }
+
+    SequentialAnimation {
+        id: hideAnim
+
+        ScriptAction {
+            // Break the binding established by showAnim to prevent binding loops
+            // during the hide animation. Assigns current value without reactive binding.
+            script: root.implicitWidth = root.implicitWidth
+        }
+        Anim {
+            target: root
+            property: "implicitWidth"
+            to: 0
+            duration: Appearance.anim.durations.normal
+            easing.bezierCurve: Appearance.anim.curves.emphasized
+        }
+    }
 
     Connections {
         target: Audio
@@ -103,8 +113,9 @@ Item {
         }
     }
 
+    // OSD auto-hides after delay unless hovered (unique to OSD, other panels stay visible)
     Timer {
-        id: timer
+        id: autoHideTimer
 
         interval: Config.osd.hideDelay
         onTriggered: {

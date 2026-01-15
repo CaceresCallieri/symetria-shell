@@ -14,6 +14,8 @@ Item {
     required property PersistentProperties visibilities
     required property PersistentProperties state
     required property FileDialog facePicker
+    // Separate "nonAnim" properties allow parent wrapper to read target size
+    // before animations complete, enabling correct animation endpoint calculation
     readonly property real nonAnimWidth: view.implicitWidth + viewWrapper.anchors.margins * 2
     readonly property real nonAnimHeight: tabs.implicitHeight + tabs.anchors.topMargin + view.implicitHeight + viewWrapper.anchors.margins * 2
 
@@ -87,6 +89,7 @@ Item {
                 id: row
 
                 Pane {
+                    index: 0
                     sourceComponent: Dash {
                         visibilities: root.visibilities
                         state: root.state
@@ -95,16 +98,19 @@ Item {
                 }
 
                 Pane {
+                    index: 1
                     sourceComponent: Media {
                         visibilities: root.visibilities
                     }
                 }
 
                 Pane {
+                    index: 2
                     sourceComponent: Performance {}
                 }
 
                 Pane {
+                    index: 3
                     sourceComponent: Weather {}
                 }
             }
@@ -130,12 +136,14 @@ Item {
     }
 
     component Pane: Loader {
+        required property int index
+
         Layout.alignment: Qt.AlignTop
 
         Component.onCompleted: active = Qt.binding(() => {
-            const vx = Math.floor(view.visibleArea.xPosition * view.contentWidth);
-            const vex = Math.floor(vx + view.visibleArea.widthRatio * view.contentWidth);
-            return (vx >= x && vx <= x + implicitWidth) || (vex >= x && vex <= x + implicitWidth);
+            // Load current pane plus adjacent panes for smooth swipe transitions.
+            // Index-based check avoids binding loops from geometry calculations.
+            return Math.abs(index - view.currentIndex) <= 1;
         })
     }
 }

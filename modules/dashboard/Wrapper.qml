@@ -30,59 +30,68 @@ Item {
         }
     }
 
-    readonly property real nonAnimHeight: state === "visible" ? (content.item?.nonAnimHeight ?? 0) : 0
+    readonly property bool shouldBeActive: visibilities.dashboard && Config.dashboard.enabled
+    readonly property real nonAnimHeight: shouldBeActive ? (content.item?.nonAnimHeight ?? 0) : 0
 
     visible: height > 0
     implicitHeight: 0
     implicitWidth: content.implicitWidth
 
-    onStateChanged: {
-        if (state === "visible" && timer.running) {
-            timer.triggered();
-            timer.stop();
+    onShouldBeActiveChanged: {
+        if (shouldBeActive) {
+            if (deferredLoadTimer.running) {
+                deferredLoadTimer.triggered();
+                deferredLoadTimer.stop();
+            }
+            hideAnim.stop();
+            showAnim.start();
+        } else {
+            showAnim.stop();
+            hideAnim.start();
         }
     }
 
-    states: State {
-        name: "visible"
-        when: root.visibilities.dashboard && Config.dashboard.enabled
+    SequentialAnimation {
+        id: showAnim
 
-        PropertyChanges {
-            root.implicitHeight: content.implicitHeight
+        Anim {
+            target: root
+            property: "implicitHeight"
+            to: content.implicitHeight
+            duration: Appearance.anim.durations.expressiveDefaultSpatial
+            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+        }
+        ScriptAction {
+            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
         }
     }
 
-    transitions: [
-        Transition {
-            from: ""
-            to: "visible"
+    SequentialAnimation {
+        id: hideAnim
 
-            Anim {
-                target: root
-                property: "implicitHeight"
-                duration: Appearance.anim.durations.expressiveDefaultSpatial
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-        },
-        Transition {
-            from: "visible"
-            to: ""
-
-            Anim {
-                target: root
-                property: "implicitHeight"
-                easing.bezierCurve: Appearance.anim.curves.emphasized
-            }
+        ScriptAction {
+            // Break the binding established by showAnim to prevent binding loops
+            // during the hide animation. Assigns current value without reactive binding.
+            script: root.implicitHeight = root.implicitHeight
         }
-    ]
+        Anim {
+            target: root
+            property: "implicitHeight"
+            to: 0
+            easing.bezierCurve: Appearance.anim.curves.emphasized
+        }
+    }
 
+    // Defer dashboard content loading to improve shell startup performance.
+    // Content loads after extraLarge duration to avoid blocking initial render.
     Timer {
-        id: timer
+        id: deferredLoadTimer
 
         running: true
         interval: Appearance.anim.durations.extraLarge
         onTriggered: {
-            content.active = Qt.binding(() => (root.visibilities.dashboard && Config.dashboard.enabled) || root.visible);
+            // Enable lazy loading: keep content loaded only while visible
+            content.active = Qt.binding(() => root.shouldBeActive || root.visible);
             content.visible = true;
         }
     }
