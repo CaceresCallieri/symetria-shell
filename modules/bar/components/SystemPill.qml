@@ -6,31 +6,14 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+// System monitoring pill - wraps CpuStatus, RamUsage, and AvailableUpdates
+// in a glassmorphism container. Uses PillContainer base for consistent styling.
+
+PillContainer {
     id: root
 
-    // Use tertiary color for time/system info pills (vs secondary for status icons)
-    // This provides visual distinction between different functional pill groups
+    // Use tertiary color for time/system info pills (vs secondary for status icons).
     property color colour: Colours.palette.m3tertiary
-
-    // Glassmorphism styling (subtle intensity for background containers,
-    // matching StatusIcons and Tray pill styling)
-    readonly property var glassStyle: Colours.glassmorphism(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
-    color: glassStyle.background
-    radius: Appearance.rounding.full
-    border.width: 1
-    border.color: glassStyle.border
-
-    // Internal padding for the pill (left and right edges)
-    readonly property int pillPadding: Appearance.spacing.large
-
-    clip: true
-    implicitHeight: Config.bar.sizes.innerWidth
-    implicitWidth: content.implicitWidth
 
     // Hide entirely when no items are visible
     visible: Config.bar.systemPill.showCpu
@@ -41,7 +24,6 @@ StyledRect {
         id: content
 
         anchors.centerIn: parent
-
         spacing: Appearance.spacing.small
 
         // Left padding spacer
@@ -51,7 +33,7 @@ StyledRect {
         }
 
         // CPU Status
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "cpu"
             active: Config.bar.systemPill.showCpu
 
@@ -61,7 +43,7 @@ StyledRect {
         }
 
         // RAM Usage
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "ram"
             active: Config.bar.systemPill.showRam
 
@@ -71,7 +53,7 @@ StyledRect {
         }
 
         // Available Updates
-        WrappedLoader {
+        PillContainer.WrappedLoader {
             name: "updates"
             active: Config.bar.systemPill.showUpdates
 
@@ -85,17 +67,5 @@ StyledRect {
             implicitWidth: root.pillPadding
             implicitHeight: 1
         }
-    }
-
-    Behavior on implicitWidth {
-        Anim {}
-    }
-
-    component WrappedLoader: Loader {
-        required property string name
-
-        Layout.alignment: Qt.AlignVCenter
-        asynchronous: true
-        visible: active
     }
 }
