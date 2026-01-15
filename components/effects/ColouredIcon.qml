@@ -9,6 +9,9 @@ IconImage {
 
     required property color colour
 
+    // Ensure minimum icon request size to prevent 2x2 pixel warnings
+    // Uses actual dimensions when anchored, falls back to 16px minimum
+    implicitSize: Math.max(width, height, 16)
     asynchronous: true
 
     layer.enabled: true

@@ -2,6 +2,7 @@ import "../services"
 import qs.components
 import qs.services
 import qs.config
+import qs.utils
 import Quickshell
 import Quickshell.Widgets
 import QtQuick
@@ -35,8 +36,9 @@ Item {
         IconImage {
             id: icon
 
-            source: Quickshell.iconPath(root.modelData?.icon, "image-missing")
-            implicitSize: parent.height * 0.8
+            source: Icons.safeIconPath(root.modelData?.icon, "image-missing")
+            // Minimum 16px to prevent invalid icon requests during initialization
+            implicitSize: Math.max(parent.height * 0.8, 16)
 
             anchors.verticalCenter: parent.verticalCenter
         }

@@ -35,6 +35,8 @@ Item {
         id: iconImage
 
         IconImage {
+            // Use actual size when available, minimum 16px to prevent invalid requests
+            implicitSize: Math.max(root.actualSize, root.implicitSize, 16)
             source: root.source
             asynchronous: true
         }

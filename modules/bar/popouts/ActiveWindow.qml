@@ -32,7 +32,8 @@ Item {
                 id: icon
 
                 Layout.alignment: Qt.AlignVCenter
-                implicitSize: details.implicitHeight
+                // Minimum 16px to prevent invalid icon requests during initialization
+                implicitSize: Math.max(details.implicitHeight, 16)
                 source: Icons.getAppIcon(Hypr.activeToplevel?.lastIpcObject.class ?? "", "image-missing")
             }
 

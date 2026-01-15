@@ -348,7 +348,7 @@ Item {
                                 implicitSize: 32
                                 source: {
                                     const entry = modelData.entry;
-                                    return entry ? Quickshell.iconPath(entry.icon, "image-missing") : "image-missing";
+                                    return entry ? Icons.safeIconPath(entry.icon, "image-missing") : "";
                                 }
                             }
 
@@ -520,12 +520,12 @@ Item {
                         implicitSize: Appearance.font.size.extraLarge * 3 * 2
                         source: {
                             const app = appDetailsLayout.displayedApp;
-                            if (!app) return "image-missing";
+                            if (!app) return "";
                             const entry = app.entry;
                             if (entry && entry.icon) {
-                                return Quickshell.iconPath(entry.icon, "image-missing");
+                                return Icons.safeIconPath(entry.icon, "application-x-executable");
                             }
-                            return "image-missing";
+                            return "";
                         }
                     }
 

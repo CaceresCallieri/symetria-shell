@@ -121,7 +121,8 @@ StackView {
                             asynchronous: true
 
                             sourceComponent: IconImage {
-                                implicitSize: label.implicitHeight
+                                // Minimum 16px to prevent invalid icon requests during initialization
+                                implicitSize: Math.max(label.implicitHeight, 16)
 
                                 source: item.modelData.icon
                             }

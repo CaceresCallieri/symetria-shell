@@ -50,7 +50,8 @@ Item {
 
         visible: Config.bar.workspaces.useActualAppIcons
         anchors.centerIn: parent
-        implicitSize: Config.bar.sizes.iconSize
+        // Minimum 16px to prevent invalid icon requests during initialization
+        implicitSize: Math.max(Config.bar.sizes.iconSize, 16)
         source: Icons.resolveWindowIcon(
             root.client?.lastIpcObject?.class ?? "",
             Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : ""

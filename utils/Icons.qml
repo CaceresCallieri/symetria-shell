@@ -22,6 +22,33 @@ Singleton {
         return { useMaterial: usesMaterial, iconText: text };
     }
 
+    // Check if an icon exists in the current theme
+    // Returns true if the icon can be loaded, false otherwise
+    function iconExists(iconName: string): bool {
+        if (!iconName || iconName.length === 0) return false;
+        // Use Quickshell.iconPath with check=true which returns empty string if icon doesn't exist
+        const path = Quickshell.iconPath(iconName, true);
+        return path && path.length > 0;
+    }
+
+    // Safe icon path getter that suppresses warnings for missing icons
+    // Returns icon path if icon exists, fallback if fallback exists, empty string otherwise
+    // Optimized to avoid redundant iconPath() calls
+    function safeIconPath(icon: string, fallback: string): string {
+        // Try primary icon first
+        if (icon && icon.length > 0) {
+            const path = Quickshell.iconPath(icon, true);
+            if (path && path.length > 0) return path;
+        }
+        // Try fallback icon
+        if (fallback && fallback.length > 0) {
+            const path = Quickshell.iconPath(fallback, true);
+            if (path && path.length > 0) return path;
+        }
+        // Return empty string to avoid warning - component should handle missing icons gracefully
+        return "";
+    }
+
     // Terminal emulator window classes for terminal app detection (all lowercase for efficient lookup)
     readonly property var terminalClasses: new Set([
         "com.mitchellh.ghostty", "ghostty", "kitty", "alacritty",
@@ -151,9 +178,10 @@ Singleton {
 
     function getAppIcon(name: string, fallback: string): string {
         const icon = DesktopEntries.heuristicLookup(name)?.icon;
+        // Use safeIconPath to avoid warnings for missing icons
         if (fallback !== "undefined")
-            return Quickshell.iconPath(icon, fallback);
-        return Quickshell.iconPath(icon);
+            return safeIconPath(icon, fallback);
+        return safeIconPath(icon, "application-x-executable");
     }
 
     function getAppCategoryIcon(name: string, fallback: string): string {
@@ -174,7 +202,7 @@ Singleton {
 
     // Resolve the appropriate icon for a window based on class and title
     // For terminals, attempts to detect the running app from the title
-    // Returns the icon path (via Quickshell.iconPath) ready for use in IconImage
+    // Returns the icon path (via safeIconPath) ready for use in IconImage
     function resolveWindowIcon(windowClass: string, windowTitle: string): string {
         // Terminal app detection
         if (isTerminal(windowClass) && windowTitle) {
@@ -185,21 +213,21 @@ Singleton {
                 // Try to get the app's actual icon
                 const appIcon = DesktopEntries.heuristicLookup(appIconName)?.icon;
                 if (appIcon) {
-                    return Quickshell.iconPath(appIcon, windowClass);
+                    return safeIconPath(appIcon, windowClass);
                 }
                 // Fallback: try the icon name directly
-                return Quickshell.iconPath(appIconName, windowClass);
+                return safeIconPath(appIconName, windowClass);
             }
         }
 
         // Standard desktop entry lookup
         const entry = DesktopEntries.heuristicLookup(windowClass);
         if (entry?.icon) {
-            return Quickshell.iconPath(entry.icon, "application-x-executable");
+            return safeIconPath(entry.icon, "application-x-executable");
         }
 
         // Final fallback
-        return Quickshell.iconPath(windowClass, "application-x-executable");
+        return safeIconPath(windowClass, "application-x-executable");
     }
 
     function getNetworkIcon(strength: int, isSecure = false): string {

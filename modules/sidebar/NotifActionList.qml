@@ -167,6 +167,8 @@ Item {
                         id: iconComp
 
                         IconImage {
+                            // Match MaterialIcon sizing for visual consistency
+                            implicitSize: Appearance.font.size.larger
                             source: Quickshell.iconPath(action.modelData.identifier)
                         }
                     }
