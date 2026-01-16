@@ -124,6 +124,36 @@ Located in `plugin/src/Caelestia/`:
 ### IPC
 Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `drawers`, `notifs`, `lock`, `mpris`, `picker`, `wallpaper`.
 
+### Clipboard Manager
+
+The clipboard manager (`modules/clipboard/`) provides clipboard history via integration with `cliphist`.
+
+**Prerequisites:**
+```bash
+paru -S cliphist wl-clipboard
+```
+
+Add to Hyprland config:
+```conf
+exec-once = wl-paste --type text --watch cliphist store
+exec-once = wl-paste --type image --watch cliphist store
+```
+
+**Keyboard Shortcuts (when drawer is open):**
+
+| Key | Action |
+|-----|--------|
+| ↑/↓ | Navigate entries |
+| Enter | Restore selected entry to clipboard |
+| Delete | Remove selected entry |
+| Escape | Close drawer |
+
+**Toggle keybind:** `Super+V` (configurable in `~/.config/hypr/keybindings.conf`)
+
+**IPC:** `qs -c caelestia ipc call drawers toggle clipboard`
+
+**Clear All:** Click the trash icon twice within 2 seconds to confirm.
+
 ## Configuration
 
 ### Two-Layer System

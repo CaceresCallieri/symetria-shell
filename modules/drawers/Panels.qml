@@ -8,6 +8,7 @@ import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
 import qs.modules.utilities.toasts as Toasts
 import qs.modules.sidebar as Sidebar
+import qs.modules.clipboard as ClipboardModule
 import Quickshell
 import QtQuick
 
@@ -27,6 +28,7 @@ Item {
     readonly property alias utilities: utilities
     readonly property alias toasts: toasts
     readonly property alias sidebar: sidebar
+    readonly property alias clipboard: clipboard
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
@@ -75,6 +77,18 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
+    }
+
+    ClipboardModule.Wrapper {
+        id: clipboard
+
+        screen: root.screen
+        visibilities: root.visibilities
+        panels: root
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: launcher.height > 0 ? launcher.height + Appearance.spacing.large : 0
     }
 
     Dashboard.Wrapper {
