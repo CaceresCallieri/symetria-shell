@@ -69,8 +69,12 @@ StyledRect {
         implicitHeight: children[root.primaryContentIndex]?.implicitHeight ?? 0
     }
 
+    // Width animation matches Tray.qml for consistent bar visual behavior
     Behavior on implicitWidth {
-        Anim {}
+        Anim {
+            duration: Appearance.anim.durations.expressiveDefaultSpatial
+            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+        }
     }
 
     // Validate single-child assumption on component completion
