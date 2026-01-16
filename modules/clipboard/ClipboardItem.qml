@@ -12,6 +12,7 @@ Item {
 
     required property var entry
     required property PersistentProperties visibilities
+    property string searchQuery: ""
 
     implicitHeight: Config.clipboard.sizes.itemHeight
 
@@ -44,55 +45,20 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
         }
 
-        // Preview text
-        StyledText {
+        // Preview text with search highlighting
+        HighlightedText {
             id: preview
 
             anchors.left: icon.right
-            anchors.right: deleteBtn.left
+            anchors.right: parent.right
             anchors.leftMargin: Appearance.spacing.normal
-            anchors.rightMargin: Appearance.spacing.normal
             anchors.verticalCenter: icon.verticalCenter
 
-            text: root.entry.preview
+            sourceText: root.entry.preview
+            searchQuery: root.searchQuery
             font.pointSize: Appearance.font.size.normal
             elide: Text.ElideRight
             maximumLineCount: 1
-        }
-
-        // Delete button
-        Item {
-            id: deleteBtn
-
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-
-            implicitWidth: deleteIcon.implicitWidth + Appearance.padding.small * 2
-            implicitHeight: deleteIcon.implicitHeight + Appearance.padding.small * 2
-
-            opacity: deleteMouse.containsMouse ? 1 : 0.5
-
-            Behavior on opacity {
-                Anim {
-                    duration: Appearance.anim.durations.small
-                }
-            }
-
-            MouseArea {
-                id: deleteMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Clipboard.remove(root.entry.id)
-            }
-
-            MaterialIcon {
-                id: deleteIcon
-                anchors.centerIn: parent
-                text: "close"
-                color: Colours.palette.m3onSurfaceVariant
-                font.pointSize: Appearance.font.size.small
-            }
         }
     }
 }
