@@ -26,6 +26,7 @@ Singleton {
     property alias sidebar: adapter.sidebar
     property alias services: adapter.services
     property alias paths: adapter.paths
+    property alias clipboard: adapter.clipboard
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -95,7 +96,8 @@ Singleton {
             utilities: serializeUtilities(),
             sidebar: serializeSidebar(),
             services: serializeServices(),
-            paths: serializePaths()
+            paths: serializePaths(),
+            clipboard: serializeClipboard()
         };
     }
 
@@ -413,6 +415,20 @@ Singleton {
         };
     }
 
+    function serializeClipboard(): var {
+        return {
+            enabled: clipboard.enabled,
+            showOnHover: clipboard.showOnHover,
+            maxShown: clipboard.maxShown,
+            previewLength: clipboard.previewLength,
+            dragThreshold: clipboard.dragThreshold,
+            sizes: {
+                itemWidth: clipboard.sizes.itemWidth,
+                itemHeight: clipboard.sizes.itemHeight
+            }
+        };
+    }
+
     FileView {
         id: fileView
 
@@ -468,6 +484,7 @@ Singleton {
             property SidebarConfig sidebar: SidebarConfig {}
             property ServiceConfig services: ServiceConfig {}
             property UserPaths paths: UserPaths {}
+            property ClipboardConfig clipboard: ClipboardConfig {}
         }
     }
 }

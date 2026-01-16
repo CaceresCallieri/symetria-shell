@@ -69,12 +69,23 @@ Scope {
         onPressed: root.launcherInterrupted = true
     }
 
+    CustomShortcut {
+        name: "clipboard"
+        description: "Toggle clipboard history"
+        onReleased: {
+            if (!root.hasFullscreen) {
+                const visibilities = Visibilities.getForActive();
+                visibilities.clipboard = !visibilities.clipboard;
+            }
+        }
+    }
+
     IpcHandler {
         target: "drawers"
 
         function toggle(drawer: string): void {
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "dashboard"].includes(drawer))
+                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard"].includes(drawer))
                     return;
                 const visibilities = Visibilities.getForActive();
                 visibilities[drawer] = !visibilities[drawer];
