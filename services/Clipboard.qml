@@ -33,8 +33,13 @@ Singleton {
         }
     }
 
+    // POSIX shell escaping: wrap in single quotes, escape embedded quotes
+    // This prevents command injection when passing user data to shell commands
+    function shellEscape(str: string): string {
+        return "'" + str.replace(/'/g, "'\\''") + "'";
+    }
+
     // Restore an entry to the clipboard
-    // Note: cliphist IDs are numeric database IDs, safe to use directly
     function restore(id: string): void {
         restoreProcess.entryId = id;
         restoreProcess.running = true;
@@ -171,12 +176,11 @@ Singleton {
     }
 
     // Restore entry to clipboard using cliphist decode | wl-copy
-    // cliphist IDs are safe numeric values from the database
     Process {
         id: restoreProcess
         property string entryId: ""
 
-        command: ["sh", "-c", `cliphist decode '${entryId}' | wl-copy`]
+        command: ["sh", "-c", `cliphist decode ${root.shellEscape(entryId)} | wl-copy`]
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode !== 0) {

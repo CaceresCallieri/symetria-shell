@@ -145,7 +145,6 @@ exec-once = wl-paste --type image --watch cliphist store
 |-----|--------|
 | ↑/↓ | Navigate entries |
 | Enter | Restore selected entry to clipboard |
-| Delete | Remove selected entry |
 | Escape | Close drawer |
 
 **Toggle keybind:** `Super+V` (configurable in `~/.config/hypr/keybindings.conf`)
@@ -153,6 +152,13 @@ exec-once = wl-paste --type image --watch cliphist store
 **IPC:** `qs -c caelestia ipc call drawers toggle clipboard`
 
 **Clear All:** Click the trash icon twice within 2 seconds to confirm.
+
+**Search vs Highlighting Algorithm:**
+- Search uses FZF fuzzy matching (when `useFuzzy: true`) or substring (when `false`)
+- Highlighting always uses simple substring matching for simplicity
+- Known limitation: With fuzzy search enabled, matched items may not show highlights
+  (e.g., "fle" matches "file example" via FZF, but no "fle" substring to highlight)
+- Current config has `useFuzzy: false`, so search and highlighting are aligned
 
 ## Configuration
 

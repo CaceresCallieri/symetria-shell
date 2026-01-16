@@ -420,8 +420,11 @@ Singleton {
             enabled: clipboard.enabled,
             showOnHover: clipboard.showOnHover,
             maxShown: clipboard.maxShown,
+            maxDisplayed: clipboard.maxDisplayed,
             previewLength: clipboard.previewLength,
             dragThreshold: clipboard.dragThreshold,
+            useFuzzy: clipboard.useFuzzy,
+            clearConfirmTimeout: clipboard.clearConfirmTimeout,
             sizes: {
                 itemWidth: clipboard.sizes.itemWidth,
                 itemHeight: clipboard.sizes.itemHeight

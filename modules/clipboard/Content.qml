@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import "services"
 import qs.components
 import qs.components.controls
 import qs.components.containers
@@ -22,8 +23,21 @@ Item {
     // Double-click confirmation state for clear all
     property bool confirmClear: false
 
+    // Debounced search text for performance (avoids searching on every keystroke)
+    property string debouncedSearchText: ""
+
+    // Filtered entries based on debounced search
+    readonly property var filteredEntries: Search.search(debouncedSearchText)
+
+    // Debounce timer for search input
+    Timer {
+        id: searchDebounce
+        interval: 150
+        onTriggered: root.debouncedSearchText = search.text
+    }
+
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
-    implicitHeight: listWrapper.height + header.height + padding * 2
+    implicitHeight: listWrapper.height + searchWrapper.height + padding * 2
 
     // Activate clipboard service when drawer is open
     Binding {
@@ -34,30 +48,30 @@ Item {
         restoreMode: Binding.RestoreValue
     }
 
-    // List wrapper (above header, like launcher)
+    // List wrapper (above search bar, like launcher)
     Item {
         id: listWrapper
 
         implicitWidth: list.width
-        implicitHeight: Clipboard.entries.length > 0 ? list.height + root.padding : empty.height
+        implicitHeight: root.filteredEntries.length > 0 ? list.height + root.padding : empty.height
 
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: header.top
+        anchors.bottom: searchWrapper.top
         anchors.bottomMargin: root.padding
 
         StyledListView {
             id: list
 
-            visible: Clipboard.entries.length > 0
-            model: Clipboard.entries
+            visible: root.filteredEntries.length > 0
+            model: root.filteredEntries
             width: Config.clipboard.sizes.itemWidth
-            height: Math.min(contentHeight, root.maxHeight - header.height - root.padding * 3)
+            height: Math.min(contentHeight, root.maxHeight - searchWrapper.height - root.padding * 3)
             clip: true
             spacing: Appearance.spacing.small
             topMargin: Appearance.spacing.normal
             orientation: Qt.Vertical
             reuseItems: true
-            implicitHeight: (Config.clipboard.sizes.itemHeight + spacing) * Math.min(Config.clipboard.maxShown, count) - spacing
+            implicitHeight: (Config.clipboard.sizes.itemHeight + spacing) * Math.min(Config.clipboard.maxDisplayed, count) - spacing
 
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
@@ -87,6 +101,7 @@ Item {
 
                 entry: modelData
                 visibilities: root.visibilities
+                searchQuery: root.debouncedSearchText
             }
 
             move: Transition {
@@ -130,7 +145,9 @@ Item {
         Row {
             id: empty
 
-            visible: Clipboard.entries.length === 0
+            visible: root.filteredEntries.length === 0
+            readonly property bool isSearchEmpty: search.text !== ""
+
             opacity: visible ? 1 : 0
             scale: visible ? 1 : 0.5
 
@@ -141,7 +158,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
 
             MaterialIcon {
-                text: "content_paste_off"
+                text: empty.isSearchEmpty ? "search_off" : "content_paste_off"
                 color: Colours.palette.m3onSurfaceVariant
                 font.pointSize: Appearance.font.size.extraLarge
 
@@ -152,14 +169,14 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
 
                 StyledText {
-                    text: qsTr("No clipboard history")
+                    text: empty.isSearchEmpty ? qsTr("No matches found") : qsTr("No clipboard history")
                     color: Colours.palette.m3onSurfaceVariant
                     font.pointSize: Appearance.font.size.larger
                     font.weight: 500
                 }
 
                 StyledText {
-                    text: qsTr("Copy something to get started")
+                    text: empty.isSearchEmpty ? qsTr("Try a different search") : qsTr("Copy something to get started")
                     color: Colours.palette.m3onSurfaceVariant
                     font.pointSize: Appearance.font.size.normal
                 }
@@ -175,9 +192,9 @@ Item {
         }
     }
 
-    // Header bar at bottom (like launcher's search bar)
+    // Search bar at bottom (like launcher)
     StyledRect {
-        id: header
+        id: searchWrapper
 
         color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
         radius: Appearance.rounding.full
@@ -187,58 +204,133 @@ Item {
         anchors.bottom: parent.bottom
         anchors.margins: root.padding
 
-        implicitHeight: headerContent.implicitHeight + Appearance.padding.larger * 2
+        implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
 
-        RowLayout {
-            id: headerContent
+        MaterialIcon {
+            id: searchIcon
 
-            anchors.fill: parent
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
             anchors.leftMargin: root.padding
-            anchors.rightMargin: root.padding
-            spacing: Appearance.spacing.normal
 
-            MaterialIcon {
-                text: "content_paste"
-                color: Colours.palette.m3onSurfaceVariant
+            text: "search"
+            color: Colours.palette.m3onSurfaceVariant
+        }
+
+        StyledTextField {
+            id: search
+
+            anchors.left: searchIcon.right
+            anchors.right: clearIcon.left
+            anchors.leftMargin: Appearance.spacing.small
+            anchors.rightMargin: Appearance.spacing.small
+
+            topPadding: Appearance.padding.larger
+            bottomPadding: Appearance.padding.larger
+
+            placeholderText: qsTr("Search clipboard...")
+
+            onTextChanged: searchDebounce.restart()
+
+            onAccepted: {
+                const item = list.currentItem;
+                if (item && item.entry) {
+                    Clipboard.restore(item.entry.id);
+                    root.visibilities.clipboard = false;
+                }
             }
 
-            StyledText {
-                text: qsTr("Clipboard History")
-                color: Colours.palette.m3onSurfaceVariant
-                Layout.fillWidth: true
+            Keys.onUpPressed: {
+                if (list.currentIndex > 0)
+                    list.currentIndex--;
             }
 
-            // Clear all button (double-click to confirm)
-            Item {
-                implicitWidth: clearIcon.implicitWidth
-                implicitHeight: clearIcon.implicitHeight
-                visible: Clipboard.entries.length > 0
+            Keys.onDownPressed: {
+                if (list.currentIndex < list.count - 1)
+                    list.currentIndex++;
+            }
 
-                MouseArea {
-                    id: clearMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (root.confirmClear) {
-                            Clipboard.clear();
-                            root.confirmClear = false;
-                        } else {
-                            root.confirmClear = true;
-                            confirmTimer.restart();
-                        }
+            Keys.onEscapePressed: root.visibilities.clipboard = false
+
+            Component.onCompleted: forceActiveFocus()
+
+            Connections {
+                target: root.visibilities
+
+                function onClipboardChanged(): void {
+                    if (root.visibilities.clipboard) {
+                        search.forceActiveFocus();
+                        Clipboard.refresh();
+                        list.currentIndex = 0;
+                    } else {
+                        // Clear search and reset state when drawer closes
+                        search.text = "";
+                        root.confirmClear = false;
                     }
                 }
+            }
+        }
 
-                MaterialIcon {
-                    id: clearIcon
-                    text: root.confirmClear ? "warning" : "delete_sweep"
-                    color: root.confirmClear ? Colours.palette.m3error : Colours.palette.m3onSurfaceVariant
+        // Clear search / Clear all button
+        MaterialIcon {
+            id: clearIcon
 
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: Appearance.anim.durations.small
-                        }
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: root.padding
+
+            width: (search.text || Clipboard.entries.length > 0) ? implicitWidth : implicitWidth / 2
+            opacity: {
+                if (!search.text && Clipboard.entries.length === 0)
+                    return 0;
+                if (clearMouse.pressed)
+                    return 0.7;
+                if (clearMouse.containsMouse)
+                    return 1;
+                return 0.5;
+            }
+
+            text: {
+                if (search.text)
+                    return "close";
+                if (root.confirmClear)
+                    return "warning";
+                return "delete_sweep";
+            }
+            color: root.confirmClear ? Colours.palette.m3error : Colours.palette.m3onSurfaceVariant
+
+            Behavior on width {
+                Anim { duration: Appearance.anim.durations.small }
+            }
+
+            Behavior on opacity {
+                Anim { duration: Appearance.anim.durations.small }
+            }
+
+            Behavior on color {
+                ColorAnimation { duration: Appearance.anim.durations.small }
+            }
+
+            MouseArea {
+                id: clearMouse
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+
+                onClicked: {
+                    if (search.text) {
+                        // Clear search text
+                        search.text = "";
+                        search.forceActiveFocus();
+                    } else if (root.confirmClear) {
+                        // Second click - actually clear
+                        Clipboard.clear();
+                        root.confirmClear = false;
+                    } else {
+                        // First click - request confirmation
+                        root.confirmClear = true;
+                        confirmTimer.restart();
                     }
                 }
             }
@@ -248,55 +340,8 @@ Item {
     // Confirmation timeout for clear all
     Timer {
         id: confirmTimer
-        interval: 2000
+        interval: Config.clipboard.clearConfirmTimeout
         onTriggered: root.confirmClear = false
-    }
-
-    // Keyboard navigation
-    Keys.onEscapePressed: root.visibilities.clipboard = false
-
-    Keys.onUpPressed: {
-        if (list.currentIndex > 0)
-            list.currentIndex--;
-    }
-
-    Keys.onDownPressed: {
-        if (list.currentIndex < list.count - 1)
-            list.currentIndex++;
-    }
-
-    Keys.onReturnPressed: {
-        const item = list.currentItem;
-        if (item && item.entry) {
-            Clipboard.restore(item.entry.id);
-            root.visibilities.clipboard = false;
-        }
-    }
-
-    Keys.onDeletePressed: {
-        const item = list.currentItem;
-        if (item && item.entry)
-            Clipboard.remove(item.entry.id);
-    }
-
-    Component.onCompleted: {
-        forceActiveFocus();
-        Clipboard.refresh();
-    }
-
-    Connections {
-        target: root.visibilities
-
-        function onClipboardChanged(): void {
-            if (root.visibilities.clipboard) {
-                root.forceActiveFocus();
-                Clipboard.refresh();
-                list.currentIndex = 0;
-            } else {
-                // Reset confirmation state when drawer closes
-                root.confirmClear = false;
-            }
-        }
     }
 
     Behavior on implicitWidth {
