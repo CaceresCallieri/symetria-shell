@@ -39,15 +39,6 @@ Item {
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
     implicitHeight: listWrapper.height + searchWrapper.height + padding * 2
 
-    // Activate clipboard service when drawer is open
-    Binding {
-        target: Clipboard
-        property: "refCount"
-        value: Clipboard.refCount + 1
-        when: root.visibilities.clipboard
-        restoreMode: Binding.RestoreValue
-    }
-
     // List wrapper (above search bar, like launcher)
     Item {
         id: listWrapper
@@ -259,10 +250,11 @@ Item {
 
                 function onClipboardChanged(): void {
                     if (root.visibilities.clipboard) {
+                        Clipboard.refCount++;
                         search.forceActiveFocus();
-                        Clipboard.refresh();
                         list.currentIndex = 0;
                     } else {
+                        Clipboard.refCount--;
                         // Clear search and reset state when drawer closes
                         search.text = "";
                         root.confirmClear = false;
