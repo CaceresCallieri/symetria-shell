@@ -71,7 +71,7 @@ Singleton {
 
     // Refresh when service becomes active (drawer opens)
     onRefCountChanged: {
-        if (refCount > 0 && !hasData) {
+        if (refCount > 0) {
             refresh();
         }
     }
