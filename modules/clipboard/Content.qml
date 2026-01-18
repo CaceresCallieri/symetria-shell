@@ -27,13 +27,56 @@ Item {
     property string debouncedSearchText: ""
 
     // Filtered entries based on debounced search
-    readonly property var filteredEntries: Search.search(debouncedSearchText)
+    // Comma operator forces QML binding to depend on entries.length, then returns search result
+    // (QML can't track dependencies inside function calls like Search.search())
+    readonly property var filteredEntries: (Clipboard.entries.length, Search.search(debouncedSearchText))
 
     // Debounce timer for search input
     Timer {
         id: searchDebounce
         interval: 150
         onTriggered: root.debouncedSearchText = search.text
+    }
+
+    // Track if we've incremented refCount to avoid double increment/decrement
+    property bool _refCounted: false
+
+    // Handle visibility changes at root level to avoid race conditions
+    Connections {
+        target: root.visibilities
+
+        function onClipboardChanged(): void {
+            if (root.visibilities.clipboard) {
+                if (!root._refCounted) {
+                    root._refCounted = true;
+                    Clipboard.refCount++;
+                }
+                search.forceActiveFocus();
+                list.currentIndex = 0;
+            } else {
+                if (root._refCounted) {
+                    root._refCounted = false;
+                    Clipboard.refCount--;
+                }
+                // Clear search and reset state when drawer closes
+                search.text = "";
+                root.confirmClear = false;
+            }
+        }
+    }
+
+    // Handle initial state if drawer is already open when component loads
+    Component.onCompleted: {
+        if (root.visibilities.clipboard && !root._refCounted) {
+            root._refCounted = true;
+            Clipboard.refCount++;
+        }
+    }
+
+    Component.onDestruction: {
+        if (root._refCounted) {
+            Clipboard.refCount--;
+        }
     }
 
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
@@ -245,23 +288,7 @@ Item {
 
             Component.onCompleted: forceActiveFocus()
 
-            Connections {
-                target: root.visibilities
-
-                function onClipboardChanged(): void {
-                    if (root.visibilities.clipboard) {
-                        Clipboard.refCount++;
-                        search.forceActiveFocus();
-                        list.currentIndex = 0;
-                    } else {
-                        Clipboard.refCount--;
-                        // Clear search and reset state when drawer closes
-                        search.text = "";
-                        root.confirmClear = false;
-                    }
-                }
-            }
-        }
+}
 
         // Clear search / Clear all button
         MaterialIcon {
