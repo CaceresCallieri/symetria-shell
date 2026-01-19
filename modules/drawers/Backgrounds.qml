@@ -9,6 +9,7 @@ import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
+import qs.modules.askpass as Askpass
 import QtQuick
 import QtQuick.Shapes
 
@@ -31,6 +32,8 @@ Item {
 
     Shape {
         id: shape
+
+        readonly property real rounding: Config.border.rounding
 
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
@@ -75,6 +78,13 @@ Item {
             wrapper: root.panels.dashboard
 
             startX: rounding  // Start at (rounding, 0) to allow TL arc to curve left into corner
+            startY: 0
+        }
+
+        Askpass.Background {
+            wrapper: root.panels.askpass
+
+            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0
         }
 
