@@ -31,6 +31,22 @@ Item {
     // (QML can't track dependencies inside function calls like Search.search())
     readonly property var filteredEntries: (Clipboard.entries.length, Search.search(debouncedSearchText))
 
+    // Calculate estimated list height accounting for mixed item sizes
+    // (image items are 2x taller than text items)
+    function calculateListHeight(): real {
+        const entries = root.filteredEntries;
+        const maxItems = Math.min(Config.clipboard.maxDisplayed, entries.length);
+        const itemHeight = Config.clipboard.sizes.itemHeight;
+        const spacing = Appearance.spacing.small;
+
+        let totalHeight = 0;
+        for (let i = 0; i < maxItems; i++) {
+            totalHeight += entries[i]?.isImage ? itemHeight * 2 : itemHeight;
+            if (i < maxItems - 1) totalHeight += spacing;
+        }
+        return totalHeight;
+    }
+
     // Debounce timer for search input
     Timer {
         id: searchDebounce
@@ -105,7 +121,7 @@ Item {
             topMargin: Appearance.spacing.normal
             orientation: Qt.Vertical
             reuseItems: true
-            implicitHeight: (Config.clipboard.sizes.itemHeight + spacing) * Math.min(Config.clipboard.maxDisplayed, count) - spacing
+            implicitHeight: root.calculateListHeight()
 
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
