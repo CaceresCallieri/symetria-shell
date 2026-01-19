@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.components.controls
+import qs.components.effects
 import qs.services
 import qs.config
 import Quickshell
@@ -14,10 +15,23 @@ Item {
     required property PersistentProperties visibilities
     property string searchQuery: ""
 
-    implicitHeight: Config.clipboard.sizes.itemHeight
+    // Null-safe property access for entry fields
+    readonly property bool isImage: entry?.isImage ?? false
+    readonly property string imagePath: entry?.imagePath ?? ""
+    readonly property string preview: entry?.preview ?? ""
+
+    // Image items use 2x height for better thumbnail visibility (96px vs 48px)
+    implicitHeight: root.isImage
+        ? Config.clipboard.sizes.itemHeight * 2
+        : Config.clipboard.sizes.itemHeight
 
     anchors.left: parent?.left
     anchors.right: parent?.right
+
+    // Accessibility for screen readers
+    Accessible.role: Accessible.Button
+    Accessible.name: root.isImage ? qsTr("Image clipboard entry") : root.preview
+    Accessible.description: qsTr("Click to restore to clipboard")
 
     StateLayer {
         radius: Appearance.rounding.normal
@@ -28,67 +42,102 @@ Item {
         }
     }
 
+    // ===== IMAGE LAYOUT (centered thumbnail, no text) =====
     Item {
+        id: imageLayout
+
+        visible: root.isImage
         anchors.fill: parent
         anchors.leftMargin: Appearance.padding.larger
         anchors.rightMargin: Appearance.padding.larger
-        anchors.margins: Appearance.padding.smaller
+        anchors.topMargin: Appearance.padding.smaller
+        anchors.bottomMargin: Appearance.padding.smaller
 
-        // Icon for text entries OR loading state for images without thumbnail
+        // Loading indicator while image decodes
+        MaterialIcon {
+            id: loadingIcon
+
+            visible: root.imagePath === ""
+            anchors.centerIn: parent
+
+            text: "image"
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Appearance.font.size.extraLarge
+
+            // Subtle pulse animation during load
+            SequentialAnimation on opacity {
+                running: loadingIcon.visible
+                loops: Animation.Infinite
+                NumberAnimation { to: 0.4; duration: 600; easing.type: Easing.InOutQuad }
+                NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
+            }
+        }
+
+        // Thumbnail with rounded corners via OpacityMask
+        Image {
+            id: thumbnailImage
+
+            visible: root.imagePath !== ""
+
+            // Square thumbnail centered in available space
+            width: parent.height
+            height: parent.height
+            anchors.centerIn: parent
+
+            source: root.imagePath ? `file://${root.imagePath}` : ""
+            sourceSize.width: 192
+            sourceSize.height: 192
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            smooth: true
+
+            layer.enabled: true
+            layer.effect: OpacityMask {
+                maskSource: thumbnailMask
+            }
+        }
+
+        // Hidden mask for rounded corners
+        Rectangle {
+            id: thumbnailMask
+
+            anchors.fill: thumbnailImage
+            radius: Appearance.rounding.normal
+            layer.enabled: true
+            visible: false
+        }
+    }
+
+    // ===== TEXT LAYOUT (icon + preview text) =====
+    Item {
+        id: textLayout
+
+        visible: !root.isImage
+        anchors.fill: parent
+        anchors.leftMargin: Appearance.padding.larger
+        anchors.rightMargin: Appearance.padding.larger
+        anchors.topMargin: Appearance.padding.smaller
+        anchors.bottomMargin: Appearance.padding.smaller
+
         MaterialIcon {
             id: icon
 
-            visible: !root.entry.isImage || root.entry.imagePath === ""
-            text: root.entry.isImage ? "image" : "notes"
+            text: "notes"
             color: Colours.palette.m3onSurfaceVariant
             font.pointSize: Appearance.font.size.large
 
             anchors.verticalCenter: parent.verticalCenter
         }
 
-        // Thumbnail container for image entries (with rounded corners)
-        Item {
-            id: thumbnailContainer
-
-            visible: root.entry.isImage && root.entry.imagePath !== ""
-            width: parent.height - Appearance.padding.smaller * 2
-            height: width
-
-            anchors.verticalCenter: parent.verticalCenter
-
-            // Rounded clip container
-            Rectangle {
-                id: thumbnailClip
-
-                anchors.fill: parent
-                radius: Appearance.rounding.small
-                color: Colours.palette.m3surfaceContainerHighest
-                clip: true
-
-                Image {
-                    id: thumbnail
-
-                    anchors.fill: parent
-                    source: root.entry.imagePath ? `file://${root.entry.imagePath}` : ""
-                    sourceSize.width: 128   // Qt only decodes to this size (memory efficient)
-                    sourceSize.height: 128
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    smooth: true
-                }
-            }
-        }
-
-        // Preview text with search highlighting
         HighlightedText {
-            id: preview
+            id: previewText
 
-            anchors.left: (thumbnailContainer.visible ? thumbnailContainer : icon).right
+            anchors.left: icon.right
             anchors.right: parent.right
             anchors.leftMargin: Appearance.spacing.normal
             anchors.verticalCenter: parent.verticalCenter
 
-            sourceText: root.entry.preview
+            sourceText: root.preview
             searchQuery: root.searchQuery
             font.pointSize: Appearance.font.size.normal
             elide: Text.ElideRight
