@@ -69,7 +69,7 @@ qs -c caelestia
 ## Architecture
 
 ### Entry Point
-- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Lock, Shortcuts, BatteryMonitor, IdleMonitors
+- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, Lock, Shortcuts, BatteryMonitor, IdleMonitors
 
 ### Directory Structure
 | Directory | Purpose |
@@ -122,7 +122,44 @@ Located in `plugin/src/Caelestia/`:
 - **Caelestia.Services** - Audio visualization (CAVA, PipeWire, beat tracking)
 
 ### IPC
-Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `drawers`, `notifs`, `lock`, `mpris`, `picker`, `wallpaper`.
+Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `drawers`, `notifs`, `lock`, `mpris`, `picker`, `wallpaper`, `askpass`.
+
+### Askpass (sudo Password Prompt)
+
+The askpass module (`modules/askpass/`) provides a native password prompt for `sudo -A` operations, replacing external tools like rofi.
+
+**Setup:**
+```bash
+# Add to ~/.zshrc (or ~/.bashrc)
+export SUDO_ASKPASS="$HOME/.dotfiles/scripts/caelestia-askpass.sh"
+```
+
+**How it works:**
+1. When `sudo -A` is invoked, it runs `caelestia-askpass.sh`
+2. The script creates a secure FIFO (named pipe) and triggers the shell popup via IPC
+3. The native Caelestia dialog appears with password input (animated dots)
+4. On submit, password is written to FIFO and read by the script
+5. Script outputs password to stdout for sudo
+
+**IPC:** `qs -c caelestia ipc call askpass prompt "<message>" "<fifo_path>"`
+
+**Security:**
+- Password never touches disk (FIFO exists only in kernel memory)
+- FIFO created with 600 permissions (owner only)
+- Shell escaping prevents command injection
+- Trap ensures FIFO cleanup on exit
+
+**Keyboard shortcuts:**
+| Key | Action |
+|-----|--------|
+| Enter | Submit password |
+| Escape | Cancel (fails sudo) |
+| Ctrl+Backspace | Clear password |
+
+**Files:**
+- `modules/askpass/Askpass.qml` - Module entry with IPC handler
+- `modules/askpass/AskpassWindow.qml` - Overlay dialog (based on WirelessPasswordDialog pattern)
+- `~/.dotfiles/scripts/caelestia-askpass.sh` - Wrapper script for sudo
 
 ### Clipboard Manager
 
