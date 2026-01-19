@@ -9,6 +9,7 @@ import qs.modules.utilities as Utilities
 import qs.modules.utilities.toasts as Toasts
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
+import qs.modules.askpass as Askpass
 import Quickshell
 import QtQuick
 
@@ -29,6 +30,7 @@ Item {
     readonly property alias toasts: toasts
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
+    readonly property alias askpass: askpass
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
@@ -97,6 +99,17 @@ Item {
         visibilities: root.visibilities
 
         anchors.left: parent.left
+        anchors.top: parent.top
+    }
+
+    Askpass.Wrapper {
+        id: askpass
+
+        screen: root.screen
+        visibilities: root.visibilities
+        panels: root
+
+        anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
     }
 

@@ -126,7 +126,7 @@ Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `d
 
 ### Askpass (sudo Password Prompt)
 
-The askpass module (`modules/askpass/`) provides a native password prompt for `sudo -A` operations, replacing external tools like rofi.
+The askpass module (`modules/askpass/`) provides a native password prompt for `sudo -A` operations, using the drawer pattern for consistent UI.
 
 **Setup:**
 ```bash
@@ -137,7 +137,7 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/caelestia-askpass.sh"
 **How it works:**
 1. When `sudo -A` is invoked, it runs `caelestia-askpass.sh`
 2. The script creates a secure FIFO (named pipe) and triggers the shell popup via IPC
-3. The native Caelestia dialog appears with password input (animated dots)
+3. The askpass drawer slides down from top-center with password input (animated dots)
 4. On submit, password is written to FIFO and read by the script
 5. Script outputs password to stdout for sudo
 
@@ -148,6 +148,8 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/caelestia-askpass.sh"
 - FIFO created with 600 permissions (owner only)
 - Shell escaping prevents command injection
 - Trap ensures FIFO cleanup on exit
+- Drawer cannot be dismissed by clicking outside (explicit cancel required)
+- Focus grab is active but doesn't auto-dismiss on clear
 
 **Keyboard shortcuts:**
 | Key | Action |
@@ -156,10 +158,19 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/caelestia-askpass.sh"
 | Escape | Cancel (fails sudo) |
 | Ctrl+Backspace | Clear password |
 
-**Files:**
-- `modules/askpass/Askpass.qml` - Module entry with IPC handler
-- `modules/askpass/AskpassWindow.qml` - Overlay dialog (based on WirelessPasswordDialog pattern)
+**Architecture (Drawer Pattern):**
+- `modules/askpass/Askpass.qml` - IPC handler (loaded in shell.qml)
+- `modules/askpass/Wrapper.qml` - Animation wrapper (show/hide SequentialAnimation)
+- `modules/askpass/Content.qml` - Password dialog UI
+- `modules/askpass/Background.qml` - Glassmorphic ShapePath
+- `modules/askpass/services/AskpassStore.qml` - State singleton (prompt, password buffer)
 - `~/.dotfiles/scripts/caelestia-askpass.sh` - Wrapper script for sudo
+
+**Integration points:**
+- `Drawers.qml` - Visibility (`visibilities.askpass`), keyboard focus, focus grab
+- `Panels.qml` - Wrapper positioned at top-center
+- `Backgrounds.qml` - Background ShapePath rendered
+- `config/AskpassConfig.qml` - Configuration (enabled)
 
 ### Clipboard Manager
 
