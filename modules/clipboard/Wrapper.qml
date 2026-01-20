@@ -12,6 +12,12 @@ Item {
     required property PersistentProperties visibilities
     required property var panels
 
+    // Persistent state for clipboard tabs (survives drawer close/open)
+    readonly property PersistentProperties clipState: PersistentProperties {
+        property int currentTab: 0  // 0=Text, 1=Images
+        reloadableId: "clipboardState"
+    }
+
     readonly property bool shouldBeActive: visibilities.clipboard && Config.clipboard.enabled
     property int contentHeight
 
@@ -117,6 +123,7 @@ Item {
             visibilities: root.visibilities
             panels: root.panels
             maxHeight: root.maxHeight
+            state: root.clipState
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }
