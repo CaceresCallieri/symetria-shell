@@ -2,12 +2,9 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Io
+import "services"
 
 Scope {
-    AskpassWindow {
-        id: askpassWin
-    }
-
     IpcHandler {
         target: "askpass"
 
@@ -34,7 +31,7 @@ Scope {
             lastCallTime = now;
 
             console.log("Askpass: Prompt requested -", message);
-            askpassWin.show(message, fifoPath);
+            AskpassStore.show(message, fifoPath);
         }
     }
 }

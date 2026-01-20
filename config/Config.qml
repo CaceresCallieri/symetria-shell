@@ -27,6 +27,7 @@ Singleton {
     property alias services: adapter.services
     property alias paths: adapter.paths
     property alias clipboard: adapter.clipboard
+    property alias askpass: adapter.askpass
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -97,7 +98,8 @@ Singleton {
             sidebar: serializeSidebar(),
             services: serializeServices(),
             paths: serializePaths(),
-            clipboard: serializeClipboard()
+            clipboard: serializeClipboard(),
+            askpass: serializeAskpass()
         };
     }
 
@@ -432,6 +434,12 @@ Singleton {
         };
     }
 
+    function serializeAskpass(): var {
+        return {
+            enabled: askpass.enabled
+        };
+    }
+
     FileView {
         id: fileView
 
@@ -488,6 +496,7 @@ Singleton {
             property ServiceConfig services: ServiceConfig {}
             property UserPaths paths: UserPaths {}
             property ClipboardConfig clipboard: ClipboardConfig {}
+            property AskpassConfig askpass: AskpassConfig {}
         }
     }
 }
