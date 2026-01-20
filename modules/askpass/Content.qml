@@ -92,13 +92,6 @@ Item {
 
             spacing: Appearance.spacing.normal
 
-            // Lock icon
-            MaterialIcon {
-                Layout.alignment: Qt.AlignHCenter
-                text: "lock"
-                font.pointSize: Appearance.font.size.extraLarge * 2
-            }
-
             // Title
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
