@@ -16,7 +16,10 @@ Item {
     property string searchQuery: ""
 
     readonly property int itemWidth: Config.clipboard.sizes.itemWidth
-    readonly property int cellSize: 181
+    readonly property int imageSize: 200
+    readonly property int columnCount: 2
+    // Each cell gets half the width; images anchor left/right within cells
+    readonly property int cellWidth: Math.floor(itemWidth / columnCount)
 
     implicitWidth: itemWidth
     implicitHeight: root.entries.length > 0 ? grid.height : empty.implicitHeight
@@ -29,22 +32,31 @@ Item {
         height: Math.min(contentHeight, root.maxHeight)
         clip: true
 
-        cellWidth: root.cellSize
-        cellHeight: root.cellSize
+        // Cell width splits container evenly; vertical spacing stays fixed
+        cellWidth: root.cellWidth
+        cellHeight: root.imageSize + Appearance.spacing.normal
 
         model: root.entries
 
-        topMargin: Appearance.spacing.normal
-
-        delegate: ImageGridItem {
+        // Wrapper Item fills the cell; ImageGridItem anchors within it
+        delegate: Item {
             required property var modelData
             required property int index
 
             width: grid.cellWidth
             height: grid.cellHeight
 
-            entry: modelData
-            visibilities: root.visibilities
+            ImageGridItem {
+                width: root.imageSize
+                height: root.imageSize
+
+                // Center within cell for space-around effect
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+
+                entry: parent.modelData
+                visibilities: root.visibilities
+            }
         }
 
         add: Transition {
