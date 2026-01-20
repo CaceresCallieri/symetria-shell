@@ -153,7 +153,8 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        implicitHeight: view.currentItem?.implicitHeight ?? 200
+        // Use fixed height (1/2 of max) for consistent sizing between tabs
+        implicitHeight: root.maxHeight / 2
 
         Flickable {
             id: view
@@ -207,7 +208,7 @@ Item {
                         entries: root.textEntries
                         visibilities: root.visibilities
                         searchQuery: root.debouncedSearchText
-                        maxHeight: root.maxHeight - tabs.implicitHeight - tabs.anchors.topMargin - searchWrapper.implicitHeight - root.padding * 3
+                        maxHeight: contentWrapper.implicitHeight
                     }
                 }
 
@@ -218,7 +219,7 @@ Item {
                         entries: root.imageEntries
                         visibilities: root.visibilities
                         searchQuery: root.debouncedSearchText
-                        maxHeight: root.maxHeight - tabs.implicitHeight - tabs.anchors.topMargin - searchWrapper.implicitHeight - root.padding * 3
+                        maxHeight: contentWrapper.implicitHeight
                     }
                 }
             }

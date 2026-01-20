@@ -16,7 +16,7 @@ Item {
     property string searchQuery: ""
 
     readonly property int itemWidth: Config.clipboard.sizes.itemWidth
-    readonly property int cellSize: itemWidth / 2
+    readonly property int cellSize: 181
 
     implicitWidth: itemWidth
     implicitHeight: root.entries.length > 0 ? grid.height : empty.implicitHeight
