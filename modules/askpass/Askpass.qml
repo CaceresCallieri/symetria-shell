@@ -15,7 +15,7 @@ Scope {
         // FIFO path validation prefix - must match caelestia-askpass.sh
         readonly property string validFifoPrefix: "/tmp/caelestia-askpass-"
 
-        function prompt(message: string, fifoPath: string): void {
+        function prompt(message: string, fifoPath: string, commandInfo: string): void {
             // Security: validate FIFO path to prevent writing to arbitrary files
             if (!fifoPath.startsWith(validFifoPrefix)) {
                 console.error("Askpass: Invalid FIFO path rejected:", fifoPath);
@@ -30,8 +30,9 @@ Scope {
             }
             lastCallTime = now;
 
-            console.log("Askpass: Prompt requested -", message);
-            AskpassStore.show(message, fifoPath);
+            const command = commandInfo || "";
+            console.log("Askpass: Prompt requested -", message, "Command:", command || "(none)");
+            AskpassStore.show(message, fifoPath, command);
         }
     }
 }

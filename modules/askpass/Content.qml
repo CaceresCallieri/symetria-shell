@@ -110,6 +110,19 @@ Item {
                 font.pointSize: Appearance.font.size.small
             }
 
+            // Command being authenticated (if available)
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.maximumWidth: parent.width - Appearance.padding.large * 2
+                visible: AskpassStore.commandInfo !== ""
+                text: AskpassStore.commandInfo
+                color: Colours.palette.m3tertiary
+                font.pointSize: Appearance.font.size.small
+                font.family: Appearance.font.family.mono
+                elide: Text.ElideMiddle
+                maximumLineCount: 1
+            }
+
             // Password input container
             Item {
                 id: passwordContainer

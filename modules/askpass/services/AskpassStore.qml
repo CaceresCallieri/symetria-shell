@@ -12,6 +12,7 @@ Singleton {
     property string promptMessage: ""
     property string fifoPath: ""
     property string passwordBuffer: ""
+    property string commandInfo: ""
 
     // POSIX shell escaping: wrap in single quotes, escape embedded quotes
     // This prevents command injection when passing user data to shell commands
@@ -19,11 +20,12 @@ Singleton {
         return "'" + str.replace(/'/g, "'\\''") + "'";
     }
 
-    function show(message: string, fifo: string): void {
+    function show(message: string, fifo: string, command: string): void {
         // Clear sensitive data FIRST, before dialog becomes visible
         root.passwordBuffer = "";
         root.promptMessage = message || "Password:";
         root.fifoPath = fifo;
+        root.commandInfo = command || "";
 
         // Toggle visibility on all screens
         for (const [_, visibilities] of Visibilities.screens) {
@@ -41,6 +43,7 @@ Singleton {
 
         root.promptMessage = "";
         root.fifoPath = "";
+        root.commandInfo = "";
     }
 
     function submitPassword(password: string): void {
