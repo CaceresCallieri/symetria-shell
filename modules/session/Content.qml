@@ -23,13 +23,18 @@ Column {
 
         KeyNavigation.down: shutdown
 
-        Component.onCompleted: forceActiveFocus()
+        // Only grab focus if session panel is actually visible
+        // (prevents focus stealing when component is pre-loaded)
+        Component.onCompleted: {
+            if (root.visibilities.session)
+                forceActiveFocus();
+        }
 
         Connections {
             target: root.visibilities
 
-            function onLauncherChanged(): void {
-                if (!root.visibilities.launcher)
+            function onSessionChanged(): void {
+                if (root.visibilities.session)
                     logout.forceActiveFocus();
             }
         }

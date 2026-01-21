@@ -23,7 +23,11 @@ Item {
 
     readonly property real maxHeight: {
         let max = screen.height - Config.border.thickness * 2 - Appearance.spacing.large;
-        // Account for launcher if open
+        // Account for launcher if open.
+        // NOTE: This creates cross-module coupling - when launcher height changes
+        // (e.g., user typing filters results), onMaxHeightChanged fires, triggering
+        // Timer-based Content pre-loading. Clipboard's Content.qml has visibility
+        // guards to prevent focus stealing during pre-loading.
         if (visibilities.launcher)
             max -= panels.launcher.height + Appearance.spacing.large;
         return max;

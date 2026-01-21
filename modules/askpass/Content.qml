@@ -47,10 +47,14 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        // Capture key events - focus: true sets initial focus intent,
-        // Component.onCompleted grabs focus when fully loaded (like Launcher/Clipboard)
+        // Capture key events - focus: true sets initial focus intent
         focus: true
-        Component.onCompleted: forceActiveFocus()
+        // Only grab focus if askpass is actually visible
+        // (visibility handler at line 29-33 handles normal open flow)
+        Component.onCompleted: {
+            if (root.visibilities.askpass)
+                forceActiveFocus();
+        }
         Keys.onEscapePressed: AskpassStore.cancel()
         Keys.onPressed: event => {
             if (!dialog.activeFocus) {

@@ -121,6 +121,13 @@ Item {
         active: false
         Component.onCompleted: timer.start()
 
+        // Restore focus when Content is recreated while launcher is active
+        // (Timer-based recreation can destroy/recreate Content mid-typing)
+        onItemChanged: {
+            if (item && root.shouldBeActive && typeof item.focusSearch === "function")
+                item.focusSearch();
+        }
+
         sourceComponent: Content {
             visibilities: root.visibilities
             panels: root.panels

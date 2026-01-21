@@ -18,6 +18,10 @@ Item {
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
 
+    function focusSearch(): void {
+        search.forceActiveFocus();
+    }
+
     implicitWidth: listWrapper.width + padding * 2
     implicitHeight: searchWrapper.height + listWrapper.height + padding * 2
 
@@ -127,13 +131,20 @@ Item {
                 }
             }
 
-            Component.onCompleted: forceActiveFocus()
+            // Only grab focus if launcher is actually visible
+            // (visibility handler below handles normal open flow)
+            Component.onCompleted: {
+                if (root.visibilities.launcher)
+                    forceActiveFocus();
+            }
 
             Connections {
                 target: root.visibilities
 
                 function onLauncherChanged(): void {
-                    if (!root.visibilities.launcher)
+                    if (root.visibilities.launcher)
+                        search.forceActiveFocus();
+                    else
                         search.text = "";
                 }
 
