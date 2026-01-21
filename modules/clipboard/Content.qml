@@ -59,7 +59,10 @@ Item {
     }
 
     readonly property var textEntries: filterByType(false, Config.clipboard.maxDisplayed)
-    readonly property var imageEntries: filterByType(true, Config.clipboard.maxImagesDisplayed)
+    // Images bypass search filtering - they have no searchable text content
+    readonly property var imageEntries: Clipboard.entries
+        .filter(e => e.isImage)
+        .slice(0, Config.clipboard.maxImagesDisplayed)
 
     // Calculate estimated list height for text entries (images use grid)
     function calculateListHeight(): real {
@@ -96,7 +99,11 @@ Item {
                     root._refCounted = true;
                     Clipboard.refCount++;
                 }
-                search.forceActiveFocus();
+                // Focus correct element based on current tab
+                if (root.state.currentTab === root.tabText)
+                    search.forceActiveFocus();
+                else
+                    imageNavFocus.forceActiveFocus();
                 if (textPane.item)
                     textPane.item.currentIndex = 0;
                 if (imagePane.item)
@@ -110,6 +117,19 @@ Item {
                 search.text = "";
                 root.confirmClear = false;
             }
+        }
+    }
+
+    // Handle tab changes to switch focus appropriately
+    Connections {
+        target: root.state
+
+        function onCurrentTabChanged(): void {
+            if (!root.visibilities.clipboard) return;
+            if (root.state.currentTab === root.tabText)
+                search.forceActiveFocus();
+            else
+                imageNavFocus.forceActiveFocus();
         }
     }
 
@@ -225,7 +245,7 @@ Item {
                     sourceComponent: ImageGrid {
                         entries: root.imageEntries
                         visibilities: root.visibilities
-                        searchQuery: root.debouncedSearchText
+                        searchQuery: ""  // Images don't support search
                         maxHeight: contentWrapper.implicitHeight
                     }
                 }
@@ -256,6 +276,7 @@ Item {
         MaterialIcon {
             id: searchIcon
 
+            visible: root.state.currentTab === root.tabText
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left
             anchors.leftMargin: root.padding
@@ -267,6 +288,7 @@ Item {
         StyledTextField {
             id: search
 
+            visible: root.state.currentTab === root.tabText
             anchors.left: searchIcon.right
             anchors.right: clearIcon.left
             anchors.leftMargin: Appearance.spacing.small
@@ -362,10 +384,72 @@ Item {
             Component.onCompleted: forceActiveFocus()
         }
 
-        // Clear search / Clear all button
+        // Invisible focus receiver for images tab keyboard navigation
+        Item {
+            id: imageNavFocus
+
+            visible: root.state.currentTab === root.tabImages
+            focus: visible
+            anchors.fill: parent
+
+            Keys.onUpPressed: {
+                const imageGrid = imagePane.item;
+                if (!imageGrid || root.imageEntries.length === 0) return;
+                const cols = imageGrid.columnCount;
+                if (imageGrid.currentIndex >= cols)
+                    imageGrid.currentIndex -= cols;
+            }
+
+            Keys.onDownPressed: {
+                const imageGrid = imagePane.item;
+                if (!imageGrid || root.imageEntries.length === 0) return;
+                const cols = imageGrid.columnCount;
+                const newIndex = imageGrid.currentIndex + cols;
+                if (newIndex < root.imageEntries.length)
+                    imageGrid.currentIndex = newIndex;
+            }
+
+            Keys.onLeftPressed: {
+                const imageGrid = imagePane.item;
+                if (!imageGrid || root.imageEntries.length === 0) return;
+                if (imageGrid.currentIndex > 0)
+                    imageGrid.currentIndex--;
+            }
+
+            Keys.onRightPressed: {
+                const imageGrid = imagePane.item;
+                if (!imageGrid || root.imageEntries.length === 0) return;
+                const newIndex = imageGrid.currentIndex + 1;
+                if (newIndex < root.imageEntries.length)
+                    imageGrid.currentIndex = newIndex;
+            }
+
+            Keys.onReturnPressed: {
+                const imageGrid = imagePane.item;
+                if (!imageGrid) return;
+                const entry = root.imageEntries[imageGrid.currentIndex];
+                if (entry) {
+                    Clipboard.restore(entry.id);
+                    root.visibilities.clipboard = false;
+                }
+            }
+
+            Keys.onEscapePressed: root.visibilities.clipboard = false
+
+            Keys.onPressed: event => {
+                // Tab key cycles between tabs
+                if (event.key === Qt.Key_Tab) {
+                    root.state.currentTab = (root.state.currentTab + 1) % 2;
+                    event.accepted = true;
+                }
+            }
+        }
+
+        // Clear search / Clear all button (text tab only)
         MaterialIcon {
             id: clearIcon
 
+            visible: root.state.currentTab === root.tabText
             anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right
             anchors.rightMargin: root.padding
