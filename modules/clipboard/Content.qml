@@ -23,6 +23,10 @@ Item {
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
 
+    // Tab indices for readability
+    readonly property int tabText: 0
+    readonly property int tabImages: 1
+
     // Double-click confirmation state for clear all
     property bool confirmClear: false
 
@@ -95,6 +99,8 @@ Item {
                 search.forceActiveFocus();
                 if (textPane.item)
                     textPane.item.currentIndex = 0;
+                if (imagePane.item)
+                    imagePane.item.currentIndex = 0;
             } else {
                 if (root._refCounted) {
                     root._refCounted = false;
@@ -214,6 +220,7 @@ Item {
 
                 // Images tab pane
                 Pane {
+                    id: imagePane
                     index: 1
                     sourceComponent: ImageGrid {
                         entries: root.imageEntries
@@ -273,34 +280,73 @@ Item {
             onTextChanged: searchDebounce.restart()
 
             onAccepted: {
-                // Handle Enter based on current tab
-                if (root.state.currentTab === 0) {
-                    // Text tab - restore highlighted item
+                if (root.state.currentTab === root.tabText) {
                     const textList = textPane.item;
-                    const entry = root.textEntries[textList?.currentIndex ?? 0];
+                    if (!textList) return;
+                    const entry = root.textEntries[textList.currentIndex];
                     if (entry) {
                         Clipboard.restore(entry.id);
                         root.visibilities.clipboard = false;
                     }
                 } else {
-                    // Images tab - restore first image if any
-                    if (root.imageEntries.length > 0) {
-                        Clipboard.restore(root.imageEntries[0].id);
+                    const imageGrid = imagePane.item;
+                    if (!imageGrid) return;
+                    const entry = root.imageEntries[imageGrid.currentIndex];
+                    if (entry) {
+                        Clipboard.restore(entry.id);
                         root.visibilities.clipboard = false;
                     }
                 }
             }
 
             Keys.onUpPressed: {
-                const textList = textPane.item;
-                if (root.state.currentTab === 0 && textList && textList.currentIndex > 0)
-                    textList.currentIndex--;
+                if (root.state.currentTab === root.tabText) {
+                    const textList = textPane.item;
+                    if (!textList) return;
+                    if (textList.currentIndex > 0)
+                        textList.currentIndex--;
+                } else {
+                    const imageGrid = imagePane.item;
+                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    const cols = imageGrid.columnCount;
+                    if (imageGrid.currentIndex >= cols)
+                        imageGrid.currentIndex -= cols;
+                }
             }
 
             Keys.onDownPressed: {
-                const textList = textPane.item;
-                if (root.state.currentTab === 0 && textList && textList.currentIndex < root.textEntries.length - 1)
-                    textList.currentIndex++;
+                if (root.state.currentTab === root.tabText) {
+                    const textList = textPane.item;
+                    if (!textList) return;
+                    if (textList.currentIndex < root.textEntries.length - 1)
+                        textList.currentIndex++;
+                } else {
+                    const imageGrid = imagePane.item;
+                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    const cols = imageGrid.columnCount;
+                    const newIndex = imageGrid.currentIndex + cols;
+                    if (newIndex < root.imageEntries.length)
+                        imageGrid.currentIndex = newIndex;
+                }
+            }
+
+            Keys.onLeftPressed: {
+                if (root.state.currentTab === root.tabImages) {
+                    const imageGrid = imagePane.item;
+                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    if (imageGrid.currentIndex > 0)
+                        imageGrid.currentIndex--;
+                }
+            }
+
+            Keys.onRightPressed: {
+                if (root.state.currentTab === root.tabImages) {
+                    const imageGrid = imagePane.item;
+                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    const newIndex = imageGrid.currentIndex + 1;
+                    if (newIndex < root.imageEntries.length)
+                        imageGrid.currentIndex = newIndex;
+                }
             }
 
             Keys.onEscapePressed: root.visibilities.clipboard = false

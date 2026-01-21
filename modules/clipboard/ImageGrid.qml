@@ -15,9 +15,12 @@ Item {
     required property real maxHeight
     property string searchQuery: ""
 
+    // Expose currentIndex for keyboard navigation
+    property alias currentIndex: grid.currentIndex
+
     readonly property int itemWidth: Config.clipboard.sizes.itemWidth
     readonly property int imageSize: 200
-    readonly property int columnCount: 2
+    readonly property int columnCount: Config.clipboard.sizes.imageGridColumns
     // Each cell gets half the width; images anchor left/right within cells
     readonly property int cellWidth: Math.floor(itemWidth / columnCount)
 
@@ -32,11 +35,33 @@ Item {
         height: Math.min(contentHeight, root.maxHeight)
         clip: true
 
+        // Auto-scroll to keep selected item visible during keyboard navigation
+        preferredHighlightBegin: 0
+        preferredHighlightEnd: height
+        highlightRangeMode: GridView.ApplyRange
+
         // Cell width splits container evenly; vertical spacing stays fixed
         cellWidth: root.cellWidth
         cellHeight: root.imageSize + Appearance.spacing.normal
 
         model: root.entries
+
+        highlight: Item {
+            width: grid.cellWidth
+            height: grid.cellHeight
+
+            StyledRect {
+                width: root.imageSize
+                height: root.imageSize
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                radius: Appearance.rounding.normal
+                color: Colours.palette.m3onSurface
+                opacity: 0.12
+            }
+        }
+
+        highlightMoveDuration: Appearance.anim.durations.small
 
         // Wrapper Item fills the cell; ImageGridItem anchors within it
         delegate: Item {

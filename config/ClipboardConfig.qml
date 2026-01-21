@@ -15,5 +15,6 @@ JsonObject {
     component Sizes: JsonObject {
         property int itemWidth: 500
         property int itemHeight: 48
+        property int imageGridColumns: 2
     }
 }
