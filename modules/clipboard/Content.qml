@@ -5,6 +5,7 @@ import "../../utils/scripts/fuzzysort.js" as Fuzzy
 import qs.components
 import qs.components.controls
 import qs.components.containers
+import qs.components.misc
 import qs.services
 import qs.config
 import Quickshell
@@ -89,34 +90,31 @@ Item {
     // Track if we've incremented refCount to avoid double increment/decrement
     property bool _refCounted: false
 
-    // Handle visibility changes at root level to avoid race conditions
-    Connections {
-        target: root.visibilities
-
-        function onClipboardChanged(): void {
-            if (root.visibilities.clipboard) {
-                if (!root._refCounted) {
-                    root._refCounted = true;
-                    Clipboard.refCount++;
-                }
-                // Focus correct element based on current tab
-                if (root.state.currentTab === root.tabText)
-                    search.forceActiveFocus();
-                else
-                    imageNavFocus.forceActiveFocus();
-                if (textPane.item)
-                    textPane.item.currentIndex = 0;
-                if (imagePane.item)
-                    imagePane.item.currentIndex = 0;
-            } else {
-                if (root._refCounted) {
-                    root._refCounted = false;
-                    Clipboard.refCount--;
-                }
-                // Clear search and reset state when drawer closes
-                search.text = "";
-                root.confirmClear = false;
+    // Focus management: dynamic target based on current tab
+    FocusManager {
+        active: root.visibilities.clipboard
+        target: root.state.currentTab === root.tabText ? search : imageNavFocus
+        onOpen: () => {
+            // Increment ref count on open
+            if (!root._refCounted) {
+                root._refCounted = true;
+                Clipboard.refCount++;
             }
+            // Reset list indices on open
+            if (textPane.item)
+                textPane.item.currentIndex = 0;
+            if (imagePane.item)
+                imagePane.item.currentIndex = 0;
+        }
+        onClose: () => {
+            // Decrement ref count on close
+            if (root._refCounted) {
+                root._refCounted = false;
+                Clipboard.refCount--;
+            }
+            // Clear search and reset state
+            search.text = "";
+            root.confirmClear = false;
         }
     }
 
@@ -133,18 +131,9 @@ Item {
         }
     }
 
-    // Handle initial state if drawer is already open when component loads
-    Component.onCompleted: {
-        if (root.visibilities.clipboard && !root._refCounted) {
-            root._refCounted = true;
-            Clipboard.refCount++;
-        }
-    }
-
     Component.onDestruction: {
-        if (root._refCounted) {
+        if (root._refCounted)
             Clipboard.refCount--;
-        }
     }
 
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
@@ -379,13 +368,6 @@ Item {
                     root.state.currentTab = (root.state.currentTab + 1) % 2;
                     event.accepted = true;
                 }
-            }
-
-            // Only grab focus if clipboard is actually visible
-            // (Content may be pre-loaded by Wrapper's timer when clipboard is hidden)
-            Component.onCompleted: {
-                if (root.visibilities.clipboard)
-                    forceActiveFocus();
             }
         }
 

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import qs.components
+import qs.components.misc
 import qs.services
 import qs.config
 import qs.utils
@@ -15,6 +16,11 @@ Column {
     padding: Appearance.padding.large
     spacing: Appearance.spacing.large
 
+    FocusManager {
+        active: root.visibilities.session
+        target: logout
+    }
+
     SessionButton {
         id: logout
 
@@ -22,22 +28,6 @@ Column {
         command: Config.session.commands.logout
 
         KeyNavigation.down: shutdown
-
-        // Only grab focus if session panel is actually visible
-        // (prevents focus stealing when component is pre-loaded)
-        Component.onCompleted: {
-            if (root.visibilities.session)
-                forceActiveFocus();
-        }
-
-        Connections {
-            target: root.visibilities
-
-            function onSessionChanged(): void {
-                if (root.visibilities.session)
-                    logout.forceActiveFocus();
-            }
-        }
     }
 
     SessionButton {

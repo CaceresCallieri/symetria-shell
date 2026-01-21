@@ -94,52 +94,52 @@ qs -c caelestia
 
 ### Focus Management in Drawers
 
-Keyboard-interactive drawers (Launcher, Clipboard, Askpass, Session) require focus management to handle:
+Keyboard-interactive drawers (Launcher, Clipboard, Askpass, Session) use the `FocusManager` component to handle:
 1. **Normal open flow** - Focus the correct element when drawer opens
 2. **Pre-loading edge case** - Prevent focus stealing when Loader pre-loads hidden content
 
-**Standard Pattern:**
+**Using FocusManager:**
 ```qml
+import qs.components.misc
+
 Item {
     required property PersistentProperties visibilities
 
-    // Primary mechanism: visibility change handler
-    Connections {
-        target: root.visibilities
-
-        function onDrawerNameChanged(): void {
-            if (root.visibilities.drawerName)
-                focusTarget.forceActiveFocus();
-            else {
-                // Optional: cleanup on close (clear text, reset state)
-            }
-        }
+    FocusManager {
+        active: root.visibilities.drawerName
+        target: focusTarget
+        onClose: () => focusTarget.text = ""  // Optional cleanup
     }
 
-    // Edge case guard: component may be pre-loaded while hidden
     SomeComponent {
         id: focusTarget
-
-        Component.onCompleted: {
-            if (root.visibilities.drawerName)
-                forceActiveFocus();
-        }
     }
 }
 ```
 
-**Key Rules:**
-1. Always check visibility before calling `forceActiveFocus()`
-2. Both `Connections` handler AND `Component.onCompleted` need the guard
-3. Use direct `forceActiveFocus()` - avoid `Qt.callLater()` unless timing issues require it
+**FocusManager Properties:**
+| Property | Type | Description |
+|----------|------|-------------|
+| `active` | bool | Bind to drawer visibility state |
+| `target` | Item | Element to focus when active becomes true |
+| `onOpen` | var | Optional callback after focus is set |
+| `onClose` | var | Optional callback when drawer closes |
+
+**Dynamic Targets:** For tab-dependent focus (like Clipboard), use a conditional binding:
+```qml
+FocusManager {
+    active: root.visibilities.clipboard
+    target: currentTab === 0 ? search : imageNavFocus
+}
+```
 
 **Reference Implementations:**
-| Module | Focus Target | File |
-|--------|--------------|------|
-| Launcher | Search TextField | `modules/launcher/Content.qml:136-155` |
-| Clipboard | Search or ImageNavFocus (tab-dependent) | `modules/clipboard/Content.qml:93-134` |
-| Askpass | Dialog container | `modules/askpass/Content.qml:26-57` |
-| Session | Logout button | `modules/session/Content.qml:28-40` |
+| Module | Focus Target | Notes |
+|--------|--------------|-------|
+| Launcher | Search TextField | Has `onClose` to clear text; separate handler for session-close refocus |
+| Clipboard | Search or ImageNavFocus | Dynamic target based on tab; `onOpen`/`onClose` for ref counting |
+| Askpass | Dialog container | Simple usage |
+| Session | Logout button | Simple usage |
 
 ### Panel Background Corner Patterns
 

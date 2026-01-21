@@ -4,6 +4,7 @@ import "services"
 import qs.components
 import qs.components.controls
 import qs.components.containers
+import qs.components.misc
 import qs.services
 import qs.config
 import Quickshell
@@ -22,14 +23,9 @@ Item {
     implicitWidth: dialog.implicitWidth
     implicitHeight: dialog.implicitHeight + padding
 
-    // Handle visibility changes - standard focus management pattern
-    Connections {
-        target: root.visibilities
-
-        function onAskpassChanged(): void {
-            if (root.visibilities.askpass)
-                dialog.forceActiveFocus();
-        }
+    FocusManager {
+        active: root.visibilities.askpass
+        target: dialog
     }
 
     // Dialog container
@@ -46,14 +42,7 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        // Capture key events - focus: true sets initial focus intent
         focus: true
-        // Only grab focus if askpass is actually visible
-        // (visibility handler at line 29-33 handles normal open flow)
-        Component.onCompleted: {
-            if (root.visibilities.askpass)
-                forceActiveFocus();
-        }
         Keys.onEscapePressed: AskpassStore.cancel()
         Keys.onPressed: event => {
             if (!dialog.activeFocus) {
@@ -78,8 +67,7 @@ Item {
             } else if (event.text && event.text.length > 0) {
                 // Filter out control characters (0x00-0x1F and 0x7F)
                 // This prevents Tab, Ctrl sequences, etc. from entering password
-                const isControlChar = event.key === Qt.Key_Tab ||
-                    /[\x00-\x1F\x7F]/.test(event.text);
+                const isControlChar = event.key === Qt.Key_Tab || /[\x00-\x1F\x7F]/.test(event.text);
                 if (!isControlChar) {
                     AskpassStore.passwordBuffer += event.text;
                 }
@@ -138,7 +126,7 @@ Item {
                     anchors.fill: parent
                     radius: Appearance.rounding.normal
                     color: dialog.activeFocus ? Qt.lighter(Colours.tPalette.m3surfaceContainer, 1.05) : Colours.tPalette.m3surfaceContainer
-                    border.width: dialog.activeFocus ? 4 : 1
+                    border.width: dialog.activeFocus ? 1 : 1
                     border.color: dialog.activeFocus ? Colours.palette.m3primary : Colours.palette.m3outline
 
                     Behavior on border.color {

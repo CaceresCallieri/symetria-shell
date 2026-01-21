@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import "services"
 import qs.components
 import qs.components.controls
+import qs.components.misc
 import qs.services
 import qs.config
 import Quickshell
@@ -20,6 +21,22 @@ Item {
 
     function focusSearch(): void {
         search.forceActiveFocus();
+    }
+
+    FocusManager {
+        active: root.visibilities.launcher
+        target: search
+        onClose: () => search.text = ""
+    }
+
+    // Special case: refocus search when session panel closes while launcher is open
+    Connections {
+        target: root.visibilities
+
+        function onSessionChanged(): void {
+            if (!root.visibilities.session && root.visibilities.launcher)
+                search.forceActiveFocus();
+        }
     }
 
     implicitWidth: listWrapper.width + padding * 2
@@ -128,29 +145,6 @@ Item {
                 } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
                     list.currentList?.decrementCurrentIndex();
                     event.accepted = true;
-                }
-            }
-
-            // Only grab focus if launcher is actually visible
-            // (visibility handler below handles normal open flow)
-            Component.onCompleted: {
-                if (root.visibilities.launcher)
-                    forceActiveFocus();
-            }
-
-            Connections {
-                target: root.visibilities
-
-                function onLauncherChanged(): void {
-                    if (root.visibilities.launcher)
-                        search.forceActiveFocus();
-                    else
-                        search.text = "";
-                }
-
-                function onSessionChanged(): void {
-                    if (!root.visibilities.session)
-                        search.forceActiveFocus();
                 }
             }
         }
