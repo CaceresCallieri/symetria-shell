@@ -54,11 +54,19 @@ StyledClippingRect {
 
     property real blur: onSpecial ? 1 : 0
 
+    // Glassmorphism styling (matching other bar pills like Tray, TimePill, SystemPill)
+    readonly property var glassStyle: Colours.glassmorphism(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.subtle
+    )
+
     implicitHeight: Config.bar.sizes.innerWidth
     implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
 
-    color: Colours.tPalette.m3surfaceContainer
+    color: glassStyle.background
     radius: Appearance.rounding.full
+    border.width: 1
+    border.color: glassStyle.border
 
     Item {
         anchors.fill: parent
