@@ -381,7 +381,12 @@ Item {
                 }
             }
 
-            Component.onCompleted: forceActiveFocus()
+            // Only grab focus if clipboard is actually visible
+            // (Content may be pre-loaded by Wrapper's timer when clipboard is hidden)
+            Component.onCompleted: {
+                if (root.visibilities.clipboard)
+                    forceActiveFocus();
+            }
         }
 
         // Invisible focus receiver for images tab keyboard navigation
