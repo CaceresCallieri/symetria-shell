@@ -4,7 +4,7 @@ This document explains the architecture behind the shell's rounded border corner
 
 ## Overview
 
-The Caelestia shell uses a two-layer system for rendering the border frame and panel backgrounds:
+The Symmetria shell uses a two-layer system for rendering the border frame and panel backgrounds:
 
 1. **Border.qml** - Renders the outer border frame using an inverted mask
 2. **Backgrounds.qml** - Contains ShapePath components for each panel's background

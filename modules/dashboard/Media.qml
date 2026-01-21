@@ -6,7 +6,7 @@ import qs.components.controls
 import qs.services
 import qs.utils
 import qs.config
-import Caelestia.Services
+import Symmetria.Services
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Services.Mpris

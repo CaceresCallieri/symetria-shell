@@ -1,4 +1,4 @@
-<h1 align=center>caelestia-shell</h1>
+<h1 align=center>symmetria-shell</h1>
 
 <div align=center>
 
@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/0840f496-575c-4ca6-83a8-87bb01a85c5f
 
 -   Widgets: [`Quickshell`](https://quickshell.outfoxxed.me)
 -   Window manager: [`Hyprland`](https://hyprland.org)
--   Dots: [`caelestia`](https://github.com/caelestia-dots)
+-   Based on: [`caelestia-dots`](https://github.com/caelestia-dots)
 
 ## Installation
 
@@ -29,12 +29,12 @@ https://github.com/user-attachments/assets/0840f496-575c-4ca6-83a8-87bb01a85c5f
 > If you want to make your own changes/tweaks to the shell do NOT edit the files installed by the AUR
 > package. Instead, follow the instructions in the [manual installation section](#manual-installation).
 
-The shell is available from the AUR as `caelestia-shell`. You can install it with an AUR helper
+The shell is available from the AUR as `symmetria-shell`. You can install it with an AUR helper
 like [`yay`](https://github.com/Jguer/yay) or manually downloading the PKGBUILD and running `makepkg -si`.
 
-A package following the latest commit also exists as `caelestia-shell-git`. This is bleeding edge
+A package following the latest commit also exists as `symmetria-shell-git`. This is bleeding edge
 and likely to be unstable/have bugs. Regular users are recommended to use the stable package
-(`caelestia-shell`).
+(`symmetria-shell`).
 
 ### Nix
 
@@ -51,7 +51,7 @@ Or add it to your system configuration:
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    caelestia-shell = {
+    symmetria-shell = {
       url = "github:caelestia-dots/shell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
@@ -59,9 +59,9 @@ Or add it to your system configuration:
 }
 ```
 
-The package is available as `caelestia-shell.packages.<system>.default`, which can be added to your
+The package is available as `symmetria-shell.packages.<system>.default`, which can be added to your
 `environment.systemPackages`, `users.users.<username>.packages`, `home.packages` if using home-manager,
-or a devshell. The shell can then be run via `caelestia-shell`.
+or a devshell. The shell can then be run via `symmetria-shell`.
 
 > [!TIP]
 > The default package does not have the CLI enabled by default, which is required for full funcionality.
@@ -73,7 +73,7 @@ For home-manager, you can also use the Caelestia's home manager module (explaine
 
 Dependencies:
 
--   [`caelestia-cli`](https://github.com/caelestia-dots/cli)
+-   [`caelestia-cli`](https://github.com/caelestia-dots/cli) (compatible with Symmetria)
 -   [`quickshell-git`](https://quickshell.outfoxxed.me) - this has to be the git version, not the latest tagged version
 -   [`ddcutil`](https://github.com/rockowitz/ddcutil)
 -   [`brightnessctl`](https://github.com/Hummer12007/brightnessctl)
@@ -100,7 +100,7 @@ Build dependencies:
 -   [`cmake`](https://cmake.org)
 -   [`ninja`](https://github.com/ninja-build/ninja)
 
-To install the shell manually, install all dependencies and clone this repo to `$XDG_CONFIG_HOME/quickshell/caelestia`.
+To install the shell manually, install all dependencies and clone this repo to `$XDG_CONFIG_HOME/quickshell/symmetria`.
 Then simply build and install using `cmake`.
 
 ```sh
@@ -116,22 +116,22 @@ sudo cmake --install build
 > [!TIP]
 > You can customise the installation location via the `cmake` flags `INSTALL_LIBDIR`, `INSTALL_QMLDIR` and
 > `INSTALL_QSCONFDIR` for the libraries (the beat detector), QML plugin and Quickshell config directories
-> respectively. If changing the library directory, remember to set the `CAELESTIA_LIB_DIR` environment
+> respectively. If changing the library directory, remember to set the `SYMMETRIA_LIB_DIR` environment
 > variable to the custom directory when launching the shell.
 >
-> e.g. installing to `~/.config/quickshell/caelestia` for easy local changes:
+> e.g. installing to `~/.config/quickshell/symmetria` for easy local changes:
 >
 > ```sh
-> mkdir -p ~/.config/quickshell/caelestia
-> cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=~/.config/quickshell/caelestia
+> mkdir -p ~/.config/quickshell/symmetria
+> cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=~/.config/quickshell/symmetria
 > cmake --build build
 > sudo cmake --install build
-> sudo chown -R $USER ~/.config/quickshell/caelestia
+> sudo chown -R $USER ~/.config/quickshell/symmetria
 > ```
 
 ## Usage
 
-The shell can be started via the `caelestia shell -d` command or `qs -c caelestia`.
+The shell can be started via the `Symmetria shell -d` command or `qs -c symmetria`.
 If the entire caelestia dots are installed, the shell will be autostarted on login
 via an `exec-once` in the hyprland config.
 
@@ -142,16 +142,16 @@ If using the entire caelestia dots, the keybinds are already configured for you.
 Otherwise, [this file](https://github.com/caelestia-dots/caelestia/blob/main/hypr/hyprland/keybinds.conf#L1-L39)
 contains an example on how to use global shortcuts.
 
-All IPC commands can be accessed via `caelestia shell ...`. For example
+All IPC commands can be accessed via `Symmetria shell ...`. For example
 
 ```sh
-caelestia shell mpris getActive trackTitle
+Symmetria shell mpris getActive trackTitle
 ```
 
-The list of IPC commands can be shown via `caelestia shell -s`:
+The list of IPC commands can be shown via `Symmetria shell -s`:
 
 ```
-$ caelestia shell -s
+$ Symmetria shell -s
 target drawers
   function toggle(drawer: string): void
   function list(): string
@@ -185,25 +185,25 @@ The profile picture for the dashboard is read from the file `~/.face`, so to set
 it you can copy your image to there or set it via the dashboard.
 
 The wallpapers for the wallpaper switcher are read from `~/Pictures/Wallpapers`
-by default. To change it, change the wallpapers path in `~/.config/caelestia/shell.json`.
+by default. To change it, change the wallpapers path in `~/.config/symmetria/shell.json`.
 
-To set the wallpaper, you can use the command `caelestia wallpaper`. Use `caelestia wallpaper -h` for more info about
+To set the wallpaper, you can use the command `symmetria wallpaper`. Use `symmetria wallpaper -h` for more info about
 the command.
 
 ## Updating
 
 If installed via the AUR package, simply update your system (e.g. using `yay`).
 
-If installed manually, you can update by running `git pull` in `$XDG_CONFIG_HOME/quickshell/caelestia`.
+If installed manually, you can update by running `git pull` in `$XDG_CONFIG_HOME/quickshell/symmetria`.
 
 ```sh
-cd $XDG_CONFIG_HOME/quickshell/caelestia
+cd $XDG_CONFIG_HOME/quickshell/symmetria
 git pull
 ```
 
 ## Configuring
 
-All configuration options should be put in `~/.config/caelestia/shell.json`. This file is _not_ created by
+All configuration options should be put in `~/.config/symmetria/shell.json`. This file is _not_ created by
 default, you must create it manually.
 
 ### Example configuration
@@ -454,7 +454,7 @@ default, you must create it manually.
                 "name": "Random",
                 "icon": "casino",
                 "description": "Switch to a random wallpaper",
-                "command": ["caelestia", "wallpaper", "-r"],
+                "command": ["symmetria", "wallpaper", "-r"],
                 "enabled": true,
                 "dangerous": false
             },
@@ -620,7 +620,7 @@ For NixOS users, a home manager module is also available.
 <details><summary><code>home.nix</code></summary>
 
 ```nix
-programs.caelestia = {
+programs.symmetria = {
   enable = true;
   systemd = {
     enable = false; # if you prefer starting from your compositor
@@ -634,7 +634,7 @@ programs.caelestia = {
     paths.wallpaperDir = "~/Images";
   };
   cli = {
-    enable = true; # Also add caelestia-cli to path
+    enable = true; # Also add symmetria-cli to path
     settings = {
       theme.enableGtk = false;
     };
@@ -642,7 +642,7 @@ programs.caelestia = {
 };
 ```
 
-The module automatically adds Caelestia shell to the path with **full functionality**. The CLI is not required, however you have the option to enable and configure it.
+The module automatically adds Symmetria shell to the path with **full functionality**. The CLI is not required, however you have the option to enable and configure it.
 
 </details>
 
@@ -650,7 +650,7 @@ The module automatically adds Caelestia shell to the path with **full functional
 
 ### My screen is flickering, help pls!
 
-Try disabling VRR in the hyprland config. You can do this by adding the following to `~/.config/caelestia/hypr-user.conf`:
+Try disabling VRR in the hyprland config. You can do this by adding the following to `~/.config/symmetria/hypr-user.conf`:
 
 ```conf
 misc {
@@ -660,7 +660,7 @@ misc {
 
 ### I want to make my own changes to the hyprland config!
 
-You can add your custom hyprland configs to `~/.config/caelestia/hypr-user.conf`.
+You can add your custom hyprland configs to `~/.config/symmetria/hypr-user.conf`.
 
 ### I want to make my own changes to other stuff!
 
@@ -674,12 +674,12 @@ If there is no corresponding option, make feature request.
 
 ### How do I make my colour scheme change with my wallpaper?
 
-Set a wallpaper via the launcher or `caelestia wallpaper` and set the scheme to the dynamic scheme via the launcher
-or `caelestia scheme set`. e.g.
+Set a wallpaper via the launcher or `symmetria wallpaper` and set the scheme to the dynamic scheme via the launcher
+or `symmetria scheme set`. e.g.
 
 ```sh
-caelestia wallpaper -f <path/to/file>
-caelestia scheme set -n dynamic
+symmetria wallpaper -f <path/to/file>
+symmetria scheme set -n dynamic
 ```
 
 ### My wallpapers aren't showing up in the launcher!

@@ -79,7 +79,7 @@ Searcher {
 
         function onClicked(list: AppList): void {
             list.visibilities.launcher = false;
-            Quickshell.execDetached(["caelestia", "scheme", "set", "-v", variant]);
+            Quickshell.execDetached(["symmetria", "scheme", "set", "-v", variant]);
         }
     }
 }

@@ -43,7 +43,7 @@ CollapsibleSection {
                         const schemeKey = `${name} ${flavour}`;
 
                         Schemes.currentScheme = schemeKey;
-                        Quickshell.execDetached(["caelestia", "scheme", "set", "-n", name, "-f", flavour]);
+                        Quickshell.execDetached(["symmetria", "scheme", "set", "-n", name, "-f", flavour]);
 
                         Qt.callLater(() => {
                             reloadTimer.restart();

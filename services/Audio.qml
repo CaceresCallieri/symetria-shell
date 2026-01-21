@@ -1,8 +1,8 @@
 pragma Singleton
 
 import qs.config
-import Caelestia.Services
-import Caelestia
+import Symmetria.Services
+import Symmetria
 import Quickshell
 import Quickshell.Services.Pipewire
 import QtQuick

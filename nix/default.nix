@@ -28,7 +28,7 @@
   cmake,
   ninja,
   pkg-config,
-  caelestia-cli,
+  symmetria-cli,
   debug ? false,
   withCli ? false,
   extraRuntimeDeps ? [],
@@ -50,7 +50,7 @@
       hyprland
     ]
     ++ extraRuntimeDeps
-    ++ lib.optional withCli caelestia-cli;
+    ++ lib.optional withCli symmetria-cli;
 
   fontconfig = makeFontsConf {
     fontDirectories = [material-symbols rubik nerd-fonts.caskaydia-cove];
@@ -69,7 +69,7 @@
 
   extras = stdenv.mkDerivation {
     inherit cmakeBuildType;
-    name = "caelestia-extras${lib.optionalString debug "-debug"}";
+    name = "symmetria-extras${lib.optionalString debug "-debug"}";
     src = lib.fileset.toSource {
       root = ./..;
       fileset = lib.fileset.union ./../CMakeLists.txt ./../extras;
@@ -87,7 +87,7 @@
 
   plugin = stdenv.mkDerivation {
     inherit cmakeBuildType;
-    name = "caelestia-qml-plugin${lib.optionalString debug "-debug"}";
+    name = "symmetria-qml-plugin${lib.optionalString debug "-debug"}";
     src = lib.fileset.toSource {
       root = ./..;
       fileset = lib.fileset.union ./../CMakeLists.txt ./../plugin;
@@ -107,7 +107,7 @@
 in
   stdenv.mkDerivation {
     inherit version cmakeBuildType;
-    pname = "caelestia-shell${lib.optionalString debug "-debug"}";
+    pname = "symmetria-shell${lib.optionalString debug "-debug"}";
     src = ./..;
 
     nativeBuildInputs = [cmake ninja makeWrapper qt6.wrapQtAppsHook];
@@ -117,7 +117,7 @@ in
     cmakeFlags =
       [
         (lib.cmakeFeature "ENABLE_MODULES" "shell")
-        (lib.cmakeFeature "INSTALL_QSCONFDIR" "${placeholder "out"}/share/caelestia-shell")
+        (lib.cmakeFeature "INSTALL_QSCONFDIR" "${placeholder "out"}/share/symmetria-shell")
       ]
       ++ cmakeVersionFlags;
 
@@ -131,18 +131,18 @@ in
     '';
 
     postInstall = ''
-      makeWrapper ${quickshell}/bin/qs $out/bin/caelestia-shell \
+      makeWrapper ${quickshell}/bin/qs $out/bin/symmetria-shell \
       	--prefix PATH : "${lib.makeBinPath runtimeDeps}" \
       	--set FONTCONFIG_FILE "${fontconfig}" \
-      	--set CAELESTIA_LIB_DIR ${extras}/lib \
-        --set CAELESTIA_XKB_RULES_PATH ${xkeyboard-config}/share/xkeyboard-config-2/rules/base.lst \
-      	--add-flags "-p $out/share/caelestia-shell"
+      	--set SYMMETRIA_LIB_DIR ${extras}/lib \
+        --set SYMMETRIA_XKB_RULES_PATH ${xkeyboard-config}/share/xkeyboard-config-2/rules/base.lst \
+      	--add-flags "-p $out/share/symmetria-shell"
 
       mkdir -p $out/lib
       ln -s ${extras}/lib/* $out/lib/
 
       # Ensure wrap_term_launch.sh is executable
-      chmod 755 $out/share/caelestia-shell/assets/wrap_term_launch.sh
+      chmod 755 $out/share/symmetria-shell/assets/wrap_term_launch.sh
     '';
 
     passthru = {
@@ -153,6 +153,6 @@ in
       description = "A very segsy desktop shell";
       homepage = "https://github.com/caelestia-dots/shell";
       license = lib.licenses.gpl3Only;
-      mainProgram = "caelestia-shell";
+      mainProgram = "symmetria-shell";
     };
   }

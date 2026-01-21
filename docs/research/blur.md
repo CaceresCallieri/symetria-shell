@@ -1,4 +1,4 @@
-# Blur Effect Research for Caelestia Shell
+# Blur Effect Research for Symmetria Shell
 
 ## Status: ✅ Working (as of 2026-01-11)
 
@@ -8,9 +8,9 @@ Blur effects successfully enabled on Hyprland 0.53.1.
 
 ## Requirements
 
-Blur for Caelestia shell requires **two** configurations:
+Blur for Symmetria shell requires **two** configurations:
 
-### 1. Shell Transparency (`~/.config/caelestia/shell.json`)
+### 1. Shell Transparency (`~/.config/symmetria/shell.json`)
 
 ```json
 "transparency": {
@@ -27,9 +27,9 @@ Blur for Caelestia shell requires **two** configurations:
 ### 2. Hyprland Layer Rules (`~/.config/hypr/windowrules.conf`)
 
 The shell creates these layer namespaces (from `hyprctl layers`):
-- `caelestia-background` - Background layer
-- `caelestia-drawers` - Bar, drawers, panels (main UI)
-- `caelestia-border-exclusion` - 1x1 pixel exclusion zones
+- `symmetria-background` - Background layer
+- `symmetria-drawers` - Bar, drawers, panels (main UI)
+- `symmetria-border-exclusion` - 1x1 pixel exclusion zones
 
 ---
 
@@ -38,30 +38,30 @@ The shell creates these layer namespaces (from `hyprctl layers`):
 ### Hyprland 0.52.x Syntax (Current)
 
 ```conf
-# Caelestia Shell
-layerrule = noanim, caelestia-(launcher|osd|notifications|border-exclusion|area-picker)
-layerrule = animation fade, caelestia-(drawers|background)
-layerrule = order 1, caelestia-border-exclusion
-layerrule = order 2, caelestia-bar
-layerrule = xray 1, caelestia-(border|launcher|bar|sidebar|navbar|mediadisplay|screencorners)
-layerrule = blur, caelestia-.*
+# Symmetria Shell
+layerrule = noanim, symmetria-(launcher|osd|notifications|border-exclusion|area-picker)
+layerrule = animation fade, symmetria-(drawers|background)
+layerrule = order 1, symmetria-border-exclusion
+layerrule = order 2, symmetria-bar
+layerrule = xray 1, symmetria-(border|launcher|bar|sidebar|navbar|mediadisplay|screencorners)
+layerrule = blur, symmetria-.*
 layerrule = blur, qs-.*
-layerrule = blurpopups, caelestia-.*
-layerrule = ignorealpha 0.57, caelestia-.*
+layerrule = blurpopups, symmetria-.*
+layerrule = ignorealpha 0.57, symmetria-.*
 ```
 
 ### Hyprland 0.53.x Syntax (New - requires upgrade)
 
 ```conf
-# Caelestia Shell
-layerrule = no_anim true, match:namespace caelestia-(launcher|osd|notifications|border-exclusion|area-picker)
-layerrule = animation fade, match:namespace caelestia-(drawers|background)
-layerrule = order 1, match:namespace caelestia-border-exclusion
-layerrule = order 2, match:namespace caelestia-bar
-layerrule = xray 1, match:namespace caelestia-(border|launcher|bar|sidebar|navbar|mediadisplay|screencorners)
-layerrule = blur true, match:namespace caelestia-.*
+# Symmetria Shell
+layerrule = no_anim true, match:namespace symmetria-(launcher|osd|notifications|border-exclusion|area-picker)
+layerrule = animation fade, match:namespace symmetria-(drawers|background)
+layerrule = order 1, match:namespace symmetria-border-exclusion
+layerrule = order 2, match:namespace symmetria-bar
+layerrule = xray 1, match:namespace symmetria-(border|launcher|bar|sidebar|navbar|mediadisplay|screencorners)
+layerrule = blur true, match:namespace symmetria-.*
 layerrule = blur true, match:namespace qs-.*
-layerrule = ignore_alpha 0.57, match:namespace caelestia-.*
+layerrule = ignore_alpha 0.57, match:namespace symmetria-.*
 ```
 
 **Key differences in 0.53+:**
@@ -123,7 +123,7 @@ hyprctl layers
 hyprctl getoption decoration:blur:enabled
 
 # Test layer rule live (doesn't persist)
-hyprctl keyword layerrule "blur, caelestia-drawers"
+hyprctl keyword layerrule "blur, symmetria-drawers"
 
 # Reload config
 hyprctl reload
@@ -133,7 +133,7 @@ hyprctl reload
 
 1. **No blur visible**: Check `transparency.enabled` is `true` in shell.json
 2. **Config errors**: Syntax differs between Hyprland versions
-3. **Rules not applying**: Use regex `caelestia-.*` to match all layers
+3. **Rules not applying**: Use regex `symmetria-.*` to match all layers
 
 ---
 
@@ -149,7 +149,7 @@ hyprctl reload
 ## Current System Info
 
 - **Hyprland Version**: 0.53.1 (Jan 2, 2026)
-- **Shell Config**: `~/.config/caelestia/shell.json`
+- **Shell Config**: `~/.config/symmetria/shell.json`
 - **Hyprland Rules**: `~/.hyprdots/.config/hypr/windowrules.conf`
 
 ---
@@ -170,15 +170,15 @@ Original config used `ignore_alpha 0.57`, which told Hyprland to skip pixels bel
 ### Working Layer Rules
 
 ```conf
-# Caelestia Shell - Blur rules
-layerrule = blur on, match:namespace caelestia-.*
+# Symmetria Shell - Blur rules
+layerrule = blur on, match:namespace symmetria-.*
 layerrule = blur on, match:namespace qs-.*
 layerrule = blur on, match:namespace quickshell
-layerrule = blur_popups on, match:namespace caelestia-.*
-layerrule = ignore_alpha 0.1, match:namespace caelestia-.*
+layerrule = blur_popups on, match:namespace symmetria-.*
+layerrule = ignore_alpha 0.1, match:namespace symmetria-.*
 ```
 
 ### Notes on Regex Patterns
 
-- Hyprland 0.53 `match:namespace` works with simple patterns like `caelestia-.*`
+- Hyprland 0.53 `match:namespace` works with simple patterns like `symmetria-.*`
 - Anchored regexes `^(...)$` may cause issues - simpler patterns are preferred

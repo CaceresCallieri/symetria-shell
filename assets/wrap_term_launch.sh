@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 
-cat ~/.local/state/caelestia/sequences.txt 2>/dev/null
+cat ~/.local/state/symmetria/sequences.txt 2>/dev/null
 
 exec "$@"

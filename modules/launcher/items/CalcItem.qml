@@ -1,7 +1,7 @@
 import qs.components
 import qs.services
 import qs.config
-import Caelestia
+import Symmetria
 import Quickshell
 import QtQuick
 import QtQuick.Layouts

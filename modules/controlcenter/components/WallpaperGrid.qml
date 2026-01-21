@@ -7,7 +7,7 @@ import qs.components.effects
 import qs.components.images
 import qs.services
 import qs.config
-import Caelestia.Models
+import Symmetria.Models
 import QtQuick
 
 GridView {

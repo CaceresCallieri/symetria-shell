@@ -74,7 +74,7 @@ JsonObject {
             name: "Random",
             icon: "casino",
             description: "Switch to a random wallpaper",
-            command: ["caelestia", "wallpaper", "-r"],
+            command: ["symmetria", "wallpaper", "-r"],
             enabled: true,
             dangerous: false
         },

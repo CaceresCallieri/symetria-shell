@@ -12,8 +12,8 @@ Scope {
         property real lastCallTime: 0
         readonly property int rateLimitMs: 1000
 
-        // FIFO path validation prefix - must match caelestia-askpass.sh
-        readonly property string validFifoPrefix: "/tmp/caelestia-askpass-"
+        // FIFO path validation prefix - must match symmetria-askpass.sh
+        readonly property string validFifoPrefix: "/tmp/symmetria-askpass-"
 
         function prompt(message: string, fifoPath: string, commandInfo: string): void {
             // Security: validate FIFO path to prevent writing to arbitrary files

@@ -2,8 +2,8 @@ pragma Singleton
 
 import qs.components.misc
 import qs.config
-import Caelestia
-import Caelestia.Internal
+import Symmetria
+import Symmetria.Internal
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -46,7 +46,7 @@ Singleton {
     }
 
     function reloadDynamicConfs(): void {
-        extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices"]);
+        extras.batchMessage(["keyword bindlni ,Caps_Lock,global,symmetria:refreshDevices", "keyword bindlni ,Num_Lock,global,symmetria:refreshDevices"]);
     }
 
     Component.onCompleted: reloadDynamicConfs()
@@ -108,7 +108,7 @@ Singleton {
     FileView {
         id: kbLayoutFile
 
-        path: Quickshell.env("CAELESTIA_XKB_RULES_PATH") || "/usr/share/X11/xkb/rules/base.lst"
+        path: Quickshell.env("SYMMETRIA_XKB_RULES_PATH") || "/usr/share/X11/xkb/rules/base.lst"
         onLoaded: {
             const layoutMatch = text().match(/! layout\n([\s\S]*?)\n\n/);
             if (layoutMatch) {

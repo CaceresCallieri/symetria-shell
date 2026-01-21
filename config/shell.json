@@ -270,7 +270,7 @@
 				"name": "Transparency"
 			},
 			{
-				"command": ["caelestia", "wallpaper", "-r"],
+				"command": ["symmetria", "wallpaper", "-r"],
 				"dangerous": false,
 				"description": "Switch to a random wallpaper",
 				"enabled": true,

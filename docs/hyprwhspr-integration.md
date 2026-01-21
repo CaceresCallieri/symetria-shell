@@ -120,7 +120,7 @@ Border: Cyan (#33ccff)
 
 A minimal status icon in the bar that shows recording state:
 
-**Location**: `/home/jc/.config/quickshell/caelestia/modules/bar/components/HyprWhspr.qml`
+**Location**: `/home/jc/.config/quickshell/symmetria/modules/bar/components/HyprWhspr.qml`
 
 **Features**:
 - Microphone icon that changes when recording
@@ -133,7 +133,7 @@ A minimal status icon in the bar that shows recording state:
 
 A popout panel similar to the GTK4 version:
 
-**Location**: `/home/jc/.config/quickshell/caelestia/modules/bar/popouts/HyprWhsprViz.qml`
+**Location**: `/home/jc/.config/quickshell/symmetria/modules/bar/popouts/HyprWhsprViz.qml`
 
 **Features**:
 - Full waveform visualization with bars
@@ -144,7 +144,7 @@ A popout panel similar to the GTK4 version:
 
 A dedicated drawer with controls and visualization:
 
-**Location**: `/home/jc/.config/quickshell/caelestia/modules/drawers/HyprWhspr.qml`
+**Location**: `/home/jc/.config/quickshell/symmetria/modules/drawers/HyprWhspr.qml`
 
 ---
 
@@ -154,7 +154,7 @@ A dedicated drawer with controls and visualization:
 
 Create a service to manage hyprwhspr state:
 
-**File**: `/home/jc/.config/quickshell/caelestia/services/HyprWhspr.qml`
+**File**: `/home/jc/.config/quickshell/symmetria/services/HyprWhspr.qml`
 
 ```qml
 pragma Singleton
@@ -227,7 +227,7 @@ Singleton {
 
 ### Bar Widget Component
 
-**File**: `/home/jc/.config/quickshell/caelestia/modules/bar/components/HyprWhspr.qml`
+**File**: `/home/jc/.config/quickshell/symmetria/modules/bar/components/HyprWhspr.qml`
 
 ```qml
 pragma ComponentBehavior: Bound
@@ -327,7 +327,7 @@ MouseArea {
 
 ### Full Visualization Component (Optional)
 
-**File**: `/home/jc/.config/quickshell/caelestia/modules/bar/popouts/HyprWhsprViz.qml`
+**File**: `/home/jc/.config/quickshell/symmetria/modules/bar/popouts/HyprWhsprViz.qml`
 
 ```qml
 pragma ComponentBehavior: Bound
@@ -417,13 +417,13 @@ Rectangle {
 
 ### Step 1: Create Service
 
-1. Create `/home/jc/.config/quickshell/caelestia/services/HyprWhspr.qml`
+1. Create `/home/jc/.config/quickshell/symmetria/services/HyprWhspr.qml`
 2. Add to qmldir if needed
 3. Import in components that need it
 
 ### Step 2: Create Bar Widget
 
-1. Create `/home/jc/.config/quickshell/caelestia/modules/bar/components/HyprWhspr.qml`
+1. Create `/home/jc/.config/quickshell/symmetria/modules/bar/components/HyprWhspr.qml`
 2. Register in Bar.qml BarLoader switch:
    ```qml
    case "hyprwhspr": return hyprwhsprComp;
@@ -438,7 +438,7 @@ Rectangle {
 
 ### Step 3: Add Config
 
-Edit `/home/jc/.config/quickshell/caelestia/config/BarConfig.qml`:
+Edit `/home/jc/.config/quickshell/symmetria/config/BarConfig.qml`:
 
 ```qml
 property list<var> entries: [
@@ -520,7 +520,7 @@ IpcHandler {
 }
 ```
 
-Usage: `caelestia shell hyprwhspr toggle`
+Usage: `symmetria shell hyprwhspr toggle`
 
 ---
 

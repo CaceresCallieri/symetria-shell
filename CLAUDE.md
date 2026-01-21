@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Caelestia Shell is a Quickshell-based desktop shell for Hyprland. It provides a complete desktop UI including bar, launcher, dashboard, notifications, lock screen, and control center. This is a fork of caelestia-dots/shell for personal customization.
+Symmetria Shell is a Quickshell-based desktop shell for Hyprland. It provides a complete desktop UI including bar, launcher, dashboard, notifications, lock screen, and control center. This is a fork of caelestia-dots/shell for personal customization.
 
 **Upstream:** https://github.com/caelestia-dots/shell
 
@@ -44,7 +44,7 @@ git merge feature/my-feature
 
 ```bash
 # Configure (development mode - keeps QML in local config dir)
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=$HOME/.config/quickshell/caelestia
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=$HOME/.config/quickshell/symmetria
 
 # Build
 cmake --build build
@@ -53,17 +53,17 @@ cmake --build build
 sudo cmake --install build
 
 # Fix ownership after install
-sudo chown -R $USER:$USER ~/.config/quickshell/caelestia
+sudo chown -R $USER:$USER ~/.config/quickshell/symmetria
 ```
 
 ## Running the Shell
 
 ```bash
-# Via caelestia-cli (preferred)
-caelestia shell -d
+# Via symmetria-cli (preferred)
+symmetria shell -d
 
 # Direct quickshell
-qs -c caelestia
+qs -c symmetria
 ```
 
 ## Architecture
@@ -77,7 +77,7 @@ qs -c caelestia
 | `modules/` | Main UI modules (bar, launcher, dashboard, lock, etc.) |
 | `components/` | Reusable QML components (controls, effects, containers) |
 | `services/` | Singleton services (Audio, Brightness, Network, Colours, etc.) |
-| `config/` | Configuration system - reads from `~/.config/caelestia/shell.json` |
+| `config/` | Configuration system - reads from `~/.config/symmetria/shell.json` |
 | `plugin/` | C++ native plugins compiled as Qt6 QML modules |
 | `utils/` | Utility functions and scripts |
 | `assets/` | Static assets (images, shaders, PAM configs) |
@@ -86,7 +86,7 @@ qs -c caelestia
 
 **Singletons:** Services in `services/` and `config/Config.qml` are singletons accessible throughout the shell via `import "services"` or `import "config"`.
 
-**Configuration:** All user settings flow through `config/Config.qml` which reads/writes `~/.config/caelestia/shell.json`. Individual config objects (BarConfig, LauncherConfig, etc.) define defaults and structure.
+**Configuration:** All user settings flow through `config/Config.qml` which reads/writes `~/.config/symmetria/shell.json`. Individual config objects (BarConfig, LauncherConfig, etc.) define defaults and structure.
 
 **Drawer System:** `modules/drawers/` manages slide-out panels (sidebar, dashboard, launcher, etc.) with unified visibility and gesture handling.
 
@@ -231,14 +231,14 @@ To create a new pill:
 3. Register in `Bar.qml`: add to `hasPillMargins`, switch case, and Component definition
 
 ### C++ Plugin Modules
-Located in `plugin/src/Caelestia/`:
-- **Caelestia** - Core utilities (Qalculator, Toaster, ImageAnalyser, AppDb, Requests)
-- **Caelestia.Internal** - Hyprland integration, login manager, caching
-- **Caelestia.Models** - File system model for file dialogs
-- **Caelestia.Services** - Audio visualization (CAVA, PipeWire, beat tracking)
+Located in `plugin/src/Symmetria/`:
+- **Symmetria** - Core utilities (Qalculator, Toaster, ImageAnalyser, AppDb, Requests)
+- **Symmetria.Internal** - Hyprland integration, login manager, caching
+- **Symmetria.Models** - File system model for file dialogs
+- **Symmetria.Services** - Audio visualization (CAVA, PipeWire, beat tracking)
 
 ### IPC
-Shell exposes IPC via `caelestia shell <target> <function>`. Targets include: `drawers`, `notifs`, `lock`, `mpris`, `picker`, `wallpaper`, `askpass`.
+Shell exposes IPC via `symmetria shell <target> <function>`. Targets include: `drawers`, `notifs`, `lock`, `mpris`, `picker`, `wallpaper`, `askpass`.
 
 ### Askpass (sudo Password Prompt)
 
@@ -247,17 +247,17 @@ The askpass module (`modules/askpass/`) provides a native password prompt for `s
 **Setup:**
 ```bash
 # Add to ~/.zshrc (or ~/.bashrc)
-export SUDO_ASKPASS="$HOME/.dotfiles/scripts/caelestia-askpass.sh"
+export SUDO_ASKPASS="$HOME/.dotfiles/scripts/symmetria-askpass.sh"
 ```
 
 **How it works:**
-1. When `sudo -A` is invoked, it runs `caelestia-askpass.sh`
+1. When `sudo -A` is invoked, it runs `symmetria-askpass.sh`
 2. The script creates a secure FIFO (named pipe) and triggers the shell popup via IPC
-3. The native Caelestia dialog appears with password input (animated dots)
+3. The native Symmetria dialog appears with password input (animated dots)
 4. On submit, password is written to FIFO and read by the script
 5. Script outputs password to stdout for sudo
 
-**IPC:** `qs -c caelestia ipc call askpass prompt "<message>" "<fifo_path>"`
+**IPC:** `qs -c symmetria ipc call askpass prompt "<message>" "<fifo_path>"`
 
 **Security:**
 - Password never touches disk (FIFO exists only in kernel memory)
@@ -275,7 +275,7 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/caelestia-askpass.sh"
 **Files:**
 - `modules/askpass/Askpass.qml` - Module entry with IPC handler
 - `modules/askpass/AskpassWindow.qml` - Overlay dialog (based on WirelessPasswordDialog pattern)
-- `~/.dotfiles/scripts/caelestia-askpass.sh` - Wrapper script for sudo
+- `~/.dotfiles/scripts/symmetria-askpass.sh` - Wrapper script for sudo
 
 ### Clipboard Manager
 
@@ -302,7 +302,7 @@ exec-once = wl-paste --type image --watch cliphist store
 
 **Toggle keybind:** `Super+V` (configurable in `~/.config/hypr/keybindings.conf`)
 
-**IPC:** `qs -c caelestia ipc call drawers toggle clipboard`
+**IPC:** `qs -c symmetria ipc call drawers toggle clipboard`
 
 **Clear All:** Click the trash icon twice within 2 seconds to confirm.
 
@@ -320,7 +320,7 @@ exec-once = wl-paste --type image --watch cliphist store
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | QML defaults | `config/*.qml` | Structure, schemas, defaults (version-controlled) |
-| JSON overrides | `~/.config/caelestia/shell.json` | User preferences (NOT version-controlled) |
+| JSON overrides | `~/.config/symmetria/shell.json` | User preferences (NOT version-controlled) |
 
 **⚠️ Key Gotcha:** JSON overrides always win. If you edit a QML default but the value exists in shell.json, your change won't take effect. Check shell.json first when debugging config issues.
 
@@ -332,10 +332,10 @@ exec-once = wl-paste --type image --watch cliphist store
 | User preferences | `shell.json` | Control center UI or edit JSON |
 
 ### Key Paths
-- User config: `~/.config/caelestia/shell.json`
+- User config: `~/.config/symmetria/shell.json`
 - Profile picture: `~/.face`
 - Wallpapers: `~/Pictures/Wallpapers/` (configurable via `paths.wallpaperDir`)
-- Hyprland user config: `~/.config/caelestia/hypr-user.conf`
+- Hyprland user config: `~/.config/symmetria/hypr-user.conf`
 
 ### Custom Color Scheme (Deviation from Upstream)
 
@@ -344,9 +344,9 @@ exec-once = wl-paste --type image --watch cliphist store
 | Location | Path |
 |----------|------|
 | QML reads from | `config/color-scheme.json` (version-controlled) |
-| CLI writes to | `~/.local/state/caelestia/scheme.json` (not connected) |
+| CLI writes to | `~/.local/state/symmetria/scheme.json` (not connected) |
 
-**Implication:** CLI commands like `caelestia scheme set` won't affect the shell. The custom warm-neutral scheme is tracked in git.
+**Implication:** CLI commands like `symmetria scheme set` won't affect the shell. The custom warm-neutral scheme is tracked in git.
 
 **To restore CLI compatibility:** See [GitHub Issue #2](https://github.com/CaceresCallieri/symetria-shell/issues/2) for symlink solution.
 
@@ -370,7 +370,7 @@ git rebase upstream/main
 
 ## AGS Bar Reference (Features to Port)
 
-The previous system bar is at `~/.config/ags/` - an AGS (Astal GTK Shell) implementation using TypeScript/TSX with GTK3. Several features from this bar should be ported to Caelestia's QML/Qt6 architecture.
+The previous system bar is at `~/.config/ags/` - an AGS (Astal GTK Shell) implementation using TypeScript/TSX with GTK3. Several features from this bar should be ported to Symmetria's QML/Qt6 architecture.
 
 ### AGS Directory Structure
 ```
@@ -404,12 +404,12 @@ The previous system bar is at `~/.config/ags/` - an AGS (Astal GTK Shell) implem
 | **Available Updates** | `bar/widget/AvailableUpdates.tsx` | Medium | Polls pacman/AUR/flatpak updates via `check-available-updates.sh`; shows count with tooltip breakdown |
 | **Kanata Status** | `bar/modules/Kanata.tsx` | Medium | Shows keyboard remapper status; listens to Hyprland custom events `kanata-configuration-switched` |
 | **Submap Indicator** | `bar/widget/SubmapStatusIndicator.tsx` | Medium | Shows current Hyprland submap (keybind modes like "groups", "groups-move-in") |
-| **System Info** | `bar/modules/SystemInfo.tsx` | Low | RAM/CPU/GPU monitoring widgets (Caelestia already has similar in dashboard) |
+| **System Info** | `bar/modules/SystemInfo.tsx` | Low | RAM/CPU/GPU monitoring widgets (Symmetria already has similar in dashboard) |
 | **Icon Resolver** | `lib/icon-resolver/` | Medium | Resolves window class → app icon; special handling for terminal apps showing nested process icons |
 
 ### Technology Translation Guide
 
-| AGS (TypeScript/GTK3) | Caelestia (QML/Qt6) |
+| AGS (TypeScript/GTK3) | Symmetria (QML/Qt6) |
 |-----------------------|---------------------|
 | `Variable(value)` | `property var` or `QtObject` with properties |
 | `bind(variable)` | QML property bindings |
@@ -417,7 +417,7 @@ The previous system bar is at `~/.config/ags/` - an AGS (Astal GTK Shell) implem
 | `widget.hook(hyprland, "event", ...)` | `Connections` to Hyprland service |
 | `exec(cmd)` / `subprocess(cmd)` | `Process { command: [...] }` |
 | GTK `<box>`, `<label>`, `<button>` | QML `Row/Column`, `Text`, `MouseArea` |
-| SCSS styling | QML inline properties or Caelestia's `Colours` service |
+| SCSS styling | QML inline properties or Symmetria's `Colours` service |
 
 ### Key Implementation Notes
 
@@ -425,4 +425,4 @@ The previous system bar is at `~/.config/ags/` - an AGS (Astal GTK Shell) implem
 
 **Available Updates Script:** Located at `~/.config/ags/bar/scripts/check-available-updates.sh` - outputs JSON with pacman, AUR, flatpak counts. Can be reused directly.
 
-**Hyprland Custom Events:** AGS listens for custom events via `hyprctl dispatch submap` and `hyprctl dispatch custom`. Caelestia's `services/Hypr.qml` should already support this pattern.
+**Hyprland Custom Events:** AGS listens for custom events via `hyprctl dispatch submap` and `hyprctl dispatch custom`. Symmetria's `services/Hypr.qml` should already support this pattern.
