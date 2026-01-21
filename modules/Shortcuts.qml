@@ -1,15 +1,68 @@
 import qs.components.misc
 import qs.modules.controlcenter
 import qs.services
+import qs.config
 import Caelestia
 import Quickshell
 import Quickshell.Io
+import QtQuick
 
 Scope {
     id: root
 
     property bool launcherInterrupted
     readonly property bool hasFullscreen: Hypr.focusedWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
+
+    // For delayed drawer switching (launcher <-> clipboard mutual exclusion)
+    property string pendingDrawer: ""
+
+    // Timer for delayed drawer opening after close animation completes.
+    // Duration must match the hide animation in drawers/Wrapper.qml.
+    // Using restart() ensures rapid toggling honors only the final request.
+    Timer {
+        id: drawerSwitchTimer
+        interval: Appearance.anim.durations.normal
+        onTriggered: {
+            if (root.pendingDrawer) {
+                const visibilities = Visibilities.getForActive();
+                visibilities[root.pendingDrawer] = true;
+                root.pendingDrawer = "";
+            }
+        }
+    }
+
+    // Toggles a drawer with mutual exclusion against an opposite drawer.
+    // If the opposite drawer is open, closes it first and delays opening.
+    function toggleDrawerWithExclusion(drawerName: string, oppositeDrawerName: string): void {
+        const visibilities = Visibilities.getForActive();
+
+        // If this drawer is already pending, cancel the pending open
+        if (root.pendingDrawer === drawerName) {
+            root.pendingDrawer = "";
+            drawerSwitchTimer.stop();
+            return;
+        }
+
+        if (!visibilities[drawerName]) {
+            // Opening drawer
+            if (visibilities[oppositeDrawerName]) {
+                // Opposite is open - close it and delay this drawer
+                visibilities[oppositeDrawerName] = false;
+                root.pendingDrawer = drawerName;
+                drawerSwitchTimer.restart();
+            } else {
+                // Opposite not open - open immediately
+                root.pendingDrawer = "";
+                drawerSwitchTimer.stop();
+                visibilities[drawerName] = true;
+            }
+        } else {
+            // Closing drawer - cancel any pending switch
+            root.pendingDrawer = "";
+            drawerSwitchTimer.stop();
+            visibilities[drawerName] = false;
+        }
+    }
 
     CustomShortcut {
         name: "controlCenter"
@@ -55,10 +108,8 @@ Scope {
         description: "Toggle launcher"
         onPressed: root.launcherInterrupted = false
         onReleased: {
-            if (!root.launcherInterrupted && !root.hasFullscreen) {
-                const visibilities = Visibilities.getForActive();
-                visibilities.launcher = !visibilities.launcher;
-            }
+            if (!root.launcherInterrupted && !root.hasFullscreen)
+                toggleDrawerWithExclusion("launcher", "clipboard");
             root.launcherInterrupted = false;
         }
     }
@@ -73,10 +124,8 @@ Scope {
         name: "clipboard"
         description: "Toggle clipboard history"
         onReleased: {
-            if (!root.hasFullscreen) {
-                const visibilities = Visibilities.getForActive();
-                visibilities.clipboard = !visibilities.clipboard;
-            }
+            if (!root.hasFullscreen)
+                toggleDrawerWithExclusion("clipboard", "launcher");
         }
     }
 
@@ -87,8 +136,14 @@ Scope {
             if (list().split("\n").includes(drawer)) {
                 if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard"].includes(drawer))
                     return;
-                const visibilities = Visibilities.getForActive();
-                visibilities[drawer] = !visibilities[drawer];
+
+                // Mutual exclusion for launcher <-> clipboard
+                if (drawer === "launcher")
+                    toggleDrawerWithExclusion("launcher", "clipboard");
+                else if (drawer === "clipboard")
+                    toggleDrawerWithExclusion("clipboard", "launcher");
+                else
+                    Visibilities.getForActive()[drawer] = !Visibilities.getForActive()[drawer];
             } else {
                 console.warn(`[IPC] Drawer "${drawer}" does not exist`);
             }
