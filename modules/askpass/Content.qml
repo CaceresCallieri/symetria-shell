@@ -22,14 +22,13 @@ Item {
     implicitWidth: dialog.implicitWidth
     implicitHeight: dialog.implicitHeight + padding
 
-    // Handle visibility changes
+    // Handle visibility changes - standard focus management pattern
     Connections {
         target: root.visibilities
 
         function onAskpassChanged(): void {
-            if (root.visibilities.askpass) {
-                Qt.callLater(() => dialog.forceActiveFocus());
-            }
+            if (root.visibilities.askpass)
+                dialog.forceActiveFocus();
         }
     }
 

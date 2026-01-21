@@ -92,6 +92,55 @@ qs -c caelestia
 
 **Colours:** `services/Colours.qml` provides the M3 (Material 3) color palette with support for light/dark modes and transparency layers.
 
+### Focus Management in Drawers
+
+Keyboard-interactive drawers (Launcher, Clipboard, Askpass, Session) require focus management to handle:
+1. **Normal open flow** - Focus the correct element when drawer opens
+2. **Pre-loading edge case** - Prevent focus stealing when Loader pre-loads hidden content
+
+**Standard Pattern:**
+```qml
+Item {
+    required property PersistentProperties visibilities
+
+    // Primary mechanism: visibility change handler
+    Connections {
+        target: root.visibilities
+
+        function onDrawerNameChanged(): void {
+            if (root.visibilities.drawerName)
+                focusTarget.forceActiveFocus();
+            else {
+                // Optional: cleanup on close (clear text, reset state)
+            }
+        }
+    }
+
+    // Edge case guard: component may be pre-loaded while hidden
+    SomeComponent {
+        id: focusTarget
+
+        Component.onCompleted: {
+            if (root.visibilities.drawerName)
+                forceActiveFocus();
+        }
+    }
+}
+```
+
+**Key Rules:**
+1. Always check visibility before calling `forceActiveFocus()`
+2. Both `Connections` handler AND `Component.onCompleted` need the guard
+3. Use direct `forceActiveFocus()` - avoid `Qt.callLater()` unless timing issues require it
+
+**Reference Implementations:**
+| Module | Focus Target | File |
+|--------|--------------|------|
+| Launcher | Search TextField | `modules/launcher/Content.qml:136-155` |
+| Clipboard | Search or ImageNavFocus (tab-dependent) | `modules/clipboard/Content.qml:93-134` |
+| Askpass | Dialog container | `modules/askpass/Content.qml:26-57` |
+| Session | Logout button | `modules/session/Content.qml:28-40` |
+
 ### Panel Background Corner Patterns
 
 The drawer system uses `ShapePath` components in `modules/drawers/Backgrounds.qml` to render panel backgrounds with "union" corner effects that create smooth visual connections between panels and the shell border/bar.
