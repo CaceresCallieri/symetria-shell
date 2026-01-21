@@ -141,75 +141,72 @@ FocusManager {
 | Askpass | Dialog container | Simple usage |
 | Session | Logout button | Simple usage |
 
-### Panel Background Corner Patterns
+### Panel Background Components
 
 The drawer system uses `ShapePath` components in `modules/drawers/Backgrounds.qml` to render panel backgrounds with "union" corner effects that create smooth visual connections between panels and the shell border/bar.
 
-#### Two Path Strategies
+#### Reusable Components
 
-| Strategy | Direction | Start Position | Union Corners | Used By |
-|----------|-----------|----------------|---------------|---------|
-| **Top-down clockwise** | ↓→↑← | Top-left (`startY: 0`) | Top (TL, TR) | Bar Popouts, Askpass |
-| **Bottom-up counterclockwise** | ↑→↓← | Bottom-left (`startY: height`) | Bottom (BL, BR) | Launcher, Clipboard |
+Located in `components/shapes/`:
 
-**Rule of thumb:** Union corners go where the panel connects to the bar/border. Top-hanging panels need union at top; bottom panels need union at bottom.
+| Component | Purpose | Union Corners | Used By |
+|-----------|---------|---------------|---------|
+| `TopHangingBackground` | Panels hanging from bar/top | TL, TR | Bar Popouts, Askpass, Session, OSD |
+| `BottomUpBackground` | Panels rising from bottom | BL, BR | Launcher, Clipboard |
 
-#### How PathArc Direction Works
+**Edge-case panels** (Dashboard, Sidebar, Notifications, Utilities) have inter-panel dependencies and use custom implementations.
 
-The `PathArc.Counterclockwise` property creates **opposite visual effects** depending on path direction:
+#### Using the Components
 
-**For clockwise paths (top-down):**
-| Corner | Direction Setting | Visual Result |
-|--------|-------------------|---------------|
-| TL, TR | Default (none) | Union (outward curve) |
-| BL, BR | `Counterclockwise` | Standard (inward rounded) |
+```qml
+import qs.components.shapes
 
-**For counterclockwise paths (bottom-up):**
-| Corner | Direction Setting | Visual Result |
-|--------|-------------------|---------------|
-| BL, BR | `Counterclockwise` | Union (outward curve) |
-| TL, TR | Default (none) | Standard (inward rounded) |
+// Simple usage (default rounding from Config.border.rounding)
+BottomUpBackground {
+    wrapper: root.panels.launcher
+    startX: (shape.width - wrapper.width) / 2 - rounding
+    startY: shape.height
+}
 
-#### Reference Implementations
+// Custom rounding (e.g., for detached bar popouts)
+TopHangingBackground {
+    wrapper: root.panels.popouts
+    customRounding: wrapper.isDetached ? Appearance.rounding.normal : Config.border.rounding
+    startX: wrapper.x - rounding
+    startY: wrapper.y
+}
+```
 
-| Panel Type | Reference File | Notes |
-|------------|----------------|-------|
-| Top-hanging (bar popouts, askpass) | `modules/bar/popouts/Background.qml` | Clockwise, union at top |
-| Bottom-up (launcher, clipboard) | `modules/clipboard/Background.qml` | Counterclockwise, union at bottom |
-| Left-edge (dashboard) | `modules/dashboard/Background.qml` | Special case with 3 union corners |
-| Right-edge (sidebar, notifications) | `modules/sidebar/Background.qml` | Edge-specific patterns |
+#### Component Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `wrapper` | Item | **Required.** Source of width/height for the panel |
+| `customRounding` | real | Override Config.border.rounding (-1 uses default) |
+| `customFillColor` | color | Override Colours.generalBackgroundOpaque |
+| `rounding` | real | **Read-only.** Computed rounding for startX/startY calculations |
+| `roundingY` | real | **Read-only.** Adaptive Y-radius for short panels |
 
 #### Creating a New Panel Background
 
-1. **Identify panel position:** Where does it connect to the bar/border?
-2. **Choose reference pattern:** Copy from a panel with same orientation
-3. **Set startX/startY:** Position path start at the correct corner
-4. **Verify arc directions:** Union corners use opposite direction from standard corners
+1. **Identify panel orientation:** Does it hang from top or rise from bottom?
+2. **Choose component:** `TopHangingBackground` or `BottomUpBackground`
+3. **Set startX/startY in Backgrounds.qml:** Use `rounding` for positioning
 
-#### Common Pitfalls
+**Standard startX/startY patterns:**
+| Orientation | startX | startY |
+|-------------|--------|--------|
+| Top-hanging, centered | `(shape.width - wrapper.width) / 2 - rounding` | `0` |
+| Bottom-up, centered | `(shape.width - wrapper.width) / 2 - rounding` | `shape.height` |
+| Top-hanging, positioned | `wrapper.x - rounding` | `wrapper.y` |
 
-| Problem | Symptom | Solution |
-|---------|---------|----------|
-| Wrong path direction | All corners inverted | Copy entire path from correct reference |
-| Wrong startY | Path renders in wrong position | Match startY to path start corner (0 for top, height for bottom) |
-| Mixed strategies | Diagonal corners look different | Don't mix clockwise/counterclockwise; use one consistent pattern |
-| Symmetric assumption | Left/right corners curve differently | PathArc direction is relative to path direction, not absolute |
+#### Technical Details
 
-#### Debugging Corner Issues
+The components use `ShapePath` with different path directions:
+- **TopHangingBackground:** Clockwise path, union arcs at TL/TR (no `direction`), standard arcs at BL/BR (`Counterclockwise`)
+- **BottomUpBackground:** Counterclockwise path, union arcs at BL/BR (`Counterclockwise`), standard arcs at TL/TR (no `direction`)
 
-```bash
-# Test panel rendering
-sudo -A echo "test"  # For askpass
-# Or trigger the relevant drawer
-
-# If corners look wrong:
-# 1. Identify which corners are inverted (top? bottom? diagonal pairs?)
-# 2. Find a working panel with same orientation
-# 3. Compare: path direction, startY, which arcs have Counterclockwise
-# 4. Copy the working pattern entirely rather than tweaking individual arcs
-```
-
-**Key insight:** When corners appear asymmetric (e.g., TL correct but TR inverted), the issue is usually mixing path strategies. The safest fix is to copy an entire working Background.qml from a panel with the same orientation.
+Both include adaptive `roundingY` to prevent rendering artifacts when panel height < rounding * 2.
 
 **Bar Pill Pattern:** Bar components can be grouped into glassmorphism "pill" containers for visual cohesion. The base component `PillContainer.qml` provides:
 - `StyledRect` with `Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)`
