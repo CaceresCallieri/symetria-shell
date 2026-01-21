@@ -11,6 +11,7 @@ jobs:
 
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
@@ -72,14 +73,16 @@ jobs:
           result/bin/caelestia-shell kill
           killall sway  # Screw using IPC
 
-      - name: Check for changes
-        id: check
-        run: echo modified=$(git diff --exit-code flake.lock &>/dev/null && echo 'false' || echo 'true') >> $GITHUB_OUTPUT
-
-      - name: Commit and push changes
-        if: steps.check.outputs.modified == 'true'
-        uses: EndBug/add-and-commit@v9
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
         with:
-          add: flake.lock
-          default_author: github_actions
-          message: "[CI] chore: update flake"
+          commit-message: "chore(nix): update flake inputs"
+          branch: ci/update-flake-inputs
+          delete-branch: true
+          title: "chore(nix): update flake inputs"
+          body: |
+            Automated flake input updates.
+
+            This PR was created automatically by the weekly flake update workflow.
+            The build and basic smoke test on Sway have passed.
+          labels: dependencies, automated
