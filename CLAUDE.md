@@ -69,7 +69,7 @@ qs -c symmetria
 ## Architecture
 
 ### Entry Point
-- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, Lock, Shortcuts, BatteryMonitor, IdleMonitors
+- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, HyprWhspr, Lock, Shortcuts, BatteryMonitor, IdleMonitors
 
 ### Directory Structure
 | Directory | Purpose |
@@ -276,6 +276,54 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/symmetria-askpass.sh"
 - `modules/askpass/Askpass.qml` - Module entry with IPC handler
 - `modules/askpass/AskpassWindow.qml` - Overlay dialog (based on WirelessPasswordDialog pattern)
 - `~/.dotfiles/scripts/symmetria-askpass.sh` - Wrapper script for sudo
+
+### HyprWhspr (Speech-to-Text Drawer)
+
+The HyprWhspr module (`modules/hyprwhspr/`) provides a native drawer overlay for the HyprWhspr speech-to-text system. The drawer auto-shows when HyprWhspr becomes active and displays state-based UI throughout the transcription lifecycle.
+
+**Prerequisites:**
+- HyprWhspr must be installed and configured
+- State files at `~/.config/hyprwhspr/`:
+  - `visualizer_state` - Current state (recording, paused, processing, error, success)
+  - `audio_level` - Float 0.0-1.0 (updated during recording)
+  - `recording_control` - FIFO for commands
+
+**State Machine:**
+
+| State | Description | UI Response |
+|-------|-------------|-------------|
+| `recording` | User is speaking | Pulsing mic icon + audio level bars |
+| `paused` | Recording paused | Pause icon, amber color |
+| `processing` | Transcribing audio | Spinner + "Transcribing..." |
+| `error` | Transcription failed | Error icon + hint text |
+| `success` | Transcription complete | Checkmark, auto-hide after 1.5s |
+
+**How it works:**
+1. HyprWhspr writes state to `~/.config/hyprwhspr/visualizer_state`
+2. `HyprWhsprService` (singleton) watches state file with `FileView.watchChanges`
+3. When state changes from `idle` to active, drawer auto-shows on all screens
+4. Audio level bars animate during recording (polled at 60fps)
+5. On `success` state, drawer auto-hides after configurable delay
+
+**Configuration (`~/.config/symmetria/shell.json`):**
+```json
+{
+  "hyprwhspr": {
+    "enabled": true,
+    "autoHideDelay": 1500
+  }
+}
+```
+
+**Files:**
+- `services/HyprWhsprService.qml` - Singleton service (state file watcher)
+- `modules/hyprwhspr/HyprWhspr.qml` - Root component (auto-show logic)
+- `modules/hyprwhspr/Wrapper.qml` - Animation wrapper (top-hanging)
+- `modules/hyprwhspr/Content.qml` - State-based UI content
+- `modules/hyprwhspr/HyprWhsprBackground.qml` - Background shape
+- `config/HyprWhsprConfig.qml` - Configuration defaults
+
+**Note:** Unlike Askpass (IPC-triggered), HyprWhspr uses file-based state watching. The drawer doesn't capture keyboard focus since the user is dictating via voice.
 
 ### Clipboard Manager
 

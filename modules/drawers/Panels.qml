@@ -10,6 +10,7 @@ import qs.modules.utilities.toasts as Toasts
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
+import qs.modules.hyprwhspr as HyprWhsprModule
 import Quickshell
 import QtQuick
 
@@ -31,6 +32,7 @@ Item {
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
+    readonly property alias hyprwhspr: hyprwhspr
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
@@ -104,6 +106,17 @@ Item {
 
     Askpass.Wrapper {
         id: askpass
+
+        screen: root.screen
+        visibilities: root.visibilities
+        panels: root
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+    }
+
+    HyprWhsprModule.Wrapper {
+        id: hyprwhspr
 
         screen: root.screen
         visibilities: root.visibilities

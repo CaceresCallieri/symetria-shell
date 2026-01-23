@@ -28,6 +28,7 @@ Singleton {
     property alias paths: adapter.paths
     property alias clipboard: adapter.clipboard
     property alias askpass: adapter.askpass
+    property alias hyprwhspr: adapter.hyprwhspr
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -99,7 +100,8 @@ Singleton {
             services: serializeServices(),
             paths: serializePaths(),
             clipboard: serializeClipboard(),
-            askpass: serializeAskpass()
+            askpass: serializeAskpass(),
+            hyprwhspr: serializeHyprWhspr()
         };
     }
 
@@ -440,6 +442,13 @@ Singleton {
         };
     }
 
+    function serializeHyprWhspr(): var {
+        return {
+            enabled: hyprwhspr.enabled,
+            autoHideDelay: hyprwhspr.autoHideDelay
+        };
+    }
+
     FileView {
         id: fileView
 
@@ -497,6 +506,7 @@ Singleton {
             property UserPaths paths: UserPaths {}
             property ClipboardConfig clipboard: ClipboardConfig {}
             property AskpassConfig askpass: AskpassConfig {}
+            property HyprWhsprConfig hyprwhspr: HyprWhsprConfig {}
         }
     }
 }

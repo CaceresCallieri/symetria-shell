@@ -10,6 +10,7 @@ import qs.modules.utilities as Utilities
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
+import qs.modules.hyprwhspr as HyprWhsprModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -83,6 +84,13 @@ Item {
 
         Askpass.AskpassBackground {
             wrapper: root.panels.askpass
+
+            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
+            startY: 0  // Start at top-left (clockwise path like bar popouts)
+        }
+
+        HyprWhsprModule.HyprWhsprBackground {
+            wrapper: root.panels.hyprwhspr
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0  // Start at top-left (clockwise path like bar popouts)

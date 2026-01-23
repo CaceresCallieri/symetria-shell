@@ -160,6 +160,7 @@ Variants {
                 property bool sidebar
                 property bool clipboard
                 property bool askpass
+                property bool hyprwhspr
 
                 Component.onCompleted: Visibilities.load(scope.modelData, this)
             }
