@@ -106,10 +106,18 @@ Singleton {
         watchChanges: false  // We use inotifywait instead
 
         onLoaded: {
+            const content = text().trim();
             root._audioLevelExists = true;
-            const level = parseFloat(text().trim());
-            if (!isNaN(level))
+
+            // Validate format: should be a short numeric string
+            if (content.length === 0 || content.length > 10) {
+                return;
+            }
+
+            const level = parseFloat(content);
+            if (!isNaN(level) && isFinite(level)) {
                 root.audioLevel = Math.max(0, Math.min(1, level));
+            }
         }
         onLoadFailed: err => {
             root._audioLevelExists = false;
@@ -150,11 +158,18 @@ Singleton {
                         // File was created or modified - check content
                         recordingStatusFile.reload();
                     }
-                } else if (filename === "audio_level" && root.recording) {
+                } else if (filename === "audio_level") {
+                    // Always track file existence, regardless of recording state.
+                    // This avoids the race condition where recording=true but
+                    // _audioLevelExists=false because events arrived in the wrong order.
                     if (event.includes("DELETE") || event.includes("MOVED_FROM")) {
                         root._audioLevelExists = false;
                     } else {
-                        audioLevelFile.reload();
+                        root._audioLevelExists = true;
+                        // Only read content if we're actually recording (saves I/O)
+                        if (root.recording) {
+                            audioLevelFile.reload();
+                        }
                     }
                 }
             }
@@ -200,9 +215,16 @@ Singleton {
         onTriggered: audioLevelFile.reload()
     }
 
-    // Reset audio level when not recording
+    // Handle recording state transitions
     onRecordingChanged: {
-        if (!recording) {
+        if (recording) {
+            // Proactively check for audio_level file when recording starts.
+            // This handles timing where the file was created before we detected
+            // the recording state change.
+            if (!_audioLevelExists) {
+                audioLevelFile.reload();
+            }
+        } else {
             audioLevel = 0.0;
         }
     }
@@ -246,11 +268,13 @@ Singleton {
         }
     }
 
-    // Initial state check - inotifywait only fires on CHANGES, not initial state
+    // Initial state check - inotifywait only fires on CHANGES, not initial state.
+    // If recording is already in progress when shell starts, we need to check files directly.
+    // Note: If audio_level file doesn't exist yet, onRecordingChanged will retry when
+    // recording state becomes true (see that handler for the fallback logic).
     Component.onCompleted: {
-        // Check if recording is already in progress
-        // (shell might have started while HyprWhspr was recording)
         recordingStatusFile.reload();
+        audioLevelFile.reload();
     }
 
     // Cleanup on destruction

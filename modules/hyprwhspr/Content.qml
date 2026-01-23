@@ -30,16 +30,32 @@ Item {
     // Minimum drawer width for readability
     readonly property int minDrawerWidth: 300
     // Height of audio level bar container
-    readonly property int audioBarContainerHeight: 32
+    readonly property int audioBarContainerHeight: 48
+
+    // Audio visualization tuning constants
+    readonly property QtObject audioConfig: QtObject {
+        readonly property real smoothing: 0.35       // Lower = smoother/slower response
+        readonly property real noiseFloor: 0.10      // Ambient noise threshold (0-1)
+        readonly property real powerCurve: 1.1       // >1 boosts loud, <1 boosts quiet
+        readonly property real waveVariation: 0.30   // ±30% height variation
+        readonly property real waveSpeed: 0.08       // Animation speed multiplier
+        readonly property real waveFrequency: 0.8    // Sine wave frequency across bars
+        readonly property real minBarHeight: 2
+        readonly property real maxBarHeight: 44
+    }
+
+    // Audio level from service (exposed for Repeater delegates under ComponentBehavior: Bound)
+    readonly property real audioLevel: HyprWhsprService.audioLevel
 
     // Animation time for audio bar noise (avoids Date.now() per-frame overhead)
+    // Increments ~60 units per second for smooth sine wave oscillation
     property real animationTime: 0
 
     NumberAnimation on animationTime {
         running: HyprWhsprService.state === "recording"
         from: 0
-        to: 1000000
-        duration: 1000000000  // ~11.5 days - effectively infinite
+        to: 6000
+        duration: 100000  // 100 seconds before loop (60 units/sec)
         loops: Animation.Infinite
     }
 
@@ -207,11 +223,11 @@ Item {
                     Anim {}
                 }
 
-                RowLayout {
+                Row {
                     id: audioLevelRow
 
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: 3
 
                     Repeater {
                         model: root.barCount
@@ -229,28 +245,40 @@ Item {
                                 return 1 - distance * 0.5;  // 0.5 to 1.0
                             }
 
+                            // The "truth" - raw target from audio level (updates at 60fps)
                             readonly property real targetHeight: {
-                                const level = HyprWhsprService.audioLevel;
-                                // Add some randomization for visual interest using animation time
-                                // (avoids Date.now() overhead - 1200+ calls/sec across 20 bars)
-                                const noise = Math.sin(index * 0.7 + root.animationTime * 0.005) * 0.1 + 0.9;
-                                return Math.max(4, level * 28 * positionFactor * noise);
-                            }
+                                const cfg = root.audioConfig;
+                                const rawLevel = root.audioLevel;
 
-                            Layout.preferredWidth: 4
-                            Layout.preferredHeight: targetHeight
-                            Layout.alignment: Qt.AlignVCenter
-
-                            radius: 2
-                            // Use pre-calculated gradient colors for performance
-                            color: root.barColors[index]
-
-                            Behavior on Layout.preferredHeight {
-                                NumberAnimation {
-                                    duration: 50
-                                    easing.type: Easing.OutQuad
+                                // Noise gate: ignore fan noise and ambient sounds
+                                let effectiveLevel = 0;
+                                if (rawLevel > cfg.noiseFloor) {
+                                    // Rescale: map [noiseFloor, 1.0] → [0, 1.0]
+                                    effectiveLevel = (rawLevel - cfg.noiseFloor) / (1.0 - cfg.noiseFloor);
+                                    // Power curve adjusts quiet vs loud response
+                                    effectiveLevel = Math.pow(effectiveLevel, cfg.powerCurve);
                                 }
+
+                                const waveOffset = Math.sin(index * cfg.waveFrequency + root.animationTime * cfg.waveSpeed) * cfg.waveVariation + (1 - cfg.waveVariation);
+                                return cfg.minBarHeight + effectiveLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor * waveOffset;
                             }
+
+                            // The "display" - smoothed version for rendering
+                            property real smoothedHeight: root.audioConfig.minBarHeight
+
+                            // Manual exponential smoothing - runs every time target changes
+                            onTargetHeightChanged: {
+                                smoothedHeight = smoothedHeight + (targetHeight - smoothedHeight) * root.audioConfig.smoothing;
+                            }
+
+                            // Direct sizing - Row doesn't support Layout.* properties,
+                            // and anchors.verticalCenter conflicts with Row positioning
+                            width: 5
+                            height: smoothedHeight
+                            y: (parent.height - height) / 2  // Manual vertical centering
+
+                            radius: 2.5
+                            color: root.barColors[index] ?? Colours.palette.m3primary
                         }
                     }
                 }
