@@ -157,62 +157,6 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
 
-            // Status row: Icon + Text
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: Appearance.spacing.normal
-
-                // State-based icon
-                MaterialIcon {
-                    id: stateIcon
-
-                    Layout.preferredWidth: Appearance.font.size.extraLarge
-                    Layout.preferredHeight: Appearance.font.size.extraLarge
-
-                    text: stateConfig.icon
-                    color: stateConfig.iconColor
-                    font.pointSize: Appearance.font.size.extraLarge
-
-                    // Pulsing animation for recording state
-                    SequentialAnimation on opacity {
-                        running: HyprWhsprService.state === "recording"
-                        loops: Animation.Infinite
-
-                        NumberAnimation {
-                            from: 1.0
-                            to: 0.5
-                            duration: 500
-                            easing.type: Easing.InOutSine
-                        }
-                        NumberAnimation {
-                            from: 0.5
-                            to: 1.0
-                            duration: 500
-                            easing.type: Easing.InOutSine
-                        }
-                    }
-
-                    // Spinning animation for processing state
-                    RotationAnimation on rotation {
-                        running: HyprWhsprService.state === "processing"
-                        loops: Animation.Infinite
-                        from: 0
-                        to: 360
-                        duration: 1500
-                    }
-                }
-
-                // Status text
-                StyledText {
-                    id: statusText
-
-                    text: stateConfig.statusText
-                    font.pointSize: Appearance.font.size.large
-                    font.weight: 500
-                    color: stateConfig.textColor
-                }
-            }
-
             // Audio level bars (only visible during recording)
             FadeTransition {
                 id: audioLevelContainer
@@ -297,17 +241,18 @@ Item {
                 }
             }
 
-            // Cancel button (visible during processing)
+            // Loading spinner (visible during processing)
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Appearance.spacing.small
                 show: HyprWhsprService.state === "processing"
 
-                TextButton {
-                    text: qsTr("Cancel")
-                    inactiveColour: Colours.palette.m3secondaryContainer
-                    inactiveOnColour: Colours.palette.m3onSecondaryContainer
-                    onClicked: HyprWhsprService.cancel()
+                CircularIndicator {
+                    running: HyprWhsprService.state === "processing"
+                    implicitSize: Appearance.font.size.large * 2
+                    strokeWidth: Appearance.padding.small * 0.6
+                    fgColour: Colours.palette.m3secondary
+                    bgColour: Colours.palette.m3secondaryContainer
                 }
             }
         }
