@@ -8,24 +8,26 @@ import QtQuick
 
 /// HyprWhspr speech-to-text service.
 ///
-/// Watches HyprWhspr state files (recording_status, audio_level) to detect recording state.
+/// Watches HyprWhspr's visualizer_state file for state transitions:
+/// - recording: User is speaking
+/// - paused: Recording paused
+/// - processing: Transcribing audio
+/// - error: Transcription failed
+/// - success: Transcription complete
+/// - (file deleted): Idle state
+///
 /// Uses inotifywait for efficient file watching instead of polling.
 Singleton {
     id: root
 
-    /// Current state: "idle", "recording", "processing"
-    readonly property string state: {
-        if (_isRecording) {
-            return "recording";
-        }
-        if (_wasRecording) {
-            return "processing";
-        }
-        return "idle";
-    }
+    // Valid HyprWhspr states (file content values)
+    readonly property var validStates: ["recording", "paused", "processing", "error", "success"]
 
-    // Internal property to track recording status from file
-    property bool _isRecording: false
+    /// Current state: "idle", "recording", "paused", "processing", "error", "success"
+    readonly property string state: validStates.includes(_rawState) ? _rawState : "idle"
+
+    // Internal: raw state string from visualizer_state file
+    property string _rawState: ""
 
     /// Audio level (0.0-1.0) during recording
     property real audioLevel: 0.0
@@ -38,9 +40,6 @@ Singleton {
 
     /// Whether currently recording (for audio level polling)
     readonly property bool recording: state === "recording"
-
-    // Internal: track if we were recording to detect transition to processing
-    property bool _wasRecording: false
 
     // Config directory for HyprWhspr
     readonly property string configDir: `${Paths.home}/.config/hyprwhspr`
@@ -58,13 +57,18 @@ Singleton {
         writeCommand("stop");
     }
 
-    /// Cancel recording (same as stop)
-    function cancel(): void {
-        writeCommand("stop");
+    /// Pause recording
+    function pause(): void {
+        writeCommand("pause");
+    }
+
+    /// Resume recording
+    function resume(): void {
+        writeCommand("resume");
     }
 
     function writeCommand(cmd: string): void {
-        commandProcess.command = ["sh", "-c", `echo "${cmd}" > "${controlFifo}"`];
+        commandProcess.command = ["sh", "-c", `printf '%s\\n' '${cmd}' > '${controlFifo}'`];
         commandProcess.running = true;
     }
 
@@ -74,27 +78,26 @@ Singleton {
     // Track if inotifywait failed (e.g., not installed)
     property bool _inotifyFailed: false
 
-    // Recording status file reader
+    // Visualizer state file reader - the source of truth for HyprWhspr state
     FileView {
-        id: recordingStatusFile
+        id: visualizerStateFile
 
-        path: `${root.configDir}/recording_status`
+        path: `${root.configDir}/visualizer_state`
         watchChanges: false  // We use inotifywait instead
 
         onLoaded: {
-            const status = text().trim();
-            const wasRecording = root._isRecording;
-            root._isRecording = (status === "true");
-            if (root._isRecording !== wasRecording) {
-                console.log("HyprWhspr: recording_status =", status);
+            const newState = text().trim();
+            if (root._rawState !== newState) {
+                console.log("HyprWhspr: visualizer_state =", newState);
+                root._rawState = newState;
             }
         }
         onLoadFailed: err => {
-            // File deletion means recording stopped - this is normal
-            if (root._isRecording) {
-                console.log("HyprWhspr: recording stopped");
+            // File deletion means return to idle - this is normal
+            if (root._rawState !== "") {
+                console.log("HyprWhspr: visualizer_state deleted (idle)");
             }
-            root._isRecording = false;
+            root._rawState = "";
         }
     }
 
@@ -147,16 +150,16 @@ Singleton {
                 const filename = parts[0];
                 const event = parts.slice(1).join(" ");
 
-                if (filename === "recording_status") {
+                if (filename === "visualizer_state") {
                     if (event.includes("DELETE") || event.includes("MOVED_FROM")) {
-                        // File was deleted - recording stopped
-                        if (root._isRecording) {
-                            console.log("HyprWhspr: recording stopped");
+                        // File was deleted - return to idle
+                        if (root._rawState !== "") {
+                            console.log("HyprWhspr: visualizer_state deleted (idle)");
                         }
-                        root._isRecording = false;
+                        root._rawState = "";
                     } else {
-                        // File was created or modified - check content
-                        recordingStatusFile.reload();
+                        // File was created or modified - read new state
+                        visualizerStateFile.reload();
                     }
                 } else if (filename === "audio_level") {
                     // Always track file existence, regardless of recording state.
@@ -181,6 +184,7 @@ Singleton {
                 console.error("HyprWhspr: inotifywait not installed - drawer disabled");
                 console.error("  Install with: paru -S inotify-tools");
                 root._inotifyFailed = true;
+                inotifyWatcher.running = false;  // Explicitly stop to prevent respawn attempts
                 return;
             }
 
@@ -219,8 +223,11 @@ Singleton {
     onRecordingChanged: {
         if (recording) {
             // Proactively check for audio_level file when recording starts.
-            // This handles timing where the file was created before we detected
-            // the recording state change.
+            // This handles the race condition where audio_level file was created
+            // BEFORE visualizer_state changed to "recording". The inotifywait event
+            // for audio_level may have arrived first, setting _audioLevelExists=true,
+            // but the 60fps polling timer wasn't running yet (requires recording=true).
+            // This one-time check ensures we don't miss the initial audio level.
             if (!_audioLevelExists) {
                 audioLevelFile.reload();
             }
@@ -229,32 +236,39 @@ Singleton {
         }
     }
 
-    // Track recording state transitions
+    // Handle state transitions
     onStateChanged: {
         console.log("HyprWhspr: State changed to:", state);
 
-        if (state === "recording") {
-            _wasRecording = true;
-        } else if (state === "processing") {
-            processingTimer.start();
-        } else if (state === "idle") {
-            _wasRecording = false;
-            processingTimer.stop();
+        // Start auto-hide timer on success
+        if (state === "success") {
+            successTimer.start();
+        } else {
+            successTimer.stop();
         }
     }
 
-    // Timer to auto-clear processing state
+    // Timer to auto-hide after success state
+    // HyprWhspr may keep success state for a while, so we force return to idle
+    // after showing the success indicator
     Timer {
-        id: processingTimer
+        id: successTimer
 
         // Validate autoHideDelay: clamp to 500ms-10s range
         interval: {
-            const delay = Config.hyprwhspr?.autoHideDelay ?? 3000;
-            return Math.max(500, Math.min(10000, delay));
+            const delay = Config.hyprwhspr?.autoHideDelay ?? 1500;
+            const clamped = Math.max(500, Math.min(10000, delay));
+            if (clamped !== delay) {
+                console.warn(`HyprWhspr: autoHideDelay ${delay}ms clamped to ${clamped}ms (valid: 500-10000)`);
+            }
+            return clamped;
         }
 
         onTriggered: {
-            root._wasRecording = false;
+            // Only hide if still in success state (prevents hiding during rapid transitions)
+            if (root.state === "success") {
+                root._rawState = "";
+            }
         }
     }
 
@@ -273,14 +287,14 @@ Singleton {
     // Note: If audio_level file doesn't exist yet, onRecordingChanged will retry when
     // recording state becomes true (see that handler for the fallback logic).
     Component.onCompleted: {
-        recordingStatusFile.reload();
+        visualizerStateFile.reload();
         audioLevelFile.reload();
     }
 
     // Cleanup on destruction
     Component.onDestruction: {
         audioLevelPoll.stop();
-        processingTimer.stop();
+        successTimer.stop();
         inotifyWatcher.running = false;
     }
 }

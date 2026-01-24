@@ -12,10 +12,11 @@ import QtQuick.Layouts
 /// Content UI for HyprWhsprService speech-to-text drawer.
 ///
 /// Displays state-based UI:
-/// - recording: Pulsing mic icon + audio level bars
-/// - processing: Spinner + "Transcribing..."
-/// - error: Error icon + retry hint (future)
-/// - success: Checkmark, brief display before auto-hide (future)
+/// - recording: Animated audio level bars
+/// - paused: Static audio level bars with pause icon
+/// - processing: Loading spinner
+/// - error: Error icon + hint text
+/// - success: Checkmark, brief display before auto-hide
 Item {
     id: root
 
@@ -33,13 +34,14 @@ Item {
     readonly property int audioBarContainerHeight: 48
 
     // Audio visualization tuning constants
+    // Tuned for natural speech visualization. Adjust if bars feel laggy/jittery.
     readonly property QtObject audioConfig: QtObject {
-        readonly property real smoothing: 0.35       // Lower = smoother/slower response
-        readonly property real noiseFloor: 0.10      // Ambient noise threshold (0-1)
-        readonly property real powerCurve: 1.1       // >1 boosts loud, <1 boosts quiet
-        readonly property real waveVariation: 0.30   // ±30% height variation
-        readonly property real waveSpeed: 0.08       // Animation speed multiplier
-        readonly property real waveFrequency: 0.8    // Sine wave frequency across bars
+        readonly property real smoothing: 0.35       // 0.2=laggy, 0.5=jittery, 0.35=balanced
+        readonly property real noiseFloor: 0.10      // Filters ~40dB ambient noise
+        readonly property real powerCurve: 1.1       // Slight boost for speech dynamics
+        readonly property real waveVariation: 0.30   // ±30% creates motion without chaos
+        readonly property real waveSpeed: 0.08       // Gentle oscillation speed
+        readonly property real waveFrequency: 0.8    // Wave pattern across bar array
         readonly property real minBarHeight: 2
         readonly property real maxBarHeight: 44
     }
@@ -91,18 +93,28 @@ Item {
         const cfg = audioConfig;
         const offsets = [];
         for (let i = 0; i < barCount; i++) {
-            offsets.push(Math.sin(i * cfg.waveFrequency + animationTime * cfg.waveSpeed) * cfg.waveVariation + (1 - cfg.waveVariation));
+            // Sine wave oscillates around a baseline (e.g., waveVariation=0.30 → baseline=0.70)
+            // This creates ±30% height variation while keeping bars visible
+            const baseline = 1 - cfg.waveVariation;
+            offsets.push(Math.sin(i * cfg.waveFrequency + animationTime * cfg.waveSpeed) * cfg.waveVariation + baseline);
         }
         return offsets;
     }
 
-    // State configuration map - single source of truth for all state-dependent UI
-    // Using a map instead of multiple switch statements improves maintainability
+    // State configuration map - defines visual properties for each state.
+    // Note: icon/iconColor are currently unused (each state has dedicated UI).
+    // See GitHub issue #22 for planned consolidation using these properties.
     readonly property var stateMap: ({
         "recording": {
             icon: "mic",
             iconColor: Colours.palette.m3primary,
             statusText: qsTr("Recording..."),
+            textColor: Colours.palette.m3onSurface
+        },
+        "paused": {
+            icon: "pause",
+            iconColor: Colours.palette.m3tertiary,
+            statusText: qsTr("Paused"),
             textColor: Colours.palette.m3onSurface
         },
         "processing": {
@@ -157,7 +169,8 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
 
-            // Audio level bars (only visible during recording)
+            // Audio level bars (visible during recording and paused)
+            // Animation only runs during recording; bars freeze during paused
             FadeTransition {
                 id: audioLevelContainer
 
@@ -165,7 +178,7 @@ Item {
                 Layout.preferredWidth: audioLevelRow.implicitWidth
                 Layout.preferredHeight: root.audioBarContainerHeight
 
-                show: HyprWhsprService.state === "recording"
+                show: HyprWhsprService.state === "recording" || HyprWhsprService.state === "paused"
 
                 Row {
                     id: audioLevelRow
@@ -216,11 +229,13 @@ Item {
                                 smoothedHeight = smoothedHeight + (targetHeight - smoothedHeight) * root.audioConfig.smoothing;
                             }
 
-                            // Direct sizing - Row doesn't support Layout.* properties,
-                            // and anchors.verticalCenter conflicts with Row positioning
+                            // Direct sizing required because:
+                            // 1. Row children can't use Layout.* properties (Row isn't a Layout)
+                            // 2. anchors.verticalCenter conflicts with Row's child positioning
+                            // 3. Therefore we calculate y manually for vertical centering
                             width: 5
                             height: smoothedHeight
-                            y: (parent.height - height) / 2  // Manual vertical centering
+                            y: (parent.height - height) / 2
 
                             radius: 2.5
                             color: root.barColors[index] ?? Colours.palette.m3primary
@@ -229,15 +244,51 @@ Item {
                 }
             }
 
+            // Pause icon overlay (visible during paused state)
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: HyprWhsprService.state === "paused"
+
+                MaterialIcon {
+                    text: "pause"
+                    color: Colours.palette.m3tertiary
+                    font.pointSize: Appearance.font.size.extraLarge
+                }
+            }
+
+            // Success checkmark (visible during success state)
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: HyprWhsprService.state === "success"
+
+                MaterialIcon {
+                    text: "check_circle"
+                    color: Colours.palette.m3primary
+                    font.pointSize: Appearance.font.size.extraLarge
+                }
+            }
+
             // Hint text for error state
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 show: HyprWhsprService.state === "error"
 
-                StyledText {
-                    text: qsTr("Check hyprwhspr logs for details")
-                    font.pointSize: Appearance.font.size.small
-                    color: Colours.palette.m3outline
+                ColumnLayout {
+                    spacing: Appearance.spacing.small
+
+                    MaterialIcon {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "error"
+                        color: Colours.palette.m3error
+                        font.pointSize: Appearance.font.size.extraLarge
+                    }
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: qsTr("Check hyprwhspr logs for details")
+                        font.pointSize: Appearance.font.size.small
+                        color: Colours.palette.m3outline
+                    }
                 }
             }
 

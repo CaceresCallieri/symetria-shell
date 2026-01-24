@@ -292,18 +292,19 @@ The HyprWhspr module (`modules/hyprwhspr/`) provides a native drawer overlay for
 
 | State | Description | UI Response |
 |-------|-------------|-------------|
-| `recording` | User is speaking | Pulsing mic icon + audio level bars |
-| `paused` | Recording paused | Pause icon, amber color |
-| `processing` | Transcribing audio | Spinner + "Transcribing..." |
+| `recording` | User is speaking | Animated audio level bars |
+| `paused` | Recording paused | Frozen audio bars + pause icon (amber) |
+| `processing` | Transcribing audio | CircularIndicator spinner |
 | `error` | Transcription failed | Error icon + hint text |
-| `success` | Transcription complete | Checkmark, auto-hide after 1.5s |
+| `success` | Transcription complete | Checkmark icon, auto-hide after delay |
 
 **How it works:**
 1. HyprWhspr writes state to `~/.config/hyprwhspr/visualizer_state`
-2. `HyprWhsprService` (singleton) watches state file with `FileView.watchChanges`
-3. When state changes from `idle` to active, drawer auto-shows on all screens
-4. Audio level bars animate during recording (polled at 60fps)
-5. On `success` state, drawer auto-hides after configurable delay
+2. `HyprWhsprService` uses `inotifywait` for efficient file-change detection (not polling)
+3. State is read directly from file content (`recording`, `paused`, `processing`, `error`, `success`)
+4. File deletion signals return to `idle` state
+5. Audio level bars animate during recording (polled at 60fps from `audio_level` file)
+6. On `success` state, drawer auto-hides after configurable delay
 
 **Configuration (`~/.config/symmetria/shell.json`):**
 ```json
