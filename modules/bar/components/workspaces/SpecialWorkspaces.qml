@@ -120,7 +120,8 @@ Item {
             id: ws
 
             required property HyprlandWorkspace modelData
-            readonly property int size: label.Layout.preferredWidth + (hasWindows ? windows.implicitWidth + Appearance.padding.small : 0)
+            readonly property int size: content.totalWidth + (hasWindows ? Appearance.padding.small : 0)
+            // Cached from modelData to survive delegate destruction during ListView remove animation
             property int wsId
             property string icon
             property bool hasWindows
@@ -165,57 +166,12 @@ Item {
                 }
             }
 
-            Loader {
-                id: label
+            WorkspaceContent {
+                id: content
 
-                Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
-                Layout.preferredWidth: Config.bar.sizes.indicatorHeight
-
-                // Parse icon using centralized helper (handles prefix stripping and validation)
-                readonly property var parsedIcon: Icons.parseIcon(ws.icon)
-                readonly property bool useMaterialIcon: parsedIcon.useMaterial
-                readonly property string iconText: parsedIcon.iconText
-
-                sourceComponent: useMaterialIcon ? iconComp : letterComp
-
-                Component {
-                    id: iconComp
-
-                    MaterialIcon {
-                        fill: 1
-                        text: label.iconText
-                        horizontalAlignment: Qt.AlignHCenter
-                    }
-                }
-
-                Component {
-                    id: letterComp
-
-                    StyledText {
-                        text: label.iconText
-                        horizontalAlignment: Qt.AlignHCenter
-                    }
-                }
-            }
-
-            Loader {
-                id: windows
-
-                Layout.alignment: Qt.AlignVCenter
-                Layout.fillWidth: true
-                Layout.preferredWidth: implicitWidth
-
-                visible: active
-                active: ws.hasWindows
-                asynchronous: true
-
-                sourceComponent: WorkspaceAppIcons {
-                    workspaceId: ws.wsId
-                }
-
-                Behavior on Layout.preferredWidth {
-                    Anim {}
-                }
+                wsId: ws.wsId
+                icon: ws.icon
+                hasWindows: ws.hasWindows
             }
         }
 

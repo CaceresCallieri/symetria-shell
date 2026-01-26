@@ -36,6 +36,25 @@ RowLayout {
     // Cached workspace reference to avoid repeated find() lookups
     readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
 
+    // Icon resolution: named workspace icon → first letter → roman numeral
+    readonly property string rawIcon: {
+        if (root.currentWorkspace) {
+            const customIcon = Icons.getNamedWsIcon(root.currentWorkspace.name);
+            if (customIcon && customIcon !== Icons.materialIconPrefix) return customIcon;
+            if (root.ws < 0 && root.currentWorkspace.name) return root.currentWorkspace.name[0].toUpperCase();
+        }
+        return Icons.romanize(root.ws);
+    }
+
+    // Color varies by active/occupied state for visual hierarchy
+    readonly property color indicatorColor: {
+        if (root.isActive)
+            return Colours.palette.m3onSurface;
+        if (Config.bar.workspaces.occupiedBg || root.isOccupied)
+            return Colours.palette.m3onSurface;
+        return Colours.layer(Colours.palette.m3outlineVariant, 2);
+    }
+
     Layout.alignment: Qt.AlignVCenter
     Layout.preferredWidth: contentSize
     Layout.leftMargin: isActive ? activePadding + activeMargin : 0
@@ -43,79 +62,16 @@ RowLayout {
 
     spacing: 0
 
-    // Workspace indicator: roman numeral, letter, or icon
-    // Uses Loader to render MaterialIcon for named icons (e.g., "mat:sports_esports")
-    // or StyledText for single characters and roman numerals
-    Loader {
-        id: indicator
+    WorkspaceContent {
+        id: content
 
-        Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
-        Layout.preferredWidth: Config.bar.sizes.indicatorHeight
-
-        // Raw icon value from config or fallback
-        readonly property string rawIcon: {
-            if (root.currentWorkspace) {
-                const customIcon = Icons.getNamedWsIcon(root.currentWorkspace.name);
-                // Validate icon is not empty or just the prefix
-                if (customIcon && customIcon !== Icons.materialIconPrefix) return customIcon;
-                // For named workspaces (negative IDs), show first letter of name as fallback
-                if (root.ws < 0 && root.currentWorkspace.name) return root.currentWorkspace.name[0].toUpperCase();
-            }
-            return Icons.romanize(root.ws);
-        }
-
-        // Parse icon using centralized helper (handles prefix stripping and validation)
-        readonly property var parsedIcon: Icons.parseIcon(rawIcon)
-        readonly property bool useMaterialIcon: parsedIcon.useMaterial
-        readonly property string iconText: parsedIcon.iconText
-
-        readonly property color indicatorColor: {
-            if (root.isActive)
-                return Colours.palette.m3onSurface;
-            if (Config.bar.workspaces.occupiedBg || root.isOccupied)
-                return Colours.palette.m3onSurface;
-            return Colours.layer(Colours.palette.m3outlineVariant, 2);
-        }
-
-        sourceComponent: useMaterialIcon ? materialIconComp : styledTextComp
-
-        Component {
-            id: materialIconComp
-
-            MaterialIcon {
-                fill: 1
-                text: indicator.iconText
-                color: indicator.indicatorColor
-                horizontalAlignment: Qt.AlignHCenter
-            }
-        }
-
-        Component {
-            id: styledTextComp
-
-            StyledText {
-                animate: true
-                text: indicator.iconText
-                color: indicator.indicatorColor
-                horizontalAlignment: Qt.AlignHCenter
-            }
-        }
-    }
-
-    Loader {
-        id: windows
-
-        Layout.alignment: Qt.AlignVCenter
-        Layout.fillWidth: true
-        Layout.leftMargin: -Config.bar.sizes.innerWidth / 10
-
-        visible: active
-        active: root.hasWindows
-        asynchronous: true
-
-        sourceComponent: WorkspaceAppIcons {
-            workspaceId: root.ws
-        }
+        wsId: root.ws
+        icon: root.rawIcon
+        hasWindows: root.hasWindows
+        labelColor: root.indicatorColor
+        animateLabel: true
+        windowsLeftMargin: -Config.bar.sizes.innerWidth / 10  // Pull icons closer for tighter grouping
+        animateWindowsWidth: false  // Root RowLayout animates width; inner animation would double-ease
     }
 
     // Fullscreen/Maximize indicator - shows at end of active workspace
