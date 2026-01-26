@@ -120,7 +120,8 @@ Item {
             id: ws
 
             required property HyprlandWorkspace modelData
-            readonly property int size: content.totalWidth + (hasWindows ? Appearance.padding.small : 0)
+            readonly property bool isActive: ListView.isCurrentItem
+            readonly property int size: content.totalWidth + (content.hasWindows ? Appearance.padding.small : 0)
             // Cached from modelData to survive delegate destruction during ListView remove animation
             property int wsId
             property string icon
@@ -171,7 +172,7 @@ Item {
 
                 wsId: ws.wsId
                 icon: ws.icon
-                hasWindows: ws.hasWindows
+                hasWindows: ws.hasWindows && ws.isActive
             }
         }
 
