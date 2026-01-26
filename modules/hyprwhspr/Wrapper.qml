@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.config
+import qs.services
 import Quickshell
 import QtQuick
 
@@ -108,6 +109,8 @@ Item {
         sourceComponent: Content {
             screen: root.screen
             visibilities: root.visibilities
+            serviceState: HyprWhsprService.state
+            serviceAudioLevel: HyprWhsprService.audioLevel
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

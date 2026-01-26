@@ -22,6 +22,8 @@ Item {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
+    required property string serviceState
+    required property real serviceAudioLevel
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -47,14 +49,14 @@ Item {
     }
 
     // Audio level from service (exposed for Repeater delegates under ComponentBehavior: Bound)
-    readonly property real audioLevel: HyprWhsprService.audioLevel
+    readonly property real audioLevel: root.serviceAudioLevel
 
     // Animation time for audio bar noise (avoids Date.now() per-frame overhead)
     // Increments ~60 units per second for smooth sine wave oscillation
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: HyprWhsprService.state === "recording"
+        running: root.serviceState === "recording"
         from: 0
         to: 6000
         duration: 100000  // 100 seconds before loop (60 units/sec)
@@ -89,7 +91,7 @@ Item {
     // Pre-calculated wave offsets - computed once per frame instead of per-bar
     // Reduces Math.sin() calls from 1200/sec (20 bars × 60fps) to 60/sec
     readonly property var waveOffsets: {
-        if (HyprWhsprService.state !== "recording") return [];
+        if (root.serviceState !== "recording") return [];
         const cfg = audioConfig;
         const offsets = [];
         for (let i = 0; i < barCount; i++) {
@@ -143,7 +145,7 @@ Item {
     })
 
     // Current state config - falls back to idle for unknown states
-    readonly property var stateConfig: stateMap[HyprWhsprService.state] ?? stateMap["idle"]
+    readonly property var stateConfig: stateMap[root.serviceState] ?? stateMap["idle"]
 
     // State indicator components - dispatched by the Loader in the content layout.
     // Shared icon component for paused and success (same structure, different icon/color).
@@ -225,7 +227,7 @@ Item {
                 Layout.preferredWidth: audioLevelRow.implicitWidth
                 Layout.preferredHeight: root.audioBarContainerHeight
 
-                show: HyprWhsprService.state === "recording" || HyprWhsprService.state === "paused"
+                show: root.serviceState === "recording" || root.serviceState === "paused"
 
                 Row {
                     id: audioLevelRow
@@ -298,10 +300,10 @@ Item {
             // processing → processingComponent (spinner)
             Loader {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: HyprWhsprService.state === "processing" ? Appearance.spacing.small : 0
+                Layout.topMargin: root.serviceState === "processing" ? Appearance.spacing.small : 0
 
                 sourceComponent: {
-                    switch (HyprWhsprService.state) {
+                    switch (root.serviceState) {
                         case "paused":
                         case "success":
                             return stateIconComponent;
