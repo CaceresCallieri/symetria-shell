@@ -87,7 +87,10 @@ Item {
     ListView {
         id: view
 
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: contentWidth > 0 && contentWidth < parent.width ? contentWidth : parent.width
         spacing: Appearance.spacing.normal
         interactive: false
         orientation: ListView.Horizontal
@@ -283,7 +286,9 @@ Item {
         drag.target: view.contentItem
         drag.axis: Drag.XAxis
         drag.maximumX: 0
-        drag.minimumX: Math.min(0, view.width - view.contentWidth - Appearance.padding.small)
+        drag.minimumX: view.contentWidth > view.width
+            ? view.width - view.contentWidth - Appearance.padding.small
+            : 0
 
         onPressed: event => startX = event.x
 
