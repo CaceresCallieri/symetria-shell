@@ -102,8 +102,7 @@ Item {
     }
 
     // State configuration map - defines visual properties for each state.
-    // Note: icon/iconColor are currently unused (each state has dedicated UI).
-    // See GitHub issue #22 for planned consolidation using these properties.
+    // icon/iconColor are used by the state indicator Loader below.
     readonly property var stateMap: ({
         "recording": {
             icon: "mic",
@@ -145,6 +144,54 @@ Item {
 
     // Current state config - falls back to idle for unknown states
     readonly property var stateConfig: stateMap[HyprWhsprService.state] ?? stateMap["idle"]
+
+    // State indicator components - dispatched by the Loader in the content layout.
+    // Shared icon component for paused and success (same structure, different icon/color).
+    // When transitioning between these two states, Loader reuses the instance and
+    // bindings update reactively — no destruction/recreation flicker.
+    Component {
+        id: stateIconComponent
+
+        MaterialIcon {
+            text: root.stateConfig.icon
+            color: root.stateConfig.iconColor
+            font.pointSize: Appearance.font.size.extraLarge
+        }
+    }
+
+    Component {
+        id: errorComponent
+
+        ColumnLayout {
+            spacing: Appearance.spacing.small
+
+            MaterialIcon {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.stateConfig.icon
+                color: root.stateConfig.iconColor
+                font.pointSize: Appearance.font.size.extraLarge
+            }
+
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                text: qsTr("Check hyprwhspr logs for details")
+                font.pointSize: Appearance.font.size.small
+                color: Colours.palette.m3outline
+            }
+        }
+    }
+
+    Component {
+        id: processingComponent
+
+        CircularIndicator {
+            running: true
+            implicitSize: Appearance.font.size.large * 2
+            strokeWidth: Appearance.padding.small * 0.6
+            fgColour: Colours.palette.m3secondary
+            bgColour: Colours.palette.m3secondaryContainer
+        }
+    }
 
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + padding
@@ -244,66 +291,27 @@ Item {
                 }
             }
 
-            // Pause icon overlay (visible during paused state)
-            FadeTransition {
+            // State indicator - dispatches to the appropriate component per state.
+            // recording/idle → null (audio bars handle recording; idle = drawer closing)
+            // paused/success → stateIconComponent (driven by stateMap icon/iconColor)
+            // error → errorComponent (icon + hint text)
+            // processing → processingComponent (spinner)
+            Loader {
                 Layout.alignment: Qt.AlignHCenter
-                show: HyprWhsprService.state === "paused"
+                Layout.topMargin: HyprWhsprService.state === "processing" ? Appearance.spacing.small : 0
 
-                MaterialIcon {
-                    text: "pause"
-                    color: Colours.palette.m3tertiary
-                    font.pointSize: Appearance.font.size.extraLarge
-                }
-            }
-
-            // Success checkmark (visible during success state)
-            FadeTransition {
-                Layout.alignment: Qt.AlignHCenter
-                show: HyprWhsprService.state === "success"
-
-                MaterialIcon {
-                    text: "check_circle"
-                    color: Colours.palette.m3primary
-                    font.pointSize: Appearance.font.size.extraLarge
-                }
-            }
-
-            // Hint text for error state
-            FadeTransition {
-                Layout.alignment: Qt.AlignHCenter
-                show: HyprWhsprService.state === "error"
-
-                ColumnLayout {
-                    spacing: Appearance.spacing.small
-
-                    MaterialIcon {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "error"
-                        color: Colours.palette.m3error
-                        font.pointSize: Appearance.font.size.extraLarge
+                sourceComponent: {
+                    switch (HyprWhsprService.state) {
+                        case "paused":
+                        case "success":
+                            return stateIconComponent;
+                        case "error":
+                            return errorComponent;
+                        case "processing":
+                            return processingComponent;
+                        default:
+                            return null;
                     }
-
-                    StyledText {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: qsTr("Check hyprwhspr logs for details")
-                        font.pointSize: Appearance.font.size.small
-                        color: Colours.palette.m3outline
-                    }
-                }
-            }
-
-            // Loading spinner (visible during processing)
-            FadeTransition {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: Appearance.spacing.small
-                show: HyprWhsprService.state === "processing"
-
-                CircularIndicator {
-                    running: HyprWhsprService.state === "processing"
-                    implicitSize: Appearance.font.size.large * 2
-                    strokeWidth: Appearance.padding.small * 0.6
-                    fgColour: Colours.palette.m3secondary
-                    bgColour: Colours.palette.m3secondaryContainer
                 }
             }
         }
