@@ -146,6 +146,6 @@ StyledRect {
     }
 
     component EAnim: Anim {
-        easing.bezierCurve: Appearance.anim.curves.emphasized
+        easing.bezierCurve: Appearance.anim.curves.standardDecel
     }
 }
