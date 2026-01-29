@@ -8,6 +8,11 @@ import Symmetria
 Singleton {
     id: root
 
+    // Verification timing constants
+    readonly property int startupVerifyDelay: 1000  // Time for gpu-screen-recorder to initialize
+    readonly property int shutdownVerifyDelay: 500  // pkill is fast, check quickly
+    readonly property int maxStopRetries: 5
+
     readonly property alias running: props.running
     readonly property alias paused: props.paused
     readonly property alias elapsed: props.elapsed
@@ -40,6 +45,7 @@ Singleton {
     property bool startPending: false
 
     property bool stopPending: false
+    property int stopRetryCount: 0
 
     function stop(): void {
         // Only stop if currently running
@@ -105,7 +111,7 @@ Singleton {
     // Verify recording actually started after execDetached
     Timer {
         id: verifyTimer
-        interval: 1000  // Give gpu-screen-recorder time to initialize
+        interval: root.startupVerifyDelay
         onTriggered: verifyProc.running = true
     }
 
@@ -130,7 +136,7 @@ Singleton {
     // Verify recording stopped after execDetached
     Timer {
         id: stopVerifyTimer
-        interval: 500  // Check quickly since pkill is fast
+        interval: root.shutdownVerifyDelay
         onTriggered: stopVerifyProc.running = true
     }
 
@@ -138,15 +144,30 @@ Singleton {
         id: stopVerifyProc
         command: ["pidof", "gpu-screen-recorder"]
         onExited: code => {
-            root.stopPending = false;
             if (code === 0) {
-                // Still running - try again or warn
-                console.warn("Recorder: stop verify - still running, retrying...");
-                stopVerifyTimer.start();
+                // Still running - retry or give up
+                root.stopRetryCount++;
+                if (root.stopRetryCount >= root.maxStopRetries) {
+                    console.error("Recorder: stop verify failed after", root.maxStopRetries, "retries");
+                    Toaster.toast(
+                        qsTr("Stop failed"),
+                        qsTr("Recording may need manual termination"),
+                        "error",
+                        Toast.Error
+                    );
+                    root.stopPending = false;
+                    root.stopRetryCount = 0;
+                } else {
+                    console.warn("Recorder: stop verify - still running, retry", root.stopRetryCount);
+                    stopVerifyTimer.start();
+                }
             } else {
+                // Stopped successfully
                 console.log("Recorder: recording stopped successfully");
                 props.running = false;
                 props.paused = false;
+                root.stopPending = false;
+                root.stopRetryCount = 0;
             }
         }
     }

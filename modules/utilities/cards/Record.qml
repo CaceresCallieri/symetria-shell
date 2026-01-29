@@ -73,7 +73,8 @@ StyledRect {
             }
 
             SplitButton {
-                disabled: Recorder.running
+                loading: Recorder.startPending
+                disabled: Recorder.running || Recorder.startPending
                 active: menuItems.find(m => root.props.recordingMode === m.icon + m.text) ?? menuItems[0]
                 menu.onItemSelected: item => root.props.recordingMode = item.icon + item.text
 
@@ -267,6 +268,8 @@ StyledRect {
 
             IconButton {
                 icon: "stop"
+                loading: Recorder.stopPending
+                disabled: Recorder.stopPending
                 inactiveColour: Colours.palette.m3error
                 inactiveOnColour: Colours.palette.m3onError
                 font.pointSize: Appearance.font.size.large

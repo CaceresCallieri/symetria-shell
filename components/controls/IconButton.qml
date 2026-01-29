@@ -19,6 +19,7 @@ StyledRect {
     property alias font: label.font
     property int type: IconButton.Filled
     property bool disabled
+    property bool loading: false
 
     property alias stateLayer: stateLayer
     property alias label: label
@@ -63,15 +64,38 @@ StyledRect {
         }
     }
 
-    MaterialIcon {
-        id: label
-
+    Item {
         anchors.centerIn: parent
-        color: root.disabled ? root.disabledOnColour : root.internalChecked ? root.activeOnColour : root.inactiveOnColour
-        fill: !root.toggle || root.internalChecked ? 1 : 0
+        implicitWidth: label.implicitWidth
+        implicitHeight: label.implicitHeight
 
-        Behavior on fill {
-            Anim {}
+        MaterialIcon {
+            id: label
+
+            anchors.centerIn: parent
+            color: root.disabled ? root.disabledOnColour : root.internalChecked ? root.activeOnColour : root.inactiveOnColour
+            fill: !root.toggle || root.internalChecked ? 1 : 0
+            opacity: root.loading ? 0 : 1
+
+            Behavior on fill {
+                Anim {}
+            }
+
+            Behavior on opacity {
+                Anim {}
+            }
+        }
+
+        Loader {
+            anchors.centerIn: parent
+            active: root.loading
+            sourceComponent: CircularIndicator {
+                implicitSize: label.implicitHeight
+                strokeWidth: Appearance.padding.small * 0.5
+                fgColour: root.internalChecked ? root.activeOnColour : root.inactiveOnColour
+                bgColour: Qt.alpha(fgColour, 0.3)
+                running: true
+            }
         }
     }
 

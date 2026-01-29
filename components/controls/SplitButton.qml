@@ -16,6 +16,7 @@ Row {
     property real verticalPadding: Appearance.padding.smaller
     property int type: SplitButton.Filled
     property bool disabled
+    property bool loading
     property bool menuOnTop
     property string fallbackIcon
     property string fallbackText
@@ -64,14 +65,37 @@ Row {
             anchors.horizontalCenterOffset: Math.floor(root.verticalPadding / 4)
             spacing: Appearance.spacing.small
 
-            MaterialIcon {
-                id: iconLabel
-
+            Item {
                 Layout.alignment: Qt.AlignVCenter
-                animate: true
-                text: root.active?.activeIcon ?? root.fallbackIcon
-                color: root.disabled ? root.disabledTextColour : root.textColour
-                fill: 1
+                implicitWidth: iconLabel.implicitWidth
+                implicitHeight: iconLabel.implicitHeight
+
+                MaterialIcon {
+                    id: iconLabel
+
+                    anchors.centerIn: parent
+                    animate: true
+                    text: root.active?.activeIcon ?? root.fallbackIcon
+                    color: root.disabled ? root.disabledTextColour : root.textColour
+                    fill: 1
+                    opacity: root.loading ? 0 : 1
+
+                    Behavior on opacity {
+                        Anim {}
+                    }
+                }
+
+                Loader {
+                    anchors.centerIn: parent
+                    active: root.loading
+                    sourceComponent: CircularIndicator {
+                        implicitSize: iconLabel.implicitHeight
+                        strokeWidth: Appearance.padding.small * 0.5
+                        fgColour: Colours.palette.m3onSurface
+                        bgColour: Qt.alpha(Colours.palette.m3onSurface, 0.3)
+                        running: true
+                    }
+                }
             }
 
             StyledText {
