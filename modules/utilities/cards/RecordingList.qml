@@ -7,11 +7,11 @@ import qs.services
 import qs.config
 import qs.utils
 import Symmetria
-import Symmetria.Models
 import Quickshell
 import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
+import Qt.labs.folderlistmodel
 
 ColumnLayout {
     id: root
@@ -55,10 +55,56 @@ ColumnLayout {
     StyledListView {
         id: list
 
-        model: FileSystemModel {
-            path: Paths.recsdir
+        model: FolderListModel {
+            id: recordingsModel
+            folder: "file://" + Paths.recsdir
             nameFilters: ["recording_*.mp4"]
-            sortReverse: true
+            showDirs: false
+            showDotAndDotDot: false
+            sortField: FolderListModel.Time
+            sortReversed: false  // Time sort: false = descending (newest first)
+        }
+
+        // Force refresh when recording stops to ensure new file is detected
+        // We poll because the CLI moves the file asynchronously after the recorder process dies
+        Timer {
+            id: refreshTimer
+            interval: 500  // Poll every 500ms
+            repeat: true
+            property int expectedCount: 0
+            property int attempts: 0
+
+            onTriggered: {
+                attempts++;
+                // Force model refresh by toggling folder
+                const originalFolder = recordingsModel.folder;
+                recordingsModel.folder = "";
+                recordingsModel.folder = originalFolder;
+
+                if (recordingsModel.count >= expectedCount) {
+                    stop();
+                    attempts = 0;
+                } else if (attempts >= 10) {
+                    // Timeout after 5 seconds (10 * 500ms)
+                    console.warn("RecordingList: timeout waiting for new recording");
+                    stop();
+                    attempts = 0;
+                }
+            }
+        }
+
+        Connections {
+            target: Recorder
+            function onRunningChanged(): void {
+                if (!Recorder.running) {
+                    // Stop any existing polling before starting new one
+                    if (refreshTimer.running)
+                        refreshTimer.stop();
+                    refreshTimer.attempts = 0;
+                    refreshTimer.expectedCount = recordingsModel.count + 1;
+                    refreshTimer.start();
+                }
+            }
         }
 
         Layout.fillWidth: true
@@ -73,27 +119,39 @@ ColumnLayout {
         delegate: RowLayout {
             id: recording
 
-            required property FileSystemEntry modelData
-            property string baseName
+            // FolderListModel provides these role properties directly
+            required property string fileBaseName
+            required property string filePath
 
             anchors.left: list.contentItem.left
             anchors.right: list.contentItem.right
             anchors.rightMargin: Appearance.spacing.small
             spacing: Appearance.spacing.small / 2
 
-            Component.onCompleted: baseName = modelData.baseName
-
             StyledText {
                 Layout.fillWidth: true
                 Layout.rightMargin: Appearance.spacing.small / 2
                 text: {
-                    const time = recording.baseName;
+                    const time = recording.fileBaseName;
                     const matches = time.match(/^recording_(\d{4})(\d{2})(\d{2})_(\d{2})-(\d{2})-(\d{2})/);
                     if (!matches)
+                        return qsTr("Recording (%1)").arg(time.replace("recording_", ""));
+
+                    const [, year, month, day, hour, minute, second] = matches;
+                    // Validate date component ranges
+                    if (+month < 1 || +month > 12 || +day < 1 || +day > 31 ||
+                        +hour > 23 || +minute > 59 || +second > 59) {
+                        console.warn("RecordingList: invalid date in filename:", time);
                         return time;
-                    const date = new Date(...matches.slice(1));
-                    date.setMonth(date.getMonth() - 1); // Woe (months start from 0)
-                    return qsTr("Recording at %1").arg(Qt.formatDateTime(date, Qt.locale()));
+                    }
+
+                    const date = new Date(+year, +month - 1, +day, +hour, +minute, +second);
+                    // Check if the date overflowed (JS Date auto-corrects invalid dates)
+                    if (date.getMonth() !== +month - 1 || date.getDate() !== +day) {
+                        console.warn("RecordingList: date overflow in filename:", time);
+                        return qsTr("Recording (%1)").arg(time.replace("recording_", ""));
+                    }
+                    return qsTr("Recording at %1").arg(Qt.formatDateTime(date, "d/M/yy HH:mm"));
                 }
                 color: Colours.palette.m3onSurfaceVariant
                 elide: Text.ElideRight
@@ -105,7 +163,7 @@ ColumnLayout {
                 onClicked: {
                     root.visibilities.utilities = false;
                     root.visibilities.sidebar = false;
-                    Quickshell.execDetached(["app2unit", "--", ...Config.general.apps.playback, recording.modelData.path]);
+                    Quickshell.execDetached(["app2unit", "--", ...Config.general.apps.playback, recording.filePath]);
                 }
             }
 
@@ -115,7 +173,7 @@ ColumnLayout {
                 onClicked: {
                     root.visibilities.utilities = false;
                     root.visibilities.sidebar = false;
-                    Quickshell.execDetached(["app2unit", "--", ...Config.general.apps.explorer, recording.modelData.path]);
+                    Quickshell.execDetached(["app2unit", "--", ...Config.general.apps.explorer, recording.filePath]);
                 }
             }
 
@@ -124,7 +182,7 @@ ColumnLayout {
                 type: IconButton.Text
                 label.color: Colours.palette.m3error
                 stateLayer.color: Colours.palette.m3error
-                onClicked: root.props.recordingConfirmDelete = recording.modelData.path
+                onClicked: root.props.recordingConfirmDelete = recording.filePath
             }
         }
 
