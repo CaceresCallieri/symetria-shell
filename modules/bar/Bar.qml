@@ -15,7 +15,7 @@ Item {
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property BarPopouts.Wrapper popouts
-    readonly property int hPadding: Appearance.padding.large
+    readonly property int hPadding: Config.bar.sizes.edgePadding
     // External margin between glassmorphism pill components and adjacent bar entries
     readonly property int pillExternalMargin: Appearance.spacing.small
 

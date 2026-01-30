@@ -126,6 +126,7 @@ JsonObject {
         property int innerWidth: 40
         readonly property int indicatorHeight: innerWidth - Appearance.padding.small * 2
         property int iconSize: 18  // Shared by workspace app icons and tray icons
+        property int edgePadding: Appearance.padding.large  // Left/right margin at bar edges
         property int trayMenuWidth: 300
         property int batteryWidth: 250
         property int networkWidth: 320

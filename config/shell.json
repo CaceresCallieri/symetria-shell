@@ -4,10 +4,10 @@
 			"scale": 1
 		},
 		"spacing": {
-			"scale": 0.9
+			"scale": 0.7
 		},
 		"padding": {
-			"scale": 0.9
+			"scale": 0.6
 		},
 		"font": {
 			"family": {
@@ -167,6 +167,7 @@
 		},
 		"sizes": {
 			"innerWidth": 34,
+			"edgePadding": 20,
 			"windowPreviewSize": 400,
 			"trayMenuWidth": 300,
 			"batteryWidth": 250,
