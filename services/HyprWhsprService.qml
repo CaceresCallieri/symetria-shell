@@ -288,8 +288,17 @@ Singleton {
             } else {
                 console.warn("HyprWhspr: Pause transition without active recording");
             }
+        } else if (state === "processing") {
+            // Processing: freeze timer at final recording duration (don't reset)
+            // Accumulate any remaining time from active recording segment
+            if (_recordingStartTime > 0) {
+                _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
+                _currentElapsed = _accumulatedSeconds;
+                _recordingStartTime = 0;
+            }
+            // If already paused, _currentElapsed already reflects total time
         } else {
-            // Any other state (processing, error, success, idle): reset timer
+            // Terminal states (error, success, idle): reset timer
             _recordingStartTime = 0;
             _accumulatedSeconds = 0;
             _currentElapsed = 0;

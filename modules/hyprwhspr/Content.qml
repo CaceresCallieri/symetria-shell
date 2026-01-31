@@ -357,11 +357,11 @@ Item {
                 }
             }
 
-            // Elapsed time display (centered below audio bars, visible during recording/paused)
+            // Elapsed time display (centered below audio bars, visible during recording/paused/processing)
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
 
-                show: root.serviceState === "recording" || root.serviceState === "paused"
+                show: root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing"
 
                 StyledText {
                     text: root.formatElapsedTime(root.serviceElapsedSeconds)
