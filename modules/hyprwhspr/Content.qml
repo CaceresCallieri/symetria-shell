@@ -12,8 +12,8 @@ import QtQuick.Layouts
 /// Content UI for HyprWhsprService speech-to-text drawer.
 ///
 /// Displays state-based UI:
-/// - recording: Animated audio level bars
-/// - paused: Static audio level bars with pause icon
+/// - recording: Animated audio level bars + elapsed time
+/// - paused: Static audio level bars with pause icon + elapsed time
 /// - processing: Loading spinner
 /// - error: Error icon + hint text
 /// - success: Checkmark, brief display before auto-hide
@@ -24,6 +24,7 @@ Item {
     required property PersistentProperties visibilities
     required property string serviceState
     required property real serviceAudioLevel
+    required property real serviceElapsedSeconds
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -46,6 +47,13 @@ Item {
         readonly property real waveFrequency: 0.8    // Wave pattern across bar array
         readonly property real minBarHeight: 2
         readonly property real maxBarHeight: 44
+    }
+
+    // Format elapsed seconds as MM:SS (matches GTK implementation)
+    function formatElapsedTime(seconds: real): string {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
     }
 
     // Audio level from service (exposed for Repeater delegates under ComponentBehavior: Bound)
@@ -290,6 +298,20 @@ Item {
                             color: root.barColors[index] ?? Colours.palette.m3primary
                         }
                     }
+                }
+            }
+
+            // Elapsed time display (centered below audio bars, visible during recording/paused)
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+
+                show: root.serviceState === "recording" || root.serviceState === "paused"
+
+                StyledText {
+                    text: root.formatElapsedTime(root.serviceElapsedSeconds)
+                    font.pointSize: Appearance.font.size.small
+                    font.family: Appearance.font.family.mono  // Consistent width for updating digits
+                    color: Colours.palette.m3outline
                 }
             }
 

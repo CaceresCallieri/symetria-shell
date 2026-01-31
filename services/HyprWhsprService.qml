@@ -41,6 +41,39 @@ Singleton {
     /// Whether currently recording (for audio level polling)
     readonly property bool recording: state === "recording"
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Elapsed time tracking (mirrors GTK implementation's timer logic)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Elapsed recording time in seconds (updated by timer during recording)
+    readonly property real elapsedSeconds: _currentElapsed
+
+    // Internal: current elapsed time (computed by timer, not on every property access)
+    property real _currentElapsed: 0
+
+    // Internal: timestamp when current recording segment started (0 if not recording)
+    property real _recordingStartTime: 0
+
+    // Internal: accumulated seconds from previous recording segments (for pause/resume)
+    property real _accumulatedSeconds: 0
+
+    // Timer interval for elapsed time updates (250ms ensures we catch second
+    // boundaries within imperceptible delay, avoiding "0.99 floors to 0" problem)
+    readonly property int _elapsedTimerInterval: 250
+
+    // Timer to update _currentElapsed during recording
+    Timer {
+        id: elapsedTimer
+        interval: root._elapsedTimerInterval
+        repeat: true
+        running: root.recording
+        onTriggered: {
+            if (root._recordingStartTime > 0) {
+                root._currentElapsed = root._accumulatedSeconds + (Date.now() - root._recordingStartTime) / 1000;
+            }
+        }
+    }
+
     // Config directory for HyprWhspr
     readonly property string configDir: `${Paths.home}/.config/hyprwhspr`
 
@@ -239,6 +272,28 @@ Singleton {
     // Handle state transitions
     onStateChanged: {
         console.log("HyprWhspr: State changed to:", state);
+
+        // Elapsed time tracking (mirrors GTK implementation)
+        if (state === "recording") {
+            // Start or resume recording
+            if (_recordingStartTime === 0) {
+                _recordingStartTime = Date.now();
+                _currentElapsed = _accumulatedSeconds;  // Clean start from accumulated base
+            }
+        } else if (state === "paused") {
+            // Pause: accumulate time and stop the clock
+            if (_recordingStartTime > 0) {
+                _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
+                _recordingStartTime = 0;
+            } else {
+                console.warn("HyprWhspr: Pause transition without active recording");
+            }
+        } else {
+            // Any other state (processing, error, success, idle): reset timer
+            _recordingStartTime = 0;
+            _accumulatedSeconds = 0;
+            _currentElapsed = 0;
+        }
 
         // Start auto-hide timer on success
         if (state === "success") {
