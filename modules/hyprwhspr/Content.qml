@@ -14,7 +14,7 @@ import QtQuick.Layouts
 /// Displays state-based UI:
 /// - recording: Animated audio level bars + elapsed time
 /// - paused: Static audio level bars with pause icon + elapsed time
-/// - processing: Loading spinner
+/// - processing: Flowing wave animation across bars (matches GTK implementation)
 /// - error: Error icon + hint text
 /// - success: Checkmark, brief display before auto-hide
 Item {
@@ -49,6 +49,16 @@ Item {
         readonly property real maxBarHeight: 44
     }
 
+    // Processing wave effect configuration (matches GTK implementation)
+    // Creates flowing wave animation during transcription state
+    readonly property QtObject processingConfig: QtObject {
+        readonly property real waveSpeed: 0.12        // Faster than recording (0.08)
+        readonly property real baseHeightBoost: 0.70  // 70% of height range used as base
+        readonly property real harmonicStrength: 0.12 // Subtle 2x frequency harmonic
+        readonly property real opacityMin: 0.75       // Opacity oscillates 0.75 - 1.0
+        readonly property real opacityRange: 0.25
+    }
+
     // Format elapsed seconds as MM:SS (matches GTK implementation)
     function formatElapsedTime(seconds: real): string {
         const mins = Math.floor(seconds / 60);
@@ -64,7 +74,7 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: root.serviceState === "recording"
+        running: root.serviceState === "recording" || root.serviceState === "processing"
         from: 0
         to: 6000
         duration: 100000  // 100 seconds before loop (60 units/sec)
@@ -110,6 +120,36 @@ Item {
         }
         return offsets;
     }
+
+    // Processing wave data - computes both offsets and opacities in single pass
+    // Fixes: negative values, duplicated wavePos calculation, inconsistent patterns
+    readonly property var processingWaveData: {
+        if (root.serviceState !== "processing") return { offsets: [], opacities: [] };
+        const cfg = processingConfig;
+        const offsets = [];
+        const opacities = [];
+        for (let i = 0; i < barCount; i++) {
+            // Spatial phase: one full 2π wave cycle across all bars
+            const spatialPhase = (i / (barCount - 1)) * 2 * Math.PI;
+            // Temporal offset: scrolls the wave over time
+            const wavePos = spatialPhase + animationTime * cfg.waveSpeed;
+
+            // Primary wave: transforms sin [-1,1] to [0,1] - always positive
+            const primaryWave = 0.5 + 0.5 * Math.sin(wavePos);
+            // Harmonic adds texture at 2x frequency
+            const harmonic = cfg.harmonicStrength * Math.sin(wavePos * 2);
+            // Clamp to ensure non-negative (harmonic might push below 0)
+            offsets.push(Math.max(0, primaryWave + harmonic));
+
+            // Opacity follows same wave pattern
+            opacities.push(cfg.opacityMin + cfg.opacityRange * primaryWave);
+        }
+        return { offsets, opacities };
+    }
+
+    // Expose arrays for bar access
+    readonly property var processingWaveOffsets: processingWaveData.offsets
+    readonly property var processingWaveOpacities: processingWaveData.opacities
 
     // State configuration map - defines visual properties for each state.
     // icon/iconColor are used by the state indicator Loader below.
@@ -191,18 +231,6 @@ Item {
         }
     }
 
-    Component {
-        id: processingComponent
-
-        CircularIndicator {
-            running: true
-            implicitSize: Appearance.font.size.large * 2
-            strokeWidth: Appearance.padding.small * 0.6
-            fgColour: Colours.palette.m3secondary
-            bgColour: Colours.palette.m3secondaryContainer
-        }
-    }
-
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + padding
 
@@ -226,8 +254,10 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
 
-            // Audio level bars (visible during recording and paused)
-            // Animation only runs during recording; bars freeze during paused
+            // Audio level bars (visible during recording, paused, and processing)
+            // Recording: audio-reactive with gentle wave
+            // Paused: frozen at last position
+            // Processing: flowing wave animation (no audio input)
             FadeTransition {
                 id: audioLevelContainer
 
@@ -235,7 +265,7 @@ Item {
                 Layout.preferredWidth: audioLevelRow.implicitWidth
                 Layout.preferredHeight: root.audioBarContainerHeight
 
-                show: root.serviceState === "recording" || root.serviceState === "paused"
+                show: root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing"
 
                 Row {
                     id: audioLevelRow
@@ -262,6 +292,19 @@ Item {
                             // The "truth" - raw target from audio level (updates at 60fps)
                             readonly property real targetHeight: {
                                 const cfg = root.audioConfig;
+
+                                // Processing state: use processing wave with boosted base height
+                                if (root.serviceState === "processing") {
+                                    const procCfg = root.processingConfig;
+                                    const waveMultiplier = root.processingWaveOffsets[index] ?? 1.0;
+                                    // Base height at 70% of range, modulated by wave pattern
+                                    const boostedHeight = procCfg.baseHeightBoost * (cfg.maxBarHeight - cfg.minBarHeight);
+                                    const rawHeight = cfg.minBarHeight + boostedHeight * waveMultiplier * positionFactor;
+                                    // Clamp to valid range (defensive, offsets should already be positive)
+                                    return Math.max(cfg.minBarHeight, Math.min(cfg.maxBarHeight, rawHeight));
+                                }
+
+                                // Recording/paused: audio-reactive with gentle wave
                                 const rawLevel = root.audioLevel;
 
                                 // Noise gate: ignore fan noise and ambient sounds
@@ -276,6 +319,18 @@ Item {
                                 // Use pre-calculated wave offset (computed once per frame at root level)
                                 const waveOffset = root.waveOffsets[index] ?? 1.0;
                                 return cfg.minBarHeight + effectiveLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor * waveOffset;
+                            }
+
+                            // Opacity modulation for processing state wave effect
+                            readonly property real waveOpacity: {
+                                if (root.serviceState === "processing") {
+                                    const opacity = root.processingWaveOpacities[index];
+                                    // Validate: opacity should be in [0.75, 1.0] range
+                                    if (opacity !== undefined && opacity >= 0 && opacity <= 1) {
+                                        return opacity;
+                                    }
+                                }
+                                return 1.0;
                             }
 
                             // The "display" - smoothed version for rendering
@@ -296,6 +351,7 @@ Item {
 
                             radius: 2.5
                             color: root.barColors[index] ?? Colours.palette.m3primary
+                            opacity: waveOpacity
                         }
                     }
                 }
@@ -316,13 +372,11 @@ Item {
             }
 
             // State indicator - dispatches to the appropriate component per state.
-            // recording/idle → null (audio bars handle recording; idle = drawer closing)
+            // recording/processing/idle → null (audio bars handle these states)
             // paused/success → stateIconComponent (driven by stateMap icon/iconColor)
             // error → errorComponent (icon + hint text)
-            // processing → processingComponent (spinner)
             Loader {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: root.serviceState === "processing" ? Appearance.spacing.small : 0
 
                 sourceComponent: {
                     switch (root.serviceState) {
@@ -331,8 +385,6 @@ Item {
                             return stateIconComponent;
                         case "error":
                             return errorComponent;
-                        case "processing":
-                            return processingComponent;
                         default:
                             return null;
                     }
