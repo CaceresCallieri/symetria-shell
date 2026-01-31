@@ -245,6 +245,12 @@ Item {
         implicitWidth: Math.max(root.minDrawerWidth, content.implicitWidth + Appearance.padding.large * 2)
         implicitHeight: content.implicitHeight + Appearance.padding.large * 2
 
+        // Smooth height transitions when child elements appear/disappear
+        // (e.g., timer hiding when transitioning from processing → success)
+        Behavior on implicitHeight {
+            Anim {}
+        }
+
         radius: Appearance.rounding.normal
         color: "transparent"
 
