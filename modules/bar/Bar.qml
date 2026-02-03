@@ -220,12 +220,14 @@ Item {
                 return;
         }
 
-        // SystemPill: updates popout only (cpu/ram have no popout content)
+        // SystemPill: updates and ram popouts
         if (id === "systemPill" && Config.bar.popouts.systemPill) {
             const container = item?.iconContainer;
             if (detectChildPopout(container, x, (child) => {
                 const name = child?.name;
-                return name === "updates" ? "updates" : null;
+                if (name === "updates") return "updates";
+                if (name === "ram") return "ram";
+                return null;
             }))
                 return;
         }

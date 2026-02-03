@@ -125,6 +125,11 @@ Item {
             sourceComponent: Updates {}
         }
 
+        Popout {
+            name: "ram"
+            sourceComponent: Ram {}
+        }
+
         Repeater {
             model: ScriptModel {
                 values: [...SystemTray.items.values]
