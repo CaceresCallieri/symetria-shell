@@ -115,6 +115,11 @@ Item {
             sourceComponent: LockStatus {}
         }
 
+        Popout {
+            name: "weather"
+            sourceComponent: Weather {}
+        }
+
         Repeater {
             model: ScriptModel {
                 values: [...SystemTray.items.values]

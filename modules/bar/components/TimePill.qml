@@ -6,7 +6,7 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-// Time display pill - wraps Clock and Date components in a glassmorphism container.
+// Time display pill - wraps Clock, Date, and Weather components in a glassmorphism container.
 // Uses PillContainer base for consistent styling with other bar pills.
 
 PillContainer {
@@ -15,11 +15,11 @@ PillContainer {
     // Use tertiary color for time/system info pills (vs secondary for status icons).
     property color colour: Colours.palette.m3tertiary
 
-    // Popout interface for calendar popout (planned feature)
+    // Popout interface for weather popout
     iconContainer: content
 
     // Hide entirely when no items are visible
-    visible: Config.bar.timePill.showClock || Config.bar.timePill.showDate
+    visible: Config.bar.timePill.showClock || Config.bar.timePill.showDate || Config.bar.timePill.showWeather
 
     // Note: Child components (Clock, Date) may display icons based on Config.bar.clock.showIcon
     // and Config.bar.date.showIcon respectively. When both are shown, this creates an
@@ -54,6 +54,30 @@ PillContainer {
 
             sourceComponent: Date {
                 colour: root.colour
+            }
+        }
+
+        // Weather icon (only show when data available)
+        PillContainer.WrappedLoader {
+            name: "weather"
+            active: Config.bar.timePill.showWeather && Weather.cc !== null
+
+            sourceComponent: MaterialIcon {
+                text: Weather.icon
+                color: root.colour
+                font.pointSize: Appearance.font.size.normal
+            }
+        }
+
+        // Temperature (only show when data available)
+        PillContainer.WrappedLoader {
+            name: "weather"
+            active: Config.bar.timePill.showWeather && Weather.cc !== null
+
+            sourceComponent: StyledText {
+                text: Weather.temp
+                color: root.colour
+                font.family: Appearance.font.family.mono
             }
         }
 

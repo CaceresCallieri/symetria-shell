@@ -60,6 +60,7 @@ JsonObject {
     component Popouts: JsonObject {
         property bool tray: true
         property bool statusIcons: true
+        property bool timePill: true
     }
 
     component Workspaces: JsonObject {
@@ -114,6 +115,7 @@ JsonObject {
     component TimePill: JsonObject {
         property bool showClock: true
         property bool showDate: true
+        property bool showWeather: true
     }
 
     component SystemPill: JsonObject {
@@ -130,5 +132,6 @@ JsonObject {
         property int trayMenuWidth: 300
         property int batteryWidth: 250
         property int networkWidth: 320
+        property int weatherWidth: 250
     }
 }
