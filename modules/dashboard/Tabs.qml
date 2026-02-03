@@ -16,14 +16,14 @@ Item {
     required property PersistentProperties state
     readonly property alias count: bar.count
 
-    implicitHeight: bar.implicitHeight + indicator.implicitHeight + indicator.anchors.topMargin + separator.implicitHeight
+    implicitHeight: separator.implicitHeight + indicator.implicitHeight + indicator.anchors.bottomMargin + bar.implicitHeight
 
     TabBar {
         id: bar
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
 
         currentIndex: root.state.currentTab
         background: null
@@ -59,8 +59,8 @@ Item {
     Item {
         id: indicator
 
-        anchors.top: bar.bottom
-        anchors.topMargin: Config.dashboard.sizes.tabIndicatorSpacing
+        anchors.bottom: bar.top
+        anchors.bottomMargin: Config.dashboard.sizes.tabIndicatorSpacing
 
         implicitWidth: bar.currentItem.implicitWidth
         implicitHeight: Config.dashboard.sizes.tabIndicatorHeight
@@ -74,7 +74,7 @@ Item {
         clip: true
 
         StyledRect {
-            anchors.top: parent.top
+            anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             implicitHeight: parent.implicitHeight * 2
@@ -95,7 +95,7 @@ Item {
     StyledRect {
         id: separator
 
-        anchors.top: indicator.bottom
+        anchors.bottom: indicator.top
         anchors.left: parent.left
         anchors.right: parent.right
 

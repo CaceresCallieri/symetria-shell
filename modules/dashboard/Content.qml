@@ -17,7 +17,7 @@ Item {
     // Separate "nonAnim" properties allow parent wrapper to read target size
     // before animations complete, enabling correct animation endpoint calculation
     readonly property real nonAnimWidth: view.implicitWidth + viewWrapper.anchors.margins * 2
-    readonly property real nonAnimHeight: tabs.implicitHeight + tabs.anchors.topMargin + view.implicitHeight + viewWrapper.anchors.margins * 2
+    readonly property real nonAnimHeight: tabs.implicitHeight + tabs.anchors.bottomMargin + view.implicitHeight + viewWrapper.anchors.margins * 2
 
     implicitWidth: nonAnimWidth
     implicitHeight: nonAnimHeight
@@ -25,10 +25,10 @@ Item {
     Tabs {
         id: tabs
 
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.topMargin: Appearance.padding.normal
+        anchors.bottomMargin: Appearance.padding.normal
         anchors.margins: Appearance.padding.large
 
         nonAnimWidth: root.nonAnimWidth - anchors.margins * 2
@@ -38,10 +38,10 @@ Item {
     ClippingRectangle {
         id: viewWrapper
 
-        anchors.top: tabs.bottom
+        anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.bottom: tabs.top
         anchors.margins: Appearance.padding.large
 
         radius: Appearance.rounding.normal
