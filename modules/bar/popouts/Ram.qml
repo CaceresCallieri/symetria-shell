@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import "root:utils" as Utils
 import qs.components
 import qs.components.containers
 import qs.components.controls
@@ -18,6 +19,8 @@ Column {
     // Estimate item height based on font size and spacing
     readonly property real itemHeight: Appearance.font.size.small * 2.5 + Appearance.spacing.small
     readonly property real maxListHeight: visibleItems * (itemHeight + Appearance.spacing.small)
+    // Width for workspace icon column (accommodates Roman numerals up to "VIII")
+    readonly property int workspaceIconWidth: 24
 
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.updatesWidth
@@ -27,8 +30,9 @@ Column {
         service: ProcessMemory
     }
 
-    // Look up workspace for a process PID by searching Hyprland toplevels
-    // Returns workspace name/id or null if not found (background process)
+    /// Look up workspace for a process PID via Hyprland toplevels
+    /// @param pid Process ID to search for
+    /// @returns {id, name} object or null for background processes
     function getWorkspaceForPid(pid: int): var {
         if (!pid) return null;
 
@@ -49,22 +53,25 @@ Column {
         return null;
     }
 
-    // Format workspace display string
-    function formatWorkspace(workspace: var): string {
+    /// Convert workspace to display icon (Roman numeral or Material icon)
+    /// @param workspace Workspace object with id and name properties
+    /// @returns Icon string - plain text or "mat:icon_name" format for Material icons
+    function getWorkspaceIcon(workspace: var): string {
         if (!workspace) return "";
 
-        // Special workspaces have negative IDs and descriptive names
+        // Special workspaces (negative ID)
         if (workspace.id < 0) {
-            // Extract readable name from "special:name" format
-            const name = workspace.name;
-            if (name.startsWith("special:")) {
-                return name.slice(8); // Remove "special:" prefix
+            if (workspace.name.startsWith("special:")) {
+                // Special workspace - use configured icon with fallbacks
+                return Utils.Icons.getSpecialWsIcon(workspace.name);
             }
-            return name;
+            // Named workspace - try custom icon, fall back to first letter
+            const icon = Utils.Icons.getNamedWsIcon(workspace.name);
+            return icon || (workspace.name?.[0]?.toUpperCase() ?? "");
         }
 
-        // Regular workspaces - just show the number/name
-        return workspace.name || workspace.id.toString();
+        // Regular numeric workspace - convert to Roman numeral
+        return Utils.Icons.romanize(workspace.id);
     }
 
     // Header: RAM summary
@@ -132,7 +139,7 @@ Column {
             height: Math.min(contentHeight, root.maxListHeight)
             clip: true
             spacing: Appearance.spacing.small
-            reuseItems: true
+            reuseItems: true  // Essential: recycles delegates for 50-item list performance
 
             delegate: ProcessRow {
                 required property var modelData
@@ -161,54 +168,74 @@ Column {
         }
     }
 
-    // Reusable row component for processes
+    /// Reusable row component for displaying a process with memory info
     component ProcessRow: RowLayout {
+        id: processRow
+
+        // --- Required properties (from model) ---
         required property string name
         required property int pid
         required property int memoryKib
         required property var memoryFormatted
 
+        // --- Computed properties ---
         readonly property real memPercent: SystemUsage.memTotal > 0
             ? (memoryKib / SystemUsage.memTotal) * 100
             : 0
+
+        // Workspace lookup and icon resolution
         readonly property var workspace: root.getWorkspaceForPid(pid)
-        readonly property string workspaceText: root.formatWorkspace(workspace)
+        readonly property string workspaceIcon: root.getWorkspaceIcon(workspace)
+        readonly property var parsedIcon: Utils.Icons.parseIcon(workspaceIcon)
+        readonly property bool useMaterialIcon: parsedIcon.useMaterial
 
         spacing: Appearance.spacing.small
 
-        // Workspace indicator (only if process has a window)
-        StyledText {
-            Layout.preferredWidth: 24
-            visible: parent.workspaceText.length > 0
-            text: parent.workspaceText
-            font.family: Appearance.font.family.mono
-            font.pointSize: Appearance.font.size.smaller
-            color: Colours.palette.m3secondary
-            horizontalAlignment: Text.AlignCenter
-        }
-
-        // Empty spacer when no workspace
+        // Workspace indicator column (fixed width for alignment)
+        // Shows icon when process has a visible window, empty otherwise
         Item {
-            Layout.preferredWidth: 24
-            visible: parent.workspaceText.length === 0
+            Layout.preferredWidth: root.workspaceIconWidth
+            Layout.alignment: Qt.AlignVCenter
+
+            MaterialIcon {
+                anchors.centerIn: parent
+                visible: processRow.workspaceIcon.length > 0 && processRow.useMaterialIcon
+                text: processRow.parsedIcon.iconText
+                fill: 1
+                font.pointSize: Appearance.font.size.smaller
+                color: Colours.palette.m3secondary
+            }
+
+            StyledText {
+                anchors.centerIn: parent
+                visible: processRow.workspaceIcon.length > 0 && !processRow.useMaterialIcon
+                text: processRow.parsedIcon.iconText
+                font.family: Appearance.font.family.mono
+                font.pointSize: Appearance.font.size.smaller
+                color: Colours.palette.m3secondary
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
 
+        // Process name (expands to fill available space)
         StyledText {
             Layout.fillWidth: true
-            text: parent.name
+            text: processRow.name
             elide: Text.ElideRight
         }
 
+        // Memory usage value
         StyledText {
-            text: `${parent.memoryFormatted.value.toFixed(1)} ${parent.memoryFormatted.unit}`
+            text: `${processRow.memoryFormatted.value.toFixed(1)} ${processRow.memoryFormatted.unit}`
             font.family: Appearance.font.family.mono
             font.pointSize: Appearance.font.size.small
             horizontalAlignment: Text.AlignRight
         }
 
+        // Memory percentage
         StyledText {
             Layout.preferredWidth: 45
-            text: `${parent.memPercent.toFixed(1)}%`
+            text: `${processRow.memPercent.toFixed(1)}%`
             font.family: Appearance.font.family.mono
             font.pointSize: Appearance.font.size.small
             opacity: 0.7
