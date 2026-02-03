@@ -61,6 +61,7 @@ JsonObject {
         property bool tray: true
         property bool statusIcons: true
         property bool timePill: true
+        property bool systemPill: true
     }
 
     component Workspaces: JsonObject {
@@ -133,5 +134,6 @@ JsonObject {
         property int batteryWidth: 250
         property int networkWidth: 320
         property int weatherWidth: 250
+        property int updatesWidth: 200
     }
 }

@@ -8,12 +8,16 @@ import QtQuick.Layouts
 
 // System monitoring pill - wraps CpuStatus, RamUsage, and AvailableUpdates
 // in a glassmorphism container. Uses PillContainer base for consistent styling.
+// Note: Only AvailableUpdates currently supports hover popout (see Bar.qml checkPopout).
 
 PillContainer {
     id: root
 
     // Use tertiary color for time/system info pills (vs secondary for status icons).
     property color colour: Colours.palette.m3tertiary
+
+    // Expose content for popout detection (matches StatusIcons/TimePill pattern)
+    property alias iconContainer: content
 
     // Hide entirely when no items are visible
     visible: Config.bar.systemPill.showCpu

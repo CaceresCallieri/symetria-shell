@@ -79,9 +79,11 @@ Item {
     // Popout Detection System
     //
     // Components that support popouts must expose:
-    //   - StatusIcons: property alias iconContainer (RowLayout with named children)
+    //   - PillContainer-based (StatusIcons, TimePill, SystemPill):
+    //     property alias iconContainer (RowLayout with named children)
     //     Each child must have: property string name
-    //   - Tray: property alias trayContainer (Row), property alias trayItems (Repeater)
+    //   - Tray (special case due to expand/collapse behavior):
+    //     property alias trayContainer (Row), property alias trayItems (Repeater)
     //     property alias expandIcon (Loader), property bool expanded
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -214,6 +216,16 @@ Item {
             if (detectChildPopout(container, x, (child) => {
                 const name = child?.name;
                 return name === "weather" ? "weather" : null;
+            }))
+                return;
+        }
+
+        // SystemPill: updates popout only (cpu/ram have no popout content)
+        if (id === "systemPill" && Config.bar.popouts.systemPill) {
+            const container = item?.iconContainer;
+            if (detectChildPopout(container, x, (child) => {
+                const name = child?.name;
+                return name === "updates" ? "updates" : null;
             }))
                 return;
         }

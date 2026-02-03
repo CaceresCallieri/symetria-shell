@@ -120,6 +120,11 @@ Item {
             sourceComponent: Weather {}
         }
 
+        Popout {
+            name: "updates"
+            sourceComponent: Updates {}
+        }
+
         Repeater {
             model: ScriptModel {
                 values: [...SystemTray.items.values]

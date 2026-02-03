@@ -12,18 +12,16 @@ MouseArea {
 
     property color colour: Colours.palette.m3tertiary
 
-    // Tooltip text with breakdown by source
+    // Tooltip text with breakdown by source (Pacman + AUR only)
     readonly property string tooltipText: {
         if (!Updates.hasData) return "Loading...";
 
         const pacmanLine = `󰮯 Pacman: ${Updates.pacmanUpdates}`;
         const aurLine = `󰣇 AUR: ${Updates.aurUpdates}`;
-        const flatpakLine = Updates.flatpakInstalled
-            ? ` Flatpak: ${Updates.flatpakUpdates}`
-            : " Flatpak: not installed";
-        const totalLine = `󰒠 Total: ${Updates.totalUpdates}`;
+        const total = Updates.pacmanUpdates + Updates.aurUpdates;
+        const totalLine = `󰒠 Total: ${total}`;
 
-        return `${pacmanLine}\n${aurLine}\n${flatpakLine}\n${totalLine}`;
+        return `${pacmanLine}\n${aurLine}\n${totalLine}`;
     }
 
     implicitWidth: content.implicitWidth
