@@ -12,6 +12,9 @@ MouseArea {
 
     property color colour: Colours.palette.m3tertiary
 
+    // Scale factor for unit suffix text (2/3 size relative to value)
+    readonly property real unitFontScale: 0.67
+
     // Computed values for display and tooltip (avoids duplicate calculations)
     readonly property var memUsedFormatted: SystemUsage.formatKib(SystemUsage.memUsed)
     readonly property var memTotalFormatted: SystemUsage.formatKib(SystemUsage.memTotal)
@@ -38,13 +41,28 @@ MouseArea {
             color: root.colour
         }
 
-        StyledText {
+        Row {
             anchors.verticalCenter: parent.verticalCenter
+            spacing: 0
 
-            text: `${root.memUsedFormatted.value.toFixed(1)} ${root.memUsedFormatted.unit}`
-            font.pointSize: Appearance.font.size.smaller
-            font.family: Appearance.font.family.mono
-            color: root.colour
+            StyledText {
+                id: valueText
+                // Parent Row handles vertical centering
+
+                text: root.memUsedFormatted.value.toFixed(1)
+                font.pointSize: Appearance.font.size.smaller
+                font.family: Appearance.font.family.mono
+                color: root.colour
+            }
+
+            StyledText {
+                anchors.baseline: valueText.baseline
+
+                text: root.memUsedFormatted.unit
+                font.pointSize: Appearance.font.size.smaller * root.unitFontScale
+                font.family: Appearance.font.family.mono
+                color: root.colour
+            }
         }
     }
 
