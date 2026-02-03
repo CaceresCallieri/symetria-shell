@@ -44,6 +44,12 @@ CustomMouseArea {
         return y > root.height - Config.border.thickness - panel.height - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
+    function inBottomLeftPanel(panel: Item, x: real, y: real): bool {
+        return y > root.height - Config.border.thickness - panel.height - Config.border.rounding
+               && x < Config.border.thickness + panel.x + panel.width + Config.border.rounding
+               && withinPanelWidth(panel, x, y);
+    }
+
     function onWheel(event: WheelEvent): void {
         if (event.y < bar.implicitHeight) {
             bar.handleWheel(event.x, event.angleDelta);
@@ -168,8 +174,8 @@ CustomMouseArea {
                 visibilities.launcher = false;
         }
 
-        // Show dashboard on hover
-        const showDashboard = Config.dashboard.showOnHover && inTopPanel(panels.dashboard, x, y);
+        // Show dashboard on hover (bottom-left panel)
+        const showDashboard = Config.dashboard.showOnHover && inBottomLeftPanel(panels.dashboard, x, y);
 
         // Always update visibility based on hover if not in shortcut mode
         if (!dashboardShortcutActive) {
@@ -180,10 +186,11 @@ CustomMouseArea {
         }
 
         // Show/hide dashboard on drag (for touchscreen devices)
-        if (pressed && inTopPanel(panels.dashboard, dragStart.x, dragStart.y) && withinPanelWidth(panels.dashboard, x, y)) {
-            if (dragY > Config.dashboard.dragThreshold)
+        // Note: drag direction is inverted for bottom panels (drag up to show, down to hide)
+        if (pressed && inBottomLeftPanel(panels.dashboard, dragStart.x, dragStart.y) && withinPanelWidth(panels.dashboard, x, y)) {
+            if (dragY < -Config.dashboard.dragThreshold)
                 visibilities.dashboard = true;
-            else if (dragY < -Config.dashboard.dragThreshold)
+            else if (dragY > Config.dashboard.dragThreshold)
                 visibilities.dashboard = false;
         }
 
@@ -219,7 +226,7 @@ CustomMouseArea {
                 root.utilitiesShortcutActive = false;
 
                 // Also hide dashboard and OSD if they're not being hovered
-                const inDashboardArea = root.inTopPanel(root.panels.dashboard, root.mouseX, root.mouseY);
+                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY);
                 const inOsdArea = root.inRightPanel(root.panels.osd, root.mouseX, root.mouseY);
 
                 if (!inDashboardArea) {
@@ -235,7 +242,7 @@ CustomMouseArea {
         function onDashboardChanged() {
             if (root.visibilities.dashboard) {
                 // Dashboard became visible, immediately check if this should be shortcut mode
-                const inDashboardArea = root.inTopPanel(root.panels.dashboard, root.mouseX, root.mouseY);
+                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY);
                 if (!inDashboardArea) {
                     root.dashboardShortcutActive = true;
                 }

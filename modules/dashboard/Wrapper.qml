@@ -57,12 +57,12 @@ Item {
         Anim {
             target: root
             property: "implicitHeight"
-            to: content.implicitHeight
+            to: content.item?.nonAnimHeight ?? content.implicitHeight
             duration: Appearance.anim.durations.expressiveDefaultSpatial
             easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
         }
         ScriptAction {
-            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
+            script: root.implicitHeight = Qt.binding(() => content.item?.nonAnimHeight ?? content.implicitHeight)
         }
     }
 
@@ -100,7 +100,7 @@ Item {
         id: content
 
         anchors.left: parent.left
-        anchors.bottom: parent.bottom
+        anchors.top: parent.top
 
         visible: false
         active: true

@@ -15,12 +15,8 @@ Item {
     readonly property bool shouldBeActive: visibilities.launcher && Config.launcher.enabled
     property int contentHeight
 
-    readonly property real maxHeight: {
-        let max = screen.height - Config.border.thickness * 2 - Appearance.spacing.large;
-        if (visibilities.dashboard)
-            max -= panels.dashboard.nonAnimHeight;
-        return max;
-    }
+    // Dashboard moved to bottom-left corner, no longer vertically constrains launcher
+    readonly property real maxHeight: screen.height - Config.border.thickness * 2 - Appearance.spacing.large
 
     onMaxHeightChanged: timer.start()
 

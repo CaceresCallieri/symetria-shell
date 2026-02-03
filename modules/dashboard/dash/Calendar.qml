@@ -19,6 +19,7 @@ CustomMouseArea {
 
     anchors.left: parent.left
     anchors.right: parent.right
+    implicitWidth: inner.implicitWidth + inner.anchors.margins * 2
     implicitHeight: inner.implicitHeight + inner.anchors.margins * 2
 
     acceptedButtons: Qt.MiddleButton

@@ -101,7 +101,7 @@ Item {
         visibilities: root.visibilities
 
         anchors.left: parent.left
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
     }
 
     Askpass.Wrapper {

@@ -78,8 +78,10 @@ Item {
         Dashboard.Background {
             wrapper: root.panels.dashboard
 
-            startX: rounding  // Start at (rounding, 0) to allow TL arc to curve left into corner
-            startY: 0
+            // Left-aligned panel: startX = wrapper.x - rounding so visible left edge aligns with wrapper
+            // The BL union arc curves into negative x territory, blending with the shell border
+            startX: -rounding
+            startY: shape.height
         }
 
         Askpass.AskpassBackground {

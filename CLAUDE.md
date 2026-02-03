@@ -152,9 +152,9 @@ Located in `components/shapes/`:
 | Component | Purpose | Union Corners | Used By |
 |-----------|---------|---------------|---------|
 | `TopHangingBackground` | Panels hanging from bar/top | TL, TR | Bar Popouts, Askpass, Session, OSD |
-| `BottomUpBackground` | Panels rising from bottom | BL, BR | Launcher, Clipboard |
+| `BottomUpBackground` | Panels rising from bottom | BL, BR | Launcher, Clipboard, Dashboard |
 
-**Edge-case panels** (Dashboard, Sidebar, Notifications, Utilities) have inter-panel dependencies and use custom implementations.
+**Edge-case panels** (Sidebar, Notifications, Utilities) have inter-panel dependencies and use custom implementations.
 
 #### Using the Components
 
@@ -198,6 +198,7 @@ TopHangingBackground {
 |-------------|--------|--------|
 | Top-hanging, centered | `(shape.width - wrapper.width) / 2 - rounding` | `0` |
 | Bottom-up, centered | `(shape.width - wrapper.width) / 2 - rounding` | `shape.height` |
+| Bottom-up, left-aligned | `rounding` | `shape.height` |
 | Top-hanging, positioned | `wrapper.x - rounding` | `wrapper.y` |
 
 #### Technical Details
