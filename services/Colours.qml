@@ -11,16 +11,21 @@ import QtQuick
 Singleton {
     id: root
 
-    // General panel background color - warm almond tint (#eee5da)
-    // NOTE: Keep alpha value (0.25) in sync with generalBackgroundAlpha below
+    // ═══════════════════════════════════════════════════════════════════════════
+    // UNIFIED BACKGROUND TINT - Change this ONE value to customize all backgrounds
+    // ═══════════════════════════════════════════════════════════════════════════
+    readonly property color panelBackgroundTint: "#000000"
+    readonly property real panelBackgroundAlpha: 0.25
+
+    // Derived properties - these automatically update when panelBackgroundTint changes
     // Legacy: Use for isolated components where overlap is impossible
-    readonly property color generalBackground: Qt.alpha("#eee5da", 0.25)
+    readonly property color generalBackground: Qt.alpha(panelBackgroundTint, panelBackgroundAlpha)
 
     // Layer-based transparency: Use when multiple shapes may overlap
     // Container applies transparency via layer.enabled + opacity, preventing
     // double-opacity artifacts where shapes would otherwise compound alpha
-    readonly property color generalBackgroundOpaque: "#eee5da"
-    readonly property real generalBackgroundAlpha: 0.25
+    readonly property color generalBackgroundOpaque: panelBackgroundTint
+    readonly property real generalBackgroundAlpha: panelBackgroundAlpha
 
     property bool showPreview
     property string scheme
@@ -106,10 +111,7 @@ Singleton {
 
         // Apply layering system
         const backgroundColor = layer(baseColor, layerDepth);
-        const borderColor = Qt.alpha(
-            layer(glassConstants.borderBaseColor, borderLayerDepth),
-            glassConstants.borderOpacity
-        );
+        const borderColor = Qt.alpha(layer(glassConstants.borderBaseColor, borderLayerDepth), glassConstants.borderOpacity);
 
         return {
             background: backgroundColor,
