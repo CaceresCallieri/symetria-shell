@@ -27,16 +27,16 @@
 		},
 		"transparency": {
 			"enabled": true,
-			"base": 0.6,
-			"layers": 0.2
+			"base": 0.45,
+			"layers": 0.25
 		}
 	},
 	"general": {
 		"apps": {
-			"terminal": ["foot"],
+			"terminal": ["ghostty"],
 			"audio": ["pavucontrol"],
 			"playback": ["mpv"],
-			"explorer": ["thunar"]
+			"explorer": ["files"]
 		},
 		"idle": {
 			"lockBeforeSleep": true,
