@@ -130,6 +130,16 @@ Background {}  // ❌ Resolves to keycaster's Background, not wallpaper!
 2. List all `.qml` files in those directories
 3. Ensure your new module's files don't share names with any of them
 4. Prefix module-specific components: `{ModuleName}{Component}.qml`
+5. Run the conflict checker: `./scripts/check-qml-conflicts.sh`
+
+**Automated Detection:**
+```bash
+# Check for type name conflicts before running the shell
+./scripts/check-qml-conflicts.sh
+
+# Exit code 0 = no critical issues (warnings OK)
+# Exit code 1 = critical conflicts found (must fix)
+```
 
 ### Focus Management in Drawers
 
