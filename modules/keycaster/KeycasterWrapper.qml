@@ -6,7 +6,7 @@ import qs.services
 import Quickshell
 import QtQuick
 
-/// Animation wrapper for Keycaster drawer.
+/// Animation wrapper for standalone Keycaster floating overlay.
 ///
 /// Handles slide-up animation from bottom of screen.
 /// Content is anchored to top so it reveals bottom-up as wrapper height grows.
@@ -14,10 +14,11 @@ Item {
     id: root
 
     required property ShellScreen screen
-    required property PersistentProperties visibilities
-    required property var panels
 
-    readonly property bool shouldBeActive: visibilities.keycaster && Config.keycaster.enabled
+    // Direct binding to Visibilities service (no longer passed from drawer system)
+    // Uses getForMonitor() which is reactive via screensVersion counter
+    readonly property var visibilities: Visibilities.getForMonitor(Hypr.monitorFor(screen))
+    readonly property bool shouldBeActive: (visibilities?.keycaster ?? false) && (Config.keycaster?.enabled ?? true)
     property int contentHeight
 
     visible: height > 0
@@ -76,7 +77,7 @@ Item {
         function onEnabledChanged(): void {
             // Trigger content reload to recalculate height before animation.
             // This handles the case where keycaster is enabled while already
-            // "visible" in the drawer system but hidden due to enabled=false.
+            // "visible" via IPC toggle but hidden due to enabled=false.
             timer.start();
         }
     }
@@ -114,7 +115,7 @@ Item {
     Loader {
         id: content
 
-        // For bottom-sliding drawer: anchor content to TOP of wrapper
+        // For bottom-sliding overlay: anchor content to TOP of wrapper
         // so it reveals from bottom-up as wrapper height grows
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter

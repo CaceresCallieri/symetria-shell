@@ -34,7 +34,10 @@ Item {
         implicitHeight: keyRow.implicitHeight + Appearance.padding.normal * 2
 
         radius: Appearance.rounding.full
-        color: "transparent"
+        // Glassmorphism background for standalone floating appearance
+        color: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+        border.color: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        border.width: 1
 
         RowLayout {
             id: keyRow

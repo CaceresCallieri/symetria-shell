@@ -11,7 +11,6 @@ import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.hyprwhspr as HyprWhsprModule
-import qs.modules.keycaster as KeycasterModule
 import Quickshell
 import QtQuick
 
@@ -34,7 +33,6 @@ Item {
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
     readonly property alias hyprwhspr: hyprwhspr
-    readonly property alias keycaster: keycaster
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
@@ -126,18 +124,6 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-    }
-
-    KeycasterModule.Wrapper {
-        id: keycaster
-
-        screen: root.screen
-        visibilities: root.visibilities
-        panels: root
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Appearance.spacing.large
     }
 
     BarPopouts.Wrapper {
