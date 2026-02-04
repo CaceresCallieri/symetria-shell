@@ -8,13 +8,16 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
 
-StyledClippingRect {
+Item {
     id: root
 
     required property ShellScreen screen
 
     readonly property bool onSpecial: (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor)?.lastIpcObject.specialWorkspace.name !== ""
     readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.monitorFor(screen).activeWorkspace?.id ?? 1) : Hypr.activeWsId
+
+    // Monitor focus detection for indicator dots
+    readonly property bool isMonitorFocused: Hypr.monitorFor(screen).focused
 
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
         acc[curr.id] = curr.lastIpcObject.windows > 0;
@@ -60,128 +63,180 @@ StyledClippingRect {
         Colours.glass.subtle
     )
 
+    // Dot sizing
+    readonly property int dotSize: 4
+    readonly property int dotSpacing: Appearance.spacing.normal
+
     implicitHeight: Config.bar.sizes.innerWidth
-    implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
+    implicitWidth: leftDot.width + dotSpacing + pill.implicitWidth + dotSpacing + rightDot.width
 
-    color: glassStyle.background
-    radius: Appearance.rounding.full
-    border.width: 1
-    border.color: glassStyle.border
+    // Focus indicator dot - left side
+    Rectangle {
+        id: leftDot
+        anchors.right: pill.left
+        anchors.rightMargin: root.dotSpacing
+        anchors.verticalCenter: parent.verticalCenter
+        width: root.dotSize
+        height: root.dotSize
+        radius: root.dotSize / 2
+        color: Colours.palette.m3primary
+        opacity: root.isMonitorFocused ? 1 : 0
 
-    Item {
-        anchors.fill: parent
-        scale: root.onSpecial ? 0.8 : 1
-        opacity: root.onSpecial ? 0.5 : 1
+        Behavior on opacity {
+            Anim {
+                duration: Appearance.anim.durations.normal
+            }
+        }
+    }
 
-        layer.enabled: root.blur > 0
-        layer.effect: MultiEffect {
-            blurEnabled: true
-            blur: root.blur
-            blurMax: 32
+    // The workspace pill
+    StyledClippingRect {
+        id: pill
+
+        anchors.centerIn: parent
+
+        implicitHeight: Config.bar.sizes.innerWidth
+        implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
+
+        color: root.glassStyle.background
+        radius: Appearance.rounding.full
+        border.width: 1
+        border.color: root.glassStyle.border
+
+        Item {
+            anchors.fill: parent
+            scale: root.onSpecial ? 0.8 : 1
+            opacity: root.onSpecial ? 0.5 : 1
+
+            layer.enabled: root.blur > 0
+            layer.effect: MultiEffect {
+                blurEnabled: true
+                blur: root.blur
+                blurMax: 32
+            }
+
+            Loader {
+                // OccupiedBg is only relevant in fixed mode - in dynamic mode all visible workspaces are occupied/active
+                active: Config.bar.workspaces.occupiedBg && !Config.bar.workspaces.showOnlyOccupied
+                asynchronous: true
+
+                anchors.fill: parent
+                anchors.margins: Appearance.padding.small
+
+                sourceComponent: OccupiedBg {
+                    workspaces: workspaces
+                    occupied: root.occupied
+                    groupOffset: root.groupOffset
+                }
+            }
+
+            RowLayout {
+                id: layout
+
+                anchors.centerIn: parent
+                spacing: Math.floor(Appearance.spacing.small / 2)
+
+                Repeater {
+                    id: workspaces
+
+                    model: ScriptModel {
+                        values: root.displayedWorkspaces
+                    }
+
+                    Workspace {
+                        required property int modelData
+
+                        wsId: modelData
+                        activeWsId: root.activeWsId
+                        occupied: root.occupied
+                    }
+                }
+            }
+
+            Loader {
+                anchors.verticalCenter: parent.verticalCenter
+                active: Config.bar.workspaces.activeIndicator
+                asynchronous: true
+                z: -1  // Render behind workspace content so icons aren't muted
+
+                sourceComponent: ActiveIndicator {
+                    activeWsId: root.activeWsId
+                    workspaces: workspaces
+                    mask: layout
+                }
+            }
+
+            MouseArea {
+                anchors.fill: layout
+                onClicked: event => {
+                    const child = layout.childAt(event.x, event.y);
+                    if (!child || !child.isWorkspace) return;
+                    const wsId = child.ws;
+                    if (Hypr.activeWsId !== wsId) {
+                        // Named workspaces (negative IDs) need "workspace name:<name>" syntax
+                        if (wsId < 0) {
+                            const wsObj = Hypr.workspaces.values.find(w => w.id === wsId);
+                            if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
+                        } else {
+                            Hypr.dispatch(`workspace ${wsId}`);
+                        }
+                    } else {
+                        Hypr.dispatch("togglespecialworkspace special");
+                    }
+                }
+            }
+
+            Behavior on scale {
+                Anim {}
+            }
+
+            Behavior on opacity {
+                Anim {}
+            }
         }
 
         Loader {
-            // OccupiedBg is only relevant in fixed mode - in dynamic mode all visible workspaces are occupied/active
-            active: Config.bar.workspaces.occupiedBg && !Config.bar.workspaces.showOnlyOccupied
-            asynchronous: true
+            id: specialWs
 
             anchors.fill: parent
             anchors.margins: Appearance.padding.small
 
-            sourceComponent: OccupiedBg {
-                workspaces: workspaces
-                occupied: root.occupied
-                groupOffset: root.groupOffset
-            }
-        }
-
-        RowLayout {
-            id: layout
-
-            anchors.centerIn: parent
-            spacing: Math.floor(Appearance.spacing.small / 2)
-
-            Repeater {
-                id: workspaces
-
-                model: ScriptModel {
-                    values: root.displayedWorkspaces
-                }
-
-                Workspace {
-                    required property int modelData
-
-                    wsId: modelData
-                    activeWsId: root.activeWsId
-                    occupied: root.occupied
-                }
-            }
-        }
-
-        Loader {
-            anchors.verticalCenter: parent.verticalCenter
-            active: Config.bar.workspaces.activeIndicator
+            active: opacity > 0
             asynchronous: true
-            z: -1  // Render behind workspace content so icons aren't muted
 
-            sourceComponent: ActiveIndicator {
-                activeWsId: root.activeWsId
-                workspaces: workspaces
-                mask: layout
+            scale: root.onSpecial ? 1 : 0.5
+            opacity: root.onSpecial ? 1 : 0
+
+            sourceComponent: SpecialWorkspaces {
+                screen: root.screen
             }
-        }
 
-        MouseArea {
-            anchors.fill: layout
-            onClicked: event => {
-                const child = layout.childAt(event.x, event.y);
-                if (!child || !child.isWorkspace) return;
-                const wsId = child.ws;
-                if (Hypr.activeWsId !== wsId) {
-                    // Named workspaces (negative IDs) need "workspace name:<name>" syntax
-                    if (wsId < 0) {
-                        const wsObj = Hypr.workspaces.values.find(w => w.id === wsId);
-                        if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
-                    } else {
-                        Hypr.dispatch(`workspace ${wsId}`);
-                    }
-                } else {
-                    Hypr.dispatch("togglespecialworkspace special");
-                }
+            Behavior on scale {
+                Anim {}
             }
-        }
 
-        Behavior on scale {
-            Anim {}
-        }
-
-        Behavior on opacity {
-            Anim {}
+            Behavior on opacity {
+                Anim {}
+            }
         }
     }
 
-    Loader {
-        id: specialWs
-
-        anchors.fill: parent
-        anchors.margins: Appearance.padding.small
-
-        active: opacity > 0
-        asynchronous: true
-
-        scale: root.onSpecial ? 1 : 0.5
-        opacity: root.onSpecial ? 1 : 0
-
-        sourceComponent: SpecialWorkspaces {
-            screen: root.screen
-        }
-
-        Behavior on scale {
-            Anim {}
-        }
+    // Focus indicator dot - right side
+    Rectangle {
+        id: rightDot
+        anchors.left: pill.right
+        anchors.leftMargin: root.dotSpacing
+        anchors.verticalCenter: parent.verticalCenter
+        width: root.dotSize
+        height: root.dotSize
+        radius: root.dotSize / 2
+        color: Colours.palette.m3primary
+        opacity: root.isMonitorFocused ? 1 : 0
 
         Behavior on opacity {
-            Anim {}
+            Anim {
+                duration: Appearance.anim.durations.normal
+            }
         }
     }
 
