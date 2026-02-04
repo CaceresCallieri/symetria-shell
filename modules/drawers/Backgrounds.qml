@@ -99,7 +99,7 @@ Item {
             startY: 0  // Start at top-left (clockwise path like bar popouts)
         }
 
-        KeycasterModule.Background {
+        KeycasterModule.KeycasterBackground {
             wrapper: root.panels.keycaster
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally

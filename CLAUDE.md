@@ -92,6 +92,45 @@ qs -c symmetria
 
 **Colours:** `services/Colours.qml` provides the M3 (Material 3) color palette with support for light/dark modes and transparency layers.
 
+### QML Type Naming Convention (CRITICAL)
+
+**⚠️ Type Name Collisions Break the Shell Silently**
+
+When multiple directory imports export QML types with the same name, **the last import wins**. This can cause catastrophic failures where entire modules are silently replaced by unrelated components.
+
+**The Problem:**
+```qml
+// In shell.qml:
+import "modules/background"    // Has Background.qml (wallpaper display)
+import "modules/keycaster"     // Has Background.qml (drawer shape)
+
+Background {}  // ❌ Resolves to keycaster's Background, not wallpaper!
+```
+
+**Naming Rules for Module Files:**
+
+| File Purpose | Naming Pattern | Example |
+|--------------|----------------|---------|
+| Root module entry | `ModuleName.qml` | `Keycaster.qml` |
+| Module-specific backgrounds | `ModuleNameBackground.qml` | `KeycasterBackground.qml` |
+| Module-specific wrappers | `Wrapper.qml` (OK - not imported in shell.qml) | `Wrapper.qml` |
+| Content components | `Content.qml` (OK - not imported in shell.qml) | `Content.qml` |
+
+**Safe Names** (used internally, not exported to shell.qml):
+- `Wrapper.qml`, `Content.qml`, `Item.qml` - OK within modules
+- These are only referenced via qualified imports like `KeycasterModule.Wrapper`
+
+**Dangerous Names** (export to shell.qml scope):
+- `Background.qml` - Conflicts with `modules/background/Background.qml`
+- `Launcher.qml` - Conflicts with `modules/launcher/Launcher.qml`
+- Any name matching a root module in shell.qml imports
+
+**When Adding New Modules:**
+1. Check shell.qml for all directory imports
+2. List all `.qml` files in those directories
+3. Ensure your new module's files don't share names with any of them
+4. Prefix module-specific components: `{ModuleName}{Component}.qml`
+
 ### Focus Management in Drawers
 
 Keyboard-interactive drawers (Launcher, Clipboard, Askpass, Session) use the `FocusManager` component to handle:
