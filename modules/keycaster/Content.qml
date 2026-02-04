@@ -1,0 +1,79 @@
+pragma ComponentBehavior: Bound
+
+import qs.components
+import qs.components.containers
+import qs.services
+import qs.config
+import Quickshell
+import QtQuick
+import QtQuick.Layouts
+
+/// Content UI for Keycaster key display.
+///
+/// Displays a horizontal row of key chips showing recent keypresses.
+/// Newest keys appear on the right, older keys fade out on the left.
+/// Held modifiers (without a following key) show as a preview chip.
+Item {
+    id: root
+
+    readonly property int padding: Appearance.padding.large
+    readonly property int chipSpacing: Appearance.spacing.small
+
+    implicitWidth: container.implicitWidth
+    implicitHeight: container.implicitHeight + padding
+
+    // Main container
+    StyledRect {
+        id: container
+
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.padding
+        anchors.horizontalCenter: parent.horizontalCenter
+
+        implicitWidth: Math.max(200, keyRow.implicitWidth + Appearance.padding.large * 2)
+        implicitHeight: keyRow.implicitHeight + Appearance.padding.normal * 2
+
+        radius: Appearance.rounding.full
+        color: "transparent"
+
+        RowLayout {
+            id: keyRow
+
+            anchors.centerIn: parent
+            spacing: root.chipSpacing
+
+            // Modifier preview (shown when modifiers held but no key pressed yet)
+            KeyChip {
+                visible: KeycasterService.hasHeldModifiers && KeycasterService.keyHistory.count === 0
+                keyText: KeycasterService.heldModifiersText
+                isModifierPreview: true
+                isNewest: false
+            }
+
+            // Key history chips
+            Repeater {
+                model: KeycasterService.keyHistory
+
+                KeyChip {
+                    required property string key
+                    required property int keyId
+                    required property int timestamp
+                    required property int index
+
+                    keyText: key
+                    isNewest: index === KeycasterService.keyHistory.count - 1
+                    keyTimestamp: timestamp
+                    isModifierPreview: false
+                }
+            }
+
+            // Modifier preview after existing keys (when modifiers held for next combo)
+            KeyChip {
+                visible: KeycasterService.hasHeldModifiers && KeycasterService.keyHistory.count > 0
+                keyText: KeycasterService.heldModifiersText + "+"
+                isModifierPreview: true
+                isNewest: false
+            }
+        }
+    }
+}

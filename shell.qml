@@ -9,6 +9,7 @@ import "modules/areapicker"
 import "modules/lock"
 import "modules/askpass"
 import "modules/hyprwhspr"
+import "modules/keycaster"
 import Quickshell
 import QtQuick
 
@@ -25,6 +26,7 @@ ShellRoot {
     AreaPicker {}
     Askpass {}
     HyprWhspr {}
+    Keycaster {}
     Lock {
         id: lock
     }

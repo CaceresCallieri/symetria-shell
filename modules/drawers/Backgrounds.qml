@@ -11,6 +11,7 @@ import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.hyprwhspr as HyprWhsprModule
+import qs.modules.keycaster as KeycasterModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -96,6 +97,13 @@ Item {
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0  // Start at top-left (clockwise path like bar popouts)
+        }
+
+        KeycasterModule.Background {
+            wrapper: root.panels.keycaster
+
+            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
+            startY: shape.height - Appearance.spacing.large  // Bottom with margin
         }
 
         BarPopouts.Background {

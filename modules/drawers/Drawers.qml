@@ -161,6 +161,7 @@ Variants {
                 property bool clipboard
                 property bool askpass
                 property bool hyprwhspr
+                property bool keycaster
 
                 Component.onCompleted: Visibilities.load(scope.modelData, this)
             }

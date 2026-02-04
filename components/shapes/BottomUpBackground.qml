@@ -44,7 +44,14 @@ ShapePath {
     readonly property real rounding: customRounding >= 0 ? customRounding : Config.border.rounding
 
     /// Adaptive Y-radius to prevent rendering artifacts on short panels.
-    readonly property real roundingY: wrapper.height < rounding * 2 ? wrapper.height / 2 : rounding
+    readonly property real roundingY: {
+        const h = wrapper?.height ?? 0;
+        return h < rounding * 2 ? h / 2 : rounding;
+    }
+
+    // Safe accessors for wrapper dimensions (null-safe)
+    readonly property real _wrapperHeight: wrapper?.height ?? 0
+    readonly property real _wrapperWidth: wrapper?.width ?? 0
 
     strokeWidth: -1
     fillColor: customFillColor
@@ -61,7 +68,7 @@ ShapePath {
     // Line 1: Left edge (going up)
     PathLine {
         relativeX: 0
-        relativeY: -(root.wrapper.height - root.roundingY * 2)
+        relativeY: -(root._wrapperHeight - root.roundingY * 2)
     }
 
     // Arc 2: Top-left corner (standard - curves inward)
@@ -74,7 +81,7 @@ ShapePath {
 
     // Line 2: Top edge (going right)
     PathLine {
-        relativeX: root.wrapper.width - root.rounding * 2
+        relativeX: root._wrapperWidth - root.rounding * 2
         relativeY: 0
     }
 
@@ -89,7 +96,7 @@ ShapePath {
     // Line 3: Right edge (going down)
     PathLine {
         relativeX: 0
-        relativeY: root.wrapper.height - root.roundingY * 2
+        relativeY: root._wrapperHeight - root.roundingY * 2
     }
 
     // Arc 4: Bottom-right corner (union - curves outward into border)
