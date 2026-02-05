@@ -245,7 +245,10 @@ Singleton {
             }
 
             function onAppIconChanged(): void {
-                notif.appIcon = notif.notification.appIcon;
+                // Use image-path hint if available and valid, fall back to appIcon
+                const imagePath = notif.notification.hints["image-path"] ?? "";
+                const validPath = imagePath && notif.isValidImagePath(imagePath);
+                notif.appIcon = validPath ? imagePath : notif.notification.appIcon;
             }
 
             function onAppNameChanged(): void {
@@ -253,8 +256,11 @@ Singleton {
             }
 
             function onImageChanged(): void {
-                notif.image = notif.notification.image;
-                if (notif.notification?.image)
+                // Don't use notification.image if image-path hint is used as appIcon
+                const imagePath = notif.notification.hints["image-path"] ?? "";
+                const validPath = imagePath && notif.isValidImagePath(imagePath);
+                notif.image = validPath ? "" : notif.notification.image;
+                if (notif.image)
                     notif.dummyImageLoader.active = true;
             }
 
@@ -302,6 +308,14 @@ Singleton {
             }
         }
 
+        // Validate that a path has a supported image extension
+        function isValidImagePath(path) {
+            if (!path) return false;
+            const validExts = [".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif"];
+            const lower = path.toLowerCase().split('?')[0].split('#')[0];  // Strip query params
+            return validExts.some(ext => lower.endsWith(ext));
+        }
+
         Component.onCompleted: {
             if (!notification)
                 return;
@@ -309,10 +323,15 @@ Singleton {
             id = notification.id;
             summary = notification.summary;
             body = notification.body;
-            appIcon = notification.appIcon;
+            // Use image-path hint if available and valid (for absolute paths from notify-send --icon)
+            // Fall back to appIcon (for icon theme names)
+            const imagePath = notification.hints["image-path"] ?? "";
+            const validPath = imagePath && isValidImagePath(imagePath);
+            appIcon = validPath ? imagePath : notification.appIcon;
             appName = notification.appName;
-            image = notification.image;
-            if (notification?.image)
+            // Don't use notification.image if we're using image-path as appIcon (avoid duplicate display)
+            image = validPath ? "" : notification.image;
+            if (image)
                 dummyImageLoader.active = true;
             expireTimeout = notification.expireTimeout;
             urgency = notification.urgency;

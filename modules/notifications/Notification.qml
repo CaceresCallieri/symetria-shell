@@ -17,6 +17,13 @@ StyledRect {
     required property Notifs.Notif modelData
     readonly property bool hasImage: modelData.image.length > 0
     readonly property bool hasAppIcon: modelData.appIcon.length > 0
+    // Detect custom icon paths: absolute paths, file:// URLs, or home-relative paths
+    readonly property bool hasTransparentIcon: {
+        const icon = modelData.appIcon;
+        return icon.startsWith("/") ||
+               icon.startsWith("file://") ||
+               icon.startsWith("~/");
+    }
     readonly property int nonAnimHeight: summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height) + inner.anchors.margins * 2
     property bool expanded: Config.notifs.openExpanded
 
@@ -144,7 +151,7 @@ StyledRect {
 
                 sourceComponent: StyledRect {
                     radius: Appearance.rounding.full
-                    color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3error : root.modelData.urgency === NotificationUrgency.Low ? Colours.layer(Colours.palette.m3surfaceContainerHighest, 2) : Colours.palette.m3secondaryContainer
+                    color: root.hasTransparentIcon ? "transparent" : root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3error : root.modelData.urgency === NotificationUrgency.Low ? Colours.layer(Colours.palette.m3surfaceContainerHighest, 2) : Colours.palette.m3secondaryContainer
                     implicitWidth: root.hasImage ? Config.notifs.sizes.badge : Config.notifs.sizes.image
                     implicitHeight: root.hasImage ? Config.notifs.sizes.badge : Config.notifs.sizes.image
 
@@ -156,10 +163,38 @@ StyledRect {
 
                         anchors.centerIn: parent
 
-                        width: Math.round(parent.width * 0.6)
-                        height: Math.round(parent.width * 0.6)
+                        // Custom icons: 80% for padding, system icons: 60% (with colored background)
+                        width: root.hasTransparentIcon ? Math.round(parent.width * 0.8) : Math.round(parent.width * 0.6)
+                        height: root.hasTransparentIcon ? Math.round(parent.height * 0.8) : Math.round(parent.width * 0.6)
 
-                        sourceComponent: ColouredIcon {
+                        // Use plain Image for custom file paths (preserves SVG transparency)
+                        // Use ColouredIcon for system icons (uses Qt icon theme engine)
+                        sourceComponent: root.hasTransparentIcon ? customIconComponent : systemIconComponent
+                    }
+
+                    Component {
+                        id: customIconComponent
+
+                        Image {
+                            anchors.fill: parent
+                            source: root.modelData.appIcon
+                            sourceSize.width: width
+                            sourceSize.height: height
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            cache: true
+
+                            onStatusChanged: {
+                                if (status === Image.Error)
+                                    console.warn("[Notification] Failed to load custom icon:", source);
+                            }
+                        }
+                    }
+
+                    Component {
+                        id: systemIconComponent
+
+                        ColouredIcon {
                             anchors.fill: parent
                             source: Quickshell.iconPath(root.modelData.appIcon)
                             colour: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3onError : root.modelData.urgency === NotificationUrgency.Low ? Colours.palette.m3onSurface : Colours.palette.m3onSecondaryContainer
