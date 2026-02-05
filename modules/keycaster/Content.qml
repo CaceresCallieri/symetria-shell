@@ -45,6 +45,17 @@ Item {
             anchors.centerIn: parent
             spacing: root.chipSpacing
 
+            // Zero-width transparent placeholder ensures minimum height when no keys displayed.
+            // Using a real KeyChip (not a fixed height) keeps the minimum in sync with chip styling.
+            // IMPORTANT: Use opacity:0 (not visible:false) - visible:false excludes from layout!
+            KeyChip {
+                keyText: "Ctrl+Shift+X"
+                isNewest: false
+                isModifierPreview: false
+                opacity: 0
+                Layout.maximumWidth: 0
+            }
+
             // Modifier preview (shown when modifiers held but no key pressed yet)
             KeyChip {
                 visible: KeycasterService.hasHeldModifiers && KeycasterService.keyHistory.count === 0
