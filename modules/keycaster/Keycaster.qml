@@ -52,7 +52,8 @@ Scope {
 
                 screen: win.modelData
 
-                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: Config.border.thickness + Appearance.spacing.large
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: Config.border.thickness + Appearance.spacing.large
             }
