@@ -44,12 +44,8 @@ Scope {
             anchors.left: true
             anchors.right: true
 
-            // Empty mask when not visible (passes all input through)
-            mask: shouldShow ? null : emptyRegion
-
-            Region {
-                id: emptyRegion
-            }
+            // Always pass clicks through - keycaster is display-only
+            mask: Region {}
 
             KeycasterWrapper {
                 id: wrapper
