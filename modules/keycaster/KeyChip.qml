@@ -9,13 +9,11 @@ import QtQuick
 ///
 /// Displays a single key or key combination with glassmorphism styling.
 /// Newest key is highlighted (m3primary, strong glass), older keys fade out.
-/// Modifier preview uses m3tertiary color.
 Item {
     id: root
 
     required property string keyText
     required property bool isNewest
-    property bool isModifierPreview: false
     property int keyTimestamp: 0
 
     // Fade animation constants
@@ -24,7 +22,7 @@ Item {
 
     // Fade out older keys based on age
     readonly property real targetOpacity: {
-        if (isNewest || isModifierPreview)
+        if (isNewest)
             return 1.0;
 
         // Calculate age-based opacity
@@ -44,7 +42,7 @@ Item {
 
     // Timer to update opacity periodically for age-based fading
     Timer {
-        running: !root.isNewest && !root.isModifierPreview && root.keyTimestamp > 0
+        running: !root.isNewest && root.keyTimestamp > 0
         interval: 50
         repeat: true
         onTriggered: root.targetOpacityChanged()
@@ -64,15 +62,9 @@ Item {
     StyledRect {
         id: chip
 
-        readonly property var glassStyle: {
-            if (root.isModifierPreview) {
-                return Colours.glassmorphism(Colours.palette.m3tertiary, Colours.glass.medium);
-            } else if (root.isNewest) {
-                return Colours.glassmorphism(Colours.palette.m3primary, Colours.glass.strong);
-            } else {
-                return Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle);
-            }
-        }
+        readonly property var glassStyle: root.isNewest
+            ? Colours.glassmorphism(Colours.palette.m3primary, Colours.glass.strong)
+            : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
         // Keyboard key-like proportions: more padding, subtle rounding
         implicitWidth: keyLabel.implicitWidth + Appearance.padding.large * 2
@@ -92,15 +84,7 @@ Item {
             font.pointSize: Appearance.font.size.normal
             font.family: Appearance.font.family.mono
             font.weight: root.isNewest ? Font.DemiBold : Font.Normal
-            color: {
-                if (root.isModifierPreview) {
-                    return Colours.palette.m3onTertiary;
-                } else if (root.isNewest) {
-                    return Colours.palette.m3onPrimary;
-                } else {
-                    return Colours.palette.m3onSurface;
-                }
-            }
+            color: root.isNewest ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
         }
     }
 }

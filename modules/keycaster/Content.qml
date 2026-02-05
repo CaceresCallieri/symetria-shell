@@ -12,7 +12,6 @@ import QtQuick.Layouts
 ///
 /// Displays a horizontal row of key chips showing recent keypresses.
 /// Newest keys appear on the right, older keys fade out on the left.
-/// Held modifiers (without a following key) show as a preview chip.
 Item {
     id: root
 
@@ -51,17 +50,8 @@ Item {
             KeyChip {
                 keyText: "Ctrl+Shift+X"
                 isNewest: false
-                isModifierPreview: false
                 opacity: 0
                 Layout.maximumWidth: 0
-            }
-
-            // Modifier preview (shown when modifiers held but no key pressed yet)
-            KeyChip {
-                visible: KeycasterService.hasHeldModifiers && KeycasterService.keyHistory.count === 0
-                keyText: KeycasterService.heldModifiersText
-                isModifierPreview: true
-                isNewest: false
             }
 
             // Key history chips
@@ -77,16 +67,7 @@ Item {
                     keyText: key
                     isNewest: index === KeycasterService.keyHistory.count - 1
                     keyTimestamp: timestamp
-                    isModifierPreview: false
                 }
-            }
-
-            // Modifier preview after existing keys (when modifiers held for next combo)
-            KeyChip {
-                visible: KeycasterService.hasHeldModifiers && KeycasterService.keyHistory.count > 0
-                keyText: KeycasterService.heldModifiersText + "+"
-                isModifierPreview: true
-                isNewest: false
             }
         }
     }
