@@ -9,6 +9,9 @@ import qs.config
 import Quickshell
 import QtQuick
 
+// Calculator service for redirect from >calc
+import "../../services" as Services
+
 Item {
     id: root
 
@@ -111,9 +114,14 @@ Item {
                         Wallpapers.setWallpaper(currentItem.modelData.path);
                         root.visibilities.launcher = false;
                     } else if (text.startsWith(Config.launcher.actionPrefix)) {
-                        if (text.startsWith(`${Config.launcher.actionPrefix}calc `))
-                            currentItem.onClicked();
-                        else
+                        if (text.startsWith(`${Config.launcher.actionPrefix}calc `)) {
+                            // Redirect to calculator drawer with the expression
+                            const expr = text.slice(`${Config.launcher.actionPrefix}calc `.length);
+                            Services.Calculator.currentExpression = expr;
+                            Services.Calculator.evaluate(expr);
+                            root.visibilities.launcher = false;
+                            root.visibilities.calculator = true;
+                        } else
                             currentItem.modelData.onClicked(list.currentList);
                     } else {
                         Apps.launch(currentItem.modelData);

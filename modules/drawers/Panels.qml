@@ -11,6 +11,7 @@ import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.hyprwhspr as HyprWhsprModule
+import qs.modules.calculator as CalculatorModule
 import Quickshell
 import QtQuick
 
@@ -33,6 +34,7 @@ Item {
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
     readonly property alias hyprwhspr: hyprwhspr
+    readonly property alias calculator: calculator
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
@@ -93,6 +95,26 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: launcher.height > 0 ? launcher.height + Appearance.spacing.large : 0
+    }
+
+    CalculatorModule.Wrapper {
+        id: calculator
+
+        screen: root.screen
+        visibilities: root.visibilities
+        panels: root
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        // Stack above launcher and clipboard if they are open
+        anchors.bottomMargin: {
+            let margin = 0;
+            if (launcher.height > 0)
+                margin += launcher.height + Appearance.spacing.large;
+            if (clipboard.height > 0)
+                margin += clipboard.height + Appearance.spacing.large;
+            return margin;
+        }
     }
 
     Dashboard.Wrapper {

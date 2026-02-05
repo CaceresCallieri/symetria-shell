@@ -31,6 +31,16 @@ Scope {
         }
     }
 
+    // Opens calculator with exclusive access - closes launcher/clipboard if open
+    function openCalculatorExclusive(): void {
+        const visibilities = Visibilities.getForActive();
+        if (visibilities.launcher)
+            visibilities.launcher = false;
+        if (visibilities.clipboard)
+            visibilities.clipboard = false;
+        visibilities.calculator = !visibilities.calculator;
+    }
+
     // Toggles a drawer with mutual exclusion against an opposite drawer.
     // If the opposite drawer is open, closes it first and delays opening.
     function toggleDrawerWithExclusion(drawerName: string, oppositeDrawerName: string): void {
@@ -129,12 +139,21 @@ Scope {
         }
     }
 
+    CustomShortcut {
+        name: "calculator"
+        description: "Toggle calculator"
+        onReleased: {
+            if (!root.hasFullscreen)
+                openCalculatorExclusive();
+        }
+    }
+
     IpcHandler {
         target: "drawers"
 
         function toggle(drawer: string): void {
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard"].includes(drawer))
+                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard", "calculator"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard
@@ -142,6 +161,8 @@ Scope {
                     toggleDrawerWithExclusion("launcher", "clipboard");
                 else if (drawer === "clipboard")
                     toggleDrawerWithExclusion("clipboard", "launcher");
+                else if (drawer === "calculator")
+                    openCalculatorExclusive();
                 else
                     Visibilities.getForActive()[drawer] = !Visibilities.getForActive()[drawer];
             } else {

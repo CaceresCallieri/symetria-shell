@@ -412,6 +412,70 @@ exec-once = wl-paste --type image --watch cliphist store
   (e.g., "fle" matches "file example" via FZF, but no "fle" substring to highlight)
 - Current config has `useFuzzy: false`, so search and highlighting are aligned
 
+### Calculator Drawer
+
+The calculator drawer (`modules/calculator/`) provides a persistent calculation history with live expression evaluation using `libqalculate` via the Symmetria C++ plugin.
+
+**Features:**
+- Live evaluation as you type (real-time results)
+- Persistent history across shell restarts (stored in `~/.local/state/symmetria/calculator.json`)
+- Maximum 50 history entries (configurable)
+- Click history entries to reload expressions into input
+- Optional auto-copy result to clipboard on Enter
+
+**Keyboard Shortcuts (when drawer is open):**
+
+| Key | Action |
+|-----|--------|
+| Enter | Add calculation to history, clear input |
+| Escape | Close calculator drawer |
+| ↑ (Up arrow) | Load most recent history entry into input |
+| Ctrl+C | Copy current result (when no text selected) |
+
+**Toggle keybind:** `Super+Shift+C` (add to `~/.config/hypr/keybindings.conf`)
+
+```conf
+bind = $mainMod SHIFT, C, exec, qs -c symmetria ipc call drawers toggle calculator
+```
+
+**IPC:** `qs -c symmetria ipc call drawers toggle calculator`
+
+**Launcher Integration:** Type `>calc 2+2` in the launcher to open the calculator drawer with the expression pre-filled.
+
+**Clear History:** Click the trash icon twice within 2 seconds to confirm.
+
+**Configuration (`~/.config/symmetria/shell.json`):**
+```json
+{
+  "calculator": {
+    "enabled": true,
+    "maxHistory": 50,
+    "copyOnEnter": false,
+    "sizes": {
+      "width": 450,
+      "historyItemHeight": 40,
+      "maxVisibleHistory": 8
+    }
+  }
+}
+```
+
+**Files:**
+| File | Purpose |
+|------|---------|
+| `services/Calculator.qml` | Singleton: state management, persistence, Qalculator integration |
+| `modules/calculator/Wrapper.qml` | Drawer lifecycle, animations, pre-loading |
+| `modules/calculator/Content.qml` | Main UI: history list, result display, input field |
+| `modules/calculator/HistoryItem.qml` | Individual history entry component |
+| `modules/calculator/CalculatorBackground.qml` | Background shape (uses BottomUpBackground) |
+| `config/CalculatorConfig.qml` | Configuration defaults |
+
+**Supported Expressions:** All `libqalculate` syntax including:
+- Basic arithmetic: `2+2`, `10/3`, `2^8`
+- Functions: `sqrt(144)`, `sin(45deg)`, `log(100)`
+- Unit conversions: `5km to miles`, `100F to C`
+- Constants: `pi`, `e`, `c` (speed of light)
+
 ## Configuration
 
 ### Two-Layer System

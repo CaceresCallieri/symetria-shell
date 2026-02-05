@@ -11,6 +11,7 @@ import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.hyprwhspr as HyprWhsprModule
+import qs.modules.calculator as CalculatorModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -73,6 +74,20 @@ Item {
 
             startX: (shape.width - wrapper.width) / 2 - rounding
             startY: shape.height - root.panels.launcher.height - (root.panels.launcher.height > 0 ? Appearance.spacing.large : 0)
+        }
+
+        CalculatorModule.CalculatorBackground {
+            wrapper: root.panels.calculator
+
+            startX: (shape.width - wrapper.width) / 2 - rounding
+            startY: {
+                let y = shape.height;
+                if (root.panels.launcher.height > 0)
+                    y -= root.panels.launcher.height + Appearance.spacing.large;
+                if (root.panels.clipboard.height > 0)
+                    y -= root.panels.clipboard.height + Appearance.spacing.large;
+                return y;
+            }
         }
 
         Dashboard.Background {

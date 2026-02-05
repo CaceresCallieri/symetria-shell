@@ -62,12 +62,13 @@ Variants {
                 visibilities.session = false;
                 visibilities.dashboard = false;
                 visibilities.clipboard = false;
+                visibilities.calculator = false;
             }
 
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
                 x: Config.border.thickness + win.dragMaskPadding
@@ -103,7 +104,7 @@ Variants {
             HyprlandFocusGrab {
                 id: focusGrab
 
-                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
                 windows: [win]
                 onCleared: {
                     visibilities.launcher = false;
@@ -111,6 +112,7 @@ Variants {
                     visibilities.sidebar = false;
                     visibilities.dashboard = false;
                     visibilities.clipboard = false;
+                    visibilities.calculator = false;
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
                     panels.popouts.hasCurrent = false;
@@ -162,6 +164,7 @@ Variants {
                 property bool askpass
                 property bool hyprwhspr
                 property bool keycaster
+                property bool calculator
 
                 Component.onCompleted: Visibilities.load(scope.modelData, this)
             }
