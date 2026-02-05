@@ -65,10 +65,10 @@ Singleton {
     // Update cached modifier text when modifiers change
     on_HeldModifiersChanged: {
         const parts = [];
-        if (_heldModifiers.super) parts.push("Super");
-        if (_heldModifiers.ctrl) parts.push("Ctrl");
-        if (_heldModifiers.alt) parts.push("Alt");
-        if (_heldModifiers.shift) parts.push("Shift");
+        if (_heldModifiers.super) parts.push(_modifierSymbols.super);
+        if (_heldModifiers.ctrl) parts.push(_modifierSymbols.ctrl);
+        if (_heldModifiers.alt) parts.push(_modifierSymbols.alt);
+        if (_heldModifiers.shift) parts.push(_modifierSymbols.shift);
         _cachedHeldModifiersText = parts.join("+");
     }
 
@@ -100,7 +100,7 @@ Singleton {
         "KEY_PAGEUP": "PgUp", "KEY_PAGEDOWN": "PgDn",
 
         // Common keys
-        "KEY_SPACE": "Space", "KEY_ENTER": "Enter", "KEY_RETURN": "Enter",
+        "KEY_SPACE": "␣", "KEY_ENTER": "⏎", "KEY_RETURN": "⏎",
         "KEY_TAB": "Tab", "KEY_BACKSPACE": "⌫", "KEY_DELETE": "Del",
         "KEY_ESCAPE": "Esc", "KEY_INSERT": "Ins",
         "KEY_CAPSLOCK": "CapsLock", "KEY_NUMLOCK": "NumLock",
@@ -136,6 +136,14 @@ Singleton {
         "KEY_LEFTALT": "alt", "KEY_RIGHTALT": "alt",
         "KEY_LEFTSHIFT": "shift", "KEY_RIGHTSHIFT": "shift",
         "KEY_LEFTMETA": "super", "KEY_RIGHTMETA": "super"
+    })
+
+    // Mac-style modifier symbols for compact display
+    readonly property var _modifierSymbols: ({
+        "super": "⌘",   // U+2318 Command key
+        "ctrl": "⌃",    // U+2303 Control key
+        "alt": "⌥",     // U+2325 Option key
+        "shift": "⇧"    // U+21E7 Shift key
     })
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -178,10 +186,10 @@ Singleton {
     /// Build full key combination text with modifiers
     function buildKeyCombo(keyName: string): string {
         const parts = [];
-        if (_heldModifiers.super) parts.push("Super");
-        if (_heldModifiers.ctrl) parts.push("Ctrl");
-        if (_heldModifiers.alt) parts.push("Alt");
-        if (_heldModifiers.shift) parts.push("Shift");
+        if (_heldModifiers.super) parts.push(_modifierSymbols.super);
+        if (_heldModifiers.ctrl) parts.push(_modifierSymbols.ctrl);
+        if (_heldModifiers.alt) parts.push(_modifierSymbols.alt);
+        if (_heldModifiers.shift) parts.push(_modifierSymbols.shift);
         parts.push(keyName);
         return parts.join("+");
     }
