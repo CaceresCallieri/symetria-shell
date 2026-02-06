@@ -32,7 +32,11 @@ Item {
         implicitWidth: Math.max(200, keyRow.implicitWidth + Appearance.padding.large * 2)
         implicitHeight: keyRow.implicitHeight + Appearance.padding.normal * 2
 
-        radius: Appearance.rounding.full
+        // Match Hyprland's window corner rounding proportionally. The raw value
+        // (e.g. 24px) would create full capsule ends on a short pill, so cap at
+        // height/2.5 to preserve a similar visual curvature to client windows.
+        readonly property real hyprRounding: Hypr.options["decoration:rounding"] ?? Appearance.rounding.full
+        radius: Math.min(hyprRounding, implicitHeight / 2.5)
         // Glassmorphism background for standalone floating appearance
         color: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
         border.color: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
