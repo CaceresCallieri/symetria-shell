@@ -52,10 +52,23 @@ Scope {
 
                 screen: win.modelData
 
+                // Dynamic margins from Hyprland gaps_out, with extra inset so the
+                // keycaster sits slightly inside the window area rather than at the edge.
+                // Horizontal/vertical insets differ to compensate for the pill shape's
+                // optical asymmetry (wide rounded rect looks closer to the right edge).
+                readonly property string gapsRaw: Hypr.options["general:gaps_out"] ?? ""
+                readonly property var gapsParts: gapsRaw.toString().split(" ").map(Number).filter(n => !isNaN(n))
+                readonly property real gapRight: gapsParts.length >= 2 ? gapsParts[1] : (gapsParts.length === 1 ? gapsParts[0] : -1)
+                readonly property real gapBottom: gapsParts.length >= 3 ? gapsParts[2] : (gapsParts.length === 1 ? gapsParts[0] : -1)
+
+                readonly property real fallbackMargin: Config.border.thickness + Appearance.spacing.large
+                readonly property real horizontalInset: 20
+                readonly property real verticalInset: 12
+
                 anchors.right: parent.right
-                anchors.rightMargin: Config.border.thickness + Appearance.spacing.large
+                anchors.rightMargin: gapRight >= 0 ? gapRight + horizontalInset : fallbackMargin
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: Config.border.thickness + Appearance.spacing.large
+                anchors.bottomMargin: gapBottom >= 0 ? gapBottom + verticalInset : fallbackMargin
             }
         }
     }
