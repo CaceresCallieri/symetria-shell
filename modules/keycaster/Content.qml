@@ -10,8 +10,8 @@ import QtQuick.Layouts
 
 /// Content UI for Keycaster key display.
 ///
-/// Displays a horizontal row of key chips showing recent keypresses.
-/// Newest keys appear on the right, older keys fade out on the left.
+/// Displays a horizontal row of key chips showing recent keypresses and mouse clicks.
+/// Newest entries appear on the right, older entries fade out on the left.
 Item {
     id: root
 
@@ -54,6 +54,7 @@ Item {
             KeyChip {
                 keyText: "Ctrl+Shift+X"
                 isNewest: false
+                mouseButton: ""
                 opacity: 0
                 Layout.maximumWidth: 0
             }
@@ -67,6 +68,12 @@ Item {
                     required property int keyId
                     required property int timestamp
                     required property int index
+
+                    // mouseButton uses `required` (without type) to make KeyChip's
+                    // EXISTING property required rather than creating a shadow property.
+                    // `required property string mouseButton` would shadow it, leaving
+                    // KeyChip's own mouseButton stuck at "".
+                    required mouseButton
 
                     keyText: key
                     isNewest: index === KeycasterService.keyHistory.count - 1

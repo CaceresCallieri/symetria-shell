@@ -92,6 +92,51 @@ qs -c symmetria
 
 **Colours:** `services/Colours.qml` provides the M3 (Material 3) color palette with support for light/dark modes and transparency layers.
 
+### Required Property Shadowing in Delegates (CRITICAL)
+
+**⚠️ When a property value silently stays empty, check for shadowing**
+
+In QML delegates with `pragma ComponentBehavior: Bound`, there are **two syntaxes** for required properties that behave completely differently:
+
+| Syntax | What it does |
+|--------|-------------|
+| `required property string foo` | Creates a **NEW shadow property** (does NOT modify the component's existing `foo`) |
+| `required foo` | Makes the component's **EXISTING** `foo` property required (model injects directly into it) |
+
+**The Problem:**
+```qml
+// MyComponent.qml has: property string status: ""
+
+Repeater {
+    model: myModel
+    MyComponent {
+        required property string status  // ❌ SHADOW — model value goes here
+        // MyComponent's own `status` stays "" — isActive: status !== "" is always false
+    }
+}
+```
+
+**The Fix — two options:**
+```qml
+// Option A: Make the existing property required (no type redeclaration)
+MyComponent {
+    required status  // ✅ Model injects directly into MyComponent.status
+}
+
+// Option B: Use a different name + explicit binding
+MyComponent {
+    required property string statusRole  // Different name
+    status: statusRole                   // Explicit bridge to component property
+}
+```
+
+**Debugging checklist** when a delegate property appears stuck at its default value:
+1. Check if the delegate declares `required property <type> <name>` where `<name>` matches an existing component property
+2. If so, either remove the type to use `required <name>`, or rename the delegate property and add an explicit binding
+3. Remember to clear `~/.cache/quickshell/qmlcache/` after any QML change
+
+**Reference:** `modules/keycaster/Content.qml` uses `required mouseButton` (Option A) correctly.
+
 ### QML Type Naming Convention (CRITICAL)
 
 **⚠️ Type Name Collisions Break the Shell Silently**

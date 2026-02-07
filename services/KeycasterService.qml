@@ -6,10 +6,11 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-/// Keycaster service for displaying keyboard events.
+/// Keycaster service for displaying keyboard and mouse button events.
 ///
-/// Spawns `showmethekey-cli` as a subprocess to capture keyboard input.
+/// Spawns `showmethekey-cli` as a subprocess to capture keyboard and mouse input.
 /// Tracks held modifiers and maintains a FIFO history of key combinations.
+/// Mouse button events (left, right, middle click) are displayed as graphical icons.
 ///
 /// Setup: User must be in the `input` group to read /dev/input:
 ///   sudo usermod -aG input $USER
@@ -20,7 +21,10 @@ Singleton {
     /// Whether the keycaster is currently active (visible and capturing)
     property bool active: false
 
-    /// Key history for display - each entry has: { key: string, timestamp: int, keyId: int }
+    /// Key history for display - each entry has:
+    ///   { key: string, mouseButton: string, timestamp: int, keyId: int }
+    /// mouseButton is "" for keyboard events, "left"/"right"/"middle" for mouse clicks.
+    /// For mouse events, key contains only the modifier prefix (e.g. "⌘+" or "").
     /// Older entries are at lower indices, newest at the end
     readonly property alias keyHistory: keyHistoryModel
 
@@ -37,7 +41,8 @@ Singleton {
     readonly property var _config: ({
         historyLength: Config.keycaster?.historyLength ?? 5,
         fadeoutDelay: Config.keycaster?.fadeoutDelay ?? 2000,
-        fadeoutDuration: Config.keycaster?.fadeoutDuration ?? 500
+        fadeoutDuration: Config.keycaster?.fadeoutDuration ?? 500,
+        showMouseClicks: Config.keycaster?.showMouseClicks ?? true
     })
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -48,28 +53,42 @@ Singleton {
     readonly property int _maxKeyId: 1000000
     property int _nextKeyId: 0
 
-    // Modifier tracking state
-    property var _heldModifiers: ({
-        super: false,
-        ctrl: false,
-        alt: false,
-        shift: false
-    })
+    // Modifier tracking state (individual properties for fine-grained change detection)
+    property bool _modSuper: false
+    property bool _modCtrl: false
+    property bool _modAlt: false
+    property bool _modShift: false
 
-    // Cached modifier text (updated via onHeldModifiersChanged)
+    // Cached modifier text (updated when any modifier changes)
     property string _cachedHeldModifiersText: ""
 
     // Track if showmethekey is missing (to avoid repeated error spam)
     property bool _showmetekeyMissing: false
 
-    // Update cached modifier text when modifiers change
-    on_HeldModifiersChanged: {
+    // Update cached modifier text when any modifier changes
+    on_ModSuperChanged: _updateModifierText()
+    on_ModCtrlChanged: _updateModifierText()
+    on_ModAltChanged: _updateModifierText()
+    on_ModShiftChanged: _updateModifierText()
+
+    function _updateModifierText(): void {
         const parts = [];
-        if (_heldModifiers.super) parts.push(_modifierSymbols.super);
-        if (_heldModifiers.ctrl) parts.push(_modifierSymbols.ctrl);
-        if (_heldModifiers.alt) parts.push(_modifierSymbols.alt);
-        if (_heldModifiers.shift) parts.push(_modifierSymbols.shift);
+        if (_modSuper) parts.push(_modifierSymbols.super);
+        if (_modCtrl) parts.push(_modifierSymbols.ctrl);
+        if (_modAlt) parts.push(_modifierSymbols.alt);
+        if (_modShift) parts.push(_modifierSymbols.shift);
         _cachedHeldModifiersText = parts.join("+");
+    }
+
+    // Clear mouse click entries from history when showMouseClicks is disabled
+    readonly property bool _showMouseClicks: _config.showMouseClicks
+    on_ShowMouseClicksChanged: {
+        if (!_showMouseClicks) {
+            for (let i = keyHistoryModel.count - 1; i >= 0; i--) {
+                if (keyHistoryModel.get(i).mouseButton !== "")
+                    keyHistoryModel.remove(i);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -146,13 +165,23 @@ Singleton {
         "shift": "⇧"    // U+21E7 Shift key
     })
 
+    // Mouse button codes → button identifiers for MouseClickIcon
+    readonly property var _mouseButtonMap: ({
+        "BTN_LEFT": "left",
+        "BTN_RIGHT": "right",
+        "BTN_MIDDLE": "middle"
+    })
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helper functions
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Reset all modifier states to released
     function resetModifiers(): void {
-        _heldModifiers = { super: false, ctrl: false, alt: false, shift: false };
+        _modSuper = false;
+        _modCtrl = false;
+        _modAlt = false;
+        _modShift = false;
     }
 
     /// Normalize a key code to display name
@@ -165,8 +194,14 @@ Singleton {
         return keyCode in _modifierKeys;
     }
 
+    /// Check if a key code is a mouse button
+    function isMouseButton(keyCode: string): bool {
+        return keyCode in _mouseButtonMap;
+    }
+
     /// Add a key combination to history
-    function addKeyToHistory(keyText: string): void {
+    /// mouseButton: "" for keyboard events, "left"/"right"/"middle" for mouse clicks
+    function addKeyToHistory(keyText: string, mouseButton: string): void {
         // Remove oldest if at capacity
         while (keyHistoryModel.count >= _config.historyLength) {
             keyHistoryModel.remove(0);
@@ -175,6 +210,7 @@ Singleton {
         // Add new entry with wraparound ID
         keyHistoryModel.append({
             key: keyText,
+            mouseButton: mouseButton,
             timestamp: Date.now(),
             keyId: _nextKeyId
         });
@@ -186,12 +222,22 @@ Singleton {
     /// Build full key combination text with modifiers
     function buildKeyCombo(keyName: string): string {
         const parts = [];
-        if (_heldModifiers.super) parts.push(_modifierSymbols.super);
-        if (_heldModifiers.ctrl) parts.push(_modifierSymbols.ctrl);
-        if (_heldModifiers.alt) parts.push(_modifierSymbols.alt);
-        if (_heldModifiers.shift) parts.push(_modifierSymbols.shift);
+        if (_modSuper) parts.push(_modifierSymbols.super);
+        if (_modCtrl) parts.push(_modifierSymbols.ctrl);
+        if (_modAlt) parts.push(_modifierSymbols.alt);
+        if (_modShift) parts.push(_modifierSymbols.shift);
         parts.push(keyName);
         return parts.join("+");
+    }
+
+    /// Build modifier prefix text for mouse click events (e.g. "⌘+⇧+" or "")
+    function buildModifierPrefix(): string {
+        const parts = [];
+        if (_modSuper) parts.push(_modifierSymbols.super);
+        if (_modCtrl) parts.push(_modifierSymbols.ctrl);
+        if (_modAlt) parts.push(_modifierSymbols.alt);
+        if (_modShift) parts.push(_modifierSymbols.shift);
+        return parts.length > 0 ? parts.join("+") + "+" : "";
     }
 
     /// Process a key event from showmethekey-cli
@@ -201,16 +247,27 @@ Singleton {
         // Handle modifier key state tracking
         if (keyCode in _modifierKeys) {
             const modName = _modifierKeys[keyCode];
-            // QML JS doesn't support spread operator, so update manually
-            const newMods = {
-                super: _heldModifiers.super,
-                ctrl: _heldModifiers.ctrl,
-                alt: _heldModifiers.alt,
-                shift: _heldModifiers.shift
-            };
-            newMods[modName] = isPress;
-            _heldModifiers = newMods;
+            if (modName === "super") _modSuper = isPress;
+            else if (modName === "ctrl") _modCtrl = isPress;
+            else if (modName === "alt") _modAlt = isPress;
+            else if (modName === "shift") _modShift = isPress;
             // Don't add modifiers to history on their own
+            return;
+        }
+
+        // Handle mouse button events
+        if (keyCode in _mouseButtonMap) {
+            if (isPress && _config.showMouseClicks) {
+                const buttonName = _mouseButtonMap[keyCode];
+                const modPrefix = buildModifierPrefix();
+                addKeyToHistory(modPrefix, buttonName);
+            }
+            return;
+        }
+
+        // Log unrecognized BTN_ codes for debugging (e.g. BTN_SIDE, BTN_EXTRA)
+        if (keyCode.startsWith("BTN_")) {
+            console.warn("Keycaster: Unsupported mouse button:", keyCode);
             return;
         }
 
@@ -218,7 +275,7 @@ Singleton {
         if (isPress) {
             const keyName = normalizeKeyName(keyCode);
             const keyCombo = buildKeyCombo(keyName);
-            addKeyToHistory(keyCombo);
+            addKeyToHistory(keyCombo, "");
         }
     }
 
@@ -244,7 +301,7 @@ Singleton {
         id: keyCaptureProcess
 
         // Use absolute path to prevent PATH manipulation attacks
-        command: ["/usr/bin/showmethekey-cli", "-m", "-n"]
+        command: ["/usr/bin/showmethekey-cli"]
 
         // Don't run if showmethekey is missing
         running: root.active && !root._showmetekeyMissing
@@ -255,8 +312,9 @@ Singleton {
                 if (!line) return;
 
                 try {
-                    // showmethekey-cli outputs JSON per key event
-                    // Format: {"key_name": "KEY_A", "state_name": "PRESSED|RELEASED", ...}
+                    // showmethekey-cli outputs JSON per key/button event
+                    // Keyboard: {"key_name": "KEY_A", "state_name": "PRESSED", "event_name": "KEYBOARD_KEY"}
+                    // Mouse:    {"key_name": "BTN_LEFT", "state_name": "PRESSED", "event_name": "POINTER_BUTTON"}
                     const event = JSON.parse(line);
 
                     // Validate required fields

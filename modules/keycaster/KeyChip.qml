@@ -9,12 +9,22 @@ import QtQuick
 ///
 /// Displays a single key or key combination with glassmorphism styling.
 /// Newest key is highlighted (m3primary, strong glass), older keys fade out.
+/// For mouse button events, renders a graphical MouseClickIcon instead of text.
 Item {
     id: root
 
     required property string keyText
     required property bool isNewest
     property int keyTimestamp: 0
+
+    /// Mouse button identifier: "" for keyboard, "left"/"right"/"middle" for mouse clicks
+    property string mouseButton: ""
+
+    /// Whether this chip represents a mouse click event
+    readonly property bool isMouseClick: mouseButton !== ""
+
+    /// The text color for this chip's state (used by both text and mouse icon)
+    readonly property color chipTextColor: isNewest ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
 
     // Fade animation constants
     readonly property real minOpacity: 0.4      // Minimum opacity for old keys
@@ -67,24 +77,63 @@ Item {
             : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
         // Keyboard key-like proportions: more padding, subtle rounding
-        implicitWidth: keyLabel.implicitWidth + Appearance.padding.large * 2
-        implicitHeight: keyLabel.implicitHeight + Appearance.padding.normal * 2
+        implicitWidth: chipContent.implicitWidth + Appearance.padding.large * 2
+        implicitHeight: chipContent.implicitHeight + Appearance.padding.normal * 2
 
         radius: 8  // Subtle rounding like a physical keycap
         color: glassStyle.background
         border.color: glassStyle.border
         border.width: 1
 
-        StyledText {
-            id: keyLabel
+        // Content: either text label or mouse icon (with optional modifier prefix)
+        Row {
+            id: chipContent
 
             anchors.centerIn: parent
+            spacing: root.isMouseClick && root.keyText !== "" ? 2 : 0
 
-            text: root.keyText
-            font.pointSize: Appearance.font.size.normal
-            font.family: Appearance.font.family.mono
-            font.weight: root.isNewest ? Font.DemiBold : Font.Normal
-            color: root.isNewest ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
+            // Modifier prefix text (e.g. "⌘+" shown before mouse icon)
+            StyledText {
+                id: modifierLabel
+
+                visible: root.isMouseClick && root.keyText !== ""
+                // Row manages horizontal positioning; vertical centering inherited
+
+                text: root.keyText
+                font.pointSize: Appearance.font.size.normal
+                font.family: Appearance.font.family.mono
+                font.weight: root.isNewest ? Font.DemiBold : Font.Normal
+                color: root.chipTextColor
+            }
+
+            // Mouse click icon
+            MouseClickIcon {
+                id: mouseIcon
+
+                visible: root.isMouseClick
+                // Row manages horizontal positioning; vertical centering inherited
+
+                activeButton: root.mouseButton
+                baseColor: root.chipTextColor
+
+                // Scale to match text height
+                width: 14
+                height: 22
+            }
+
+            // Keyboard key text label
+            StyledText {
+                id: keyLabel
+
+                visible: !root.isMouseClick
+                // Row manages horizontal positioning; vertical centering inherited
+
+                text: root.keyText
+                font.pointSize: Appearance.font.size.normal
+                font.family: Appearance.font.family.mono
+                font.weight: root.isNewest ? Font.DemiBold : Font.Normal
+                color: root.chipTextColor
+            }
         }
     }
 }
