@@ -44,6 +44,12 @@ signals:
     void usingCacheChanged();
 
 private:
+    void clearShaGuard(const QString& path);
+
+    // Re-entry guard: prevents concurrent SHA256 calculations for the same path.
+    // Set when updateSource() starts async SHA, cleared when the operation completes
+    // or abandons (zero dimensions, path changed). Must be cleared on all exit paths
+    // so width/height change signals can retry.
     QString m_shaPath;
 
     QQuickItem* m_item;

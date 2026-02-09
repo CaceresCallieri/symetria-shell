@@ -94,6 +94,12 @@ void CachingImageManager::setPath(const QString& path) {
     }
 }
 
+void CachingImageManager::clearShaGuard(const QString& path) {
+    if (m_shaPath == path) {
+        m_shaPath = QString();
+    }
+}
+
 void CachingImageManager::updateSource() {
     updateSource(m_path);
 }
@@ -113,6 +119,7 @@ void CachingImageManager::updateSource(const QString& path) {
     connect(watcher, &QFutureWatcher<QString>::finished, this, [watcher, path, this]() {
         if (m_path != path) {
             // Object is destroyed or path has changed, ignore
+            clearShaGuard(path);
             watcher->deleteLater();
             return;
         }
@@ -120,6 +127,16 @@ void CachingImageManager::updateSource(const QString& path) {
         const QSize size = effectiveSize();
 
         if (!m_item || !size.width() || !size.height()) {
+            // Clear guard so width/height change signals can retry
+            clearShaGuard(path);
+            watcher->deleteLater();
+            return;
+        }
+
+        const QString hash = watcher->result();
+        if (hash.isEmpty()) {
+            qWarning() << "CachingImageManager: SHA256 failed for" << path;
+            clearShaGuard(path);
             watcher->deleteLater();
             return;
         }
@@ -127,7 +144,7 @@ void CachingImageManager::updateSource(const QString& path) {
         const QString fillMode = m_item->property("fillMode").toString();
         // clang-format off
         const QString filename = QString("%1@%2x%3-%4.png")
-            .arg(watcher->result()).arg(size.width()).arg(size.height())
+            .arg(hash).arg(size.width()).arg(size.height())
             .arg(fillMode == "PreserveAspectCrop" ? "crop" : fillMode == "PreserveAspectFit" ? "fit" : "stretch");
         // clang-format on
 
@@ -155,9 +172,7 @@ void CachingImageManager::updateSource(const QString& path) {
         }
 
         // Clear current running sha if same
-        if (m_shaPath == path) {
-            m_shaPath = QString();
-        }
+        clearShaGuard(path);
 
         watcher->deleteLater();
     });
