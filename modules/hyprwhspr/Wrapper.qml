@@ -112,6 +112,7 @@ Item {
             serviceState: HyprWhsprService.state
             serviceAudioLevel: HyprWhsprService.audioLevel
             serviceElapsedSeconds: HyprWhsprService.elapsedSeconds
+            serviceLanguage: HyprWhsprService.language
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

@@ -41,6 +41,11 @@ Singleton {
     /// Whether currently recording (for audio level polling)
     readonly property bool recording: state === "recording"
 
+    /// Current speech-to-text language code (e.g., "en", "es")
+    /// Written by Hyprland keybindings before HyprWhspr starts.
+    readonly property string language: _currentLanguage
+    property string _currentLanguage: ""
+
     // ─────────────────────────────────────────────────────────────────────────
     // Elapsed time tracking (mirrors GTK implementation's timer logic)
     // ─────────────────────────────────────────────────────────────────────────
@@ -160,6 +165,21 @@ Singleton {
         }
     }
 
+    // Language file reader - written by Hyprland keybinding before HyprWhspr starts
+    FileView {
+        id: languageFile
+        path: `${root.configDir}/current_language`
+        watchChanges: false
+        onLoaded: {
+            const lang = text().trim();
+            if (lang.length > 0 && lang.length <= 5)
+                root._currentLanguage = lang;
+        }
+        onLoadFailed: err => {
+            root._currentLanguage = "";
+        }
+    }
+
     // inotifywait process to watch the config directory for file changes
     // This is MUCH more efficient than polling
     Process {
@@ -206,6 +226,10 @@ Singleton {
                         if (root.recording) {
                             audioLevelFile.reload();
                         }
+                    }
+                } else if (filename === "current_language") {
+                    if (!event.includes("DELETE") && !event.includes("MOVED_FROM")) {
+                        languageFile.reload();
                     }
                 }
             }
@@ -275,6 +299,8 @@ Singleton {
 
         // Elapsed time tracking (mirrors GTK implementation)
         if (state === "recording") {
+            // Read language file when recording starts (written by keybinding)
+            languageFile.reload();
             // Start or resume recording
             if (_recordingStartTime === 0) {
                 _recordingStartTime = Date.now();
@@ -302,6 +328,9 @@ Singleton {
             _recordingStartTime = 0;
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
+            // Keep language during success (badge stays visible until auto-hide)
+            if (state !== "success")
+                _currentLanguage = "";
         }
 
         // Start auto-hide timer on success
@@ -309,6 +338,11 @@ Singleton {
             successTimer.start();
         } else {
             successTimer.stop();
+        }
+
+        // Delete language file on idle to prevent stale data across sessions
+        if (state === "idle") {
+            deleteLanguageFile.running = true;
         }
     }
 
@@ -336,6 +370,12 @@ Singleton {
         }
     }
 
+    // Cleanup: delete language file on idle to prevent stale data across sessions
+    Process {
+        id: deleteLanguageFile
+        command: ["rm", "-f", `${root.configDir}/current_language`]
+    }
+
     // Process for writing commands to control FIFO
     Process {
         id: commandProcess
@@ -353,6 +393,7 @@ Singleton {
     Component.onCompleted: {
         visualizerStateFile.reload();
         audioLevelFile.reload();
+        languageFile.reload();
     }
 
     // Cleanup on destruction

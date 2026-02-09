@@ -25,6 +25,7 @@ Item {
     required property string serviceState
     required property real serviceAudioLevel
     required property real serviceElapsedSeconds
+    required property string serviceLanguage
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -195,6 +196,16 @@ Item {
     // Current state config - falls back to idle for unknown states
     readonly property var stateConfig: stateMap[root.serviceState] ?? stateMap["idle"]
 
+    // Language badge: maps ISO 639-1 codes to uppercase display labels
+    readonly property var languageDisplayNames: ({
+        "en": "EN", "es": "ES", "fr": "FR", "de": "DE",
+        "pt": "PT", "it": "IT", "ja": "JA", "zh": "ZH"
+    })
+    readonly property string languageLabel: {
+        if (root.serviceLanguage === "") return "";
+        return languageDisplayNames[root.serviceLanguage] ?? root.serviceLanguage.toUpperCase();
+    }
+
     // State indicator components - dispatched by the Loader in the content layout.
     // Shared icon component for paused and success (same structure, different icon/color).
     // When transitioning between these two states, Loader reuses the instance and
@@ -259,6 +270,19 @@ Item {
 
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
+
+            // Language badge (EN/ES) shown above audio bars during active states
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.languageLabel !== "" && (root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing")
+
+                StyledText {
+                    text: root.languageLabel
+                    font.pointSize: Appearance.font.size.small
+                    font.family: Appearance.font.family.mono
+                    color: Colours.palette.m3outline
+                }
+            }
 
             // Audio level bars (visible during recording, paused, and processing)
             // Recording: audio-reactive with gentle wave
