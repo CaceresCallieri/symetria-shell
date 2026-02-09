@@ -50,11 +50,16 @@ Searcher {
         if (!Config.background.perWorkspaceWallpapers.enabled)
             return actualCurrent;
 
-        // Fix 5: Special workspaces (negative IDs) use actualCurrent (manually set wallpaper)
-        if (workspaceId < 0)
+        // Special workspaces (name starts with "special:") always use the global wallpaper.
+        // Named workspaces also have negative IDs but should NOT be filtered here.
+        if (workspaceName.startsWith("special:"))
             return actualCurrent;
 
-        const key = workspaceId > 0 ? workspaceId.toString() : workspaceName.toLowerCase();
+        // Named workspaces: use the name as lookup key
+        // Numbered workspaces: use the ID as lookup key
+        const isNamedWorkspace = workspaceId <= 0 || workspaceName !== workspaceId.toString();
+        const key = isNamedWorkspace ? workspaceName.toLowerCase() : workspaceId.toString();
+
         const mapped = workspaceWallpaperMap[key];
 
         if (mapped)
