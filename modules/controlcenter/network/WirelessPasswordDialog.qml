@@ -183,6 +183,7 @@ Item {
                 }
 
                 property string passwordBuffer: ""
+                property bool showPassword: false
 
                 Connections {
                     target: root.session.network
@@ -191,6 +192,7 @@ Item {
                             Qt.callLater(() => {
                                 passwordContainer.forceActiveFocus();
                                 passwordContainer.passwordBuffer = "";
+                                passwordContainer.showPassword = false;
                                 connectButton.hasError = false;
                             });
                         }
@@ -245,95 +247,161 @@ Item {
                     }
                 }
 
-                StyledText {
-                    id: placeholder
-                    anchors.centerIn: parent
-                    text: qsTr("Password")
-                    color: Colours.palette.m3outline
+                IconButton {
+                    id: showPasswordToggle
+
+                    anchors.right: parent.right
+                    anchors.rightMargin: Appearance.spacing.large
+                    anchors.verticalCenter: parent.verticalCenter
+                    z: 1
+
+                    type: IconButton.Text
+                    toggle: true
+                    checked: passwordContainer.showPassword
+                    icon: passwordContainer.showPassword ? "visibility" : "visibility_off"
                     font.pointSize: Appearance.font.size.normal
-                    font.family: Appearance.font.family.mono
-                    opacity: passwordContainer.passwordBuffer ? 0 : 1
+
+                    focus: false
+                    activeFocusOnTab: false
+
+                    inactiveOnColour: Colours.palette.m3outline
+                    activeOnColour: Colours.palette.m3primary
+
+                    visible: passwordContainer.passwordBuffer.length > 0
+                    opacity: visible ? 1 : 0
 
                     Behavior on opacity {
                         Anim {}
                     }
+
+                    onClicked: {
+                        passwordContainer.showPassword = !passwordContainer.showPassword;
+                        passwordContainer.forceActiveFocus();
+                    }
                 }
 
-                ListView {
-                    id: charList
+                Item {
+                    id: passwordContentArea
 
-                    readonly property int fullWidth: count * (implicitHeight + spacing) - spacing
+                    anchors.left: parent.left
+                    anchors.right: showPasswordToggle.visible ? showPasswordToggle.left : parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
 
-                    anchors.centerIn: parent
-                    implicitWidth: fullWidth
-                    implicitHeight: Appearance.font.size.normal
+                    StyledText {
+                        id: placeholder
 
-                    orientation: Qt.Horizontal
-                    spacing: Appearance.spacing.small / 2
-                    interactive: false
-
-                    model: ScriptModel {
-                        values: passwordContainer.passwordBuffer.split("")
-                    }
-
-                    delegate: StyledRect {
-                        id: ch
-
-                        implicitWidth: implicitHeight
-                        implicitHeight: charList.implicitHeight
-
-                        color: Colours.palette.m3onSurface
-                        radius: Appearance.rounding.small / 2
-
-                        opacity: 0
-                        scale: 0
-                        Component.onCompleted: {
-                            opacity = 1;
-                            scale = 1;
-                        }
-                        ListView.onRemove: removeAnim.start()
-
-                        SequentialAnimation {
-                            id: removeAnim
-
-                            PropertyAction {
-                                target: ch
-                                property: "ListView.delayRemove"
-                                value: true
-                            }
-                            ParallelAnimation {
-                                Anim {
-                                    target: ch
-                                    property: "opacity"
-                                    to: 0
-                                }
-                                Anim {
-                                    target: ch
-                                    property: "scale"
-                                    to: 0.5
-                                }
-                            }
-                            PropertyAction {
-                                target: ch
-                                property: "ListView.delayRemove"
-                                value: false
-                            }
-                        }
+                        anchors.centerIn: parent
+                        text: qsTr("Password")
+                        color: Colours.palette.m3outline
+                        font.pointSize: Appearance.font.size.normal
+                        font.family: Appearance.font.family.mono
+                        opacity: passwordContainer.passwordBuffer ? 0 : 1
 
                         Behavior on opacity {
                             Anim {}
                         }
+                    }
 
-                        Behavior on scale {
-                            Anim {
-                                duration: Appearance.anim.durations.expressiveFastSpatial
-                                easing.bezierCurve: Appearance.anim.curves.expressiveFastSpatial
+                    ListView {
+                        id: charList
+
+                        visible: !passwordContainer.showPassword
+
+                        readonly property int fullWidth: count * (implicitHeight + spacing) - spacing
+
+                        anchors.centerIn: parent
+                        implicitWidth: fullWidth
+                        implicitHeight: Appearance.font.size.normal
+
+                        orientation: Qt.Horizontal
+                        spacing: Appearance.spacing.small / 2
+                        interactive: false
+
+                        model: ScriptModel {
+                            values: passwordContainer.passwordBuffer.split("")
+                        }
+
+                        delegate: StyledRect {
+                            id: ch
+
+                            implicitWidth: implicitHeight
+                            implicitHeight: charList.implicitHeight
+
+                            color: Colours.palette.m3onSurface
+                            radius: Appearance.rounding.small / 2
+
+                            opacity: 0
+                            scale: 0
+                            Component.onCompleted: {
+                                opacity = 1;
+                                scale = 1;
                             }
+                            ListView.onRemove: removeAnim.start()
+
+                            SequentialAnimation {
+                                id: removeAnim
+
+                                PropertyAction {
+                                    target: ch
+                                    property: "ListView.delayRemove"
+                                    value: true
+                                }
+                                ParallelAnimation {
+                                    Anim {
+                                        target: ch
+                                        property: "opacity"
+                                        to: 0
+                                    }
+                                    Anim {
+                                        target: ch
+                                        property: "scale"
+                                        to: 0.5
+                                    }
+                                }
+                                PropertyAction {
+                                    target: ch
+                                    property: "ListView.delayRemove"
+                                    value: false
+                                }
+                            }
+
+                            Behavior on opacity {
+                                Anim {}
+                            }
+
+                            Behavior on scale {
+                                Anim {
+                                    duration: Appearance.anim.durations.expressiveFastSpatial
+                                    easing.bezierCurve: Appearance.anim.curves.expressiveFastSpatial
+                                }
+                            }
+                        }
+
+                        Behavior on implicitWidth {
+                            Anim {}
                         }
                     }
 
-                    Behavior on implicitWidth {
-                        Anim {}
+                    StyledText {
+                        id: revealedPassword
+
+                        anchors.centerIn: parent
+                        width: Math.min(implicitWidth, parent.width - Appearance.padding.normal * 2)
+
+                        text: passwordContainer.passwordBuffer
+                        visible: passwordContainer.showPassword
+                        color: Colours.palette.m3onSurface
+                        font.pointSize: Appearance.font.size.normal
+                        font.family: Appearance.font.family.mono
+                        maximumLineCount: 1
+                        elide: Text.ElideMiddle
+
+                        opacity: visible ? 1 : 0
+
+                        Behavior on opacity {
+                            Anim {}
+                        }
                     }
                 }
             }
@@ -392,6 +460,7 @@ Item {
                                 enabled = true;
                                 text = qsTr("Connect");
                                 passwordContainer.passwordBuffer = "";
+                                passwordContainer.showPassword = false;
                                 if (root.network && root.network.ssid) {
                                     Nmcli.forgetNetwork(root.network.ssid);
                                 }
@@ -402,6 +471,7 @@ Item {
                                 enabled = true;
                                 text = qsTr("Connect");
                                 passwordContainer.passwordBuffer = "";
+                                passwordContainer.showPassword = false;
                                 if (root.network && root.network.ssid) {
                                     Nmcli.forgetNetwork(root.network.ssid);
                                 }
@@ -435,6 +505,7 @@ Item {
                 connectButton.enabled = true;
                 connectButton.text = qsTr("Connect");
                 passwordContainer.passwordBuffer = "";
+                passwordContainer.showPassword = false;
                 if (root.network && root.network.ssid) {
                     Nmcli.forgetNetwork(root.network.ssid);
                 }
@@ -492,6 +563,7 @@ Item {
                 connectButton.enabled = true;
                 connectButton.text = qsTr("Connect");
                 passwordContainer.passwordBuffer = "";
+                passwordContainer.showPassword = false;
                 Nmcli.forgetNetwork(ssid);
             }
         }
@@ -504,6 +576,7 @@ Item {
 
         isClosing = true;
         passwordContainer.passwordBuffer = "";
+        passwordContainer.showPassword = false;
         connectButton.connecting = false;
         connectButton.hasError = false;
         connectButton.text = qsTr("Connect");
