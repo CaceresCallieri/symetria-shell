@@ -66,6 +66,10 @@ Singleton {
     // boundaries within imperceptible delay, avoiding "0.99 floors to 0" problem)
     readonly property int _elapsedTimerInterval: 250
 
+    // Auto-hide delay constraints (ms)
+    readonly property int _minAutoHideDelay: 500    // Minimum: enough time to see success indicator
+    readonly property int _maxAutoHideDelay: 10000  // Maximum: prevent indefinite display blocking UI
+
     // Timer to update _currentElapsed during recording
     Timer {
         id: elapsedTimer
@@ -352,12 +356,12 @@ Singleton {
     Timer {
         id: successTimer
 
-        // Validate autoHideDelay: clamp to 500ms-10s range
+        // Validate autoHideDelay: clamp to acceptable range
         interval: {
             const delay = Config.hyprwhspr?.autoHideDelay ?? 1500;
-            const clamped = Math.max(500, Math.min(10000, delay));
+            const clamped = Math.max(root._minAutoHideDelay, Math.min(root._maxAutoHideDelay, delay));
             if (clamped !== delay) {
-                console.warn(`HyprWhspr: autoHideDelay ${delay}ms clamped to ${clamped}ms (valid: 500-10000)`);
+                console.warn(`HyprWhspr: autoHideDelay ${delay}ms clamped to ${clamped}ms (valid: ${root._minAutoHideDelay}-${root._maxAutoHideDelay})`);
             }
             return clamped;
         }

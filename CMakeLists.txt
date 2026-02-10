@@ -65,3 +65,12 @@ if("shell" IN_LIST ENABLE_MODULES)
     endforeach()
     install(FILES shell.qml LICENSE DESTINATION "${INSTALL_QSCONFDIR}")
 endif()
+
+# Clear Quickshell QML cache after install to prevent stale bytecode
+install(CODE "
+    set(_qmlcache_dir \"\$ENV{HOME}/.cache/quickshell/qmlcache\")
+    if(EXISTS \"\${_qmlcache_dir}\")
+        message(STATUS \"Clearing Quickshell QML cache: \${_qmlcache_dir}\")
+        file(REMOVE_RECURSE \"\${_qmlcache_dir}\")
+    endif()
+")

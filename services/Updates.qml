@@ -1,6 +1,7 @@
 pragma Singleton
 
 import qs.config
+import qs.utils
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -92,11 +93,7 @@ Singleton {
             }
         }
         stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.trim() !== "") {
-                    console.warn("Updates: stderr:", text.trim());
-                }
-            }
+            onStreamFinished: ProcessUtils.logStderr("Updates", "check", text)
         }
     }
 }
