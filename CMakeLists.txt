@@ -66,9 +66,15 @@ if("shell" IN_LIST ENABLE_MODULES)
     install(FILES shell.qml LICENSE DESTINATION "${INSTALL_QSCONFDIR}")
 endif()
 
-# Clear Quickshell QML cache after install to prevent stale bytecode
+# Clear Quickshell QML cache after install to prevent stale bytecode.
+# When running under sudo, $HOME is /root — use SUDO_USER to find the real user.
 install(CODE "
-    set(_qmlcache_dir \"\$ENV{HOME}/.cache/quickshell/qmlcache\")
+    if(DEFINED ENV{SUDO_USER})
+        set(_user_home \"/home/\$ENV{SUDO_USER}\")
+    else()
+        set(_user_home \"\$ENV{HOME}\")
+    endif()
+    set(_qmlcache_dir \"\${_user_home}/.cache/quickshell/qmlcache\")
     if(EXISTS \"\${_qmlcache_dir}\")
         message(STATUS \"Clearing Quickshell QML cache: \${_qmlcache_dir}\")
         file(REMOVE_RECURSE \"\${_qmlcache_dir}\")

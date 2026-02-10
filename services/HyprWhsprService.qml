@@ -110,7 +110,7 @@ Singleton {
     }
 
     function writeCommand(cmd: string): void {
-        commandProcess.command = ["sh", "-c", `printf '%s\\n' '${cmd}' > '${controlFifo}'`];
+        commandProcess.command = ["sh", "-c", "printf '%s\\n' \"$1\" > \"$2\"", "--", cmd, controlFifo];
         commandProcess.running = true;
     }
 
