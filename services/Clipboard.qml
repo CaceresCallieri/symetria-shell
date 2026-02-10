@@ -34,12 +34,6 @@ Singleton {
         }
     }
 
-    // POSIX shell escaping: wrap in single quotes, escape embedded quotes
-    // This prevents command injection when passing user data to shell commands
-    function shellEscape(str: string): string {
-        return "'" + str.replace(/'/g, "'\\''") + "'";
-    }
-
     // Restore an entry to the clipboard
     function restore(id: string): void {
         restoreProcess.entryId = id;
@@ -66,8 +60,7 @@ Singleton {
         // Create decode process dynamically
         const process = decodeComponent.createObject(root, {
             entryId: entry.id,
-            outputPath: outputPath,
-            targetEntry: entry
+            outputPath: outputPath
         });
         process.running = true;
     }
@@ -119,9 +112,7 @@ Singleton {
         command: ["cliphist", "list"]
 
         onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0) {
-                console.error("Clipboard: cliphist list failed with code", exitCode);
-            }
+            ProcessUtils.logExit("Clipboard", "list", exitCode, "");
         }
 
         stdout: StdioCollector {
@@ -197,11 +188,7 @@ Singleton {
         }
 
         stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.trim() !== "") {
-                    console.warn("Clipboard: list stderr:", text.trim());
-                }
-            }
+            onStreamFinished: ProcessUtils.logStderr("Clipboard", "list", text)
         }
     }
 
@@ -218,7 +205,6 @@ Singleton {
         Process {
             property string entryId
             property string outputPath
-            property ClipboardEntry targetEntry
 
             // Use parameterized shell arguments to prevent command injection
             command: ["sh", "-c",
@@ -230,20 +216,19 @@ Singleton {
             ]
 
             onExited: (exitCode, exitStatus) => {
-                if (exitCode === 0 && targetEntry) {
-                    targetEntry.imagePath = outputPath;
-                } else if (exitCode !== 0) {
-                    console.warn("Clipboard: decode failed for entry", entryId, "code", exitCode);
+                if (exitCode === 0) {
+                    const entry = root.entries.find(e => e.id === entryId);
+                    if (entry) {
+                        entry.imagePath = outputPath;
+                    }
+                } else {
+                    ProcessUtils.logExit("Clipboard", "decode " + entryId, exitCode, "");
                 }
                 destroy();
             }
 
             stderr: StdioCollector {
-                onStreamFinished: {
-                    if (text.trim() !== "") {
-                        console.warn("Clipboard: decode stderr for", entryId + ":", text.trim());
-                    }
-                }
+                onStreamFinished: ProcessUtils.logStderr("Clipboard", "decode " + entryId, text)
             }
         }
     }
@@ -253,23 +238,17 @@ Singleton {
         id: restoreProcess
         property string entryId: ""
 
-        command: ["sh", "-c", `cliphist decode ${root.shellEscape(entryId)} | wl-copy`]
+        command: ["sh", "-c", "cliphist decode \"$1\" | wl-copy", "--", entryId]
 
         onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0) {
-                console.error("Clipboard: restore failed for id", entryId, "code", exitCode);
-            }
+            ProcessUtils.logExit("Clipboard", "restore", exitCode, "");
             if (entryId !== "") {
                 root.refresh();
             }
         }
 
         stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.trim() !== "") {
-                    console.warn("Clipboard: restore stderr:", text.trim());
-                }
-            }
+            onStreamFinished: ProcessUtils.logStderr("Clipboard", "restore", text)
         }
     }
 
@@ -281,20 +260,14 @@ Singleton {
         command: ["cliphist", "delete-query", entryId]
 
         onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0) {
-                console.error("Clipboard: delete failed for id", entryId, "code", exitCode);
-            }
+            ProcessUtils.logExit("Clipboard", "delete", exitCode, "");
             if (entryId !== "") {
                 root.refresh();
             }
         }
 
         stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.trim() !== "") {
-                    console.warn("Clipboard: delete stderr:", text.trim());
-                }
-            }
+            onStreamFinished: ProcessUtils.logStderr("Clipboard", "delete", text)
         }
     }
 
@@ -304,18 +277,12 @@ Singleton {
         command: ["cliphist", "wipe"]
 
         onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0) {
-                console.error("Clipboard: wipe failed with code", exitCode);
-            }
+            ProcessUtils.logExit("Clipboard", "wipe", exitCode, "");
             root.refresh();
         }
 
         stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.trim() !== "") {
-                    console.warn("Clipboard: wipe stderr:", text.trim());
-                }
-            }
+            onStreamFinished: ProcessUtils.logStderr("Clipboard", "wipe", text)
         }
     }
 }

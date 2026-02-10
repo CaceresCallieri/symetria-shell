@@ -22,6 +22,25 @@ Scope {
                 return;
             }
 
+            // Security: reject path traversal attempts
+            if (fifoPath.includes("..") || fifoPath.includes("\0")) {
+                console.error("Askpass: Suspicious FIFO path rejected (traversal/null):", fifoPath);
+                return;
+            }
+
+            // Security: reject unreasonably long paths (normal FIFO paths are ~40 chars)
+            if (fifoPath.length > 128) {
+                console.error("Askpass: FIFO path too long, rejected:", fifoPath.substring(0, 50) + "...");
+                return;
+            }
+
+            // Security: only allow alphanumeric, dash, underscore, and dot after prefix
+            const suffix = fifoPath.substring(validFifoPrefix.length);
+            if (!/^[a-zA-Z0-9._-]+$/.test(suffix)) {
+                console.error("Askpass: FIFO path contains invalid characters:", fifoPath);
+                return;
+            }
+
             // Rate limiting: reject rapid successive calls
             const now = Date.now();
             if (now - lastCallTime < rateLimitMs) {

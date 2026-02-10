@@ -14,12 +14,6 @@ Singleton {
     property string passwordBuffer: ""
     property string commandInfo: ""
 
-    // POSIX shell escaping: wrap in single quotes, escape embedded quotes
-    // This prevents command injection when passing user data to shell commands
-    function shellEscape(str: string): string {
-        return "'" + str.replace(/'/g, "'\\''") + "'";
-    }
-
     function show(message: string, fifo: string, command: string): void {
         // Clear sensitive data FIRST, before dialog becomes visible
         root.passwordBuffer = "";
@@ -75,7 +69,7 @@ Singleton {
 
         // Use printf with shell-escaped password to safely write to FIFO
         // printf '%s' avoids adding a trailing newline which would break password
-        command: ["sh", "-c", `printf '%s' ${root.shellEscape(password)} > ${root.shellEscape(fifoPath)}`]
+        command: ["sh", "-c", "printf '%s' \"$1\" > \"$2\"", "--", password, fifoPath]
 
         onRunningChanged: {
             if (running) writeTimeout.start();
@@ -109,7 +103,7 @@ Singleton {
         property string fifoPath: ""
 
         // Write sentinel value to signal cancellation
-        command: ["sh", "-c", `printf '%s' '__CANCELLED__' > ${root.shellEscape(fifoPath)}`]
+        command: ["sh", "-c", "printf '%s' '__CANCELLED__' > \"$1\"", "--", fifoPath]
 
         onRunningChanged: {
             if (running) cancelTimeout.start();
