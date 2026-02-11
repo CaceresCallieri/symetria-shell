@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Symmetria Shell is a Quickshell-based desktop shell for Hyprland. It provides a complete desktop UI including bar, launcher, dashboard, notifications, lock screen, and control center. This is a fork of caelestia-dots/shell for personal customization.
 
+**Do NOT use Chrome DevTools MCP tools** (take_screenshot, take_snapshot, click, etc.) in this project. This is a native Wayland desktop shell, not a web application. For screenshots, use `grim` via the Bash tool instead.
+
 **Upstream:** https://github.com/caelestia-dots/shell
 
 ## Branch Structure
