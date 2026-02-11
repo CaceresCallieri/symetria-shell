@@ -89,7 +89,10 @@ StyledFlickable {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Packages.openUrl(root.detail.url)
+                        onClicked: {
+                            if (root.detail?.url)
+                                Packages.openUrl(root.detail.url);
+                        }
                     }
                 }
             }
@@ -466,7 +469,8 @@ StyledFlickable {
 
                     function onClicked(): void {
                         urlClickAnim.restart();
-                        Packages.openUrl(root.detail?.url ?? "");
+                        if (root.detail?.url)
+                            Packages.openUrl(root.detail.url);
                     }
                 }
 
