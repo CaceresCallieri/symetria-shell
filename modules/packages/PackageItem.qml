@@ -34,7 +34,7 @@ Item {
         radius: Appearance.rounding.normal
 
         function onClicked(): void {
-            Packages.copyInstallCommand(root.packageName);
+            Packages.fetchDetail(root.packageName, root.installed);
         }
     }
 

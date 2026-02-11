@@ -11,10 +11,12 @@ import QtQuick
 
 /// Main content for the packages drawer.
 ///
-/// Layout (top-hanging, search at top, results below):
-/// - Search bar with debounced input
-/// - Loading indicator OR result list OR empty state
-Item {
+/// Two view states:
+/// 1. Search view — search bar + result list (default)
+/// 2. Detail view — back header + scrollable package details
+///
+/// Transitions are driven by Packages.selectedDetail / Packages.fetchingDetail.
+FocusScope {
     id: root
 
     required property PersistentProperties visibilities
@@ -22,8 +24,28 @@ Item {
 
     readonly property int padding: Appearance.padding.large
 
+    /// Whether the detail view is active (fetching or showing)
+    readonly property bool showingDetail: Packages.selectedDetail !== null || Packages.fetchingDetail
+
     function focusSearch(): void {
         search.forceActiveFocus();
+    }
+
+    // Global Escape handler: back from detail → close drawer
+    Keys.onEscapePressed: {
+        if (root.showingDetail) {
+            Packages.clearDetail();
+            search.forceActiveFocus();
+        } else {
+            root.visibilities.packages = false;
+        }
+    }
+
+    // When entering detail mode, grab focus on the root FocusScope
+    // so the global Escape handler works
+    onShowingDetailChanged: {
+        if (showingDetail)
+            root.forceActiveFocus();
     }
 
     FocusManager {
@@ -32,7 +54,19 @@ Item {
         onClose: () => {
             search.text = "";
             Packages.cancelSearch();
+            Packages.clearDetail();
             Packages.hasSearched = false;
+        }
+    }
+
+    // Handle searchFromDetail: update search text and trigger search
+    Connections {
+        target: Packages
+
+        function onSearchFromDetailRequested(name: string): void {
+            search.text = name;
+            Packages.search(name);
+            search.forceActiveFocus();
         }
     }
 
@@ -45,15 +79,24 @@ Item {
 
     implicitWidth: Config.packages.sizes.width + padding * 2
     implicitHeight: {
+        if (root.showingDetail) {
+            let h = detailHeader.implicitHeight + padding * 2;
+            if (detailSection.visible)
+                h += detailSection.implicitHeight + padding;
+            return Math.min(root.maxHeight, h);
+        }
+
         let h = searchWrapper.implicitHeight + padding * 2;
         if (resultSection.visible)
             h += resultSection.implicitHeight + padding;
         return Math.min(root.maxHeight, h);
     }
 
-    // ===== Search bar (top) =====
+    // ===== Search bar (top, hidden in detail view) =====
     StyledRect {
         id: searchWrapper
+
+        visible: !root.showingDetail
 
         color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
         radius: Appearance.rounding.full
@@ -102,11 +145,11 @@ Item {
             }
 
             onAccepted: {
-                // Enter copies install command for highlighted item
+                // Enter fetches detail for highlighted item
                 if (resultList.count > 0 && resultList.currentIndex >= 0) {
                     const entry = Packages.results[resultList.currentIndex];
                     if (entry)
-                        Packages.copyInstallCommand(entry.name);
+                        Packages.fetchDetail(entry.name, entry.installed);
                 }
             }
 
@@ -120,7 +163,6 @@ Item {
                     resultList.currentIndex++;
             }
 
-            Keys.onEscapePressed: root.visibilities.packages = false
         }
 
         MaterialIcon {
@@ -171,25 +213,233 @@ Item {
         }
     }
 
-    // Debug: track visibility state changes
-    Connections {
-        target: Packages
+    // ===== Detail header (top, visible in detail view) =====
+    Item {
+        id: detailHeader
 
-        function onSearchingChanged(): void {
-            console.log("[Packages UI] searching:", Packages.searching, "results:", Packages.results.length, "hasSearched:", Packages.hasSearched);
-        }
+        visible: root.showingDetail
 
-        function onResultsChanged(): void {
-            console.log("[Packages UI] results changed:", Packages.results.length, "searching:", Packages.searching,
-                "resultList.visible:", resultList.visible, "loadingState.visible:", loadingState.visible);
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: root.padding
+        anchors.leftMargin: root.padding
+        anchors.rightMargin: root.padding
+
+        implicitHeight: detailHeaderRow.implicitHeight
+
+        Row {
+            id: detailHeaderRow
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Appearance.spacing.normal
+
+            // Back button
+            StyledRect {
+                id: backButton
+
+                implicitWidth: backIcon.implicitWidth + Appearance.padding.normal * 2
+                implicitHeight: backIcon.implicitHeight + Appearance.padding.normal * 2
+                radius: Appearance.rounding.full
+                color: "transparent"
+                anchors.verticalCenter: parent.verticalCenter
+
+                MaterialIcon {
+                    id: backIcon
+                    anchors.centerIn: parent
+                    text: "arrow_back"
+                    color: Colours.palette.m3onSurface
+                }
+
+                StateLayer {
+                    radius: parent.radius
+
+                    function onClicked(): void {
+                        Packages.clearDetail();
+                    }
+                }
+            }
+
+            // Package name + version
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+
+                Row {
+                    spacing: Appearance.spacing.small
+
+                    StyledText {
+                        text: Packages.selectedDetail?.name ?? ""
+                        font.pointSize: Appearance.font.size.larger
+                        font.weight: Font.Medium
+                    }
+
+                    StyledText {
+                        text: Packages.selectedDetail?.version ?? ""
+                        font.pointSize: Appearance.font.size.normal
+                        color: Colours.palette.m3outline
+                        anchors.baseline: parent.children[0]?.baseline
+                    }
+                }
+
+                Row {
+                    spacing: Appearance.spacing.small
+
+                    // Repo badge
+                    StyledRect {
+                        visible: (Packages.selectedDetail?.repo ?? "") !== ""
+                        color: {
+                            const d = Packages.selectedDetail;
+                            if (!d) return "transparent";
+                            if (d.installed) return Qt.alpha(Colours.palette.m3primary, 0.15);
+                            if (d.isAur) return Qt.alpha(Colours.palette.m3tertiary, 0.15);
+                            return Colours.palette.m3surfaceContainerHighest;
+                        }
+                        radius: Appearance.rounding.full
+                        implicitWidth: repoText.implicitWidth + Appearance.padding.normal * 2
+                        implicitHeight: repoText.implicitHeight + Appearance.padding.small * 2
+
+                        StyledText {
+                            id: repoText
+                            anchors.centerIn: parent
+                            text: Packages.selectedDetail?.repo ?? ""
+                            font.pointSize: Appearance.font.size.small
+                            font.weight: Font.Medium
+                            color: {
+                                const d = Packages.selectedDetail;
+                                if (!d) return Colours.palette.m3onSurfaceVariant;
+                                if (d.installed) return Colours.palette.m3primary;
+                                if (d.isAur) return Colours.palette.m3tertiary;
+                                return Colours.palette.m3onSurfaceVariant;
+                            }
+                        }
+                    }
+
+                    // Installed indicator
+                    Row {
+                        visible: Packages.selectedDetail?.installed ?? false
+                        spacing: 2
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        MaterialIcon {
+                            text: "check_circle"
+                            font.pointSize: Appearance.font.size.small
+                            color: Colours.palette.m3primary
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        StyledText {
+                            text: qsTr("Installed")
+                            font.pointSize: Appearance.font.size.small
+                            color: Colours.palette.m3primary
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+            }
         }
     }
 
-    // ===== Result section (below search) =====
+    // ===== Detail section (below detail header) =====
+    Item {
+        id: detailSection
+
+        visible: root.showingDetail
+
+        anchors.top: detailHeader.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: root.padding
+        anchors.leftMargin: root.padding
+        anchors.rightMargin: root.padding
+
+        implicitHeight: {
+            if (Packages.fetchingDetail)
+                return detailLoadingState.implicitHeight;
+            if (Packages.detailError)
+                return detailErrorState.implicitHeight;
+            if (Packages.selectedDetail)
+                return detailView.height;
+            return 0;
+        }
+
+        // Detail loading spinner
+        Row {
+            id: detailLoadingState
+
+            visible: Packages.fetchingDetail
+            spacing: Appearance.spacing.normal
+            padding: Appearance.padding.large
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            CircularIndicator {
+                running: detailLoadingState.visible
+                implicitSize: Appearance.font.size.large * 2
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            StyledText {
+                text: qsTr("Loading package details...")
+                color: Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.normal
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+
+        // Detail error state
+        Row {
+            id: detailErrorState
+
+            visible: !Packages.fetchingDetail && Packages.detailError !== ""
+            spacing: Appearance.spacing.normal
+            padding: Appearance.padding.large
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            MaterialIcon {
+                text: "error_outline"
+                color: Colours.palette.m3error
+                font.pointSize: Appearance.font.size.extraLarge
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+
+                StyledText {
+                    text: Packages.detailError
+                    color: Colours.palette.m3error
+                    font.pointSize: Appearance.font.size.larger
+                    font.weight: 500
+                }
+
+                StyledText {
+                    text: qsTr("Press Escape or click back to return")
+                    color: Colours.palette.m3onSurfaceVariant
+                    font.pointSize: Appearance.font.size.normal
+                }
+            }
+        }
+
+        // Detail view (scrollable)
+        DetailView {
+            id: detailView
+
+            visible: !Packages.fetchingDetail && Packages.detailError === "" && Packages.selectedDetail !== null
+            detail: Packages.selectedDetail
+
+            width: parent.width
+            height: Math.min(
+                contentHeight,
+                root.maxHeight - detailHeader.implicitHeight - root.padding * 3
+            )
+        }
+    }
+
+    // ===== Result section (below search, hidden in detail view) =====
     Item {
         id: resultSection
 
-        visible: Packages.searching || Packages.hasSearched
+        visible: !root.showingDetail && (Packages.searching || Packages.hasSearched)
 
         anchors.top: searchWrapper.bottom
         anchors.left: parent.left
