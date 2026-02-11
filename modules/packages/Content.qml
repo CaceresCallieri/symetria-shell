@@ -27,6 +27,9 @@ FocusScope {
     /// Whether the detail view is active (fetching or showing)
     readonly property bool showingDetail: Packages.selectedDetail !== null || Packages.fetchingDetail
 
+    /// Whether the user has navigated the result list with arrow keys
+    property bool hasNavigated: false
+
     function focusSearch(): void {
         search.forceActiveFocus();
     }
@@ -77,6 +80,7 @@ FocusScope {
         target: search
         onClose: () => {
             search.text = "";
+            root.hasNavigated = false;
             Packages.cancelSearch();
             Packages.clearDetail();
             Packages.hasSearched = false;
@@ -152,6 +156,7 @@ FocusScope {
             placeholderText: qsTr("Search packages...")
 
             onTextChanged: {
+                root.hasNavigated = false;
                 if (!text) {
                     Packages.clearResults();
                     Packages.hasSearched = false;
@@ -159,9 +164,7 @@ FocusScope {
             }
 
             onAccepted: {
-                const trimmed = search.text.trim();
-                // Already searched this query → open highlighted result
-                if (trimmed === Packages.currentQuery && resultList.count > 0 && resultList.currentIndex >= 0) {
+                if (root.hasNavigated && resultList.count > 0 && resultList.currentIndex >= 0) {
                     const entry = Packages.results[resultList.currentIndex];
                     if (entry)
                         Packages.fetchDetail(entry.name, entry.installed);
@@ -171,13 +174,17 @@ FocusScope {
             }
 
             Keys.onUpPressed: {
-                if (resultList.count > 0 && resultList.currentIndex > 0)
+                if (resultList.count > 0 && resultList.currentIndex > 0) {
                     resultList.currentIndex--;
+                    root.hasNavigated = true;
+                }
             }
 
             Keys.onDownPressed: {
-                if (resultList.count > 0 && resultList.currentIndex < resultList.count - 1)
+                if (resultList.count > 0 && resultList.currentIndex < resultList.count - 1) {
                     resultList.currentIndex++;
+                    root.hasNavigated = true;
+                }
             }
 
         }
@@ -557,7 +564,10 @@ FocusScope {
                 root.maxHeight - searchWrapper.implicitHeight - root.padding * 3
             )
 
-            onModelChanged: currentIndex = 0
+            onModelChanged: {
+                currentIndex = 0;
+                root.hasNavigated = false;
+            }
 
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
