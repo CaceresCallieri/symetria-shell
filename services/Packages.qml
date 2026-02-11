@@ -44,17 +44,26 @@ Singleton {
         }
 
         currentQuery = trimmed;
-        searchProcess.command = ["paru", "-Ss", "--topdown", "--limit", "25", "--", trimmed];
+        searchProcess.command = ["paru", "-Ss", "--topdown", "--limit", Config.packages.maxResults.toString(), "--", trimmed];
         console.log("[Packages] Starting process:", JSON.stringify(searchProcess.command));
         searchProcess.running = true;
+        searchTimeout.restart();
     }
 
     /// Clear all results and destroy entry objects
     function clearResults(): void {
+        searchTimeout.stop();
         for (const entry of results)
             entry.destroy();
         results = [];
         currentQuery = "";
+    }
+
+    /// Cancel any running search and clear results
+    function cancelSearch(): void {
+        if (searchProcess.running)
+            searchProcess.running = false;
+        clearResults();
     }
 
     /// Copy `paru -S <name>` to clipboard via wl-copy
@@ -94,8 +103,16 @@ Singleton {
                     const installed = /\[Installed/.test(rest);
                     const isAur = repo === "aur";
 
+                    // Parse AUR votes from [+N ~P] format
+                    let votes = -1;
+                    if (isAur) {
+                        const votesMatch = rest.match(/\[\+(\d+)/);
+                        if (votesMatch)
+                            votes = parseInt(votesMatch[1]);
+                    }
+
                     entries.push(entryComponent.createObject(root, {
-                        repo, name, version, description: desc, installed, isAur
+                        repo, name, version, description: desc, installed, isAur, votes
                     }));
                 }
 
@@ -119,6 +136,7 @@ Singleton {
         }
 
         onExited: (exitCode, exitStatus) => {
+            searchTimeout.stop();
             console.log("[Packages] onExited code:", exitCode, "status:", exitStatus, "searching:", root.searching, "results:", root.results.length);
             // Exit code 1 means no results — clear and mark searched
             if (exitCode === 1) {
@@ -130,6 +148,16 @@ Singleton {
         }
     }
 
+    Timer {
+        id: searchTimeout
+        interval: 15000
+        onTriggered: {
+            console.log("[Packages] Search timed out after 15s, killing process");
+            searchProcess.running = false;
+            root.hasSearched = true;
+        }
+    }
+
     /// Data model for a single package result
     component PackageEntry: QtObject {
         property string repo: ""
@@ -138,6 +166,7 @@ Singleton {
         property string description: ""
         property bool installed: false
         property bool isAur: false
+        property int votes: -1
     }
 
     Component {

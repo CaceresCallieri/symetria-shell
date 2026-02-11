@@ -31,7 +31,7 @@ Item {
         target: search
         onClose: () => {
             search.text = "";
-            Packages.clearResults();
+            Packages.cancelSearch();
             Packages.hasSearched = false;
         }
     }

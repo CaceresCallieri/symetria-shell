@@ -22,9 +22,11 @@ Item {
     readonly property string description: modelData?.description ?? ""
     readonly property bool installed: modelData?.installed ?? false
     readonly property bool isAur: modelData?.isAur ?? false
+    readonly property int votes: modelData?.votes ?? -1
 
     implicitHeight: Config.packages.sizes.itemHeight
 
+    // ListView reuseItems causes parent to be null during delegate recycling
     anchors.left: parent?.left
     anchors.right: parent?.right
 
@@ -78,7 +80,7 @@ Item {
         // Name + version + description column
         Item {
             anchors.left: repoBadge.right
-            anchors.right: installedIcon.left
+            anchors.right: root.isAur ? votesBadge.left : installedIcon.left
             anchors.leftMargin: Appearance.spacing.normal
             anchors.rightMargin: Appearance.spacing.small
             anchors.verticalCenter: parent.verticalCenter
@@ -121,6 +123,32 @@ Item {
                 color: Colours.palette.m3outline
                 elide: Text.ElideRight
                 maximumLineCount: 1
+            }
+        }
+
+        // Votes badge (AUR only)
+        Row {
+            id: votesBadge
+
+            visible: root.isAur && root.votes >= 0
+            spacing: 2
+
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: installedIcon.left
+            anchors.rightMargin: installedIcon.visible ? Appearance.spacing.small : 0
+
+            MaterialIcon {
+                text: "thumb_up"
+                font.pointSize: Appearance.font.size.small
+                color: Colours.palette.m3tertiary
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            StyledText {
+                text: root.votes.toString()
+                font.pointSize: Appearance.font.size.small
+                color: Colours.palette.m3tertiary
+                anchors.verticalCenter: parent.verticalCenter
             }
         }
 
