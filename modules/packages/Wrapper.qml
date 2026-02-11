@@ -15,6 +15,13 @@ Item {
     readonly property bool shouldBeActive: visibilities.packages && Config.packages.enabled
     property int contentHeight
 
+    readonly property real maxHeight: {
+        let max = screen.height - Config.border.thickness * 2 - Appearance.spacing.large;
+        return max;
+    }
+
+    onMaxHeightChanged: timer.start()
+
     visible: height > 0
     implicitHeight: 0
     implicitWidth: content.implicitWidth
@@ -78,7 +85,7 @@ Item {
                 content.visible = false;
                 content.active = true;
             } else {
-                root.contentHeight = content.implicitHeight;
+                root.contentHeight = Math.min(root.maxHeight, content.implicitHeight);
                 content.active = Qt.binding(() => root.shouldBeActive || root.visible);
                 content.visible = true;
                 if (showAnim.running) {
@@ -108,6 +115,7 @@ Item {
 
         sourceComponent: Content {
             visibilities: root.visibilities
+            maxHeight: root.maxHeight
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

@@ -480,8 +480,12 @@ Singleton {
     function serializePackages(): var {
         return {
             enabled: packages.enabled,
+            debounceMs: packages.debounceMs,
+            maxResults: packages.maxResults,
+            maxShown: packages.maxShown,
             sizes: {
-                width: packages.sizes.width
+                width: packages.sizes.width,
+                itemHeight: packages.sizes.itemHeight
             }
         };
     }
