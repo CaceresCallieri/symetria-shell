@@ -31,6 +31,7 @@ Singleton {
     property alias hyprwhspr: adapter.hyprwhspr
     property alias keycaster: adapter.keycaster
     property alias calculator: adapter.calculator
+    property alias packages: adapter.packages
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -105,7 +106,8 @@ Singleton {
             askpass: serializeAskpass(),
             hyprwhspr: serializeHyprWhspr(),
             keycaster: serializeKeycaster(),
-            calculator: serializeCalculator()
+            calculator: serializeCalculator(),
+            packages: serializePackages()
         };
     }
 
@@ -475,6 +477,15 @@ Singleton {
         };
     }
 
+    function serializePackages(): var {
+        return {
+            enabled: packages.enabled,
+            sizes: {
+                width: packages.sizes.width
+            }
+        };
+    }
+
     FileView {
         id: fileView
 
@@ -535,6 +546,7 @@ Singleton {
             property HyprWhsprConfig hyprwhspr: HyprWhsprConfig {}
             property KeycasterConfig keycaster: KeycasterConfig {}
             property CalculatorConfig calculator: CalculatorConfig {}
+            property PackagesConfig packages: PackagesConfig {}
         }
     }
 }

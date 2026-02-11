@@ -12,6 +12,7 @@ import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.hyprwhspr as HyprWhsprModule
 import qs.modules.calculator as CalculatorModule
+import qs.modules.packages as PackagesModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -108,6 +109,13 @@ Item {
 
         HyprWhsprModule.HyprWhsprBackground {
             wrapper: root.panels.hyprwhspr
+
+            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
+            startY: 0  // Start at top-left (clockwise path like bar popouts)
+        }
+
+        PackagesModule.PackagesBackground {
+            wrapper: root.panels.packages
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0  // Start at top-left (clockwise path like bar popouts)
