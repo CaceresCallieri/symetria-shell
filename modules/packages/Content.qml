@@ -31,6 +31,13 @@ FocusScope {
         search.forceActiveFocus();
     }
 
+    function executeSearch(): void {
+        const trimmed = search.text.trim();
+        if (trimmed.length >= 2 && trimmed !== Packages.currentQuery) {
+            Packages.search(trimmed);
+        }
+    }
+
     // Global Escape handler: back from detail → close drawer
     Keys.onEscapePressed: {
         if (root.showingDetail) {
@@ -70,13 +77,6 @@ FocusScope {
         }
     }
 
-    // Debounce timer for search input
-    Timer {
-        id: searchDebounce
-        interval: Config.packages.debounceMs
-        onTriggered: Packages.search(search.text)
-    }
-
     implicitWidth: Config.packages.sizes.width + padding * 2
     implicitHeight: {
         if (root.showingDetail) {
@@ -108,7 +108,7 @@ FocusScope {
         anchors.leftMargin: root.padding
         anchors.rightMargin: root.padding
 
-        implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+        implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, submitButton.implicitHeight, clearIcon.implicitHeight)
 
         MaterialIcon {
             id: searchIcon
@@ -125,7 +125,7 @@ FocusScope {
             id: search
 
             anchors.left: searchIcon.right
-            anchors.right: clearIcon.left
+            anchors.right: submitButton.left
             anchors.leftMargin: Appearance.spacing.small
             anchors.rightMargin: Appearance.spacing.small
 
@@ -135,21 +135,21 @@ FocusScope {
             placeholderText: qsTr("Search packages...")
 
             onTextChanged: {
-                if (text.trim().length >= 2)
-                    searchDebounce.restart();
-                else {
-                    searchDebounce.stop();
+                if (!text) {
                     Packages.clearResults();
                     Packages.hasSearched = false;
                 }
             }
 
             onAccepted: {
-                // Enter fetches detail for highlighted item
-                if (resultList.count > 0 && resultList.currentIndex >= 0) {
+                const trimmed = search.text.trim();
+                // Already searched this query → open highlighted result
+                if (trimmed === Packages.currentQuery && resultList.count > 0 && resultList.currentIndex >= 0) {
                     const entry = Packages.results[resultList.currentIndex];
                     if (entry)
                         Packages.fetchDetail(entry.name, entry.installed);
+                } else {
+                    root.executeSearch();
                 }
             }
 
@@ -163,6 +163,47 @@ FocusScope {
                     resultList.currentIndex++;
             }
 
+        }
+
+        // Search submit button (circular arrow)
+        StyledRect {
+            id: submitButton
+
+            readonly property bool canSearch: {
+                const trimmed = search.text.trim();
+                return trimmed.length >= 2 && trimmed !== Packages.currentQuery;
+            }
+
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: clearIcon.left
+            anchors.rightMargin: Appearance.spacing.small
+
+            implicitWidth: submitIcon.implicitWidth + Appearance.padding.normal * 2
+            implicitHeight: implicitWidth
+            radius: Appearance.rounding.full
+            color: canSearch ? Colours.palette.m3primary : "transparent"
+
+            MaterialIcon {
+                id: submitIcon
+                anchors.centerIn: parent
+                text: "arrow_forward"
+                font.pointSize: Appearance.font.size.normal
+                color: submitButton.canSearch ? Colours.palette.m3onPrimary : Colours.palette.m3outline
+            }
+
+            StateLayer {
+                visible: submitButton.canSearch
+                radius: parent.radius
+                color: Colours.palette.m3onPrimary
+
+                function onClicked(): void {
+                    root.executeSearch();
+                }
+            }
+
+            Behavior on color {
+                CAnim {}
+            }
         }
 
         MaterialIcon {
