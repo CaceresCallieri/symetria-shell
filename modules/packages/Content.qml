@@ -48,11 +48,28 @@ FocusScope {
         }
     }
 
-    // When entering detail mode, grab focus on the root FocusScope
-    // so the global Escape handler works
+    // Enter in detail view → copy install command
+    Keys.onReturnPressed: {
+        if (root.showingDetail && Packages.selectedDetail)
+            detailView.triggerCopy();
+    }
+
+    Keys.onEnterPressed: {
+        if (root.showingDetail && Packages.selectedDetail)
+            detailView.triggerCopy();
+    }
+
+    // When entering detail mode, defocus the search field and grab focus
+    // on the root FocusScope so Keys handlers (Escape, Enter) work.
+    // Note: FocusScope.forceActiveFocus() alone does NOT remove activeFocus
+    // from a child — a hidden TextField still receives key events.
     onShowingDetailChanged: {
-        if (showingDetail)
+        if (showingDetail) {
+            search.focus = false;
             root.forceActiveFocus();
+        } else {
+            search.forceActiveFocus();
+        }
     }
 
     FocusManager {

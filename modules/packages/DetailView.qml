@@ -19,9 +19,30 @@ StyledFlickable {
 
     required property var detail
 
+    property bool copied: false
+
+    function triggerCopy(): void {
+        if (!root.detail?.name) return;
+        Packages.copyInstallCommand(root.detail.name);
+        copied = true;
+        copiedResetTimer.restart();
+        copyClickAnim.restart();
+    }
+
+    onDetailChanged: {
+        copied = false;
+        copiedResetTimer.stop();
+    }
+
     flickableDirection: Flickable.VerticalFlick
     contentHeight: mainColumn.implicitHeight + Appearance.padding.large
     clip: true
+
+    Timer {
+        id: copiedResetTimer
+        interval: 1500
+        onTriggered: root.copied = false
+    }
 
     StyledScrollBar.vertical: StyledScrollBar {
         flickable: root
@@ -425,16 +446,26 @@ StyledFlickable {
 
             // Open URL button
             StyledRect {
+                id: urlButton
+
                 visible: (root.detail?.url ?? "") !== ""
                 Layout.fillWidth: true
                 implicitHeight: urlRow.implicitHeight + Appearance.padding.normal * 2
                 radius: Appearance.rounding.normal
                 color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                transformOrigin: Item.Center
+
+                SequentialAnimation {
+                    id: urlClickAnim
+                    NumberAnimation { target: urlButton; property: "scale"; to: 0.93; duration: 80; easing.type: Easing.InQuad }
+                    NumberAnimation { target: urlButton; property: "scale"; to: 1.0; duration: 200; easing.type: Easing.OutBack }
+                }
 
                 StateLayer {
                     radius: parent.radius
 
                     function onClicked(): void {
+                        urlClickAnim.restart();
                         Packages.openUrl(root.detail?.url ?? "");
                     }
                 }
@@ -463,17 +494,28 @@ StyledFlickable {
 
             // Copy install command button
             StyledRect {
+                id: copyButton
+
                 Layout.fillWidth: true
                 implicitHeight: copyRow.implicitHeight + Appearance.padding.normal * 2
                 radius: Appearance.rounding.normal
-                color: Colours.palette.m3primaryContainer
+                color: root.copied ? Colours.palette.m3tertiaryContainer : Colours.palette.m3primaryContainer
+                transformOrigin: Item.Center
+
+                Behavior on color { CAnim { duration: Appearance.anim.durations.small } }
+
+                SequentialAnimation {
+                    id: copyClickAnim
+                    NumberAnimation { target: copyButton; property: "scale"; to: 0.93; duration: 80; easing.type: Easing.InQuad }
+                    NumberAnimation { target: copyButton; property: "scale"; to: 1.0; duration: 200; easing.type: Easing.OutBack }
+                }
 
                 StateLayer {
                     radius: parent.radius
-                    color: Colours.palette.m3onPrimaryContainer
+                    color: root.copied ? Colours.palette.m3onTertiaryContainer : Colours.palette.m3onPrimaryContainer
 
                     function onClicked(): void {
-                        Packages.copyInstallCommand(root.detail?.name ?? "");
+                        root.triggerCopy();
                     }
                 }
 
@@ -483,18 +525,22 @@ StyledFlickable {
                     spacing: Appearance.spacing.small
 
                     MaterialIcon {
-                        text: "content_copy"
-                        color: Colours.palette.m3onPrimaryContainer
+                        text: root.copied ? "check" : "content_copy"
+                        color: root.copied ? Colours.palette.m3onTertiaryContainer : Colours.palette.m3onPrimaryContainer
                         font.pointSize: Appearance.font.size.normal
                         anchors.verticalCenter: parent.verticalCenter
+
+                        Behavior on color { CAnim { duration: Appearance.anim.durations.small } }
                     }
 
                     StyledText {
-                        text: qsTr("Copy install command")
-                        color: Colours.palette.m3onPrimaryContainer
+                        text: root.copied ? qsTr("Copied!") : qsTr("Copy install command")
+                        color: root.copied ? Colours.palette.m3onTertiaryContainer : Colours.palette.m3onPrimaryContainer
                         font.pointSize: Appearance.font.size.normal
                         font.weight: Font.Medium
                         anchors.verticalCenter: parent.verticalCenter
+
+                        Behavior on color { CAnim { duration: Appearance.anim.durations.small } }
                     }
                 }
             }
