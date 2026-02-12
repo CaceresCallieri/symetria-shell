@@ -474,7 +474,7 @@ Item {
                 }
             }
 
-            // Control buttons: pause/resume, restart, cancel (visible during recording/paused)
+            // Control buttons: pause/resume, submit, restart, cancel (visible during recording/paused)
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
 
@@ -506,6 +506,15 @@ Item {
                         onClicked: {
                             console.log("[HW UI] Cancel button clicked");
                             HyprWhsprService.cancel();
+                        }
+                    }
+
+                    ControlButton {
+                        icon: "check"
+                        iconColor: "#81C784"
+                        onClicked: {
+                            console.log("[HW UI] Submit button clicked");
+                            HyprWhsprService.stop();
                         }
                     }
                 }
