@@ -50,6 +50,11 @@ Item {
         readonly property real maxBarHeight: 44
     }
 
+    // Paused state visual configuration
+    // Soft yellow bars at reduced opacity to clearly signal "paused" without extra icons
+    readonly property color pausedBarColor: "#C9B458"
+    readonly property real pausedDimOpacity: 0.55
+
     // Processing wave effect configuration (matches GTK implementation)
     // Creates flowing wave animation during transcription state
     readonly property QtObject processingConfig: QtObject {
@@ -345,6 +350,7 @@ Item {
                     font.pointSize: Appearance.font.size.small
                     font.family: Appearance.font.family.mono
                     color: Colours.palette.m3outline
+                    opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
                 }
             }
 
@@ -415,14 +421,16 @@ Item {
                                 return cfg.minBarHeight + effectiveLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor * waveOffset;
                             }
 
-                            // Opacity modulation for processing state wave effect
+                            // Opacity modulation for processing and paused states
                             readonly property real waveOpacity: {
                                 if (root.serviceState === "processing") {
                                     const opacity = root.processingWaveOpacities[index];
-                                    // Validate: opacity should be in [0.75, 1.0] range
                                     if (opacity !== undefined && opacity >= 0 && opacity <= 1) {
                                         return opacity;
                                     }
+                                }
+                                if (root.serviceState === "paused") {
+                                    return root.pausedDimOpacity;
                                 }
                                 return 1.0;
                             }
@@ -444,7 +452,7 @@ Item {
                             y: (parent.height - height) / 2
 
                             radius: 2.5
-                            color: root.barColors[index] ?? Colours.palette.m3primary
+                            color: root.serviceState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)
                             opacity: waveOpacity
                         }
                     }
@@ -460,8 +468,9 @@ Item {
                 StyledText {
                     text: root.formatElapsedTime(root.serviceElapsedSeconds)
                     font.pointSize: Appearance.font.size.small
-                    font.family: Appearance.font.family.mono  // Consistent width for updating digits
+                    font.family: Appearance.font.family.mono
                     color: Colours.palette.m3outline
+                    opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
                 }
             }
 
@@ -503,15 +512,14 @@ Item {
             }
 
             // State indicator - dispatches to the appropriate component per state.
-            // recording/processing/idle → null (audio bars handle these states)
-            // paused/success → stateIconComponent (driven by stateMap icon/iconColor)
+            // recording/processing/idle/paused → null (audio bars + control buttons handle these)
+            // success → stateIconComponent (checkmark icon driven by stateMap)
             // error → errorComponent (icon + hint text)
             Loader {
                 Layout.alignment: Qt.AlignHCenter
 
                 sourceComponent: {
                     switch (root.serviceState) {
-                        case "paused":
                         case "success":
                             return stateIconComponent;
                         case "error":
