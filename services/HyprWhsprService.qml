@@ -41,9 +41,6 @@ Singleton {
     /// Audio level (0.0-1.0) during recording
     property real audioLevel: 0.0
 
-    /// Whether HyprWhspr is available (service is running)
-    readonly property bool available: true
-
     /// Whether any non-idle state is active (used to show/hide drawer).
     /// Requires both a non-idle daemon state AND an orchestrator-initiated session.
     /// This prevents phantom recordings from showing the drawer.
@@ -96,11 +93,7 @@ Singleton {
         interval: root._elapsedTimerInterval
         repeat: true
         running: root.recording
-        onTriggered: {
-            if (root._recordingStartTime > 0) {
-                root._currentElapsed = root._accumulatedSeconds + (Date.now() - root._recordingStartTime) / 1000;
-            }
-        }
+        onTriggered: root._currentElapsed = root._accumulatedSeconds + (Date.now() - root._recordingStartTime) / 1000
     }
 
     // Config directory for HyprWhspr
@@ -130,7 +123,7 @@ Singleton {
             stop();
         } else if (state === "error") {
             console.log("[HW] toggle: state=error → calling restart() for recovery");
-            if (lang) _pendingRestartLang = lang;
+            _pendingRestartLang = lang || _currentLanguage || _pendingRestartLang || "";
             restart();
         } else {
             console.log("[HW] toggle: state=" + state + " → no-op");
@@ -200,9 +193,15 @@ Singleton {
     function cancel(): void {
         console.log("[HW] cancel() called — resetting state and restarting daemon");
         console.log("[HW] cancel: _rawState was:", _rawState, "→ clearing to ''");
+
+        // Stop all timers to prevent post-cancel side effects
+        successTimer.stop();
+        restartDelayTimer.stop();
+
         _orchestratorActive = false;
         _rawState = "";
         _currentLanguage = "";
+        _pendingRestartLang = "";  // Clear pending restart language
         _recordingStartTime = 0;
         _accumulatedSeconds = 0;
         _currentElapsed = 0;
@@ -214,11 +213,18 @@ Singleton {
     /// Restart recording: cancel current session and start a new one.
     /// Saves the current language so it persists across the restart.
     function restart(): void {
-        console.log("[HW] restart() called — saving lang:", _currentLanguage || _pendingRestartLang, "then cancel + delayed start");
-        if (!_pendingRestartLang)
-            _pendingRestartLang = _currentLanguage || "";
+        console.log("[HW] restart() called");
+
+        // Always capture current language (prefer active session, then pending)
+        const savedLang = _currentLanguage || _pendingRestartLang || "";
+
+        // Stop any pending restart timer to prevent race with previous restart
+        restartDelayTimer.stop();
+
         cancel();
-        console.log("[HW] restart: starting restartDelayTimer (interval:", restartDelayTimer.interval, "ms)");
+        _pendingRestartLang = savedLang;
+
+        console.log("[HW] restart: saved lang:", _pendingRestartLang, "starting delay timer (interval:", restartDelayTimer.interval, "ms)");
         restartDelayTimer.start();
     }
 
@@ -366,11 +372,11 @@ Singleton {
         }
     }
 
-    // Audio level polling during recording (60fps for smooth visualizations).
+    // Audio level polling during recording
     Timer {
         id: audioLevelPoll
 
-        interval: 16  // ~60fps
+        interval: 33  // ~30fps (sufficient for speech visualization)
         repeat: true
         running: root.recording && root._audioLevelExists
 
@@ -396,12 +402,14 @@ Singleton {
 
         // Elapsed time tracking
         if (state === "recording") {
+            processingTimeoutTimer.stop();
             if (_recordingStartTime === 0) {
                 _recordingStartTime = Date.now();
                 _currentElapsed = _accumulatedSeconds;
                 console.log("[HW] elapsed: recording started, _recordingStartTime =", _recordingStartTime);
             }
         } else if (state === "paused") {
+            processingTimeoutTimer.stop();
             if (_recordingStartTime > 0) {
                 _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
                 _recordingStartTime = 0;
@@ -416,8 +424,11 @@ Singleton {
                 _recordingStartTime = 0;
                 console.log("[HW] elapsed: processing, total =", _accumulatedSeconds.toFixed(1), "s");
             }
+            console.log("[HW] starting processingTimeoutTimer");
+            processingTimeoutTimer.start();
         } else {
             // Terminal states (error, success, idle): reset timer
+            processingTimeoutTimer.stop();
             console.log("[HW] elapsed: terminal state", state, "— resetting timer");
             _recordingStartTime = 0;
             _accumulatedSeconds = 0;
@@ -427,7 +438,8 @@ Singleton {
                 _orchestratorActive = false;
             }
             if (state !== "success") {
-                console.log("[HW] clearing _currentLanguage (was:", _currentLanguage, ")");
+                if (_currentLanguage !== "")
+                    console.log("[HW] clearing _currentLanguage (was:", _currentLanguage, ")");
                 _currentLanguage = "";
             }
         }
@@ -459,6 +471,17 @@ Singleton {
                 console.log("[HW] successTimer: clearing _rawState → idle");
                 root._rawState = "";
             }
+        }
+    }
+
+    // Timer to detect stuck processing state (daemon crash during transcription)
+    Timer {
+        id: processingTimeoutTimer
+        interval: 120000  // 2 minutes — transcription should never take this long
+
+        onTriggered: {
+            console.error("[HW] processingTimeoutTimer: processing timed out — daemon may have crashed");
+            root._rawState = "error";
         }
     }
 
@@ -519,6 +542,7 @@ Singleton {
         console.log("[HW] Component.onDestruction — cleaning up");
         audioLevelPoll.stop();
         successTimer.stop();
+        processingTimeoutTimer.stop();
         restartDelayTimer.stop();
         inotifyWatcher.running = false;
     }

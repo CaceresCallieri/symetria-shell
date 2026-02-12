@@ -304,6 +304,37 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
 
+            // Error: inotify-tools not installed
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: HyprWhsprService._inotifyFailed
+
+                ColumnLayout {
+                    spacing: Appearance.spacing.small
+
+                    MaterialIcon {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "error"
+                        color: Colours.palette.m3error
+                        font.pointSize: Appearance.font.size.extraLarge
+                    }
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: qsTr("inotify-tools not installed")
+                        color: Colours.palette.m3error
+                        font.pointSize: Appearance.font.size.normal
+                    }
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: qsTr("Install with: paru -S inotify-tools")
+                        color: Colours.palette.m3outline
+                        font.pointSize: Appearance.font.size.small
+                    }
+                }
+            }
+
             // Language badge (EN/ES) shown above audio bars during active states
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
