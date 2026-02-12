@@ -6,9 +6,18 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-/// HyprWhspr speech-to-text service.
+/// HyprWhspr speech-to-text orchestrator service.
 ///
-/// Watches HyprWhspr's visualizer_state file for state transitions:
+/// Centralizes all HyprWhspr control through IPC, replacing the previous
+/// file-based sideband protocol. Keybindings route through Symmetria IPC
+/// instead of calling HyprWhspr directly.
+///
+/// FIFO protocol (long_form recording mode):
+/// - "start" / "start:lang"  → Start recording or resume from pause
+/// - "stop"                  → Pause (save current segment)
+/// - "submit"                → Stop + transcribe all segments
+///
+/// State transitions (from visualizer_state file):
 /// - recording: User is speaking
 /// - paused: Recording paused
 /// - processing: Transcribing audio
@@ -35,16 +44,27 @@ Singleton {
     /// Whether HyprWhspr is available (service is running)
     readonly property bool available: true
 
-    /// Whether any non-idle state is active (used to show/hide drawer)
-    readonly property bool active: state !== "idle"
+    /// Whether any non-idle state is active (used to show/hide drawer).
+    /// Requires both a non-idle daemon state AND an orchestrator-initiated session.
+    /// This prevents phantom recordings from showing the drawer.
+    readonly property bool active: state !== "idle" && _orchestratorActive
 
     /// Whether currently recording (for audio level polling)
     readonly property bool recording: state === "recording"
 
-    /// Current speech-to-text language code (e.g., "en", "es")
-    /// Written by Hyprland keybindings before HyprWhspr starts.
+    /// Current speech-to-text language code (e.g., "en", "es").
+    /// Set via IPC start/toggle calls.
     readonly property string language: _currentLanguage
     property string _currentLanguage: ""
+
+    // Language saved for restart (cancel clears _currentLanguage, but restart needs it)
+    property string _pendingRestartLang: ""
+
+    // Orchestrator-initiated session flag.
+    // True only when Symmetria explicitly started a recording session via IPC.
+    // Gates the `active` property to prevent phantom recordings (daemon writes
+    // "recording" to visualizer_state on startup without any FIFO command).
+    property bool _orchestratorActive: false
 
     // ─────────────────────────────────────────────────────────────────────────
     // Elapsed time tracking (mirrors GTK implementation's timer logic)
@@ -89,27 +109,122 @@ Singleton {
     // Control FIFO for sending commands
     readonly property string controlFifo: `${configDir}/recording_control`
 
-    /// Send start command to HyprWhspr
-    function start(): void {
-        writeCommand("start");
+    // ─────────────────────────────────────────────────────────────────────────
+    // Orchestrator commands
+    //
+    // All keybindings route through these functions via IPC. The FIFO protocol
+    // requires long_form recording mode in HyprWhspr config.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Toggle recording: start if idle, submit if active, recover from error.
+    /// This is the primary keybinding action.
+    /// When _orchestratorActive is false, any daemon state is treated as phantom
+    /// and we start a fresh session regardless of what the daemon reports.
+    function toggle(lang: string): void {
+        console.log("[HW] toggle() called — lang:", lang, "| state:", state, "| orchestratorActive:", _orchestratorActive);
+        if (state === "idle" || !_orchestratorActive) {
+            console.log("[HW] toggle: starting new session (idle or phantom state)");
+            start(lang);
+        } else if (state === "recording" || state === "paused") {
+            console.log("[HW] toggle: state=" + state + " → calling stop() (submit)");
+            stop();
+        } else if (state === "error") {
+            console.log("[HW] toggle: state=error → calling restart() for recovery");
+            if (lang) _pendingRestartLang = lang;
+            restart();
+        } else {
+            console.log("[HW] toggle: state=" + state + " → no-op");
+        }
     }
 
-    /// Send stop command to HyprWhspr
+    /// Start recording with optional language code.
+    /// Sends "start:lang" or "start" to the FIFO.
+    /// Clears stale terminal states and resets elapsed time if overriding phantom state.
+    function start(lang: string): void {
+        const cmd = lang ? `start:${lang}` : "start";
+        console.log("[HW] start() called — lang:", lang, "| FIFO cmd:", cmd, "| was orchestratorActive:", _orchestratorActive);
+
+        // Clear stale terminal states from previous daemon crashes
+        if (state === "error" || state === "success") {
+            console.log("[HW] start: clearing stale", state, "state");
+            _rawState = "";
+        }
+
+        _orchestratorActive = true;
+
+        // If daemon already has "recording" state (phantom), reset elapsed time
+        // so the drawer shows 00:00 from when the user actually pressed the key
+        if (state === "recording") {
+            console.log("[HW] start: resetting elapsed time (phantom or pre-existing recording)");
+            _recordingStartTime = Date.now();
+            _accumulatedSeconds = 0;
+            _currentElapsed = 0;
+        }
+
+        if (lang)
+            _currentLanguage = lang;
+        writeCommand(cmd);
+    }
+
+    /// Stop recording and submit for transcription.
+    /// In long-form mode, FIFO "submit" = stop + transcribe all segments.
     function stop(): void {
-        writeCommand("stop");
+        console.log("[HW] stop() called → FIFO cmd: submit");
+        writeCommand("submit");
     }
 
-    /// Pause recording
+    /// Toggle pause: pause if recording, resume if paused.
+    /// Designed for single-key "Pause/Resume" keybinding.
     function pause(): void {
-        writeCommand("pause");
+        console.log("[HW] pause() called — current state:", state);
+        if (state === "recording") {
+            console.log("[HW] pause: state=recording → FIFO cmd: stop (pause)");
+            writeCommand("stop");
+        } else if (state === "paused") {
+            console.log("[HW] pause: state=paused → calling resume()");
+            resume();
+        } else {
+            console.log("[HW] pause: state=" + state + " → no-op");
+        }
     }
 
-    /// Resume recording
+    /// Resume from pause. Reuses the stored language code.
     function resume(): void {
-        writeCommand("resume");
+        const cmd = _currentLanguage ? `start:${_currentLanguage}` : "start";
+        console.log("[HW] resume() called — lang:", _currentLanguage, "| FIFO cmd:", cmd);
+        writeCommand(cmd);
+    }
+
+    /// Cancel recording: restart HyprWhspr daemon, discard all audio.
+    /// Immediately hides the drawer and resets all internal state.
+    function cancel(): void {
+        console.log("[HW] cancel() called — resetting state and restarting daemon");
+        console.log("[HW] cancel: _rawState was:", _rawState, "→ clearing to ''");
+        _orchestratorActive = false;
+        _rawState = "";
+        _currentLanguage = "";
+        _recordingStartTime = 0;
+        _accumulatedSeconds = 0;
+        _currentElapsed = 0;
+        audioLevel = 0.0;
+        console.log("[HW] cancel: starting cancelProcess (systemctl --user restart hyprwhspr)");
+        cancelProcess.running = true;
+    }
+
+    /// Restart recording: cancel current session and start a new one.
+    /// Saves the current language so it persists across the restart.
+    function restart(): void {
+        console.log("[HW] restart() called — saving lang:", _currentLanguage || _pendingRestartLang, "then cancel + delayed start");
+        if (!_pendingRestartLang)
+            _pendingRestartLang = _currentLanguage || "";
+        cancel();
+        console.log("[HW] restart: starting restartDelayTimer (interval:", restartDelayTimer.interval, "ms)");
+        restartDelayTimer.start();
     }
 
     function writeCommand(cmd: string): void {
+        console.log("[HW] writeCommand:", cmd, "→ FIFO:", controlFifo);
+        console.log("[HW] writeCommand: commandProcess.running =", commandProcess.running);
         commandProcess.command = ["sh", "-c", "printf '%s\\n' \"$1\" > \"$2\"", "--", cmd, controlFifo];
         commandProcess.running = true;
     }
@@ -129,15 +244,18 @@ Singleton {
 
         onLoaded: {
             const newState = text().trim();
+            console.log("[HW] visualizerStateFile.onLoaded: content =", JSON.stringify(newState), "| current _rawState =", JSON.stringify(root._rawState));
             if (root._rawState !== newState) {
-                console.log("HyprWhspr: visualizer_state =", newState);
+                console.log("[HW] visualizerStateFile: _rawState changing:", root._rawState, "→", newState);
                 root._rawState = newState;
+            } else {
+                console.log("[HW] visualizerStateFile: same state, no change");
             }
         }
         onLoadFailed: err => {
-            // File deletion means return to idle - this is normal
+            console.log("[HW] visualizerStateFile.onLoadFailed:", err, "| current _rawState =", JSON.stringify(root._rawState));
             if (root._rawState !== "") {
-                console.log("HyprWhspr: visualizer_state deleted (idle)");
+                console.log("[HW] visualizerStateFile: file deleted → idle");
             }
             root._rawState = "";
         }
@@ -169,21 +287,6 @@ Singleton {
         }
     }
 
-    // Language file reader - written by Hyprland keybinding before HyprWhspr starts
-    FileView {
-        id: languageFile
-        path: `${root.configDir}/current_language`
-        watchChanges: false
-        onLoaded: {
-            const lang = text().trim();
-            if (lang.length > 0 && lang.length <= 5)
-                root._currentLanguage = lang;
-        }
-        onLoadFailed: err => {
-            root._currentLanguage = "";
-        }
-    }
-
     // inotifywait process to watch the config directory for file changes
     // This is MUCH more efficient than polling
     Process {
@@ -208,68 +311,62 @@ Singleton {
                 const event = parts.slice(1).join(" ");
 
                 if (filename === "visualizer_state") {
+                    console.log("[HW] inotify: visualizer_state event:", event);
                     if (event.includes("DELETE") || event.includes("MOVED_FROM")) {
-                        // File was deleted - return to idle
+                        console.log("[HW] inotify: visualizer_state deleted → idle");
                         if (root._rawState !== "") {
-                            console.log("HyprWhspr: visualizer_state deleted (idle)");
+                            console.log("[HW] inotify: _rawState was:", root._rawState);
                         }
                         root._rawState = "";
                     } else {
-                        // File was created or modified - read new state
+                        console.log("[HW] inotify: visualizer_state changed → reloading");
                         visualizerStateFile.reload();
                     }
                 } else if (filename === "audio_level") {
-                    // Always track file existence, regardless of recording state.
-                    // This avoids the race condition where recording=true but
-                    // _audioLevelExists=false because events arrived in the wrong order.
                     if (event.includes("DELETE") || event.includes("MOVED_FROM")) {
                         root._audioLevelExists = false;
                     } else {
                         root._audioLevelExists = true;
-                        // Only read content if we're actually recording (saves I/O)
                         if (root.recording) {
                             audioLevelFile.reload();
                         }
                     }
-                } else if (filename === "current_language") {
-                    if (!event.includes("DELETE") && !event.includes("MOVED_FROM")) {
-                        languageFile.reload();
-                    }
+                } else if (filename === "recording_control") {
+                    // Ignore FIFO events (we write to it, not read from it)
+                } else {
+                    console.log("[HW] inotify: unhandled file:", filename, "event:", event);
                 }
             }
         }
 
         onExited: (code, status) => {
-            // Exit code 127 = command not found (inotifywait not installed)
+            console.log("[HW] inotifyWatcher exited — code:", code, "status:", status);
             if (code === 127) {
-                console.error("HyprWhspr: inotifywait not installed - drawer disabled");
+                console.error("[HW] inotifywait not installed - drawer disabled");
                 console.error("  Install with: paru -S inotify-tools");
                 root._inotifyFailed = true;
-                inotifyWatcher.running = false;  // Explicitly stop to prevent respawn attempts
+                inotifyWatcher.running = false;
                 return;
             }
 
-            // Restart if it exits unexpectedly
             if (code !== 0 && !root._inotifyFailed) {
-                console.warn("HyprWhspr: inotifywait exited with code", code, "- restarting");
-                restartTimer.start();
+                console.warn("[HW] inotifywait crashed, restarting in 1s");
+                inotifyRestartTimer.start();
             }
         }
     }
 
     // Timer to restart inotifywait if it crashes
     Timer {
-        id: restartTimer
+        id: inotifyRestartTimer
         interval: 1000
-        onTriggered: inotifyWatcher.running = true
+        onTriggered: {
+            console.log("[HW] inotifyRestartTimer: restarting inotifywait");
+            inotifyWatcher.running = true;
+        }
     }
 
     // Audio level polling during recording (60fps for smooth visualizations).
-    // We use polling here instead of inotifywait because:
-    // 1. Audio level updates need ~60fps for smooth bar animations
-    // 2. inotifywait event batching would cause stuttering
-    // 3. FileView.reload() is fast for small files (<10 bytes)
-    // 4. Only runs when recording AND audio_level file exists
     Timer {
         id: audioLevelPoll
 
@@ -282,14 +379,10 @@ Singleton {
 
     // Handle recording state transitions
     onRecordingChanged: {
+        console.log("[HW] onRecordingChanged:", recording);
         if (recording) {
-            // Proactively check for audio_level file when recording starts.
-            // This handles the race condition where audio_level file was created
-            // BEFORE visualizer_state changed to "recording". The inotifywait event
-            // for audio_level may have arrived first, setting _audioLevelExists=true,
-            // but the 60fps polling timer wasn't running yet (requires recording=true).
-            // This one-time check ensures we don't miss the initial audio level.
             if (!_audioLevelExists) {
+                console.log("[HW] recording started but audio_level missing, probing");
                 audioLevelFile.reload();
             }
         } else {
@@ -299,85 +392,74 @@ Singleton {
 
     // Handle state transitions
     onStateChanged: {
-        console.log("HyprWhspr: State changed to:", state);
+        console.log("[HW] ═══ onStateChanged:", state, "(_rawState:", _rawState, "| orchestratorActive:", _orchestratorActive, ")");
 
-        // Elapsed time tracking (mirrors GTK implementation)
+        // Elapsed time tracking
         if (state === "recording") {
-            // Read language file when recording starts (written by keybinding)
-            languageFile.reload();
-            // Start or resume recording
             if (_recordingStartTime === 0) {
                 _recordingStartTime = Date.now();
-                _currentElapsed = _accumulatedSeconds;  // Clean start from accumulated base
+                _currentElapsed = _accumulatedSeconds;
+                console.log("[HW] elapsed: recording started, _recordingStartTime =", _recordingStartTime);
             }
         } else if (state === "paused") {
-            // Pause: accumulate time and stop the clock
             if (_recordingStartTime > 0) {
                 _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
                 _recordingStartTime = 0;
+                console.log("[HW] elapsed: paused, accumulated =", _accumulatedSeconds.toFixed(1), "s");
             } else {
-                console.warn("HyprWhspr: Pause transition without active recording");
+                console.warn("[HW] elapsed: pause without active recording");
             }
         } else if (state === "processing") {
-            // Processing: freeze timer at final recording duration (don't reset)
-            // Accumulate any remaining time from active recording segment
             if (_recordingStartTime > 0) {
                 _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
                 _currentElapsed = _accumulatedSeconds;
                 _recordingStartTime = 0;
+                console.log("[HW] elapsed: processing, total =", _accumulatedSeconds.toFixed(1), "s");
             }
-            // If already paused, _currentElapsed already reflects total time
         } else {
             // Terminal states (error, success, idle): reset timer
+            console.log("[HW] elapsed: terminal state", state, "— resetting timer");
             _recordingStartTime = 0;
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
-            // Keep language during success (badge stays visible until auto-hide)
-            if (state !== "success")
+            if (state === "idle") {
+                console.log("[HW] idle → _orchestratorActive = false");
+                _orchestratorActive = false;
+            }
+            if (state !== "success") {
+                console.log("[HW] clearing _currentLanguage (was:", _currentLanguage, ")");
                 _currentLanguage = "";
+            }
         }
 
-        // Start auto-hide timer on success
         if (state === "success") {
+            console.log("[HW] starting successTimer (interval:", successTimer.interval, "ms)");
             successTimer.start();
         } else {
             successTimer.stop();
         }
-
-        // Delete language file on idle to prevent stale data across sessions
-        if (state === "idle") {
-            deleteLanguageFile.running = true;
-        }
     }
 
     // Timer to auto-hide after success state
-    // HyprWhspr may keep success state for a while, so we force return to idle
-    // after showing the success indicator
     Timer {
         id: successTimer
 
-        // Validate autoHideDelay: clamp to acceptable range
         interval: {
             const delay = Config.hyprwhspr?.autoHideDelay ?? 1500;
             const clamped = Math.max(root._minAutoHideDelay, Math.min(root._maxAutoHideDelay, delay));
             if (clamped !== delay) {
-                console.warn(`HyprWhspr: autoHideDelay ${delay}ms clamped to ${clamped}ms (valid: ${root._minAutoHideDelay}-${root._maxAutoHideDelay})`);
+                console.warn(`[HW] autoHideDelay ${delay}ms clamped to ${clamped}ms`);
             }
             return clamped;
         }
 
         onTriggered: {
-            // Only hide if still in success state (prevents hiding during rapid transitions)
+            console.log("[HW] successTimer fired — current state:", root.state);
             if (root.state === "success") {
+                console.log("[HW] successTimer: clearing _rawState → idle");
                 root._rawState = "";
             }
         }
-    }
-
-    // Cleanup: delete language file on idle to prevent stale data across sessions
-    Process {
-        id: deleteLanguageFile
-        command: ["rm", "-f", `${root.configDir}/current_language`]
     }
 
     // Process for writing commands to control FIFO
@@ -385,25 +467,59 @@ Singleton {
         id: commandProcess
 
         onExited: (exitCode, exitStatus) => {
+            console.log("[HW] commandProcess exited — code:", exitCode, "status:", exitStatus);
             if (exitCode !== 0)
-                console.warn("HyprWhspr: Command failed with exit code:", exitCode);
+                console.warn("[HW] FIFO write FAILED — exit code:", exitCode);
+            else
+                console.log("[HW] FIFO write OK");
+        }
+    }
+
+    // Process for restarting the HyprWhspr systemd service (used by cancel/restart)
+    Process {
+        id: cancelProcess
+        command: ["systemctl", "--user", "restart", "hyprwhspr"]
+
+        onExited: (code, status) => {
+            console.log("[HW] cancelProcess (systemctl restart) exited — code:", code, "status:", status);
+            if (code !== 0)
+                console.warn("[HW] systemd restart FAILED — exit code:", code);
+            else
+                console.log("[HW] systemd restart OK");
+        }
+    }
+
+    // Timer for delayed start after cancel (used by restart).
+    // Waits for the daemon to come back up before sending start command.
+    Timer {
+        id: restartDelayTimer
+        interval: Config.hyprwhspr?.restartDelay ?? 500
+
+        onTriggered: {
+            const lang = root._pendingRestartLang;
+            console.log("[HW] restartDelayTimer fired — _pendingRestartLang:", lang);
+            root._pendingRestartLang = "";
+            console.log("[HW] restartDelayTimer: calling start(" + lang + ")");
+            root.start(lang);
         }
     }
 
     // Initial state check - inotifywait only fires on CHANGES, not initial state.
     // If recording is already in progress when shell starts, we need to check files directly.
-    // Note: If audio_level file doesn't exist yet, onRecordingChanged will retry when
-    // recording state becomes true (see that handler for the fallback logic).
     Component.onCompleted: {
+        console.log("[HW] ═══ Component.onCompleted — reading initial state files");
+        console.log("[HW] configDir:", configDir);
+        console.log("[HW] controlFifo:", controlFifo);
         visualizerStateFile.reload();
         audioLevelFile.reload();
-        languageFile.reload();
     }
 
     // Cleanup on destruction
     Component.onDestruction: {
+        console.log("[HW] Component.onDestruction — cleaning up");
         audioLevelPoll.stop();
         successTimer.stop();
+        restartDelayTimer.stop();
         inotifyWatcher.running = false;
     }
 }

@@ -242,6 +242,39 @@ Item {
         }
     }
 
+    // Inline reusable component for control buttons (pause/restart/cancel)
+    component ControlButton: Item {
+        id: controlBtn
+
+        required property string icon
+        property color iconColor: Colours.palette.m3onSurfaceVariant
+
+        signal clicked()
+
+        implicitWidth: controlIcon.implicitWidth + Appearance.padding.normal * 2
+        implicitHeight: controlIcon.implicitHeight + Appearance.padding.smaller * 2
+
+        StyledRect {
+            anchors.fill: parent
+            radius: Appearance.rounding.full
+            color: Colours.palette.m3surfaceContainerHigh
+        }
+
+        StateLayer {
+            radius: Appearance.rounding.full
+            color: controlBtn.iconColor
+            function onClicked(): void { controlBtn.clicked(); }
+        }
+
+        MaterialIcon {
+            id: controlIcon
+            anchors.centerIn: parent
+            text: controlBtn.icon
+            color: controlBtn.iconColor
+            font.pointSize: Appearance.font.size.normal
+        }
+    }
+
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + padding
 
@@ -398,6 +431,43 @@ Item {
                     font.pointSize: Appearance.font.size.small
                     font.family: Appearance.font.family.mono  // Consistent width for updating digits
                     color: Colours.palette.m3outline
+                }
+            }
+
+            // Control buttons: pause/resume, restart, cancel (visible during recording/paused)
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+
+                show: root.serviceState === "recording" || root.serviceState === "paused"
+
+                RowLayout {
+                    spacing: Appearance.spacing.normal
+
+                    ControlButton {
+                        icon: root.serviceState === "paused" ? "play_arrow" : "pause"
+                        iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+                        onClicked: {
+                            console.log("[HW UI] Pause/Resume button clicked — state:", root.serviceState);
+                            HyprWhsprService.pause();
+                        }
+                    }
+
+                    ControlButton {
+                        icon: "restart_alt"
+                        onClicked: {
+                            console.log("[HW UI] Restart button clicked");
+                            HyprWhsprService.restart();
+                        }
+                    }
+
+                    ControlButton {
+                        icon: "close"
+                        iconColor: Colours.palette.m3error
+                        onClicked: {
+                            console.log("[HW UI] Cancel button clicked");
+                            HyprWhsprService.cancel();
+                        }
+                    }
                 }
             }
 
