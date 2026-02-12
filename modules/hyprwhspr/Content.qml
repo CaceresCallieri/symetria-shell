@@ -511,7 +511,7 @@ Item {
 
                     ControlButton {
                         icon: "check"
-                        iconColor: "#81C784"
+                        iconColor: Colours.palette.m3confirm
                         onClicked: {
                             console.log("[HW UI] Submit button clicked");
                             HyprWhsprService.stop();
