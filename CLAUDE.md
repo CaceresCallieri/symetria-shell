@@ -419,9 +419,9 @@ HyprWhsprService → writes "start:en" to FIFO → HyprWhspr daemon
 |-----|--------|
 | Super+Alt+D | Toggle STT (English) |
 | Super+Alt+E | Toggle STT (Spanish) |
-| Super+Alt+Shift+D | Pause/Resume |
-| Super+Alt+C | Cancel (discard) |
-| Super+Alt+R | Restart recording |
+| Alt+Space | Pause/Resume |
+| Alt+X | Cancel (discard) |
+| Alt+R | Restart recording |
 
 **UI Control Buttons:** During recording/paused states, the drawer shows clickable buttons:
 - Pause/Resume (toggles icon), Restart, Cancel (red)
