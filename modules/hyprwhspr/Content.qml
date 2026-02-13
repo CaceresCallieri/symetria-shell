@@ -247,7 +247,9 @@ Item {
         }
     }
 
-    // Inline reusable component for control buttons (pause/restart/cancel)
+    /// Control button with press feedback animation.
+    /// Call triggerPress() to programmatically trigger the scale squeeze
+    /// (used by Connections block for keybind-triggered feedback).
     component ControlButton: Item {
         id: controlBtn
 
@@ -255,6 +257,30 @@ Item {
         property color iconColor: Colours.palette.m3onSurfaceVariant
 
         signal clicked()
+
+        function triggerPress(): void {
+            pressAnim.restart();
+        }
+
+        SequentialAnimation {
+            id: pressAnim
+
+            NumberAnimation {
+                target: controlBtn
+                property: "scale"
+                to: 0.85
+                duration: 80
+                easing.type: Easing.OutQuad
+            }
+
+            NumberAnimation {
+                target: controlBtn
+                property: "scale"
+                to: 1.0
+                duration: 150
+                easing.type: Easing.OutBack
+            }
+        }
 
         implicitWidth: controlIcon.implicitWidth + Appearance.padding.normal * 2
         implicitHeight: controlIcon.implicitHeight + Appearance.padding.smaller * 2
@@ -484,6 +510,7 @@ Item {
                     spacing: Appearance.spacing.normal
 
                     ControlButton {
+                        id: pauseBtn
                         icon: root.serviceState === "paused" ? "play_arrow" : "pause"
                         iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
                         onClicked: {
@@ -493,6 +520,7 @@ Item {
                     }
 
                     ControlButton {
+                        id: restartBtn
                         icon: "restart_alt"
                         onClicked: {
                             console.log("[HW UI] Restart button clicked");
@@ -501,6 +529,7 @@ Item {
                     }
 
                     ControlButton {
+                        id: cancelBtn
                         icon: "close"
                         iconColor: Colours.palette.m3error
                         onClicked: {
@@ -510,12 +539,37 @@ Item {
                     }
 
                     ControlButton {
+                        id: submitBtn
                         icon: "check"
                         iconColor: Colours.palette.m3confirm
                         onClicked: {
                             console.log("[HW UI] Submit button clicked");
                             HyprWhsprService.stop();
                         }
+                    }
+                }
+            }
+
+            // Dispatch action signals from HyprWhsprService to control button animations.
+            // Bridges both UI clicks and keybind-triggered IPC calls to the same
+            // visual feedback: a brief scale squeeze on the corresponding button.
+            Connections {
+                target: HyprWhsprService
+                function onActionTriggered(action: string): void {
+                    switch (action) {
+                        case "pause":
+                        case "resume":
+                            pauseBtn.triggerPress();
+                            break;
+                        case "restart":
+                            restartBtn.triggerPress();
+                            break;
+                        case "cancel":
+                            cancelBtn.triggerPress();
+                            break;
+                        case "stop":
+                            submitBtn.triggerPress();
+                            break;
                     }
                 }
             }

@@ -63,6 +63,10 @@ Singleton {
     // "recording" to visualizer_state on startup without any FIFO command).
     property bool _orchestratorActive: false
 
+    /// Emitted when an action is successfully dispatched (not a no-op).
+    /// Used by Content.qml to animate the corresponding control button.
+    signal actionTriggered(string action)
+
     // ─────────────────────────────────────────────────────────────────────────
     // Elapsed time tracking (mirrors GTK implementation's timer logic)
     // ─────────────────────────────────────────────────────────────────────────
@@ -162,6 +166,7 @@ Singleton {
     /// Stop recording and submit for transcription.
     /// In long-form mode, FIFO "submit" = stop + transcribe all segments.
     function stop(): void {
+        actionTriggered("stop");
         console.log("[HW] stop() called → FIFO cmd: submit");
         writeCommand("submit");
     }
@@ -171,9 +176,11 @@ Singleton {
     function pause(): void {
         console.log("[HW] pause() called — current state:", state);
         if (state === "recording") {
+            actionTriggered("pause");
             console.log("[HW] pause: state=recording → FIFO cmd: stop (pause)");
             writeCommand("stop");
         } else if (state === "paused") {
+            actionTriggered("resume");
             console.log("[HW] pause: state=paused → calling resume()");
             resume();
         } else {
@@ -191,8 +198,15 @@ Singleton {
     /// Cancel recording: restart HyprWhspr daemon, discard all audio.
     /// Immediately hides the drawer and resets all internal state.
     function cancel(): void {
-        console.log("[HW] cancel() called — resetting state and restarting daemon");
-        console.log("[HW] cancel: _rawState was:", _rawState, "→ clearing to ''");
+        actionTriggered("cancel");
+        _cancelInternal();
+    }
+
+    // Internal cancel logic shared by cancel() and restart().
+    // Does NOT emit actionTriggered to avoid double-animation when restart() calls it.
+    function _cancelInternal(): void {
+        console.log("[HW] _cancelInternal() called — resetting state and restarting daemon");
+        console.log("[HW] _cancelInternal: _rawState was:", _rawState, "→ clearing to ''");
 
         // Stop all timers to prevent post-cancel side effects
         successTimer.stop();
@@ -206,13 +220,14 @@ Singleton {
         _accumulatedSeconds = 0;
         _currentElapsed = 0;
         audioLevel = 0.0;
-        console.log("[HW] cancel: starting cancelProcess (systemctl --user restart hyprwhspr)");
+        console.log("[HW] _cancelInternal: starting cancelProcess (systemctl --user restart hyprwhspr)");
         cancelProcess.running = true;
     }
 
     /// Restart recording: cancel current session and start a new one.
     /// Saves the current language so it persists across the restart.
     function restart(): void {
+        actionTriggered("restart");
         console.log("[HW] restart() called");
 
         // Always capture current language (prefer active session, then pending)
@@ -221,7 +236,7 @@ Singleton {
         // Stop any pending restart timer to prevent race with previous restart
         restartDelayTimer.stop();
 
-        cancel();
+        _cancelInternal();
         _pendingRestartLang = savedLang;
 
         console.log("[HW] restart: saved lang:", _pendingRestartLang, "starting delay timer (interval:", restartDelayTimer.interval, "ms)");
