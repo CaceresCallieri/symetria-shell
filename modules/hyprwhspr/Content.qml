@@ -80,7 +80,7 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: root.serviceState === "recording" || root.serviceState === "processing"
+        running: (root.serviceState === "recording" || root.serviceState === "processing") && root.visibilities.hyprwhspr
         from: 0
         to: 6000
         duration: 100000  // 100 seconds before loop (60 units/sec)
@@ -513,39 +513,27 @@ Item {
                         id: pauseBtn
                         icon: root.serviceState === "paused" ? "play_arrow" : "pause"
                         iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-                        onClicked: {
-                            console.log("[HW UI] Pause/Resume button clicked — state:", root.serviceState);
-                            HyprWhsprService.pause();
-                        }
+                        onClicked: HyprWhsprService.pause()
                     }
 
                     ControlButton {
                         id: restartBtn
                         icon: "restart_alt"
-                        onClicked: {
-                            console.log("[HW UI] Restart button clicked");
-                            HyprWhsprService.restart();
-                        }
+                        onClicked: HyprWhsprService.restart()
                     }
 
                     ControlButton {
                         id: cancelBtn
                         icon: "close"
                         iconColor: Colours.palette.m3error
-                        onClicked: {
-                            console.log("[HW UI] Cancel button clicked");
-                            HyprWhsprService.cancel();
-                        }
+                        onClicked: HyprWhsprService.cancel()
                     }
 
                     ControlButton {
                         id: submitBtn
                         icon: "check"
                         iconColor: Colours.palette.m3confirm
-                        onClicked: {
-                            console.log("[HW UI] Submit button clicked");
-                            HyprWhsprService.stop();
-                        }
+                        onClicked: HyprWhsprService.stop()
                     }
                 }
             }

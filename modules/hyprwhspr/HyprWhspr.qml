@@ -22,12 +22,10 @@ Scope {
                 for (const [_, visibilities] of Visibilities.screens) {
                     visibilities.hyprwhspr = true;
                 }
-                console.log("HyprWhspr: Drawer shown");
             } else {
                 for (const [_, visibilities] of Visibilities.screens) {
                     visibilities.hyprwhspr = false;
                 }
-                console.log("HyprWhspr: Drawer hidden");
             }
         }
     }
@@ -36,31 +34,24 @@ Scope {
         target: "hyprwhspr"
 
         function toggle(lang: string): void {
-            console.log("[HW IPC] → toggle('" + lang + "')");
             HyprWhsprService.toggle(lang);
         }
         function start(lang: string): void {
-            console.log("[HW IPC] → start('" + lang + "')");
             HyprWhsprService.start(lang);
         }
         function stop(): void {
-            console.log("[HW IPC] → stop()");
             HyprWhsprService.stop();
         }
         function pause(): void {
-            console.log("[HW IPC] → pause()");
             HyprWhsprService.pause();
         }
         function resume(): void {
-            console.log("[HW IPC] → resume()");
             HyprWhsprService.resume();
         }
         function cancel(): void {
-            console.log("[HW IPC] → cancel()");
             HyprWhsprService.cancel();
         }
         function restart(): void {
-            console.log("[HW IPC] → restart()");
             HyprWhsprService.restart();
         }
     }

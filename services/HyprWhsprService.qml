@@ -107,6 +107,27 @@ Singleton {
     readonly property string controlFifo: `${configDir}/recording_control`
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Command queue and FIFO write tracking
+    // ─────────────────────────────────────────────────────────────────────────
+
+    property var _commandQueue: []
+    property string _lastCommand: ""
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Toggle debouncing
+    // ─────────────────────────────────────────────────────────────────────────
+
+    property real _lastToggleTime: 0
+    readonly property int _toggleDebounceMs: 200
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Restart retry tracking
+    // ─────────────────────────────────────────────────────────────────────────
+
+    property int _restartRetries: 0
+    readonly property int _maxRestartRetries: 3
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Orchestrator commands
     //
     // All keybindings route through these functions via IPC. The FIFO protocol
@@ -118,32 +139,40 @@ Singleton {
     /// When _orchestratorActive is false, any daemon state is treated as phantom
     /// and we start a fresh session regardless of what the daemon reports.
     function toggle(lang: string): void {
-        console.log("[HW] toggle() called — lang:", lang, "| state:", state, "| orchestratorActive:", _orchestratorActive);
+        const now = Date.now();
+        if (now - _lastToggleTime < _toggleDebounceMs) return;
+        _lastToggleTime = now;
+
         if (state === "idle" || !_orchestratorActive) {
-            console.log("[HW] toggle: starting new session (idle or phantom state)");
             start(lang);
         } else if (state === "recording" || state === "paused") {
-            console.log("[HW] toggle: state=" + state + " → calling stop() (submit)");
             stop();
         } else if (state === "error") {
-            console.log("[HW] toggle: state=error → calling restart() for recovery");
-            _pendingRestartLang = lang || _currentLanguage || _pendingRestartLang || "";
+            _pendingRestartLang = lang || _currentLanguage || "";
             restart();
-        } else {
-            console.log("[HW] toggle: state=" + state + " → no-op");
         }
+    }
+
+    /// Sanitize and validate language codes. Only allow [a-zA-Z-], length 2-5.
+    function _sanitizeLanguage(lang: string): string {
+        if (!lang) return "";
+        const sanitized = lang.replace(/[^a-zA-Z-]/g, "");
+        if (sanitized.length < 2 || sanitized.length > 5) {
+            console.warn("[HW] Invalid language code:", lang);
+            return "";
+        }
+        return sanitized;
     }
 
     /// Start recording with optional language code.
     /// Sends "start:lang" or "start" to the FIFO.
     /// Clears stale terminal states and resets elapsed time if overriding phantom state.
     function start(lang: string): void {
-        const cmd = lang ? `start:${lang}` : "start";
-        console.log("[HW] start() called — lang:", lang, "| FIFO cmd:", cmd, "| was orchestratorActive:", _orchestratorActive);
+        const safeLang = _sanitizeLanguage(lang);
+        const cmd = safeLang ? `start:${safeLang}` : "start";
 
         // Clear stale terminal states from previous daemon crashes
         if (state === "error" || state === "success") {
-            console.log("[HW] start: clearing stale", state, "state");
             _rawState = "";
         }
 
@@ -152,14 +181,13 @@ Singleton {
         // If daemon already has "recording" state (phantom), reset elapsed time
         // so the drawer shows 00:00 from when the user actually pressed the key
         if (state === "recording") {
-            console.log("[HW] start: resetting elapsed time (phantom or pre-existing recording)");
             _recordingStartTime = Date.now();
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
         }
 
-        if (lang)
-            _currentLanguage = lang;
+        if (safeLang)
+            _currentLanguage = safeLang;
         writeCommand(cmd);
     }
 
@@ -167,31 +195,25 @@ Singleton {
     /// In long-form mode, FIFO "submit" = stop + transcribe all segments.
     function stop(): void {
         actionTriggered("stop");
-        console.log("[HW] stop() called → FIFO cmd: submit");
         writeCommand("submit");
     }
 
     /// Toggle pause: pause if recording, resume if paused.
     /// Designed for single-key "Pause/Resume" keybinding.
     function pause(): void {
-        console.log("[HW] pause() called — current state:", state);
         if (state === "recording") {
             actionTriggered("pause");
-            console.log("[HW] pause: state=recording → FIFO cmd: stop (pause)");
             writeCommand("stop");
         } else if (state === "paused") {
             actionTriggered("resume");
-            console.log("[HW] pause: state=paused → calling resume()");
             resume();
-        } else {
-            console.log("[HW] pause: state=" + state + " → no-op");
         }
     }
 
     /// Resume from pause. Reuses the stored language code.
     function resume(): void {
-        const cmd = _currentLanguage ? `start:${_currentLanguage}` : "start";
-        console.log("[HW] resume() called — lang:", _currentLanguage, "| FIFO cmd:", cmd);
+        const safeLang = _sanitizeLanguage(_currentLanguage);
+        const cmd = safeLang ? `start:${safeLang}` : "start";
         writeCommand(cmd);
     }
 
@@ -205,12 +227,8 @@ Singleton {
     // Internal cancel logic shared by cancel() and restart().
     // Does NOT emit actionTriggered to avoid double-animation when restart() calls it.
     function _cancelInternal(): void {
-        console.log("[HW] _cancelInternal() called — resetting state and restarting daemon");
-        console.log("[HW] _cancelInternal: _rawState was:", _rawState, "→ clearing to ''");
-
         // Stop all timers to prevent post-cancel side effects
-        successTimer.stop();
-        restartDelayTimer.stop();
+        _stopAllTimers();
 
         _orchestratorActive = false;
         _rawState = "";
@@ -220,7 +238,6 @@ Singleton {
         _accumulatedSeconds = 0;
         _currentElapsed = 0;
         audioLevel = 0.0;
-        console.log("[HW] _cancelInternal: starting cancelProcess (systemctl --user restart hyprwhspr)");
         cancelProcess.running = true;
     }
 
@@ -228,7 +245,6 @@ Singleton {
     /// Saves the current language so it persists across the restart.
     function restart(): void {
         actionTriggered("restart");
-        console.log("[HW] restart() called");
 
         // Always capture current language (prefer active session, then pending)
         const savedLang = _currentLanguage || _pendingRestartLang || "";
@@ -239,15 +255,28 @@ Singleton {
         _cancelInternal();
         _pendingRestartLang = savedLang;
 
-        console.log("[HW] restart: saved lang:", _pendingRestartLang, "starting delay timer (interval:", restartDelayTimer.interval, "ms)");
         restartDelayTimer.start();
     }
 
     function writeCommand(cmd: string): void {
-        console.log("[HW] writeCommand:", cmd, "→ FIFO:", controlFifo);
-        console.log("[HW] writeCommand: commandProcess.running =", commandProcess.running);
-        commandProcess.command = ["sh", "-c", "printf '%s\\n' \"$1\" > \"$2\"", "--", cmd, controlFifo];
+        if (commandProcess.running) {
+            _commandQueue.push(cmd);
+            return;
+        }
+        _executeCommand(cmd);
+    }
+
+    function _executeCommand(cmd: string): void {
+        _lastCommand = cmd;
+        commandProcess.command = ["sh", "-c", "test -p \"$2\" && printf '%s\\n' \"$1\" > \"$2\" || { echo \"FIFO not found: $2\" >&2; exit 1; }", "--", cmd, controlFifo];
         commandProcess.running = true;
+    }
+
+    /// Stop all recurring/delay timers (used by cancel and destruction).
+    function _stopAllTimers(): void {
+        successTimer.stop();
+        restartDelayTimer.stop();
+        processingTimeoutTimer.stop();
     }
 
     // Track if audio_level file exists (only present when visualizer daemon runs)
@@ -265,19 +294,11 @@ Singleton {
 
         onLoaded: {
             const newState = text().trim();
-            console.log("[HW] visualizerStateFile.onLoaded: content =", JSON.stringify(newState), "| current _rawState =", JSON.stringify(root._rawState));
             if (root._rawState !== newState) {
-                console.log("[HW] visualizerStateFile: _rawState changing:", root._rawState, "→", newState);
                 root._rawState = newState;
-            } else {
-                console.log("[HW] visualizerStateFile: same state, no change");
             }
         }
         onLoadFailed: err => {
-            console.log("[HW] visualizerStateFile.onLoadFailed:", err, "| current _rawState =", JSON.stringify(root._rawState));
-            if (root._rawState !== "") {
-                console.log("[HW] visualizerStateFile: file deleted → idle");
-            }
             root._rawState = "";
         }
     }
@@ -332,15 +353,9 @@ Singleton {
                 const event = parts.slice(1).join(" ");
 
                 if (filename === "visualizer_state") {
-                    console.log("[HW] inotify: visualizer_state event:", event);
                     if (event.includes("DELETE") || event.includes("MOVED_FROM")) {
-                        console.log("[HW] inotify: visualizer_state deleted → idle");
-                        if (root._rawState !== "") {
-                            console.log("[HW] inotify: _rawState was:", root._rawState);
-                        }
                         root._rawState = "";
                     } else {
-                        console.log("[HW] inotify: visualizer_state changed → reloading");
                         visualizerStateFile.reload();
                     }
                 } else if (filename === "audio_level") {
@@ -354,14 +369,11 @@ Singleton {
                     }
                 } else if (filename === "recording_control") {
                     // Ignore FIFO events (we write to it, not read from it)
-                } else {
-                    console.log("[HW] inotify: unhandled file:", filename, "event:", event);
                 }
             }
         }
 
         onExited: (code, status) => {
-            console.log("[HW] inotifyWatcher exited — code:", code, "status:", status);
             if (code === 127) {
                 console.error("[HW] inotifywait not installed - drawer disabled");
                 console.error("  Install with: paru -S inotify-tools");
@@ -382,7 +394,6 @@ Singleton {
         id: inotifyRestartTimer
         interval: 1000
         onTriggered: {
-            console.log("[HW] inotifyRestartTimer: restarting inotifywait");
             inotifyWatcher.running = true;
         }
     }
@@ -400,10 +411,8 @@ Singleton {
 
     // Handle recording state transitions
     onRecordingChanged: {
-        console.log("[HW] onRecordingChanged:", recording);
         if (recording) {
             if (!_audioLevelExists) {
-                console.log("[HW] recording started but audio_level missing, probing");
                 audioLevelFile.reload();
             }
         } else {
@@ -413,22 +422,18 @@ Singleton {
 
     // Handle state transitions
     onStateChanged: {
-        console.log("[HW] ═══ onStateChanged:", state, "(_rawState:", _rawState, "| orchestratorActive:", _orchestratorActive, ")");
-
         // Elapsed time tracking
         if (state === "recording") {
             processingTimeoutTimer.stop();
             if (_recordingStartTime === 0) {
                 _recordingStartTime = Date.now();
                 _currentElapsed = _accumulatedSeconds;
-                console.log("[HW] elapsed: recording started, _recordingStartTime =", _recordingStartTime);
             }
         } else if (state === "paused") {
             processingTimeoutTimer.stop();
             if (_recordingStartTime > 0) {
                 _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
                 _recordingStartTime = 0;
-                console.log("[HW] elapsed: paused, accumulated =", _accumulatedSeconds.toFixed(1), "s");
             } else {
                 console.warn("[HW] elapsed: pause without active recording");
             }
@@ -437,30 +442,23 @@ Singleton {
                 _accumulatedSeconds += (Date.now() - _recordingStartTime) / 1000;
                 _currentElapsed = _accumulatedSeconds;
                 _recordingStartTime = 0;
-                console.log("[HW] elapsed: processing, total =", _accumulatedSeconds.toFixed(1), "s");
             }
-            console.log("[HW] starting processingTimeoutTimer");
             processingTimeoutTimer.start();
         } else {
             // Terminal states (error, success, idle): reset timer
             processingTimeoutTimer.stop();
-            console.log("[HW] elapsed: terminal state", state, "— resetting timer");
             _recordingStartTime = 0;
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
             if (state === "idle") {
-                console.log("[HW] idle → _orchestratorActive = false");
                 _orchestratorActive = false;
             }
             if (state !== "success") {
-                if (_currentLanguage !== "")
-                    console.log("[HW] clearing _currentLanguage (was:", _currentLanguage, ")");
                 _currentLanguage = "";
             }
         }
 
         if (state === "success") {
-            console.log("[HW] starting successTimer (interval:", successTimer.interval, "ms)");
             successTimer.start();
         } else {
             successTimer.stop();
@@ -481,9 +479,7 @@ Singleton {
         }
 
         onTriggered: {
-            console.log("[HW] successTimer fired — current state:", root.state);
             if (root.state === "success") {
-                console.log("[HW] successTimer: clearing _rawState → idle");
                 root._rawState = "";
             }
         }
@@ -492,7 +488,7 @@ Singleton {
     // Timer to detect stuck processing state (daemon crash during transcription)
     Timer {
         id: processingTimeoutTimer
-        interval: 120000  // 2 minutes — transcription should never take this long
+        interval: Config.hyprwhspr?.processingTimeout ?? 120000
 
         onTriggered: {
             console.error("[HW] processingTimeoutTimer: processing timed out — daemon may have crashed");
@@ -505,11 +501,21 @@ Singleton {
         id: commandProcess
 
         onExited: (exitCode, exitStatus) => {
-            console.log("[HW] commandProcess exited — code:", exitCode, "status:", exitStatus);
-            if (exitCode !== 0)
-                console.warn("[HW] FIFO write FAILED — exit code:", exitCode);
-            else
-                console.log("[HW] FIFO write OK");
+            if (exitCode !== 0) {
+                console.error("[HW] FIFO write failed (exit", exitCode + ") cmd:", root._lastCommand);
+                // Rollback orchestrator state if start command failed
+                if (root._lastCommand.startsWith("start")) {
+                    root._orchestratorActive = false;
+                    root._currentLanguage = "";
+                    root._rawState = "error";
+                }
+            }
+
+            // Process queued commands
+            if (root._commandQueue.length > 0) {
+                const nextCmd = root._commandQueue.shift();
+                root._executeCommand(nextCmd);
+            }
         }
     }
 
@@ -519,11 +525,10 @@ Singleton {
         command: ["systemctl", "--user", "restart", "hyprwhspr"]
 
         onExited: (code, status) => {
-            console.log("[HW] cancelProcess (systemctl restart) exited — code:", code, "status:", status);
-            if (code !== 0)
-                console.warn("[HW] systemd restart FAILED — exit code:", code);
-            else
-                console.log("[HW] systemd restart OK");
+            if (code !== 0) {
+                console.error("[HW] systemd restart failed (exit", code + ")");
+                root._rawState = "error";
+            }
         }
     }
 
@@ -534,31 +539,60 @@ Singleton {
         interval: Config.hyprwhspr?.restartDelay ?? 500
 
         onTriggered: {
-            const lang = root._pendingRestartLang;
-            console.log("[HW] restartDelayTimer fired — _pendingRestartLang:", lang);
-            root._pendingRestartLang = "";
-            console.log("[HW] restartDelayTimer: calling start(" + lang + ")");
-            root.start(lang);
+            if (root._pendingRestartLang === "") return;
+            restartProbeProcess.running = true;
+        }
+    }
+
+    // Probe process to check if FIFO exists before restarting
+    Process {
+        id: restartProbeProcess
+        command: ["test", "-p", root.controlFifo]
+
+        onExited: (code, status) => {
+            if (code === 0) {
+                const lang = root._pendingRestartLang;
+                root._pendingRestartLang = "";
+                root._restartRetries = 0;
+                root.start(lang);
+            } else if (root._restartRetries < root._maxRestartRetries) {
+                root._restartRetries++;
+                console.warn("[HW] Daemon not ready, retry", root._restartRetries, "/", root._maxRestartRetries);
+                restartDelayTimer.start();
+            } else {
+                console.error("[HW] Restart failed after", root._maxRestartRetries, "retries");
+                root._pendingRestartLang = "";
+                root._restartRetries = 0;
+                root._rawState = "error";
+            }
+        }
+    }
+
+    // Orphan detection: if daemon reports recording/paused but orchestrator didn't start it
+    Timer {
+        id: orphanDetectionTimer
+        interval: 500
+        onTriggered: {
+            if ((root.state === "recording" || root.state === "paused") && !root._orchestratorActive) {
+                console.warn("[HW] Detected orphaned recording session — auto-adopting");
+                root._orchestratorActive = true;
+                root._recordingStartTime = Date.now();
+            }
         }
     }
 
     // Initial state check - inotifywait only fires on CHANGES, not initial state.
     // If recording is already in progress when shell starts, we need to check files directly.
     Component.onCompleted: {
-        console.log("[HW] ═══ Component.onCompleted — reading initial state files");
-        console.log("[HW] configDir:", configDir);
-        console.log("[HW] controlFifo:", controlFifo);
         visualizerStateFile.reload();
         audioLevelFile.reload();
+        orphanDetectionTimer.start();
     }
 
     // Cleanup on destruction
     Component.onDestruction: {
-        console.log("[HW] Component.onDestruction — cleaning up");
+        _stopAllTimers();
         audioLevelPoll.stop();
-        successTimer.stop();
-        processingTimeoutTimer.stop();
-        restartDelayTimer.stop();
         inotifyWatcher.running = false;
     }
 }
