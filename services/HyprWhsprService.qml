@@ -115,7 +115,10 @@ Singleton {
         interval: root._elapsedTimerInterval
         repeat: true
         running: root.recording
-        onTriggered: root._currentElapsed = root._accumulatedSeconds + (Date.now() - root._recordingStartTime) / 1000
+        onTriggered: {
+            if (root._recordingStartTime > 0)
+                root._currentElapsed = root._accumulatedSeconds + (Date.now() - root._recordingStartTime) / 1000;
+        }
     }
 
     // Config directory for HyprWhspr
@@ -173,6 +176,7 @@ Singleton {
                 retry();
             }
         }
+        // Processing/success: toggle is a no-op (wait for completion)
     }
 
     /// Sanitize and validate language codes. Only allow [a-zA-Z-], length 2-5.
@@ -296,6 +300,8 @@ Singleton {
     // Internal cancel logic shared by cancel() and restart().
     // Does NOT emit actionTriggered to avoid double-animation when restart() calls it.
     function _cancelInternal(): void {
+        _commandQueue = [];
+
         // Stop all timers to prevent post-cancel side effects
         _stopAllTimers();
 
@@ -334,6 +340,8 @@ Singleton {
     function retry(): void {
         if (state !== "error" || _errorSource !== "daemon") return;
         actionTriggered("retry");
+        _clearErrorState();
+        _rawState = "processing";
         writeCommand("submit");
     }
 
@@ -609,8 +617,8 @@ Singleton {
                 if (root._lastCommand.startsWith("start")) {
                     root._orchestratorActive = false;
                     root._currentLanguage = "";
-                    root._setErrorState("fifo", "Failed to send command", "Is hyprwhspr running?");
                 }
+                root._setErrorState("fifo", "Failed to send command", "Is hyprwhspr running?");
             }
 
             // Process queued commands
@@ -731,11 +739,11 @@ Singleton {
 
     // Orphan detection: if daemon reports recording/paused but orchestrator didn't start it
     Timer {
-        id: orphanDetectionTimer
+        id: startupOrphanCheck
         interval: 500
         onTriggered: {
             if ((root.state === "recording" || root.state === "paused") && !root._orchestratorActive) {
-                console.warn("[HW] Detected orphaned recording session — auto-adopting");
+                console.warn("[HW] Detected orphaned recording at startup — adopting (language unknown)");
                 root._orchestratorActive = true;
                 root._recordingStartTime = Date.now();
             }
@@ -747,7 +755,7 @@ Singleton {
     Component.onCompleted: {
         visualizerStateFile.reload();
         audioLevelFile.reload();
-        orphanDetectionTimer.start();
+        startupOrphanCheck.start();
     }
 
     // Cleanup on destruction

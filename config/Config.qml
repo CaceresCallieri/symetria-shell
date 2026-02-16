@@ -453,7 +453,9 @@ Singleton {
     function serializeHyprWhspr(): var {
         return {
             enabled: hyprwhspr.enabled,
-            autoHideDelay: hyprwhspr.autoHideDelay
+            autoHideDelay: hyprwhspr.autoHideDelay,
+            restartDelay: hyprwhspr.restartDelay,
+            processingTimeout: hyprwhspr.processingTimeout
         };
     }
 
