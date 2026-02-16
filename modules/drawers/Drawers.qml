@@ -5,6 +5,7 @@ import qs.components.containers
 import qs.services
 import qs.config
 import qs.modules.bar
+import qs.modules.keychords as KeyChordsModule
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -64,12 +65,13 @@ Variants {
                 visibilities.clipboard = false;
                 visibilities.calculator = false;
                 visibilities.packages = false;
+                visibilities.keychords = false;
             }
 
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || visibilities.keychords ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
                 x: Config.border.thickness + win.dragMaskPadding
@@ -105,7 +107,7 @@ Variants {
             HyprlandFocusGrab {
                 id: focusGrab
 
-                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (visibilities.keychords && Config.keychords.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
                 windows: [win]
                 onCleared: {
                     visibilities.launcher = false;
@@ -115,6 +117,7 @@ Variants {
                     visibilities.clipboard = false;
                     visibilities.calculator = false;
                     visibilities.packages = false;
+                    visibilities.keychords = false;
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
                     panels.popouts.hasCurrent = false;
@@ -168,6 +171,7 @@ Variants {
                 property bool keycaster
                 property bool calculator
                 property bool packages
+                property bool keychords
 
                 Component.onCompleted: Visibilities.load(scope.modelData, this)
             }
@@ -202,6 +206,11 @@ Variants {
 
                     Component.onCompleted: Visibilities.bars.set(scope.modelData, this)
                 }
+            }
+
+            KeyChordsModule.Overlay {
+                anchors.fill: parent
+                visibilities: visibilities
             }
         }
     }

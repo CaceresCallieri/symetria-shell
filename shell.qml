@@ -10,6 +10,7 @@ import "modules/lock"
 import "modules/askpass"
 import "modules/hyprwhspr"
 import "modules/keycaster"
+import "modules/keychords"
 import Quickshell
 import QtQuick
 
@@ -27,6 +28,7 @@ ShellRoot {
     Askpass {}
     HyprWhspr {}
     Keycaster {}
+    KeyChords {}
     Lock {
         id: lock
     }

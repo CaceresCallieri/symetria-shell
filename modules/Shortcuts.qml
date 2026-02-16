@@ -153,7 +153,7 @@ Scope {
 
         function toggle(drawer: string): void {
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard", "calculator", "packages"].includes(drawer))
+                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard", "calculator", "packages", "keychords"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard
