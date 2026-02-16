@@ -327,6 +327,42 @@ To create a new pill:
 2. Add `RowLayout` with padding spacers and `PillContainer.WrappedLoader` children
 3. Register in `Bar.qml`: add to `hasPillMargins`, switch case, and Component definition
 
+### Transparency Compensation for Out-of-Backgrounds Components
+
+**⚠️ Components outside the unified Backgrounds system will appear darker**
+
+The drawer system uses a two-layer opacity pipeline in `Drawers.qml`:
+
+```
+Transparency layer (Item, layer.enabled: true)
+├── opacity: Colours.transparency.base (e.g., 0.45)
+├── Border (color: generalBackground)
+└── Backgrounds (layer.enabled: true, opacity: generalBackgroundAlpha = 0.5)
+    └── ShapePaths at generalBackgroundOpaque (#000000, fully opaque)
+```
+
+Panel backgrounds get **two** multiplicative opacity reductions: `generalBackgroundAlpha × transparency.base`. For example: `0.5 × 0.45 = 0.225` (22.5% black).
+
+Components placed **outside** this container (e.g., directly in `StyledWindow`) don't get the transparency layer reduction. Using `Colours.generalBackground` directly gives `0.5` (50% black) — more than double the panel darkness.
+
+**The Fix — compute effective alpha manually:**
+
+```qml
+readonly property real effectiveAlpha: Colours.generalBackgroundAlpha
+    * (Colours.transparency.enabled ? Colours.transparency.base : 1)
+
+color: Qt.alpha(Colours.generalBackgroundOpaque, effectiveAlpha)
+```
+
+This produces the same visual result as panel backgrounds regardless of whether transparency is enabled.
+
+**When this applies:**
+- Overlays placed directly in `Drawers.qml` (outside `Backgrounds` / `Panels`)
+- Any floating dialog or widget that bypasses the unified background system
+- Components that intentionally avoid `Panels` (e.g., to skip Region mask iteration)
+
+**Reference:** `modules/keychords/Overlay.qml` uses this pattern for its centered dialog.
+
 ### C++ Plugin Modules
 Located in `plugin/src/Symmetria/`:
 - **Symmetria** - Core utilities (Qalculator, Toaster, ImageAnalyser, AppDb, Requests)

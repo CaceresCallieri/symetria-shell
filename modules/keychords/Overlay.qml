@@ -67,15 +67,16 @@ Item {
         StyledRect {
             id: dialog
 
-            readonly property var glassStyle: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
-
             implicitWidth: dialogContent.implicitWidth + Appearance.padding.large * 2
             implicitHeight: dialogContent.implicitHeight + Appearance.padding.large * 2
 
+            // Match panel background opacity: generalBackgroundAlpha × transparency.base
+            // The unified Backgrounds system gets both reductions via nested layers,
+            // but this overlay lives outside that container, so we compute it directly.
+            readonly property real effectiveAlpha: Colours.generalBackgroundAlpha * (Colours.transparency.enabled ? Colours.transparency.base : 1)
+
             radius: Appearance.rounding.normal
-            color: glassStyle.background
-            border.color: glassStyle.border
-            border.width: 1
+            color: Qt.alpha(Colours.generalBackgroundOpaque, effectiveAlpha)
 
             focus: true
 
