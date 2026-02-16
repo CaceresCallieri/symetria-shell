@@ -26,6 +26,9 @@ Item {
     required property real serviceAudioLevel
     required property real serviceElapsedSeconds
     required property string serviceLanguage
+    required property string serviceErrorDetail
+    required property string serviceErrorHint
+    required property string serviceErrorRaw
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -238,11 +241,28 @@ Item {
                 font.pointSize: Appearance.font.size.extraLarge
             }
 
+            // Error summary (e.g., "Connection timed out", "Authentication failed")
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("Check hyprwhspr logs for details")
+                text: root.serviceErrorDetail || qsTr("Transcription failed")
+                font.pointSize: Appearance.font.size.normal
+                color: Colours.palette.m3error
+            }
+
+            // Actionable hint (e.g., "Check your network connection")
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.serviceErrorHint || qsTr("Check hyprwhspr logs")
                 font.pointSize: Appearance.font.size.small
                 color: Colours.palette.m3outline
+            }
+
+            // Copy raw error button — only shown for daemon errors with journalctl output
+            ControlButton {
+                Layout.alignment: Qt.AlignHCenter
+                visible: root.serviceErrorRaw !== ""
+                icon: "content_copy"
+                onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
             }
         }
     }

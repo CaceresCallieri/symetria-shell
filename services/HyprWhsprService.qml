@@ -57,6 +57,23 @@ Singleton {
     // Language saved for restart (cancel clears _currentLanguage, but restart needs it)
     property string _pendingRestartLang: ""
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Error detail properties for the drawer UI
+    //
+    // When the state transitions to "error", these provide categorized
+    // information instead of just "Failed". For daemon errors, journalctl
+    // is queried. For Symmetria-internal errors (timeout, FIFO, restart),
+    // the source is known and journalctl is skipped.
+    // ─────────────────────────────────────────────────────────────────────────
+    readonly property string errorDetail: _errorDetail
+    readonly property string errorHint: _errorHint
+    readonly property string errorRaw: _errorRaw
+
+    property string _errorDetail: ""
+    property string _errorHint: ""
+    property string _errorSource: ""  // "daemon", "timeout", "fifo", "restart"
+    property string _errorRaw: ""     // Raw journalctl line (for copy-to-clipboard)
+
     // Orchestrator-initiated session flag.
     // True only when Symmetria explicitly started a recording session via IPC.
     // Gates the `active` property to prevent phantom recordings (daemon writes
@@ -164,6 +181,44 @@ Singleton {
         return sanitized;
     }
 
+    /// Transition to error state with categorized details.
+    /// Centralizes the "set error props before _rawState" pattern so callers
+    /// can't accidentally forget the ordering.
+    function _setErrorState(source: string, detail: string, hint: string): void {
+        _errorSource = source;
+        _errorDetail = detail;
+        _errorHint = hint;
+        _rawState = "error";
+    }
+
+    /// Categorize a raw journalctl error line into user-friendly detail + hint.
+    /// Pattern matching is ordered from most specific to most general.
+    function _categorizeError(rawLine: string): void {
+        _errorRaw = rawLine;
+
+        const patterns = [
+            { re: /TimeoutError|timed out/i,            detail: "Connection timed out",    hint: "Check your network connection" },
+            { re: /ConnectionResetError|Connection reset/i, detail: "Connection reset",    hint: "Server closed the connection" },
+            { re: /SSLError|SSL:/i,                     detail: "SSL/TLS error",           hint: "Check API endpoint configuration" },
+            { re: /status 401|API key/i,                detail: "Authentication failed",   hint: "Check your API key" },
+            { re: /status 429|quota/i,                  detail: "Quota exceeded",          hint: "Check your API plan limits" },
+            { re: /status 4\d\d/,                       detail: "API request rejected",    hint: "Check hyprwhspr configuration" },
+            { re: /status 5\d\d/,                       detail: "API server error",        hint: "Try again later" },
+        ];
+
+        for (const p of patterns) {
+            if (p.re.test(rawLine)) {
+                _errorDetail = p.detail;
+                _errorHint = p.hint;
+                return;
+            }
+        }
+
+        // No pattern matched — keep generic fallback
+        _errorDetail = "Transcription failed";
+        _errorHint = "Check hyprwhspr logs";
+    }
+
     /// Start recording with optional language code.
     /// Sends "start:lang" or "start" to the FIFO.
     /// Clears stale terminal states and resets elapsed time if overriding phantom state.
@@ -173,6 +228,10 @@ Singleton {
 
         // Clear stale terminal states from previous daemon crashes
         if (state === "error" || state === "success") {
+            _errorSource = "";
+            _errorDetail = "";
+            _errorHint = "";
+            _errorRaw = "";
             _rawState = "";
         }
 
@@ -238,6 +297,10 @@ Singleton {
         _accumulatedSeconds = 0;
         _currentElapsed = 0;
         audioLevel = 0.0;
+        _errorSource = "";
+        _errorDetail = "";
+        _errorHint = "";
+        _errorRaw = "";
         cancelProcess.running = true;
     }
 
@@ -277,6 +340,8 @@ Singleton {
         successTimer.stop();
         restartDelayTimer.stop();
         processingTimeoutTimer.stop();
+        errorQueryTimeout.stop();
+        if (errorQueryProcess.running) errorQueryProcess.running = false;
     }
 
     // Track if audio_level file exists (only present when visualizer daemon runs)
@@ -456,6 +521,28 @@ Singleton {
             if (state !== "success") {
                 _currentLanguage = "";
             }
+
+            // Error detail management
+            if (state === "error") {
+                // If _errorSource is already set, a Symmetria-internal error
+                // populated the details before setting _rawState — skip journalctl.
+                if (_errorSource === "") {
+                    _errorSource = "daemon";
+                    _errorDetail = "Transcription failed";
+                    _errorHint = "Fetching error details...";
+                    errorQueryProcess.running = true;
+                    errorQueryTimeout.start();
+                }
+            } else {
+                // Non-error terminal state: clear stale error details and
+                // stop any in-flight journalctl query to prevent race condition
+                if (errorQueryProcess.running) errorQueryProcess.running = false;
+                errorQueryTimeout.stop();
+                _errorSource = "";
+                _errorDetail = "";
+                _errorHint = "";
+                _errorRaw = "";
+            }
         }
 
         if (state === "success") {
@@ -492,7 +579,7 @@ Singleton {
 
         onTriggered: {
             console.error("[HW] processingTimeoutTimer: processing timed out — daemon may have crashed");
-            root._rawState = "error";
+            root._setErrorState("timeout", "Processing timed out", "Daemon may have crashed");
         }
     }
 
@@ -507,7 +594,7 @@ Singleton {
                 if (root._lastCommand.startsWith("start")) {
                     root._orchestratorActive = false;
                     root._currentLanguage = "";
-                    root._rawState = "error";
+                    root._setErrorState("fifo", "Failed to send command", "Is hyprwhspr running?");
                 }
             }
 
@@ -527,7 +614,7 @@ Singleton {
         onExited: (code, status) => {
             if (code !== 0) {
                 console.error("[HW] systemd restart failed (exit", code + ")");
-                root._rawState = "error";
+                root._setErrorState("restart", "Service restart failed", "Check systemctl --user status hyprwhspr");
             }
         }
     }
@@ -563,7 +650,66 @@ Singleton {
                 console.error("[HW] Restart failed after", root._maxRestartRetries, "retries");
                 root._pendingRestartLang = "";
                 root._restartRetries = 0;
-                root._rawState = "error";
+                root._setErrorState("restart", "Daemon not responding", "Try restarting hyprwhspr manually");
+            }
+        }
+    }
+
+    // Process for querying recent HyprWhspr errors from journalctl.
+    // Triggered when daemon reports "error" and _errorSource is empty (unknown cause).
+    // Uses -p err to filter error-level messages, -o cat for clean output.
+    Process {
+        id: errorQueryProcess
+
+        command: ["journalctl", "--user-unit=hyprwhspr", "--no-pager", "-n", "5", "--since", "-2min", "-p", "err", "-o", "cat"]
+
+        onExited: (code, status) => {
+            errorQueryTimeout.stop();
+            if (code !== 0) {
+                console.warn("[HW] journalctl query failed (exit", code, ") — using generic error");
+            }
+        }
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                errorQueryTimeout.stop();
+
+                if (!text || text.trim() === "") {
+                    // No error lines found in journal
+                    root._errorHint = "No details in journal (check daemon logs)";
+                    return;
+                }
+
+                // Find the last ERROR line (most recent is most relevant)
+                const lines = text.trim().split("\n");
+                let errorLine = "";
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    if (lines[i].includes("ERROR")) {
+                        errorLine = lines[i];
+                        break;
+                    }
+                }
+
+                if (errorLine) {
+                    root._categorizeError(errorLine);
+                } else {
+                    // Journalctl returned lines but none had "ERROR" — use last line as raw
+                    root._categorizeError(lines[lines.length - 1]);
+                }
+            }
+        }
+    }
+
+    // Timeout for journalctl error query — prevents "Fetching error details..."
+    // from displaying indefinitely if journalctl hangs or is very slow.
+    Timer {
+        id: errorQueryTimeout
+        interval: 5000
+
+        onTriggered: {
+            if (errorQueryProcess.running) {
+                console.warn("[HW] Error query timed out — using generic message");
+                errorQueryProcess.running = false;
             }
         }
     }

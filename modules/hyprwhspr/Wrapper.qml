@@ -113,6 +113,9 @@ Item {
             serviceAudioLevel: HyprWhsprService.audioLevel
             serviceElapsedSeconds: HyprWhsprService.elapsedSeconds
             serviceLanguage: HyprWhsprService.language
+            serviceErrorDetail: HyprWhsprService.errorDetail
+            serviceErrorHint: HyprWhsprService.errorHint
+            serviceErrorRaw: HyprWhsprService.errorRaw
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }
