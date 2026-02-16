@@ -593,6 +593,78 @@ bind = $mainMod SHIFT, C, exec, qs -c symmetria ipc call drawers toggle calculat
 - Unit conversions: `5km to miles`, `100F to C`
 - Constants: `pi`, `e`, `c` (speed of light)
 
+### KeyChords (Which-Key Overlay)
+
+The KeyChords module (`modules/keychords/`) provides a "which-key" style chord overlay. When a chord group is activated via IPC, a centered dialog appears showing available key-label pairs. Pressing a key executes the associated command.
+
+**Configuration File:** `~/.config/symmetria/chords.json` (see `chords.example.json` for schema)
+
+**Schema:**
+```json
+{
+  "groupName": {
+    "title": "Display Title",
+    "chords": [
+      { "key": "x", "label": "Description", "command": "shell command" }
+    ]
+  }
+}
+```
+
+**Validation Rules:**
+- `key` must be a single character
+- `label` must be a non-empty string
+- `command` must be a non-empty string (executed via `sh -c`)
+- Empty or invalid groups are silently skipped
+- File is hot-reloaded on changes (via `FileView.watchChanges`)
+
+**IPC:**
+```bash
+# Activate a chord group
+qs -c symmetria ipc call chords activate screenshot
+
+# Dismiss overlay
+qs -c symmetria ipc call chords dismiss
+```
+
+**Hyprland Keybinding Example:**
+```conf
+bind = $mainMod, S, exec, qs -c symmetria ipc call chords activate screenshot
+```
+
+**Keyboard Behavior:**
+| Key | Action |
+|-----|--------|
+| Matched key | Execute command, close overlay |
+| Escape | Dismiss overlay |
+| Click outside | Dismiss overlay |
+| Unmatched key | Silently consumed |
+
+**Configuration (`~/.config/symmetria/shell.json`):**
+```json
+{
+  "keychords": {
+    "enabled": true,
+    "sizes": {
+      "maxWidth": 500,
+      "keyWidth": 32,
+      "itemHeight": 28
+    }
+  }
+}
+```
+
+**Files:**
+| File | Purpose |
+|------|---------|
+| `services/KeyChordsService.qml` | Singleton: chord group loading, key dispatch, command execution |
+| `modules/keychords/KeyChords.qml` | Root component: IPC handler, visibility management |
+| `modules/keychords/Overlay.qml` | Centered floating dialog with key grid |
+| `modules/keychords/ChordKey.qml` | Individual key chip (badge + label + click) |
+| `config/KeyChordsConfig.qml` | Configuration defaults |
+
+**Security:** Commands in `chords.json` are executed via `sh -c` without sanitization. This file is trusted at the same level as `~/.bashrc` -- shell expansion is intentional.
+
 ## Configuration
 
 ### Two-Layer System
