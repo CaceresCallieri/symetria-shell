@@ -128,7 +128,8 @@ Item {
                             width: (Config.keychords.sizes.maxWidth - Appearance.spacing.small) / 2
 
                             onActivated: {
-                                KeyChordsService.handleKey(modelData.key);
+                                KeyChordsService.dismiss();
+                                KeyChordsService.executeCommand(modelData.command);
                             }
                         }
                     }

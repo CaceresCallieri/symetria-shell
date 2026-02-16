@@ -90,6 +90,10 @@ Singleton {
         return false;
     }
 
+    /// Execute a chord command via shell.
+    /// SECURITY: Commands come from user-controlled chords.json.
+    /// This file is trusted at the same level as ~/.bashrc —
+    /// no sanitization is performed; shell expansion is intentional.
     function executeCommand(command: string): void {
         commandRunner.command = ["sh", "-c", command];
         commandRunner.running = true;
