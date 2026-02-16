@@ -116,6 +116,7 @@ Item {
             serviceErrorDetail: HyprWhsprService.errorDetail
             serviceErrorHint: HyprWhsprService.errorHint
             serviceErrorRaw: HyprWhsprService.errorRaw
+            serviceErrorSource: HyprWhsprService.errorSource
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

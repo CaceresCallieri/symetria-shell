@@ -68,6 +68,7 @@ Singleton {
     readonly property string errorDetail: _errorDetail
     readonly property string errorHint: _errorHint
     readonly property string errorRaw: _errorRaw
+    readonly property string errorSource: _errorSource
 
     property string _errorDetail: ""
     property string _errorHint: ""
@@ -165,8 +166,12 @@ Singleton {
         } else if (state === "recording" || state === "paused") {
             stop();
         } else if (state === "error") {
-            _pendingRestartLang = lang || _currentLanguage || "";
-            restart();
+            if (_errorSource === "timeout" || _errorSource === "fifo" || _errorSource === "restart") {
+                _pendingRestartLang = lang || _currentLanguage || "";
+                restart();
+            } else {
+                retry();
+            }
         }
     }
 
@@ -189,6 +194,14 @@ Singleton {
         _errorDetail = detail;
         _errorHint = hint;
         _rawState = "error";
+    }
+
+    /// Clear all error detail properties. Companion to _setErrorState().
+    function _clearErrorState(): void {
+        _errorSource = "";
+        _errorDetail = "";
+        _errorHint = "";
+        _errorRaw = "";
     }
 
     /// Categorize a raw journalctl error line into user-friendly detail + hint.
@@ -228,10 +241,7 @@ Singleton {
 
         // Clear stale terminal states from previous daemon crashes
         if (state === "error" || state === "success") {
-            _errorSource = "";
-            _errorDetail = "";
-            _errorHint = "";
-            _errorRaw = "";
+            _clearErrorState();
             _rawState = "";
         }
 
@@ -297,10 +307,7 @@ Singleton {
         _accumulatedSeconds = 0;
         _currentElapsed = 0;
         audioLevel = 0.0;
-        _errorSource = "";
-        _errorDetail = "";
-        _errorHint = "";
-        _errorRaw = "";
+        _clearErrorState();
         cancelProcess.running = true;
     }
 
@@ -319,6 +326,15 @@ Singleton {
         _pendingRestartLang = savedLang;
 
         restartDelayTimer.start();
+    }
+
+    /// Retry transcription by re-submitting cached audio.
+    /// Only meaningful for daemon-reported errors where audio is cached in memory.
+    /// Sends "submit" to FIFO — HyprWhspr's built-in retry uses _longform_error_audio.
+    function retry(): void {
+        if (state !== "error" || _errorSource !== "daemon") return;
+        actionTriggered("retry");
+        writeCommand("submit");
     }
 
     function writeCommand(cmd: string): void {
@@ -509,6 +525,8 @@ Singleton {
                 _recordingStartTime = 0;
             }
             processingTimeoutTimer.start();
+            // Clear error source so a fresh journalctl query runs if we return to error
+            _errorSource = "";
         } else {
             // Terminal states (error, success, idle): reset timer
             processingTimeoutTimer.stop();
@@ -538,10 +556,7 @@ Singleton {
                 // stop any in-flight journalctl query to prevent race condition
                 if (errorQueryProcess.running) errorQueryProcess.running = false;
                 errorQueryTimeout.stop();
-                _errorSource = "";
-                _errorDetail = "";
-                _errorHint = "";
-                _errorRaw = "";
+                _clearErrorState();
             }
         }
 

@@ -29,6 +29,7 @@ Item {
     required property string serviceErrorDetail
     required property string serviceErrorHint
     required property string serviceErrorRaw
+    required property string serviceErrorSource
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -257,12 +258,44 @@ Item {
                 color: Colours.palette.m3outline
             }
 
-            // Copy raw error button — only shown for daemon errors with journalctl output
-            ControlButton {
+            // Action buttons for error state
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                visible: root.serviceErrorRaw !== ""
-                icon: "content_copy"
-                onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
+                spacing: Appearance.spacing.normal
+
+                // Retry: re-submit cached audio (only for daemon errors where audio is in memory)
+                ControlButton {
+                    id: retryBtn
+                    visible: root.serviceErrorSource === "daemon"
+                    icon: "refresh"
+                    iconColor: Colours.palette.m3primary
+                    onClicked: HyprWhsprService.retry()
+                }
+
+                // Cancel: restart daemon, discard audio, close drawer
+                ControlButton {
+                    id: errorCancelBtn
+                    icon: "close"
+                    iconColor: Colours.palette.m3error
+                    onClicked: HyprWhsprService.cancel()
+                }
+
+                // Copy raw error to clipboard (only when journalctl output available)
+                ControlButton {
+                    visible: root.serviceErrorRaw !== ""
+                    icon: "content_copy"
+                    onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
+                }
+            }
+
+            // Internal signal handler for keybind-triggered animations.
+            // retryBtn/errorCancelBtn are only in scope inside this Component.
+            Connections {
+                target: HyprWhsprService
+                function onActionTriggered(action: string): void {
+                    if (action === "retry") retryBtn.triggerPress();
+                    else if (action === "cancel") errorCancelBtn.triggerPress();
+                }
             }
         }
     }
@@ -573,7 +606,10 @@ Item {
                             restartBtn.triggerPress();
                             break;
                         case "cancel":
-                            cancelBtn.triggerPress();
+                            if (root.serviceState !== "error")
+                                cancelBtn.triggerPress();
+                            break;
+                        case "retry":
                             break;
                         case "stop":
                             submitBtn.triggerPress();

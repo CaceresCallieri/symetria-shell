@@ -54,5 +54,8 @@ Scope {
         function restart(): void {
             HyprWhsprService.restart();
         }
+        function retry(): void {
+            HyprWhsprService.retry();
+        }
     }
 }
