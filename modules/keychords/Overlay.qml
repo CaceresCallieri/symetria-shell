@@ -107,12 +107,13 @@ Item {
                     color: Colours.palette.m3onSurface
                 }
 
-                // Chord keys grid (wrapping flow)
-                Flow {
+                // Chord keys grid
+                Grid {
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: Config.keychords.sizes.maxWidth
 
-                    spacing: Appearance.spacing.small
+                    columns: 2
+                    columnSpacing: Appearance.spacing.small
+                    rowSpacing: Appearance.spacing.normal
 
                     Repeater {
                         model: KeyChordsService.activeChords

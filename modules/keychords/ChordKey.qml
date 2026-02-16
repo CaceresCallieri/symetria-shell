@@ -19,7 +19,7 @@ Item {
     signal activated
 
     implicitWidth: row.implicitWidth + Appearance.padding.normal * 2
-    implicitHeight: Config.keychords.sizes.itemHeight
+    implicitHeight: Math.max(Config.keychords.sizes.itemHeight, Config.keychords.sizes.keyWidth + Appearance.padding.small * 2)
 
     StateLayer {
         radius: Appearance.rounding.small
@@ -32,7 +32,9 @@ Item {
     RowLayout {
         id: row
 
-        anchors.centerIn: parent
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: parent.left
+        anchors.leftMargin: Appearance.padding.normal
         spacing: Appearance.spacing.smaller
 
         // Key letter badge — matches keycaster non-active key style
