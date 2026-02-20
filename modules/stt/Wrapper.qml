@@ -117,6 +117,8 @@ Item {
             serviceErrorHint: SttService.errorHint
             serviceErrorRaw: SttService.errorRaw
             serviceErrorSource: SttService.errorSource
+            serviceIsAskMode: SttService.isAskMode
+            serviceDeliveryChoice: SttService.activeDeliveryChoice
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

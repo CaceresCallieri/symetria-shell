@@ -478,6 +478,7 @@ SttService → spawns pw-record → WAV file
 | Cancel | `qs -c symmetria ipc call stt cancel` | Kill processes, discard audio |
 | Restart | `qs -c symmetria ipc call stt restart` | Cancel + re-start recording |
 | Retry | `qs -c symmetria ipc call stt retry` | Re-submit failed transcription |
+| Set mode | `qs -c symmetria ipc call stt mode submit` | Switch ask-mode radio to given choice |
 
 **Keyboard Shortcuts:**
 
@@ -510,6 +511,7 @@ SttService → spawns pw-record → WAV file
 | Clipboard only | `"clipboard"` (default) | Copies transcription to clipboard via `wl-copy` |
 | Window inject | `"inject"` | Clipboard copy **+** paste into the window that was active at submit time |
 | Auto-submit | `"submit"` | Clipboard copy **+** paste **+** send Enter to auto-submit |
+| Ask (radio) | `"ask"` | Shows radio toggle in drawer; user picks delivery per-recording |
 
 **Window Injection Flow (Modes B & C):**
 1. User presses Submit (stop) → `_captureTargetWindow()` saves the active window's Hyprland address + class
@@ -526,6 +528,17 @@ SttService → spawns pw-record → WAV file
 - **50ms clipboard propagation delay** — ensures `wl-copy` data reaches the Wayland compositor before `sendshortcut`
 - **Auto-submit delay** — 150ms between paste and Enter allows the application to process clipboard content
 - **Universal Enter** — `Return` key without modifiers works in both terminals and GUI apps
+
+**Ask Mode (Radio Toggle):**
+
+When `deliveryMode` is `"ask"`, a radio toggle row appears in the STT drawer during recording, paused, and processing states. The user can switch between Save (clipboard), Inject, and Submit at any time — including during processing. The selected option at transcription completion determines delivery behavior.
+
+- Three options: **Save** (clipboard icon), **Inject** (input icon), **Submit** (send icon)
+- Clickable chips with M3 primaryContainer styling for selected state
+- IPC: `qs -c symmetria ipc call stt mode inject` to switch programmatically
+- Last-used choice persists across recordings within the same shell session (first default: clipboard)
+- Resolves to effective mode at delivery time via `effectiveMode` in `clipboardProcess.onExited`
+- `_captureTargetWindow()` always runs (since `"ask" !== "clipboard"`), ensuring inject/submit targets are available
 
 **Configuration (`~/.config/symmetria/shell.json`):**
 ```json

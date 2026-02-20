@@ -59,6 +59,12 @@ Singleton {
     /// Used by Content.qml to animate the corresponding control button.
     signal actionTriggered(string action)
 
+    /// Whether the delivery mode radio toggle should be shown
+    readonly property bool isAskMode: _deliveryMode === "ask"
+
+    /// The user's runtime delivery choice for "ask" mode
+    readonly property string activeDeliveryChoice: _activeDeliveryChoice
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal state
     // ─────────────────────────────────────────────────────────────────────────
@@ -104,6 +110,11 @@ Singleton {
     // Values: "" (none), "pause", "submit", "cancel"
     property string _pendingRecordAction: ""
 
+    // Runtime delivery choice for "ask" mode.
+    // Persists across recordings within the same shell session.
+    // First-time default is "clipboard" (safest).
+    property string _activeDeliveryChoice: "clipboard"
+
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
     readonly property string _tempDir: `${_runtimeDir}/symmetria-stt`
@@ -113,10 +124,10 @@ Singleton {
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
     readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
 
-    // Delivery mode: "clipboard" (default), "inject" (paste into target), or "submit" (paste + Enter)
+    // Delivery mode: "clipboard" (default), "inject", "submit", or "ask" (runtime radio toggle)
     readonly property string _deliveryMode: {
         const mode = Config.stt?.deliveryMode ?? "clipboard";
-        if (mode === "inject" || mode === "submit") return mode;
+        if (mode === "inject" || mode === "submit" || mode === "ask") return mode;
         return "clipboard";
     }
 
@@ -266,6 +277,18 @@ Singleton {
         _startTranscription(_currentAudioFile);
     }
 
+    /// Switch the runtime delivery choice (only effective in "ask" mode).
+    function setDeliveryChoice(mode: string): void {
+        if (_deliveryMode !== "ask") {
+            console.debug("[STT] setDeliveryChoice() ignored: deliveryMode is", _deliveryMode, "(not ask)");
+            return;
+        }
+        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
+        if (_activeDeliveryChoice === mode) return;
+        _activeDeliveryChoice = mode;
+        actionTriggered("mode-" + mode);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -297,6 +320,8 @@ Singleton {
     /// Capture the currently active window for inject delivery.
     /// Called at both start() and stop() — start() captures an eager fallback,
     /// stop() overwrites with a fresher value if a toplevel is available.
+    /// In ask mode, we capture regardless of _activeDeliveryChoice because
+    /// the user may switch to inject/submit before delivery completes.
     function _captureTargetWindow(): void {
         if (_deliveryMode === "clipboard") return;
         const toplevel = Hypr.activeToplevel;
@@ -650,12 +675,16 @@ Singleton {
                 root._targetWindowClass = "";
                 return;
             }
+            // Resolve effective delivery mode ("ask" → runtime choice)
+            const effectiveMode = root._deliveryMode === "ask"
+                ? root._activeDeliveryChoice
+                : root._deliveryMode;
             // Chain window injection after successful clipboard write
-            if (root._deliveryMode !== "clipboard" && root._targetWindowAddress !== "") {
+            if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
                 if (root._targetWindowClass === "")
                     console.warn("[STT] Window class unknown; inject will use Ctrl+V");
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
-                if (root._deliveryMode === "submit") cmd.push("submit");
+                if (effectiveMode === "submit") cmd.push("submit");
                 injectProcess.command = cmd;
                 injectProcess.running = true;
             }

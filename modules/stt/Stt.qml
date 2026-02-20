@@ -57,5 +57,8 @@ Scope {
         function retry(): void {
             SttService.retry();
         }
+        function mode(choice: string): void {
+            SttService.setDeliveryChoice(choice);
+        }
     }
 }

@@ -30,6 +30,8 @@ Item {
     required property string serviceErrorHint
     required property string serviceErrorRaw
     required property string serviceErrorSource
+    required property bool serviceIsAskMode
+    required property string serviceDeliveryChoice
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -361,6 +363,87 @@ Item {
         }
     }
 
+    /// Radio-style delivery option chip for "ask" mode.
+    /// Displays a selectable pill with icon + label. Visual feedback via triggerPress().
+    component DeliveryOption: Item {
+        id: optionBtn
+
+        required property string mode
+        required property string icon
+        required property string label
+        required property bool selected
+
+        signal clicked()
+
+        function triggerPress(): void {
+            optionPressAnim.restart();
+        }
+
+        SequentialAnimation {
+            id: optionPressAnim
+
+            NumberAnimation {
+                target: optionBtn
+                property: "scale"
+                to: 0.90
+                duration: 80
+                easing.type: Easing.OutQuad
+            }
+
+            NumberAnimation {
+                target: optionBtn
+                property: "scale"
+                to: 1.0
+                duration: 150
+                easing.type: Easing.OutBack
+            }
+        }
+
+        implicitWidth: optionRow.implicitWidth + Appearance.padding.normal * 2
+        implicitHeight: optionRow.implicitHeight + Appearance.padding.smaller * 2
+
+        StyledRect {
+            anchors.fill: parent
+            radius: Appearance.rounding.full
+            color: optionBtn.selected
+                ? Colours.palette.m3primaryContainer
+                : Colours.palette.m3surfaceContainerHigh
+        }
+
+        StateLayer {
+            radius: Appearance.rounding.full
+            color: optionBtn.selected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+            function onClicked(): void {
+                SttService.setDeliveryChoice(optionBtn.mode);
+                optionBtn.clicked();
+            }
+        }
+
+        Row {
+            id: optionRow
+            anchors.centerIn: parent
+            spacing: Appearance.spacing.smaller
+
+            MaterialIcon {
+                text: optionBtn.icon
+                color: optionBtn.selected
+                    ? Colours.palette.m3onPrimaryContainer
+                    : Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            StyledText {
+                text: optionBtn.label
+                color: optionBtn.selected
+                    ? Colours.palette.m3onPrimaryContainer
+                    : Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+    }
+
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + padding
 
@@ -562,10 +645,47 @@ Item {
                 }
             }
 
+            // Delivery mode radio toggle (visible only in "ask" mode during recording/paused).
+            // Hidden during processing to match convention that processing is non-interactive.
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.serviceIsAskMode && (root.serviceState === "recording"
+                    || root.serviceState === "paused")
+
+                RowLayout {
+                    spacing: Appearance.spacing.small
+
+                    DeliveryOption {
+                        id: saveOption
+                        mode: "clipboard"
+                        icon: "content_copy"
+                        label: qsTr("Save")
+                        selected: root.serviceDeliveryChoice === "clipboard"
+                    }
+
+                    DeliveryOption {
+                        id: injectOption
+                        mode: "inject"
+                        icon: "input"
+                        label: qsTr("Inject")
+                        selected: root.serviceDeliveryChoice === "inject"
+                    }
+
+                    DeliveryOption {
+                        id: submitOption
+                        mode: "submit"
+                        icon: "send"
+                        label: qsTr("Submit")
+                        selected: root.serviceDeliveryChoice === "submit"
+                    }
+                }
+            }
+
             // Signal handler for recording/paused-state buttons (pauseBtn, restartBtn,
-            // cancelBtn, submitBtn). These IDs exist in the main content scope.
+            // cancelBtn, submitBtn) and delivery mode radio options.
+            // These IDs exist in the main content scope.
             // The error-state buttons have a separate Connections block inside
-            // errorComponent above (~line 293).
+            // errorComponent above.
             Connections {
                 target: SttService
                 function onActionTriggered(action: string): void {
@@ -585,6 +705,15 @@ Item {
                             break;
                         case "stop":
                             submitBtn.triggerPress();
+                            break;
+                        case "mode-clipboard":
+                            saveOption.triggerPress();
+                            break;
+                        case "mode-inject":
+                            injectOption.triggerPress();
+                            break;
+                        case "mode-submit":
+                            submitOption.triggerPress();
                             break;
                     }
                 }
