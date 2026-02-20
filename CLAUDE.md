@@ -71,7 +71,7 @@ qs -c symmetria
 ## Architecture
 
 ### Entry Point
-- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, HyprWhspr, Lock, Shortcuts, BatteryMonitor, IdleMonitors
+- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, Stt, Lock, Shortcuts, BatteryMonitor, IdleMonitors
 
 ### Directory Structure
 | Directory | Purpose |

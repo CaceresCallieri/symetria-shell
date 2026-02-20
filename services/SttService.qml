@@ -31,7 +31,10 @@ Singleton {
     /// Audio level (0.0-1.0) during recording
     readonly property real audioLevel: _audioLevel
 
-    /// Whether any non-idle state is active (controls drawer visibility)
+    /// Whether any non-idle state is active (controls drawer visibility).
+    /// _orchestratorActive can diverge from _state in the API-key-missing path:
+    /// start() sets _orchestratorActive=true, then _setErrorState moves to "error".
+    /// Without _orchestratorActive, the brief idle→error transition would flicker the drawer.
     readonly property bool active: _state !== "idle" && _orchestratorActive
 
     /// Whether currently recording
@@ -126,16 +129,18 @@ Singleton {
     function toggle(lang: string): void {
         const now = Date.now();
         if (now - _lastToggleTime < _toggleDebounceMs) return;
-        _lastToggleTime = now;
 
         if (_state === "idle" || !_orchestratorActive) {
+            _lastToggleTime = now;
             start(lang);
         } else if (_state === "recording" || _state === "paused") {
+            _lastToggleTime = now;
             stop();
         } else if (_state === "error") {
+            _lastToggleTime = now;
             retry();
         }
-        // Processing/success: no-op (wait for completion)
+        // Processing/success: no-op — don't update debounce timestamp
     }
 
     /// Start recording with optional language code.
@@ -340,6 +345,9 @@ Singleton {
         const sampleRate = Config.stt?.recording?.sampleRate ?? 16000;
         const channels = Config.stt?.recording?.channels ?? 1;
 
+        // Capture segment path on the process so onExited reads the correct
+        // path even if _segmentCounter is incremented before the exit fires.
+        recordProcess.capturedSegmentPath = segmentPath;
         recordProcess.command = [
             "pw-record",
             "--format=s16",
@@ -391,8 +399,10 @@ Singleton {
         const model = Config.stt?.model ?? "gpt-4o-transcribe";
         const lang = _currentLanguage || "en";
 
+        // Pass API key via environment to avoid exposure in /proc/<pid>/cmdline
+        transcribeProcess.environment = ({ STT_API_KEY: _resolvedApiKey });
         transcribeProcess.command = [
-            _transcribeScript, audioFile, lang, model, _resolvedApiKey
+            _transcribeScript, audioFile, lang, model
         ];
         transcribeProcess.running = true;
     }
@@ -400,8 +410,8 @@ Singleton {
     /// Delete temp files for the current session.
     function _cleanupTempFiles(): void {
         if (_sessionId !== "") {
-            Quickshell.execDetached(["sh", "-c",
-                `rm -f "${_tempDir}/session_${_sessionId}"_* 2>/dev/null`]);
+            Quickshell.execDetached(["find", _tempDir, "-maxdepth", "1",
+                "-name", `session_${_sessionId}_*`, "-delete"]);
         }
     }
 
@@ -482,6 +492,9 @@ Singleton {
     // pw-record: captures audio to WAV file (command set dynamically)
     Process {
         id: recordProcess
+        // Captured at _startRecording() time so onExited reads the path that was
+        // active when this invocation began, not the post-resume counter value.
+        property string capturedSegmentPath: ""
         onExited: (code, status) => {
             const action = root._pendingRecordAction;
             root._pendingRecordAction = "";
@@ -490,7 +503,7 @@ Singleton {
             if (action === "cancel") return;
 
             // Register completed segment file
-            const segPath = root._currentSegmentPath;
+            const segPath = capturedSegmentPath;
             if (segPath !== "") {
                 const files = root._segmentFiles.slice();
                 files.push(segPath);

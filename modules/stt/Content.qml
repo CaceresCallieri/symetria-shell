@@ -288,8 +288,10 @@ Item {
                 }
             }
 
-            // Internal signal handler for keybind-triggered animations.
-            // retryBtn/errorCancelBtn are only in scope inside this Component.
+            // Signal handler for error-state buttons (retryBtn, errorCancelBtn).
+            // These IDs only exist inside errorComponent's scope, so this
+            // Connections block must live here — the outer block at line ~566
+            // handles recording/paused-state buttons instead.
             Connections {
                 target: SttService
                 function onActionTriggered(action: string): void {
@@ -560,9 +562,10 @@ Item {
                 }
             }
 
-            // Dispatch action signals from SttService to control button animations.
-            // Bridges both UI clicks and keybind-triggered IPC calls to the same
-            // visual feedback: a brief scale squeeze on the corresponding button.
+            // Signal handler for recording/paused-state buttons (pauseBtn, restartBtn,
+            // cancelBtn, submitBtn). These IDs exist in the main content scope.
+            // The error-state buttons have a separate Connections block inside
+            // errorComponent above (~line 293).
             Connections {
                 target: SttService
                 function onActionTriggered(action: string): void {
