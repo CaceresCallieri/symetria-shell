@@ -69,7 +69,7 @@ Item {
     MouseArea {
         anchors.fill: parent
 
-        onClicked: {
+        onClicked: event => {
             if (!root.isActive) {
                 // Named workspaces (negative IDs) need "workspace name:<name>" syntax
                 if (root.ws < 0) {
@@ -78,7 +78,9 @@ Item {
                 } else {
                     Hypr.dispatch(`workspace ${root.ws}`);
                 }
-            } else {
+            } else if (event.x < content.labelWidth) {
+                // Only toggle special workspace when clicking on the label area,
+                // not on app icons gaps or the fullscreen indicator
                 Hypr.dispatch("togglespecialworkspace special");
             }
         }
