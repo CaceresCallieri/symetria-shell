@@ -47,8 +47,9 @@ Item {
     // Tuned for natural speech visualization. Adjust if bars feel laggy/jittery.
     readonly property QtObject audioConfig: QtObject {
         readonly property real smoothing: 0.35       // 0.2=laggy, 0.5=jittery, 0.35=balanced
-        readonly property real noiseFloor: 0.10      // Filters ~40dB ambient noise
-        readonly property real powerCurve: 1.1       // Slight boost for speech dynamics
+        readonly property real noiseFloor: 0.025     // Just below ambient (~0.03), so silence ≈ 0
+        readonly property real gain: 15.0            // Clips at ~0.09 RMS (speech ceiling). Recalculate if noiseFloor changes
+        readonly property real powerCurve: 0.5       // Square root curve: boosts mids further
         readonly property real waveVariation: 0.30   // ±30% creates motion without chaos
         readonly property real waveSpeed: 0.08       // Gentle oscillation speed
         readonly property real waveFrequency: 0.8    // Wave pattern across bar array
@@ -489,7 +490,7 @@ Item {
 
             // Audio level bars (visible during recording, paused, and processing)
             // Recording: audio-reactive with gentle wave
-            // Paused: frozen at last position
+            // Paused: bars settle to minimum height (audioLevel reset to 0 on pause)
             // Processing: flowing wave animation (no audio input)
             FadeTransition {
                 id: audioLevelContainer
@@ -540,12 +541,14 @@ Item {
                                 // Recording/paused: audio-reactive with gentle wave
                                 const rawLevel = root.audioLevel;
 
-                                // Noise gate: ignore fan noise and ambient sounds
+                                // Noise gate: subtract ambient baseline, amplify, compress
                                 let effectiveLevel = 0;
                                 if (rawLevel > cfg.noiseFloor) {
                                     // Rescale: map [noiseFloor, 1.0] → [0, 1.0]
                                     effectiveLevel = (rawLevel - cfg.noiseFloor) / (1.0 - cfg.noiseFloor);
-                                    // Power curve adjusts quiet vs loud response
+                                    // Gain: stretch narrow speech range to fill [0, 1.0]
+                                    effectiveLevel = Math.min(1.0, effectiveLevel * cfg.gain);
+                                    // Power curve compresses dynamic range (sqrt boosts mids)
                                     effectiveLevel = Math.pow(effectiveLevel, cfg.powerCurve);
                                 }
 
