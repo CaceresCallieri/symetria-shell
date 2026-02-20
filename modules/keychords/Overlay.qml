@@ -48,8 +48,11 @@ Item {
     }
 
     // Transparent click catcher — dismiss when clicking outside the dialog
+    // Only enabled when the dialog is showing; otherwise this full-window
+    // MouseArea would block all click events in the drawers window.
     MouseArea {
         anchors.fill: parent
+        enabled: root.shouldShow
         onClicked: KeyChordsService.dismiss()
     }
 
