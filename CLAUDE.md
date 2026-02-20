@@ -363,6 +363,42 @@ This produces the same visual result as panel backgrounds regardless of whether 
 
 **Reference:** `modules/keychords/Overlay.qml` uses this pattern for its centered dialog.
 
+### Drawers Window Input Region (XOR Mask)
+
+**⚠️ The mask uses XOR — expanding the mainRect SHRINKS the input region**
+
+The drawers window (`Drawers.qml`) uses a `mask: Region` with `Intersection.Xor` to define its Wayland input region (where the surface accepts pointer press/click events). The XOR creates an **inverted** relationship between the `mainRect` and the clickable area:
+
+```
+finalInputRegion = fullWindowRect XOR (mainRect - panelSubtractions)
+```
+
+Since `mainRect` is inside the full window, XOR produces:
+- **In the input region:** everything NOT in mainRect (border strips, bar area) + panel areas (subtracted from mainRect, so restored by XOR)
+- **NOT in the input region:** mainRect minus panels (the empty interior — clicks pass through to desktop)
+
+**Current mainRect (correct):**
+```qml
+y: bar.implicitHeight + win.dragMaskPadding  // Starts BELOW bar
+```
+Result: bar area is OUTSIDE mainRect → XOR puts it IN the input region → **bar receives both hover and click events** ✓
+
+**If you change to y: 0 (WRONG):**
+```
+y: win.dragMaskPadding  // Includes bar in mainRect
+```
+Result: bar area is INSIDE mainRect → XOR REMOVES it from the input region → **bar loses all input** ✗
+
+**Key rules:**
+- The `mainRect` defines the **non-interactive interior**, not the interactive area
+- To ADD an area to the input region, keep it OUTSIDE the mainRect
+- To REMOVE an area from the input region, include it IN the mainRect
+- Panel areas are subtracted from mainRect before XOR, which RESTORES them to the input region
+- Hover events in the bar work because Hyprland delivers `wl_pointer.motion` to layer surfaces within the input region; outside it, the compositor sends `wl_pointer.leave` and routes events elsewhere
+
+**Full-window MouseAreas in the drawers window:**
+Any `MouseArea { anchors.fill: parent }` placed as a sibling of `Interactions` in the StyledWindow will sit above it in z-order and intercept ALL click events. Such MouseAreas MUST be guarded with `enabled: <condition>` to prevent blocking the entire bar's click interactivity. Reference: `modules/keychords/Overlay.qml` guards its dismiss-on-click MouseArea with `enabled: root.shouldShow`.
+
 ### C++ Plugin Modules
 Located in `plugin/src/Symmetria/`:
 - **Symmetria** - Core utilities (Qalculator, Toaster, ImageAnalyser, AppDb, Requests)
