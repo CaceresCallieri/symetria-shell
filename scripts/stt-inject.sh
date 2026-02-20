@@ -3,14 +3,16 @@
 # Pastes clipboard content into the target window via hyprctl sendshortcut.
 # Assumes clipboard already contains the transcription (wl-copy ran first).
 #
-# Usage: stt-inject.sh <window_address> <window_class>
+# Usage: stt-inject.sh <window_address> <window_class> [submit]
 #   window_address: Hyprland window address (e.g., "0x5a3b2c1d")
 #   window_class:   Window class string (e.g., "ghostty", "firefox")
+#   submit:         If non-empty, send Enter after pasting (auto-submit)
 #
 # Always exits 0 — injection failure is non-fatal (clipboard still has text).
 
 ADDRESS="$1"
 WINDOW_CLASS="$2"
+SUBMIT="$3"
 
 # Validate arguments (class is optional — defaults to Ctrl+V if empty)
 if [ -z "$ADDRESS" ]; then
@@ -42,6 +44,15 @@ sleep 0.05
 # Send paste shortcut to the target window without changing focus
 if ! hyprctl dispatch sendshortcut "$SHORTCUT, address:$ADDRESS" 2>/dev/null; then
     echo "[stt-inject] sendshortcut failed for $ADDRESS (class=$WINDOW_CLASS)" >&2
+fi
+
+# Auto-submit: send Enter after paste if requested
+if [ "$SUBMIT" = "submit" ]; then
+    # 150ms: allow application to process pasted text before submitting
+    sleep 0.15
+    if ! hyprctl dispatch sendshortcut ", Return, address:$ADDRESS" 2>/dev/null; then
+        echo "[stt-inject] sendshortcut Enter failed for $ADDRESS" >&2
+    fi
 fi
 
 exit 0

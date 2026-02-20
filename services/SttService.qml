@@ -113,8 +113,12 @@ Singleton {
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
     readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
 
-    // Delivery mode: "clipboard" (default) or "inject" (clipboard + paste into target window)
-    readonly property string _deliveryMode: Config.stt?.deliveryMode === "inject" ? "inject" : "clipboard"
+    // Delivery mode: "clipboard" (default), "inject" (paste into target), or "submit" (paste + Enter)
+    readonly property string _deliveryMode: {
+        const mode = Config.stt?.deliveryMode ?? "clipboard";
+        if (mode === "inject" || mode === "submit") return mode;
+        return "clipboard";
+    }
 
     // API key: config value takes priority, then environment variable
     readonly property string _resolvedApiKey: {
@@ -294,7 +298,7 @@ Singleton {
     /// Called at both start() and stop() — start() captures an eager fallback,
     /// stop() overwrites with a fresher value if a toplevel is available.
     function _captureTargetWindow(): void {
-        if (_deliveryMode !== "inject") return;
+        if (_deliveryMode === "clipboard") return;
         const toplevel = Hypr.activeToplevel;
         if (toplevel) {
             // .address lacks "0x" prefix; sendshortcut needs it
@@ -647,14 +651,12 @@ Singleton {
                 return;
             }
             // Chain window injection after successful clipboard write
-            if (root._deliveryMode === "inject" && root._targetWindowAddress !== "") {
+            if (root._deliveryMode !== "clipboard" && root._targetWindowAddress !== "") {
                 if (root._targetWindowClass === "")
                     console.warn("[STT] Window class unknown; inject will use Ctrl+V");
-                injectProcess.command = [
-                    root._injectScript,
-                    root._targetWindowAddress,
-                    root._targetWindowClass
-                ];
+                const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
+                if (root._deliveryMode === "submit") cmd.push("submit");
+                injectProcess.command = cmd;
                 injectProcess.running = true;
             }
         }

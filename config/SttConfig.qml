@@ -7,6 +7,7 @@ JsonObject {
     property string model: "gpt-4o-transcribe"
     property int autoHideDelay: 1500
     property int processingTimeout: 120000
+    // Valid values: "clipboard" | "inject" | "submit"
     property string deliveryMode: "clipboard"
 
     property JsonObject recording: JsonObject {

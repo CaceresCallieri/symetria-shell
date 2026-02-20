@@ -463,7 +463,7 @@ Keybind → qs ipc call stt toggle en
                     ↓ IPC
 SttService → spawns pw-record → WAV file
            → spawns level monitor (pw-record | od | awk → stdout)
-           → on stop: curl → OpenAI API → wl-copy [→ sendshortcut inject]
+           → on stop: curl → OpenAI API → wl-copy [→ sendshortcut inject [→ Enter submit]]
 ```
 
 **IPC Commands:**
@@ -509,12 +509,14 @@ SttService → spawns pw-record → WAV file
 |------|----------------|----------|
 | Clipboard only | `"clipboard"` (default) | Copies transcription to clipboard via `wl-copy` |
 | Window inject | `"inject"` | Clipboard copy **+** paste into the window that was active at submit time |
+| Auto-submit | `"submit"` | Clipboard copy **+** paste **+** send Enter to auto-submit |
 
-**Window Injection Flow (Mode B):**
+**Window Injection Flow (Modes B & C):**
 1. User presses Submit (stop) → `_captureTargetWindow()` saves the active window's Hyprland address + class
 2. Transcription completes → `wl-copy` writes text to clipboard
 3. `clipboardProcess.onExited` chains `stt-inject.sh` with the captured address
 4. Script verifies window exists, detects terminal vs GUI, sends `Ctrl+V` or `Ctrl+Shift+V` via `hyprctl dispatch sendshortcut address:0x...`
+5. In submit mode: after a 150ms delay, sends `Return` to the same address to auto-submit
 
 **Key design decisions:**
 - **No focus change** — `sendshortcut` with address targeting pastes without stealing focus
@@ -522,6 +524,8 @@ SttService → spawns pw-record → WAV file
 - **Terminal detection** — Ghostty, Alacritty, Kitty, Foot, WezTerm, Warp, Konsole, etc. use `Ctrl+Shift+V`; all others use `Ctrl+V`
 - **Retry preserves target** — `retry()` does NOT clear the captured window, so re-transcription injects to the same target
 - **50ms clipboard propagation delay** — ensures `wl-copy` data reaches the Wayland compositor before `sendshortcut`
+- **Auto-submit delay** — 150ms between paste and Enter allows the application to process clipboard content
+- **Universal Enter** — `Return` key without modifiers works in both terminals and GUI apps
 
 **Configuration (`~/.config/symmetria/shell.json`):**
 ```json
