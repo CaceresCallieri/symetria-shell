@@ -166,25 +166,6 @@ Item {
                 }
             }
 
-            MouseArea {
-                anchors.fill: layout
-                onClicked: event => {
-                    const child = layout.childAt(event.x, event.y);
-                    if (!child || !child.isWorkspace) return;
-                    const wsId = child.ws;
-                    if (Hypr.activeWsId !== wsId) {
-                        // Named workspaces (negative IDs) need "workspace name:<name>" syntax
-                        if (wsId < 0) {
-                            const wsObj = Hypr.workspaces.values.find(w => w.id === wsId);
-                            if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
-                        } else {
-                            Hypr.dispatch(`workspace ${wsId}`);
-                        }
-                    } else {
-                        Hypr.dispatch("togglespecialworkspace special");
-                    }
-                }
-            }
 
             Behavior on scale {
                 Anim {}
