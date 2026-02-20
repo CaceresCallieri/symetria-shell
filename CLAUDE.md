@@ -463,7 +463,7 @@ Keybind → qs ipc call stt toggle en
                     ↓ IPC
 SttService → spawns pw-record → WAV file
            → spawns level monitor (pw-record | od | awk → stdout)
-           → on stop: curl → OpenAI API → wl-copy
+           → on stop: curl → OpenAI API → wl-copy [→ sendshortcut inject]
 ```
 
 **IPC Commands:**
@@ -503,6 +503,26 @@ SttService → spawns pw-record → WAV file
 
 **Pause/Resume:** Each pause saves the current segment (SIGTERM → pw-record finalizes WAV). Resume starts a new segment. On submit, multiple segments are concatenated via `ffmpeg -filter_complex concat`.
 
+**Delivery Modes:**
+
+| Mode | `deliveryMode` | Behavior |
+|------|----------------|----------|
+| Clipboard only | `"clipboard"` (default) | Copies transcription to clipboard via `wl-copy` |
+| Window inject | `"inject"` | Clipboard copy **+** paste into the window that was active at submit time |
+
+**Window Injection Flow (Mode B):**
+1. User presses Submit (stop) → `_captureTargetWindow()` saves the active window's Hyprland address + class
+2. Transcription completes → `wl-copy` writes text to clipboard
+3. `clipboardProcess.onExited` chains `stt-inject.sh` with the captured address
+4. Script verifies window exists, detects terminal vs GUI, sends `Ctrl+V` or `Ctrl+Shift+V` via `hyprctl dispatch sendshortcut address:0x...`
+
+**Key design decisions:**
+- **No focus change** — `sendshortcut` with address targeting pastes without stealing focus
+- **Best-effort** — injection failure is non-fatal (clipboard always has the text)
+- **Terminal detection** — Ghostty, Alacritty, Kitty, Foot, WezTerm, Warp, Konsole, etc. use `Ctrl+Shift+V`; all others use `Ctrl+V`
+- **Retry preserves target** — `retry()` does NOT clear the captured window, so re-transcription injects to the same target
+- **50ms clipboard propagation delay** — ensures `wl-copy` data reaches the Wayland compositor before `sendshortcut`
+
 **Configuration (`~/.config/symmetria/shell.json`):**
 ```json
 {
@@ -540,6 +560,7 @@ SttService → spawns pw-record → WAV file
 | `config/SttConfig.qml` | Configuration defaults |
 | `scripts/stt-level-monitor.sh` | Audio level pipeline (pw-record → od → awk) |
 | `scripts/stt-transcribe.sh` | OpenAI API curl wrapper with error categorization |
+| `scripts/stt-inject.sh` | Window injection via hyprctl sendshortcut (best-effort) |
 
 **API Key Resolution:** SttService checks `Config.stt.apiKey` first, then falls back to `$OPENAI_API_KEY` env var. If neither is set, starting STT shows an error with configuration hint.
 

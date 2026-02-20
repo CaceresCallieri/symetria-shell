@@ -11,7 +11,7 @@ import QtQuick
 /// Replaces HyprWhsprService with direct process management instead of
 /// file-watching / FIFO / inotifywait / systemd orchestration.
 ///
-/// Pipeline: pw-record → WAV file → curl (OpenAI API) → wl-copy
+/// Pipeline: pw-record → WAV file → curl (OpenAI API) → wl-copy [→ sendshortcut inject]
 ///
 /// State machine:
 ///   idle → recording ⇄ paused → processing → success/error → idle
@@ -96,6 +96,10 @@ Singleton {
     property var _segmentFiles: []
     property string _currentAudioFile: ""  // Combined file for transcription/retry
 
+    // Target window for inject delivery (captured at submit time)
+    property string _targetWindowAddress: ""
+    property string _targetWindowClass: ""
+
     // Pending action for recordProcess.onExited callback
     // Values: "" (none), "pause", "submit", "cancel"
     property string _pendingRecordAction: ""
@@ -107,6 +111,10 @@ Singleton {
     // Script paths (resolved relative to project root)
     readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace("file://", "")
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
+    readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
+
+    // Delivery mode: "clipboard" (default) or "inject" (clipboard + paste into target window)
+    readonly property string _deliveryMode: Config.stt?.deliveryMode === "inject" ? "inject" : "clipboard"
 
     // API key: config value takes priority, then environment variable
     readonly property string _resolvedApiKey: {
@@ -174,6 +182,10 @@ Singleton {
         _currentElapsed = 0;
         _pendingRecordAction = "";
 
+        // Eagerly capture target window as fallback for inject delivery;
+        // stop() will overwrite with a fresher value if available
+        _captureTargetWindow();
+
         // Ensure temp dir exists, then start recording
         tempDirProcess.running = true;
     }
@@ -182,6 +194,7 @@ Singleton {
     function stop(): void {
         if (_state !== "recording" && _state !== "paused") return;
         actionTriggered("stop");
+        _captureTargetWindow();
 
         if (_state === "paused") {
             // Already paused — no active recording, go straight to processing
@@ -277,6 +290,20 @@ Singleton {
         _errorRaw = "";
     }
 
+    /// Capture the currently active window for inject delivery.
+    /// Called at both start() and stop() — start() captures an eager fallback,
+    /// stop() overwrites with a fresher value if a toplevel is available.
+    function _captureTargetWindow(): void {
+        if (_deliveryMode !== "inject") return;
+        const toplevel = Hypr.activeToplevel;
+        if (toplevel) {
+            // .address lacks "0x" prefix; sendshortcut needs it
+            _targetWindowAddress = `0x${toplevel.address}`;
+            _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
+        }
+        // If no toplevel, preserve any previously captured value (start-time fallback)
+    }
+
     /// Categorize API errors from stt-transcribe.sh stderr output.
     /// Format: ERROR:<http_code>:<message>
     function _categorizeApiError(stderrText: string): void {
@@ -328,6 +355,8 @@ Singleton {
         _transcribedText = "";
         _segmentFiles = [];
         _currentAudioFile = "";
+        _targetWindowAddress = "";
+        _targetWindowClass = "";
         _sessionId = "";
         _pendingRecordAction = "";
         _clearErrorState();
@@ -611,8 +640,32 @@ Singleton {
     Process {
         id: clipboardProcess
         onExited: (code, status) => {
-            if (code !== 0)
+            if (code !== 0) {
                 console.warn("[STT] wl-copy failed (exit", code + ")");
+                root._targetWindowAddress = "";
+                root._targetWindowClass = "";
+                return;
+            }
+            // Chain window injection after successful clipboard write
+            if (root._deliveryMode === "inject" && root._targetWindowAddress !== "") {
+                if (root._targetWindowClass === "")
+                    console.warn("[STT] Window class unknown; inject will use Ctrl+V");
+                injectProcess.command = [
+                    root._injectScript,
+                    root._targetWindowAddress,
+                    root._targetWindowClass
+                ];
+                injectProcess.running = true;
+            }
+        }
+    }
+
+    // Window injection via stt-inject.sh (best-effort, non-fatal)
+    Process {
+        id: injectProcess
+        onExited: (code, status) => {
+            if (code !== 0)
+                console.warn("[STT] inject script exited with code", code, "(non-fatal)");
         }
     }
 
