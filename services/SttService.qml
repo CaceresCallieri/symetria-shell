@@ -360,14 +360,16 @@ Singleton {
     }
 
     function _cancelInternal(): void {
+        // Set before SIGKILL so recordProcess.onExited (fires async) sees "cancel"
+        // and returns early. Cleared at the end of this function after sync work.
         _pendingRecordAction = "cancel";
         _stopAllTimers();
 
-        // Kill active processes
-        if (recordProcess.running) recordProcess.kill();
+        // Kill active processes (signal(9) = SIGKILL; Process.kill() is not exposed to QML)
+        if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (transcribeProcess.running) transcribeProcess.kill();
-        if (concatProcess.running) concatProcess.kill();
+        if (transcribeProcess.running) transcribeProcess.signal(9);
+        if (concatProcess.running) concatProcess.signal(9);
 
         // Clean up temp files
         _cleanupTempFiles();
@@ -510,7 +512,7 @@ Singleton {
         interval: Config.stt?.processingTimeout ?? 120000
         onTriggered: {
             console.error("[STT] Processing timed out");
-            if (transcribeProcess.running) transcribeProcess.kill();
+            if (transcribeProcess.running) transcribeProcess.signal(9);
             root._setErrorState("timeout", "Processing timed out", "Check your network connection");
         }
     }
@@ -610,6 +612,9 @@ Singleton {
     Process {
         id: concatProcess
         onExited: (code, status) => {
+            // Ignore exit if cancel already reset state
+            if (root._state !== "processing") return;
+
             if (code !== 0) {
                 console.error("[STT] Segment concatenation failed (exit", code + ")");
                 // Fallback: use last segment only
@@ -736,8 +741,8 @@ Singleton {
 
     Component.onDestruction: {
         _stopAllTimers();
-        if (recordProcess.running) recordProcess.kill();
+        if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (transcribeProcess.running) transcribeProcess.kill();
+        if (transcribeProcess.running) transcribeProcess.signal(9);
     }
 }
