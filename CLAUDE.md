@@ -446,44 +446,38 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/symmetria-askpass.sh"
 - `modules/askpass/AskpassWindow.qml` - Overlay dialog (based on WirelessPasswordDialog pattern)
 - `~/.dotfiles/scripts/symmetria-askpass.sh` - Wrapper script for sudo
 
-### HyprWhspr (Speech-to-Text Orchestrator)
+### Native Speech-to-Text (STT)
 
-The HyprWhspr module (`modules/hyprwhspr/`) provides a native drawer overlay for the HyprWhspr speech-to-text system. Symmetria acts as the **orchestrator** — all keybindings route through Symmetria IPC instead of calling HyprWhspr directly.
+The STT module (`modules/stt/`) provides native speech-to-text using `pw-record` for audio capture and OpenAI's GPT-4o Transcribe API for transcription. Unlike the previous HyprWhspr integration, this system owns the entire pipeline — no external daemons, no file-watching, no inotifywait.
 
 **Prerequisites:**
-- HyprWhspr must be installed and configured with `recording_mode: "long_form"`
-- State files at `~/.config/hyprwhspr/`:
-  - `visualizer_state` - Current state (recording, paused, processing, error, success)
-  - `audio_level` - Float 0.0-1.0 (updated during recording)
-  - `recording_control` - FIFO for commands
+- `pipewire` (pw-record) — already installed on any PipeWire system
+- `curl` — for API calls
+- `wl-clipboard` (wl-copy) — for clipboard delivery
+- `ffmpeg` — optional, for pause/resume segment concatenation
+- `OPENAI_API_KEY` environment variable (or `stt.apiKey` in shell.json)
 
 **Architecture:**
 ```
-Keybind → qs ipc call hyprwhspr toggle en
+Keybind → qs ipc call stt toggle en
                     ↓ IPC
-HyprWhsprService → writes "start:en" to FIFO → HyprWhspr daemon
-                 ← inotifywait watches state files
+SttService → spawns pw-record → WAV file
+           → spawns level monitor (pw-record | od | awk → stdout)
+           → on stop: curl → OpenAI API → wl-copy
 ```
-
-**FIFO Protocol (long_form mode):**
-
-| FIFO Command | Effect |
-|-------------|--------|
-| `start` / `start:lang` | Start recording or resume from pause |
-| `stop` | Pause (save current segment) |
-| `submit` | Stop + transcribe all segments |
 
 **IPC Commands:**
 
 | Command | IPC Call | Description |
 |---------|----------|-------------|
-| Toggle | `qs -c symmetria ipc call hyprwhspr toggle en` | Start if idle, submit if active |
-| Start | `qs -c symmetria ipc call hyprwhspr start en` | Start with language |
-| Stop | `qs -c symmetria ipc call hyprwhspr stop` | Submit for transcription |
-| Pause | `qs -c symmetria ipc call hyprwhspr pause` | Toggle pause/resume |
-| Resume | `qs -c symmetria ipc call hyprwhspr resume` | Explicit resume |
-| Cancel | `qs -c symmetria ipc call hyprwhspr cancel` | Restart daemon, discard audio |
-| Restart | `qs -c symmetria ipc call hyprwhspr restart` | Cancel + re-start recording |
+| Toggle | `qs -c symmetria ipc call stt toggle en` | Start if idle, submit if active |
+| Start | `qs -c symmetria ipc call stt start en` | Start with language |
+| Stop | `qs -c symmetria ipc call stt stop` | Submit for transcription |
+| Pause | `qs -c symmetria ipc call stt pause` | Toggle pause/resume |
+| Resume | `qs -c symmetria ipc call stt resume` | Explicit resume |
+| Cancel | `qs -c symmetria ipc call stt cancel` | Kill processes, discard audio |
+| Restart | `qs -c symmetria ipc call stt restart` | Cancel + re-start recording |
+| Retry | `qs -c symmetria ipc call stt retry` | Re-submit failed transcription |
 
 **Keyboard Shortcuts:**
 
@@ -495,9 +489,6 @@ HyprWhsprService → writes "start:en" to FIFO → HyprWhspr daemon
 | Alt+X | Cancel (discard) |
 | Alt+R | Restart recording |
 
-**UI Control Buttons:** During recording/paused states, the drawer shows clickable buttons:
-- Pause/Resume (toggles icon), Restart, Cancel (red)
-
 **State Machine:**
 
 | State | Description | UI Response |
@@ -505,29 +496,54 @@ HyprWhsprService → writes "start:en" to FIFO → HyprWhspr daemon
 | `recording` | User is speaking | Animated audio level bars + control buttons |
 | `paused` | Recording paused | Frozen bars + pause icon + control buttons |
 | `processing` | Transcribing audio | Flowing wave animation |
-| `error` | Transcription failed | Error icon + hint text |
+| `error` | Transcription failed | Error icon + hint text + retry/cancel buttons |
 | `success` | Transcription complete | Checkmark icon, auto-hide after delay |
+
+**Audio Level Pipeline:** A separate `pw-record | od | awk` pipeline outputs RMS level at ~10Hz via stdout. QML reads via `Process.stdout: SplitParser`. PipeWire multiplexes multiple readers natively.
+
+**Pause/Resume:** Each pause saves the current segment (SIGTERM → pw-record finalizes WAV). Resume starts a new segment. On submit, multiple segments are concatenated via `ffmpeg -filter_complex concat`.
 
 **Configuration (`~/.config/symmetria/shell.json`):**
 ```json
 {
-  "hyprwhspr": {
+  "stt": {
     "enabled": true,
+    "apiKey": "",
+    "backend": "openai",
+    "model": "gpt-4o-transcribe",
     "autoHideDelay": 1500,
-    "restartDelay": 500
+    "processingTimeout": 120000,
+    "deliveryMode": "clipboard",
+    "recording": {
+      "format": "wav",
+      "sampleRate": 16000,
+      "channels": 1
+    },
+    "cache": {
+      "enabled": true,
+      "maxEntries": 10,
+      "deleteOnSuccess": true
+    }
   }
 }
 ```
 
 **Files:**
-- `services/HyprWhsprService.qml` - Orchestrator service (FIFO commands, state watcher)
-- `modules/hyprwhspr/HyprWhspr.qml` - Root component (auto-show logic, IPC handler)
-- `modules/hyprwhspr/Wrapper.qml` - Animation wrapper (top-hanging)
-- `modules/hyprwhspr/Content.qml` - State-based UI content with control buttons
-- `modules/hyprwhspr/HyprWhsprBackground.qml` - Background shape
-- `config/HyprWhsprConfig.qml` - Configuration defaults
 
-**Cancel/Restart implementation:** HyprWhspr has no native `cancel` command. Cancel restarts the systemd service (`systemctl --user restart hyprwhspr`), which kills the daemon and discards buffered audio. Restart saves the language, cancels, then re-sends `start:lang` after a configurable delay (default 500ms).
+| File | Purpose |
+|------|---------|
+| `services/SttService.qml` | Core service: process management, state machine, API calls |
+| `modules/stt/Stt.qml` | Root component (auto-show logic, IPC handler) |
+| `modules/stt/Wrapper.qml` | Animation wrapper (top-hanging slide-down) |
+| `modules/stt/Content.qml` | State-based UI: audio bars, controls, error display |
+| `modules/stt/SttBackground.qml` | Background shape (uses TopHangingBackground) |
+| `config/SttConfig.qml` | Configuration defaults |
+| `scripts/stt-level-monitor.sh` | Audio level pipeline (pw-record → od → awk) |
+| `scripts/stt-transcribe.sh` | OpenAI API curl wrapper with error categorization |
+
+**API Key Resolution:** SttService checks `Config.stt.apiKey` first, then falls back to `$OPENAI_API_KEY` env var. If neither is set, starting STT shows an error with configuration hint.
+
+**Cancel/Restart:** Cancel kills all active processes (SIGKILL for pw-record, SIGTERM for others) and deletes temp files. Restart saves the language, cancels, then re-starts after a 500ms delay.
 
 ### Clipboard Manager
 

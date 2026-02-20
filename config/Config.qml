@@ -28,7 +28,7 @@ Singleton {
     property alias paths: adapter.paths
     property alias clipboard: adapter.clipboard
     property alias askpass: adapter.askpass
-    property alias hyprwhspr: adapter.hyprwhspr
+    property alias stt: adapter.stt
     property alias keycaster: adapter.keycaster
     property alias calculator: adapter.calculator
     property alias packages: adapter.packages
@@ -105,7 +105,7 @@ Singleton {
             paths: serializePaths(),
             clipboard: serializeClipboard(),
             askpass: serializeAskpass(),
-            hyprwhspr: serializeHyprWhspr(),
+            stt: serializeStt(),
             keycaster: serializeKeycaster(),
             calculator: serializeCalculator(),
             packages: serializePackages(),
@@ -450,12 +450,25 @@ Singleton {
         };
     }
 
-    function serializeHyprWhspr(): var {
+    function serializeStt(): var {
         return {
-            enabled: hyprwhspr.enabled,
-            autoHideDelay: hyprwhspr.autoHideDelay,
-            restartDelay: hyprwhspr.restartDelay,
-            processingTimeout: hyprwhspr.processingTimeout
+            enabled: stt.enabled,
+            apiKey: stt.apiKey,
+            backend: stt.backend,
+            model: stt.model,
+            autoHideDelay: stt.autoHideDelay,
+            processingTimeout: stt.processingTimeout,
+            deliveryMode: stt.deliveryMode,
+            recording: {
+                format: stt.recording.format,
+                sampleRate: stt.recording.sampleRate,
+                channels: stt.recording.channels
+            },
+            cache: {
+                enabled: stt.cache.enabled,
+                maxEntries: stt.cache.maxEntries,
+                deleteOnSuccess: stt.cache.deleteOnSuccess
+            }
         };
     }
 
@@ -562,7 +575,7 @@ Singleton {
             property UserPaths paths: UserPaths {}
             property ClipboardConfig clipboard: ClipboardConfig {}
             property AskpassConfig askpass: AskpassConfig {}
-            property HyprWhsprConfig hyprwhspr: HyprWhsprConfig {}
+            property SttConfig stt: SttConfig {}
             property KeycasterConfig keycaster: KeycasterConfig {}
             property CalculatorConfig calculator: CalculatorConfig {}
             property PackagesConfig packages: PackagesConfig {}

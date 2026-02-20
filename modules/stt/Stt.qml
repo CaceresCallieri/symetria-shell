@@ -6,56 +6,56 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-/// Root component for HyprWhspr speech-to-text drawer.
+/// Root component for native speech-to-text drawer.
 ///
-/// Auto-shows the drawer on all screens when HyprWhsprService becomes active.
-/// Exposes IPC handler for orchestrator control (start, stop, pause, cancel, etc.).
+/// Auto-shows the drawer on all screens when SttService becomes active.
+/// Exposes IPC handler for control (start, stop, pause, cancel, etc.).
 Scope {
     Connections {
-        target: HyprWhsprService
+        target: SttService
 
         function onActiveChanged(): void {
-            if (!Config.hyprwhspr.enabled)
+            if (!Config.stt.enabled)
                 return;
 
-            if (HyprWhsprService.active) {
+            if (SttService.active) {
                 for (const [_, visibilities] of Visibilities.screens) {
-                    visibilities.hyprwhspr = true;
+                    visibilities.stt = true;
                 }
             } else {
                 for (const [_, visibilities] of Visibilities.screens) {
-                    visibilities.hyprwhspr = false;
+                    visibilities.stt = false;
                 }
             }
         }
     }
 
     IpcHandler {
-        target: "hyprwhspr"
+        target: "stt"
 
         function toggle(lang: string): void {
-            HyprWhsprService.toggle(lang);
+            SttService.toggle(lang);
         }
         function start(lang: string): void {
-            HyprWhsprService.start(lang);
+            SttService.start(lang);
         }
         function stop(): void {
-            HyprWhsprService.stop();
+            SttService.stop();
         }
         function pause(): void {
-            HyprWhsprService.pause();
+            SttService.pause();
         }
         function resume(): void {
-            HyprWhsprService.resume();
+            SttService.resume();
         }
         function cancel(): void {
-            HyprWhsprService.cancel();
+            SttService.cancel();
         }
         function restart(): void {
-            HyprWhsprService.restart();
+            SttService.restart();
         }
         function retry(): void {
-            HyprWhsprService.retry();
+            SttService.retry();
         }
     }
 }

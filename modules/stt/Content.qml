@@ -9,7 +9,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-/// Content UI for HyprWhsprService speech-to-text drawer.
+/// Content UI for SttService speech-to-text drawer.
 ///
 /// Displays state-based UI:
 /// - recording: Animated audio level bars + elapsed time
@@ -84,7 +84,7 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: (root.serviceState === "recording" || root.serviceState === "processing") && root.visibilities.hyprwhspr
+        running: (root.serviceState === "recording" || root.serviceState === "processing") && root.visibilities.stt
         from: 0
         to: 6000
         duration: 100000  // 100 seconds before loop (60 units/sec)
@@ -253,7 +253,7 @@ Item {
             // Actionable hint (e.g., "Check your network connection")
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
-                text: root.serviceErrorHint || qsTr("Check hyprwhspr logs")
+                text: root.serviceErrorHint || qsTr("Check STT configuration")
                 font.pointSize: Appearance.font.size.small
                 color: Colours.palette.m3outline
             }
@@ -263,24 +263,24 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: Appearance.spacing.normal
 
-                // Retry: re-submit cached audio (only for daemon errors where audio is in memory)
+                // Retry: re-submit audio (available for API errors where audio file exists)
                 ControlButton {
                     id: retryBtn
-                    visible: root.serviceErrorSource === "daemon"
+                    visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
                     icon: "refresh"
                     iconColor: Colours.palette.m3primary
-                    onClicked: HyprWhsprService.retry()
+                    onClicked: SttService.retry()
                 }
 
-                // Cancel: restart daemon, discard audio, close drawer
+                // Cancel: discard audio, close drawer
                 ControlButton {
                     id: errorCancelBtn
                     icon: "close"
                     iconColor: Colours.palette.m3error
-                    onClicked: HyprWhsprService.cancel()
+                    onClicked: SttService.cancel()
                 }
 
-                // Copy raw error to clipboard (only when journalctl output available)
+                // Copy raw error to clipboard
                 ControlButton {
                     visible: root.serviceErrorRaw !== ""
                     icon: "content_copy"
@@ -291,7 +291,7 @@ Item {
             // Internal signal handler for keybind-triggered animations.
             // retryBtn/errorCancelBtn are only in scope inside this Component.
             Connections {
-                target: HyprWhsprService
+                target: SttService
                 function onActionTriggered(action: string): void {
                     if (action === "retry") retryBtn.triggerPress();
                     else if (action === "cancel") errorCancelBtn.triggerPress();
@@ -387,37 +387,6 @@ Item {
 
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
-
-            // Error: inotify-tools not installed
-            FadeTransition {
-                Layout.alignment: Qt.AlignHCenter
-                show: HyprWhsprService._inotifyFailed
-
-                ColumnLayout {
-                    spacing: Appearance.spacing.small
-
-                    MaterialIcon {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "error"
-                        color: Colours.palette.m3error
-                        font.pointSize: Appearance.font.size.extraLarge
-                    }
-
-                    StyledText {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: qsTr("inotify-tools not installed")
-                        color: Colours.palette.m3error
-                        font.pointSize: Appearance.font.size.normal
-                    }
-
-                    StyledText {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: qsTr("Install with: paru -S inotify-tools")
-                        color: Colours.palette.m3outline
-                        font.pointSize: Appearance.font.size.small
-                    }
-                }
-            }
 
             // Language badge (EN/ES) shown above audio bars during active states
             FadeTransition {
@@ -566,36 +535,36 @@ Item {
                         id: pauseBtn
                         icon: root.serviceState === "paused" ? "play_arrow" : "pause"
                         iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-                        onClicked: HyprWhsprService.pause()
+                        onClicked: SttService.pause()
                     }
 
                     ControlButton {
                         id: restartBtn
                         icon: "restart_alt"
-                        onClicked: HyprWhsprService.restart()
+                        onClicked: SttService.restart()
                     }
 
                     ControlButton {
                         id: cancelBtn
                         icon: "close"
                         iconColor: Colours.palette.m3error
-                        onClicked: HyprWhsprService.cancel()
+                        onClicked: SttService.cancel()
                     }
 
                     ControlButton {
                         id: submitBtn
                         icon: "check"
                         iconColor: Colours.palette.m3confirm
-                        onClicked: HyprWhsprService.stop()
+                        onClicked: SttService.stop()
                     }
                 }
             }
 
-            // Dispatch action signals from HyprWhsprService to control button animations.
+            // Dispatch action signals from SttService to control button animations.
             // Bridges both UI clicks and keybind-triggered IPC calls to the same
             // visual feedback: a brief scale squeeze on the corresponding button.
             Connections {
-                target: HyprWhsprService
+                target: SttService
                 function onActionTriggered(action: string): void {
                     switch (action) {
                         case "pause":

@@ -8,7 +8,7 @@ import "modules/background"
 import "modules/areapicker"
 import "modules/lock"
 import "modules/askpass"
-import "modules/hyprwhspr"
+import "modules/stt"
 import "modules/keycaster"
 import "modules/keychords"
 import Quickshell
@@ -26,7 +26,7 @@ ShellRoot {
     Drawers {}
     AreaPicker {}
     Askpass {}
-    HyprWhspr {}
+    Stt {}
     Keycaster {}
     KeyChords {}
     Lock {

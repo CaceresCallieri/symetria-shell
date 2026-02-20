@@ -167,7 +167,7 @@ Variants {
                 property bool sidebar
                 property bool clipboard
                 property bool askpass
-                property bool hyprwhspr
+                property bool stt
                 property bool keycaster
                 property bool calculator
                 property bool packages
