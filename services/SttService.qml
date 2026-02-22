@@ -105,6 +105,8 @@ Singleton {
     // Target window for inject delivery (captured at submit time)
     property string _targetWindowAddress: ""
     property string _targetWindowClass: ""
+    // Target Neovim socket (captured at stop-time to avoid focus drift during transcription)
+    property string _targetNvimSocket: ""
 
     // Pending action for recordProcess.onExited callback
     // Values: "" (none), "pause", "submit", "cancel"
@@ -123,6 +125,7 @@ Singleton {
     readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace("file://", "")
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
     readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
+    readonly property string _selectSocketScript: Qt.resolvedUrl("../scripts/stt-select-socket.sh").toString().replace("file://", "")
 
     // Delivery mode: "clipboard" (default), "inject", "submit", or "ask" (runtime radio toggle)
     readonly property string _deliveryMode: {
@@ -151,7 +154,12 @@ Singleton {
     /// Toggle: start if idle, submit if active, retry if error.
     function toggle(lang: string): void {
         const now = Date.now();
-        if (now - _lastToggleTime < _toggleDebounceMs) return;
+        if (now - _lastToggleTime < _toggleDebounceMs) {
+            console.log("[STT:D19] toggle() DEBOUNCED | elapsed:", now - _lastToggleTime, "ms");
+            return;
+        }
+        console.log("[STT:D19] toggle() | state:", _state,
+            "| orchestratorActive:", _orchestratorActive, "| lang:", lang);
 
         if (_state === "idle" || !_orchestratorActive) {
             _lastToggleTime = now;
@@ -168,6 +176,9 @@ Singleton {
 
     /// Start recording with optional language code.
     function start(lang: string): void {
+        console.log("[STT:D18] start() called | lang:", lang,
+            "| currentState:", _state,
+            "| deliveryMode:", _deliveryMode);
         // Check API key before starting
         if (_resolvedApiKey === "") {
             _orchestratorActive = true;
@@ -200,6 +211,8 @@ Singleton {
         // Eagerly capture target window as fallback for inject delivery;
         // stop() will overwrite with a fresher value if available
         _captureTargetWindow();
+        console.log("[STT:D18] session initialized | id:", _sessionId,
+            "| eagerTarget:", _targetWindowAddress, "class:", _targetWindowClass);
 
         // Ensure temp dir exists, then start recording
         tempDirProcess.running = true;
@@ -208,16 +221,26 @@ Singleton {
     /// Stop recording and submit for transcription.
     function stop(): void {
         if (_state !== "recording" && _state !== "paused") return;
+        console.log("[STT:D01] stop() called | state:", _state,
+            "| deliveryMode:", _deliveryMode,
+            "| askChoice:", _activeDeliveryChoice,
+            "| sessionId:", _sessionId,
+            "| segments:", _segmentFiles.length);
         actionTriggered("stop");
         _captureTargetWindow();
+        _captureTargetNvimSocket();
+        console.log("[STT:D02] after _captureTargetWindow() | address:", _targetWindowAddress,
+            "| class:", _targetWindowClass);
 
         if (_state === "paused") {
             // Already paused — no active recording, go straight to processing
+            console.log("[STT:D03] paused path → direct _submitForTranscription()");
             _submitForTranscription();
             return;
         }
 
         // Stop recording first, then submit on exit
+        console.log("[STT:D03] recording path → SIGTERM pw-record, pending submit");
         _pendingRecordAction = "submit";
         levelMonitorProcess.running = false;
         recordProcess.running = false;  // SIGTERM → pw-record finalizes WAV
@@ -265,6 +288,8 @@ Singleton {
     function retry(): void {
         if (_state !== "error") return;
         actionTriggered("retry");
+        console.log("[STT:D21] retry() | audioFile:", _currentAudioFile,
+            "| targetAddr:", _targetWindowAddress, "| targetClass:", _targetWindowClass);
 
         if (_currentAudioFile === "") {
             _setErrorState("internal", "No audio file to retry", "Start a new recording");
@@ -323,14 +348,35 @@ Singleton {
     /// In ask mode, we capture regardless of _activeDeliveryChoice because
     /// the user may switch to inject/submit before delivery completes.
     function _captureTargetWindow(): void {
-        if (_deliveryMode === "clipboard") return;
+        if (_deliveryMode === "clipboard") {
+            console.log("[STT:D04] _captureTargetWindow() skipped — deliveryMode is clipboard");
+            return;
+        }
         const toplevel = Hypr.activeToplevel;
         if (toplevel) {
+            const prevAddr = _targetWindowAddress;
             // .address lacks "0x" prefix; sendshortcut needs it
             _targetWindowAddress = `0x${toplevel.address}`;
             _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
+            console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
+                "| class:", _targetWindowClass,
+                "| prevAddress:", prevAddr,
+                "| changed:", prevAddr !== _targetWindowAddress);
+        } else {
+            console.warn("[STT:D04] _captureTargetWindow() — NO activeToplevel! Keeping fallback:",
+                _targetWindowAddress, "class:", _targetWindowClass);
         }
         // If no toplevel, preserve any previously captured value (start-time fallback)
+    }
+
+    /// Capture the Neovim socket most likely to be the STT target at stop-time.
+    /// Must run at stop() — by inject-time (2-10s later), the user may have
+    /// switched Neovim windows, changing which socket has the highest focus_timestamp.
+    function _captureTargetNvimSocket(): void {
+        if (_deliveryMode === "clipboard") return;
+        _targetNvimSocket = "";
+        socketCaptureProcess.command = [_selectSocketScript];
+        socketCaptureProcess.running = true;
     }
 
     /// Categorize API errors from stt-transcribe.sh stderr output.
@@ -370,6 +416,7 @@ Singleton {
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
+        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
 
         // Clean up temp files
         _cleanupTempFiles();
@@ -388,6 +435,7 @@ Singleton {
         _currentAudioFile = "";
         _targetWindowAddress = "";
         _targetWindowClass = "";
+        _targetNvimSocket = "";
         _sessionId = "";
         _pendingRecordAction = "";
         _clearErrorState();
@@ -421,7 +469,10 @@ Singleton {
 
     /// Proceed to transcription after recording is complete.
     function _submitForTranscription(): void {
+        console.log("[STT:D05] _submitForTranscription() | segments:", _segmentFiles.length,
+            "| files:", JSON.stringify(_segmentFiles));
         if (_segmentFiles.length === 0) {
+            console.error("[STT:D05] NO segments — aborting");
             _setErrorState("internal", "No audio segments", "Recording may have failed");
             return;
         }
@@ -431,9 +482,11 @@ Singleton {
         if (_segmentFiles.length === 1) {
             // Single segment — use directly
             _currentAudioFile = _segmentFiles[0];
+            console.log("[STT:D06] single segment → transcribing:", _currentAudioFile);
             _startTranscription(_currentAudioFile);
         } else {
             // Multiple segments — concatenate with ffmpeg
+            console.log("[STT:D06] multi-segment → ffmpeg concat, count:", _segmentFiles.length);
             const outputPath = `${_tempDir}/session_${_sessionId}_combined.wav`;
             _currentAudioFile = outputPath;
 
@@ -458,6 +511,9 @@ Singleton {
         processingTimeoutTimer.start();
         const model = Config.stt?.model ?? "gpt-4o-transcribe";
         const lang = _currentLanguage || "en";
+        console.log("[STT:D07] _startTranscription() | file:", audioFile,
+            "| model:", model, "| lang:", lang,
+            "| timeoutMs:", processingTimeoutTimer.interval);
 
         // Pass API key via environment to avoid exposure in /proc/<pid>/cmdline
         transcribeProcess.environment = ({ STT_API_KEY: _resolvedApiKey });
@@ -499,7 +555,10 @@ Singleton {
             return Math.max(root._minAutoHideDelay, Math.min(root._maxAutoHideDelay, delay));
         }
         onTriggered: {
+            console.log("[STT:D17] successTimer fired | state:", root._state,
+                "| delay was:", interval, "ms");
             if (root._state === "success") {
+                console.log("[STT:D17] → auto-hiding (idle)");
                 root._orchestratorActive = false;
                 root._state = "idle";
             }
@@ -558,9 +617,16 @@ Singleton {
         onExited: (code, status) => {
             const action = root._pendingRecordAction;
             root._pendingRecordAction = "";
+            console.log("[STT:D08] recordProcess.onExited | code:", code,
+                "| action:", action || "(none)",
+                "| segPath:", capturedSegmentPath,
+                "| state:", root._state);
 
             // Cancel already handled everything
-            if (action === "cancel") return;
+            if (action === "cancel") {
+                console.log("[STT:D08] action=cancel → returning early");
+                return;
+            }
 
             // Register completed segment file
             const segPath = capturedSegmentPath;
@@ -568,6 +634,9 @@ Singleton {
                 const files = root._segmentFiles.slice();
                 files.push(segPath);
                 root._segmentFiles = files;
+                console.log("[STT:D09] segment registered:", segPath, "| total segments:", files.length);
+            } else {
+                console.warn("[STT:D09] capturedSegmentPath is EMPTY — no segment registered");
             }
 
             if (action === "pause") {
@@ -578,6 +647,7 @@ Singleton {
                 }
                 root._audioLevel = 0.0;
                 root._state = "paused";
+                console.log("[STT:D08] → paused, accumulated:", root._accumulatedSeconds.toFixed(1), "s");
             } else if (action === "submit") {
                 // Accumulate final elapsed time
                 if (root._recordingStartTime > 0) {
@@ -586,11 +656,14 @@ Singleton {
                     root._recordingStartTime = 0;
                 }
                 root._audioLevel = 0.0;
+                console.log("[STT:D08] → submit path, elapsed:", root._accumulatedSeconds.toFixed(1), "s, calling _submitForTranscription()");
                 root._submitForTranscription();
             } else if (code !== 0 && root._state === "recording") {
                 // Unexpected exit during recording
-                console.error("[STT] pw-record exited unexpectedly (code", code + ")");
+                console.error("[STT:D08] pw-record exited unexpectedly (code", code + ")");
                 root._setErrorState("recording", "Recording failed", "Check audio device");
+            } else {
+                console.log("[STT:D08] no matching action, code:", code, "state:", root._state, "— no-op");
             }
         }
     }
@@ -612,21 +685,26 @@ Singleton {
     Process {
         id: concatProcess
         onExited: (code, status) => {
+            console.log("[STT:D20] concatProcess.onExited | code:", code, "| state:", root._state);
             // Ignore exit if cancel already reset state
-            if (root._state !== "processing") return;
+            if (root._state !== "processing") {
+                console.log("[STT:D20] state is not processing — ignoring");
+                return;
+            }
 
             if (code !== 0) {
-                console.error("[STT] Segment concatenation failed (exit", code + ")");
+                console.error("[STT:D20] ffmpeg concat FAILED (exit", code + ")");
                 // Fallback: use last segment only
                 if (root._segmentFiles.length > 0) {
                     root._currentAudioFile = root._segmentFiles[root._segmentFiles.length - 1];
-                    console.warn("[STT] Falling back to last segment only");
+                    console.warn("[STT:D20] falling back to last segment:", root._currentAudioFile);
                     root._startTranscription(root._currentAudioFile);
                 } else {
                     root._setErrorState("concat", "Failed to combine segments", "Is ffmpeg installed?");
                 }
                 return;
             }
+            console.log("[STT:D20] concat OK → transcribing combined file:", root._currentAudioFile);
             root._startTranscription(root._currentAudioFile);
         }
     }
@@ -650,8 +728,13 @@ Singleton {
         }
         onExited: (code, status) => {
             processingTimeoutTimer.stop();
+            console.log("[STT:D10] transcribeProcess.onExited | code:", code,
+                "| textLength:", root._transcribedText.length,
+                "| textPreview:", root._transcribedText.substring(0, 80),
+                "| errorDetail:", root._errorDetail);
             if (code === 0 && root._transcribedText !== "") {
                 root._state = "success";
+                console.log("[STT:D11] → success, chaining wl-copy | textLength:", root._transcribedText.length);
                 // Copy to clipboard
                 clipboardProcess.command = ["wl-copy", root._transcribedText];
                 clipboardProcess.running = true;
@@ -659,6 +742,10 @@ Singleton {
                 if (Config.stt?.cache?.deleteOnSuccess ?? true)
                     root._cleanupTempFiles();
             } else {
+                console.error("[STT:D10] → error path | code:", code,
+                    "| hasText:", root._transcribedText !== "",
+                    "| errorDetail:", root._errorDetail,
+                    "| errorRaw:", root._errorRaw);
                 // Error — categorization already happened in stderr collector
                 if (root._errorDetail === "")
                     root._setErrorState("api", "Transcription failed", "Check logs for details");
@@ -674,8 +761,13 @@ Singleton {
     Process {
         id: clipboardProcess
         onExited: (code, status) => {
+            console.log("[STT:D12] clipboardProcess.onExited | code:", code,
+                "| deliveryMode:", root._deliveryMode,
+                "| askChoice:", root._activeDeliveryChoice,
+                "| targetAddr:", root._targetWindowAddress,
+                "| targetClass:", root._targetWindowClass);
             if (code !== 0) {
-                console.warn("[STT] wl-copy failed (exit", code + ")");
+                console.error("[STT:D12] wl-copy FAILED (exit", code + ") — clearing target, aborting inject chain");
                 root._targetWindowAddress = "";
                 root._targetWindowClass = "";
                 return;
@@ -684,14 +776,26 @@ Singleton {
             const effectiveMode = root._deliveryMode === "ask"
                 ? root._activeDeliveryChoice
                 : root._deliveryMode;
+            console.log("[STT:D13] effectiveMode resolved:", effectiveMode,
+                "| from:", root._deliveryMode === "ask" ? "ask→" + root._activeDeliveryChoice : root._deliveryMode);
             // Chain window injection after successful clipboard write
             if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
                 if (root._targetWindowClass === "")
-                    console.warn("[STT] Window class unknown; inject will use Ctrl+V");
+                    console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
+                console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
+                // Pass expected text and pre-determined Neovim socket (captured at stop-time)
+                injectProcess.environment = ({
+                    STT_EXPECTED_TEXT: root._transcribedText,
+                    STT_NVIM_SOCKET: root._targetNvimSocket
+                });
                 injectProcess.command = cmd;
                 injectProcess.running = true;
+            } else {
+                console.log("[STT:D14] inject SKIPPED | reason:",
+                    effectiveMode === "clipboard" ? "effectiveMode=clipboard" :
+                    root._targetWindowAddress === "" ? "no targetWindowAddress" : "unknown");
             }
         }
     }
@@ -699,9 +803,37 @@ Singleton {
     // Window injection via stt-inject.sh (best-effort, non-fatal)
     Process {
         id: injectProcess
+        stderr: SplitParser {
+            onRead: data => {
+                console.log("[STT:D16:stderr]", data.trim());
+            }
+        }
         onExited: (code, status) => {
+            console.log("[STT:D16] injectProcess.onExited | code:", code,
+                "| targetAddr:", root._targetWindowAddress,
+                "| targetClass:", root._targetWindowClass);
             if (code !== 0)
-                console.warn("[STT] inject script exited with code", code, "(non-fatal)");
+                console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal, clipboard still has text");
+            else
+                console.log("[STT:D16] inject completed successfully");
+        }
+    }
+
+    // Neovim socket capture at stop-time (runs stt-select-socket.sh)
+    Process {
+        id: socketCaptureProcess
+        stdout: SplitParser {
+            onRead: data => {
+                const socket = data.trim();
+                if (socket !== "") {
+                    root._targetNvimSocket = socket;
+                    console.log("[STT:D04a] captured Neovim socket:", socket);
+                }
+            }
+        }
+        onExited: (code, status) => {
+            console.log("[STT:D04a] socketCaptureProcess.onExited | code:", code,
+                "| socket:", root._targetNvimSocket);
         }
     }
 
