@@ -372,6 +372,11 @@ Singleton {
     /// Capture the Neovim socket most likely to be the STT target at stop-time.
     /// Must run at stop() — by inject-time (2-10s later), the user may have
     /// switched Neovim windows, changing which socket has the highest focus_timestamp.
+    ///
+    /// Timing: stt-select-socket.sh queries each socket with a 1s timeout.
+    /// With N sockets, worst case is N seconds. Transcription typically takes >2s.
+    /// If socket capture hasn't completed when clipboardProcess.onExited fires,
+    /// _targetNvimSocket will be empty and stt-inject.sh falls back to Pass 1.
     function _captureTargetNvimSocket(): void {
         if (_deliveryMode === "clipboard") return;
         _targetNvimSocket = "";

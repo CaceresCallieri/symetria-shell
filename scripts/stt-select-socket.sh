@@ -7,7 +7,9 @@
 BEST_SOCKET=""
 BEST_TIMESTAMP=0
 
-for sock in $(find "/run/user/$(id -u)/" -maxdepth 1 -name 'nvim.*.0' 2>/dev/null); do
+USER_ID=$(id -u 2>/dev/null) || { printf ''; exit 0; }
+
+for sock in $(find "/run/user/$USER_ID/" -maxdepth 1 -name 'nvim.*.0' 2>/dev/null); do
     INFO=$(timeout 1s nvim --server "$sock" --remote-expr \
         'luaeval("require(\"orchestrator\").stt_target_info()")' 2>/dev/null)
     [ $? -ne 0 ] && continue

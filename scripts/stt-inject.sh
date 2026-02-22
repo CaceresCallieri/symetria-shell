@@ -26,6 +26,8 @@ NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 
 echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET" >&2
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 notify_failure() {
@@ -100,40 +102,10 @@ try_neovim_inject() {
         BEST_SOCKET="$NVIM_SOCKET"
     else
         # Fallback: query all sockets for focus info at inject-time
-        # Each Neovim tracks when it last received FocusGained (terminal focus-in).
-        # We pick the most recently focused one that has Claude instances.
-        for sock in $NVIM_SOCKETS; do
-            echo "[STT:INJ-NVIM] pass 1: querying $sock" >&2
-
-            INFO=$(timeout 1s nvim --server "$sock" --remote-expr \
-                'luaeval("require(\"orchestrator\").stt_target_info()")' 2>/dev/null)
-            if [ $? -ne 0 ]; then
-                echo "[STT:INJ-NVIM] pass 1: $sock RPC failed — skipping" >&2
-                continue
-            fi
-
-            echo "[STT:INJ-NVIM] pass 1: $sock info=$INFO" >&2
-
-            # Parse has_instances and focus_timestamp from compact JSON
-            HAS_INSTANCES=$(echo "$INFO" | grep -o '"has_instances":true')
-            TIMESTAMP=$(echo "$INFO" | grep -o '"focus_timestamp":[0-9]*' | sed 's/"focus_timestamp"://')
-
-            if [ -z "$HAS_INSTANCES" ]; then
-                echo "[STT:INJ-NVIM] pass 1: $sock has no Claude instances — skipping" >&2
-                continue
-            fi
-
-            if [ -z "$TIMESTAMP" ]; then
-                echo "[STT:INJ-NVIM] pass 1: $sock missing timestamp — skipping" >&2
-                continue
-            fi
-
-            if [ "$TIMESTAMP" -gt "$BEST_TIMESTAMP" ] 2>/dev/null; then
-                BEST_TIMESTAMP="$TIMESTAMP"
-                BEST_SOCKET="$sock"
-                echo "[STT:INJ-NVIM] pass 1: new best | socket=$sock timestamp=$TIMESTAMP" >&2
-            fi
-        done
+        BEST_SOCKET=$("$SCRIPT_DIR/stt-select-socket.sh" 2>/dev/null)
+        if [ -n "$BEST_SOCKET" ]; then
+            echo "[STT:INJ-NVIM] pass 1 fallback via stt-select-socket.sh: $BEST_SOCKET" >&2
+        fi
     fi
 
     # ── Pass 2: Inject on the winning socket only ─────────────────────────
@@ -160,6 +132,7 @@ try_neovim_inject() {
     if echo "$RESULT" | grep -q '"ok":true'; then
         INSTANCE_CWD=$(echo "$RESULT" | grep -o '"instance_cwd":"[^"]*"' | sed 's/"instance_cwd":"//' | sed 's/"$//')
         echo "[STT:INJ-NVIM] injection succeeded | socket=$BEST_SOCKET | cwd=$INSTANCE_CWD" >&2
+        rm -f "$NVIM_TMPFILE"
         return 0
     fi
 
@@ -229,12 +202,19 @@ echo "[STT:INJ03] shortcut resolved | class_lower=$CLASS_LOWER | shortcut=$SHORT
 ACTIVE_ADDR=$(hyprctl activewindow -j 2>/dev/null | grep -o '"address": "[^"]*"' | head -1)
 echo "[STT:INJ04] active window at inject time: $ACTIVE_ADDR | target: $ADDRESS" >&2
 
-# ── Pre-paste clipboard verification ─────────────────────────────────────────
+# ── Pre-paste clipboard sanity check ─────────────────────────────────────────
+# Light check: only verify clipboard is non-empty (catches silent wl-copy failure).
+# Full text comparison is deferred to INJ09 (before Enter) where the async gap
+# makes it genuinely useful. Doing a full comparison here would false-positive
+# if the user legitimately copies something during the ~2-10s transcription window.
 
-if ! verify_clipboard "INJ05"; then
-    notify_failure "STT Inject Failed" "Clipboard doesn't contain transcribed text. Something overwrote it between copy and paste."
+CLIP_CHECK=$(wl-paste --no-newline 2>/dev/null)
+if [ -z "$CLIP_CHECK" ]; then
+    echo "[STT:INJ05] clipboard is EMPTY — wl-copy may have failed silently" >&2
+    notify_failure "STT Inject Failed" "Clipboard is empty. wl-copy may have failed silently."
     exit 0
 fi
+echo "[STT:INJ05] clipboard non-empty (len=${#CLIP_CHECK}) — proceeding" >&2
 
 # ── Send paste ───────────────────────────────────────────────────────────────
 
