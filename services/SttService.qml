@@ -881,5 +881,9 @@ Singleton {
         if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
         if (transcribeProcess.running) transcribeProcess.signal(9);
+        if (concatProcess.running) concatProcess.signal(9);
+        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
+        if (clipboardProcess.running) clipboardProcess.running = false;
+        if (injectProcess.running) injectProcess.running = false;
     }
 }
