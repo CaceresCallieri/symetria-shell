@@ -9,7 +9,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-/// Content UI for HyprWhsprService speech-to-text drawer.
+/// Content UI for SttService speech-to-text drawer.
 ///
 /// Displays state-based UI:
 /// - recording: Animated audio level bars + elapsed time
@@ -26,6 +26,12 @@ Item {
     required property real serviceAudioLevel
     required property real serviceElapsedSeconds
     required property string serviceLanguage
+    required property string serviceErrorDetail
+    required property string serviceErrorHint
+    required property string serviceErrorRaw
+    required property string serviceErrorSource
+    required property bool serviceIsAskMode
+    required property string serviceDeliveryChoice
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -41,14 +47,20 @@ Item {
     // Tuned for natural speech visualization. Adjust if bars feel laggy/jittery.
     readonly property QtObject audioConfig: QtObject {
         readonly property real smoothing: 0.35       // 0.2=laggy, 0.5=jittery, 0.35=balanced
-        readonly property real noiseFloor: 0.10      // Filters ~40dB ambient noise
-        readonly property real powerCurve: 1.1       // Slight boost for speech dynamics
+        readonly property real noiseFloor: 0.025     // Just below ambient (~0.03), so silence ≈ 0
+        readonly property real gain: 15.0            // Clips at ~0.09 RMS (speech ceiling). Recalculate if noiseFloor changes
+        readonly property real powerCurve: 0.5       // Square root curve: boosts mids further
         readonly property real waveVariation: 0.30   // ±30% creates motion without chaos
         readonly property real waveSpeed: 0.08       // Gentle oscillation speed
         readonly property real waveFrequency: 0.8    // Wave pattern across bar array
         readonly property real minBarHeight: 2
         readonly property real maxBarHeight: 44
     }
+
+    // Paused state visual configuration
+    // Soft yellow bars at reduced opacity to clearly signal "paused" without extra icons
+    readonly property color pausedBarColor: "#C9B458"
+    readonly property real pausedDimOpacity: 0.55
 
     // Processing wave effect configuration (matches GTK implementation)
     // Creates flowing wave animation during transcription state
@@ -75,7 +87,7 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: root.serviceState === "recording" || root.serviceState === "processing"
+        running: (root.serviceState === "recording" || root.serviceState === "processing") && root.visibilities.stt
         from: 0
         to: 6000
         duration: 100000  // 100 seconds before loop (60 units/sec)
@@ -233,11 +245,202 @@ Item {
                 font.pointSize: Appearance.font.size.extraLarge
             }
 
+            // Error summary (e.g., "Connection timed out", "Authentication failed")
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("Check hyprwhspr logs for details")
+                text: root.serviceErrorDetail || qsTr("Transcription failed")
+                font.pointSize: Appearance.font.size.normal
+                color: Colours.palette.m3error
+            }
+
+            // Actionable hint (e.g., "Check your network connection")
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.serviceErrorHint || qsTr("Check STT configuration")
                 font.pointSize: Appearance.font.size.small
                 color: Colours.palette.m3outline
+            }
+
+            // Action buttons for error state
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: Appearance.spacing.normal
+
+                // Retry: re-submit audio (available for API errors where audio file exists)
+                ControlButton {
+                    id: retryBtn
+                    visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
+                    icon: "refresh"
+                    iconColor: Colours.palette.m3primary
+                    onClicked: SttService.retry()
+                }
+
+                // Cancel: discard audio, close drawer
+                ControlButton {
+                    id: errorCancelBtn
+                    icon: "close"
+                    iconColor: Colours.palette.m3error
+                    onClicked: SttService.cancel()
+                }
+
+                // Copy raw error to clipboard
+                ControlButton {
+                    visible: root.serviceErrorRaw !== ""
+                    icon: "content_copy"
+                    onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
+                }
+            }
+
+            // Signal handler for error-state buttons (retryBtn, errorCancelBtn).
+            // These IDs only exist inside errorComponent's scope, so this
+            // Connections block must live here — the outer block at line ~566
+            // handles recording/paused-state buttons instead.
+            Connections {
+                target: SttService
+                function onActionTriggered(action: string): void {
+                    if (action === "retry") retryBtn.triggerPress();
+                    else if (action === "cancel") errorCancelBtn.triggerPress();
+                }
+            }
+        }
+    }
+
+    /// Control button with press feedback animation.
+    /// Call triggerPress() to programmatically trigger the scale squeeze
+    /// (used by Connections block for keybind-triggered feedback).
+    component ControlButton: Item {
+        id: controlBtn
+
+        required property string icon
+        property color iconColor: Colours.palette.m3onSurfaceVariant
+
+        signal clicked()
+
+        function triggerPress(): void {
+            pressAnim.restart();
+        }
+
+        SequentialAnimation {
+            id: pressAnim
+
+            NumberAnimation {
+                target: controlBtn
+                property: "scale"
+                to: 0.85
+                duration: 80
+                easing.type: Easing.OutQuad
+            }
+
+            NumberAnimation {
+                target: controlBtn
+                property: "scale"
+                to: 1.0
+                duration: 150
+                easing.type: Easing.OutBack
+            }
+        }
+
+        implicitWidth: controlIcon.implicitWidth + Appearance.padding.normal * 2
+        implicitHeight: controlIcon.implicitHeight + Appearance.padding.smaller * 2
+
+        StyledRect {
+            anchors.fill: parent
+            radius: Appearance.rounding.full
+            color: Colours.palette.m3surfaceContainerHigh
+        }
+
+        StateLayer {
+            radius: Appearance.rounding.full
+            color: controlBtn.iconColor
+            function onClicked(): void { controlBtn.clicked(); }
+        }
+
+        MaterialIcon {
+            id: controlIcon
+            anchors.centerIn: parent
+            text: controlBtn.icon
+            color: controlBtn.iconColor
+            font.pointSize: Appearance.font.size.normal
+        }
+    }
+
+    /// Radio-style delivery option chip for "ask" mode.
+    /// Displays a selectable pill with icon + label. Visual feedback via triggerPress().
+    component DeliveryOption: Item {
+        id: optionBtn
+
+        required property string mode
+        required property string icon
+        required property string label
+        required property bool selected
+
+        signal clicked()
+
+        function triggerPress(): void {
+            optionPressAnim.restart();
+        }
+
+        SequentialAnimation {
+            id: optionPressAnim
+
+            NumberAnimation {
+                target: optionBtn
+                property: "scale"
+                to: 0.90
+                duration: 80
+                easing.type: Easing.OutQuad
+            }
+
+            NumberAnimation {
+                target: optionBtn
+                property: "scale"
+                to: 1.0
+                duration: 150
+                easing.type: Easing.OutBack
+            }
+        }
+
+        implicitWidth: optionRow.implicitWidth + Appearance.padding.normal * 2
+        implicitHeight: optionRow.implicitHeight + Appearance.padding.smaller * 2
+
+        StyledRect {
+            anchors.fill: parent
+            radius: Appearance.rounding.full
+            color: optionBtn.selected
+                ? Colours.palette.m3primaryContainer
+                : Colours.palette.m3surfaceContainerHigh
+        }
+
+        StateLayer {
+            radius: Appearance.rounding.full
+            color: optionBtn.selected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+            function onClicked(): void {
+                SttService.setDeliveryChoice(optionBtn.mode);
+                optionBtn.clicked();
+            }
+        }
+
+        Row {
+            id: optionRow
+            anchors.centerIn: parent
+            spacing: Appearance.spacing.smaller
+
+            MaterialIcon {
+                text: optionBtn.icon
+                color: optionBtn.selected
+                    ? Colours.palette.m3onPrimaryContainer
+                    : Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            StyledText {
+                text: optionBtn.label
+                color: optionBtn.selected
+                    ? Colours.palette.m3onPrimaryContainer
+                    : Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                anchors.verticalCenter: parent.verticalCenter
             }
         }
     }
@@ -281,12 +484,13 @@ Item {
                     font.pointSize: Appearance.font.size.small
                     font.family: Appearance.font.family.mono
                     color: Colours.palette.m3outline
+                    opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
                 }
             }
 
             // Audio level bars (visible during recording, paused, and processing)
             // Recording: audio-reactive with gentle wave
-            // Paused: frozen at last position
+            // Paused: bars settle to minimum height (audioLevel reset to 0 on pause)
             // Processing: flowing wave animation (no audio input)
             FadeTransition {
                 id: audioLevelContainer
@@ -337,12 +541,14 @@ Item {
                                 // Recording/paused: audio-reactive with gentle wave
                                 const rawLevel = root.audioLevel;
 
-                                // Noise gate: ignore fan noise and ambient sounds
+                                // Noise gate: subtract ambient baseline, amplify, compress
                                 let effectiveLevel = 0;
                                 if (rawLevel > cfg.noiseFloor) {
                                     // Rescale: map [noiseFloor, 1.0] → [0, 1.0]
                                     effectiveLevel = (rawLevel - cfg.noiseFloor) / (1.0 - cfg.noiseFloor);
-                                    // Power curve adjusts quiet vs loud response
+                                    // Gain: stretch narrow speech range to fill [0, 1.0]
+                                    effectiveLevel = Math.min(1.0, effectiveLevel * cfg.gain);
+                                    // Power curve compresses dynamic range (sqrt boosts mids)
                                     effectiveLevel = Math.pow(effectiveLevel, cfg.powerCurve);
                                 }
 
@@ -351,14 +557,16 @@ Item {
                                 return cfg.minBarHeight + effectiveLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor * waveOffset;
                             }
 
-                            // Opacity modulation for processing state wave effect
+                            // Opacity modulation for processing and paused states
                             readonly property real waveOpacity: {
                                 if (root.serviceState === "processing") {
                                     const opacity = root.processingWaveOpacities[index];
-                                    // Validate: opacity should be in [0.75, 1.0] range
                                     if (opacity !== undefined && opacity >= 0 && opacity <= 1) {
                                         return opacity;
                                     }
+                                }
+                                if (root.serviceState === "paused") {
+                                    return root.pausedDimOpacity;
                                 }
                                 return 1.0;
                             }
@@ -380,7 +588,7 @@ Item {
                             y: (parent.height - height) / 2
 
                             radius: 2.5
-                            color: root.barColors[index] ?? Colours.palette.m3primary
+                            color: root.serviceState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)
                             opacity: waveOpacity
                         }
                     }
@@ -396,21 +604,133 @@ Item {
                 StyledText {
                     text: root.formatElapsedTime(root.serviceElapsedSeconds)
                     font.pointSize: Appearance.font.size.small
-                    font.family: Appearance.font.family.mono  // Consistent width for updating digits
+                    font.family: Appearance.font.family.mono
                     color: Colours.palette.m3outline
+                    opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
+                }
+            }
+
+            // Control buttons: pause/resume, submit, restart, cancel (visible during recording/paused)
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+
+                show: root.serviceState === "recording" || root.serviceState === "paused"
+
+                RowLayout {
+                    spacing: Appearance.spacing.normal
+
+                    ControlButton {
+                        id: pauseBtn
+                        icon: root.serviceState === "paused" ? "play_arrow" : "pause"
+                        iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+                        onClicked: SttService.pause()
+                    }
+
+                    ControlButton {
+                        id: restartBtn
+                        icon: "restart_alt"
+                        onClicked: SttService.restart()
+                    }
+
+                    ControlButton {
+                        id: cancelBtn
+                        icon: "close"
+                        iconColor: Colours.palette.m3error
+                        onClicked: SttService.cancel()
+                    }
+
+                    ControlButton {
+                        id: submitBtn
+                        icon: "check"
+                        iconColor: Colours.palette.m3confirm
+                        onClicked: SttService.stop()
+                    }
+                }
+            }
+
+            // Delivery mode radio toggle (visible only in "ask" mode during recording/paused).
+            // Hidden during processing to match convention that processing is non-interactive.
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.serviceIsAskMode && (root.serviceState === "recording"
+                    || root.serviceState === "paused")
+
+                RowLayout {
+                    spacing: Appearance.spacing.small
+
+                    DeliveryOption {
+                        id: saveOption
+                        mode: "clipboard"
+                        icon: "content_copy"
+                        label: qsTr("Save")
+                        selected: root.serviceDeliveryChoice === "clipboard"
+                    }
+
+                    DeliveryOption {
+                        id: injectOption
+                        mode: "inject"
+                        icon: "input"
+                        label: qsTr("Inject")
+                        selected: root.serviceDeliveryChoice === "inject"
+                    }
+
+                    DeliveryOption {
+                        id: submitOption
+                        mode: "submit"
+                        icon: "send"
+                        label: qsTr("Submit")
+                        selected: root.serviceDeliveryChoice === "submit"
+                    }
+                }
+            }
+
+            // Signal handler for recording/paused-state buttons (pauseBtn, restartBtn,
+            // cancelBtn, submitBtn) and delivery mode radio options.
+            // These IDs exist in the main content scope.
+            // The error-state buttons have a separate Connections block inside
+            // errorComponent above.
+            Connections {
+                target: SttService
+                function onActionTriggered(action: string): void {
+                    switch (action) {
+                        case "pause":
+                        case "resume":
+                            pauseBtn.triggerPress();
+                            break;
+                        case "restart":
+                            restartBtn.triggerPress();
+                            break;
+                        case "cancel":
+                            if (root.serviceState !== "error")
+                                cancelBtn.triggerPress();
+                            break;
+                        case "retry":
+                            break;
+                        case "stop":
+                            submitBtn.triggerPress();
+                            break;
+                        case "mode-clipboard":
+                            saveOption.triggerPress();
+                            break;
+                        case "mode-inject":
+                            injectOption.triggerPress();
+                            break;
+                        case "mode-submit":
+                            submitOption.triggerPress();
+                            break;
+                    }
                 }
             }
 
             // State indicator - dispatches to the appropriate component per state.
-            // recording/processing/idle → null (audio bars handle these states)
-            // paused/success → stateIconComponent (driven by stateMap icon/iconColor)
+            // recording/processing/idle/paused → null (audio bars + control buttons handle these)
+            // success → stateIconComponent (checkmark icon driven by stateMap)
             // error → errorComponent (icon + hint text)
             Loader {
                 Layout.alignment: Qt.AlignHCenter
 
                 sourceComponent: {
                     switch (root.serviceState) {
-                        case "paused":
                         case "success":
                             return stateIconComponent;
                         case "error":

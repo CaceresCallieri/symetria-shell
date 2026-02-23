@@ -71,7 +71,7 @@ qs -c symmetria
 ## Architecture
 
 ### Entry Point
-- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, HyprWhspr, Lock, Shortcuts, BatteryMonitor, IdleMonitors
+- `shell.qml` - Root component, loads Background, Drawers, AreaPicker, Askpass, Stt, Lock, Shortcuts, BatteryMonitor, IdleMonitors
 
 ### Directory Structure
 | Directory | Purpose |
@@ -327,6 +327,78 @@ To create a new pill:
 2. Add `RowLayout` with padding spacers and `PillContainer.WrappedLoader` children
 3. Register in `Bar.qml`: add to `hasPillMargins`, switch case, and Component definition
 
+### Transparency Compensation for Out-of-Backgrounds Components
+
+**⚠️ Components outside the unified Backgrounds system will appear darker**
+
+The drawer system uses a two-layer opacity pipeline in `Drawers.qml`:
+
+```
+Transparency layer (Item, layer.enabled: true)
+├── opacity: Colours.transparency.base (e.g., 0.45)
+├── Border (color: generalBackground)
+└── Backgrounds (layer.enabled: true, opacity: generalBackgroundAlpha = 0.5)
+    └── ShapePaths at generalBackgroundOpaque (#000000, fully opaque)
+```
+
+Panel backgrounds get **two** multiplicative opacity reductions: `generalBackgroundAlpha × transparency.base`. For example: `0.5 × 0.45 = 0.225` (22.5% black).
+
+Components placed **outside** this container (e.g., directly in `StyledWindow`) don't get the transparency layer reduction. Using `Colours.generalBackground` directly gives `0.5` (50% black) — more than double the panel darkness.
+
+**The Fix — compute effective alpha manually:**
+
+```qml
+readonly property real effectiveAlpha: Colours.generalBackgroundAlpha
+    * (Colours.transparency.enabled ? Colours.transparency.base : 1)
+
+color: Qt.alpha(Colours.generalBackgroundOpaque, effectiveAlpha)
+```
+
+This produces the same visual result as panel backgrounds regardless of whether transparency is enabled.
+
+**When this applies:**
+- Overlays placed directly in `Drawers.qml` (outside `Backgrounds` / `Panels`)
+- Any floating dialog or widget that bypasses the unified background system
+- Components that intentionally avoid `Panels` (e.g., to skip Region mask iteration)
+
+**Reference:** `modules/keychords/Overlay.qml` uses this pattern for its centered dialog.
+
+### Drawers Window Input Region (XOR Mask)
+
+**⚠️ The mask uses XOR — expanding the mainRect SHRINKS the input region**
+
+The drawers window (`Drawers.qml`) uses a `mask: Region` with `Intersection.Xor` to define its Wayland input region (where the surface accepts pointer press/click events). The XOR creates an **inverted** relationship between the `mainRect` and the clickable area:
+
+```
+finalInputRegion = fullWindowRect XOR (mainRect - panelSubtractions)
+```
+
+Since `mainRect` is inside the full window, XOR produces:
+- **In the input region:** everything NOT in mainRect (border strips, bar area) + panel areas (subtracted from mainRect, so restored by XOR)
+- **NOT in the input region:** mainRect minus panels (the empty interior — clicks pass through to desktop)
+
+**Current mainRect (correct):**
+```qml
+y: bar.implicitHeight + win.dragMaskPadding  // Starts BELOW bar
+```
+Result: bar area is OUTSIDE mainRect → XOR puts it IN the input region → **bar receives both hover and click events** ✓
+
+**If you change to y: 0 (WRONG):**
+```
+y: win.dragMaskPadding  // Includes bar in mainRect
+```
+Result: bar area is INSIDE mainRect → XOR REMOVES it from the input region → **bar loses all input** ✗
+
+**Key rules:**
+- The `mainRect` defines the **non-interactive interior**, not the interactive area
+- To ADD an area to the input region, keep it OUTSIDE the mainRect
+- To REMOVE an area from the input region, include it IN the mainRect
+- Panel areas are subtracted from mainRect before XOR, which RESTORES them to the input region
+- Hover events in the bar work because Hyprland delivers `wl_pointer.motion` to layer surfaces within the input region; outside it, the compositor sends `wl_pointer.leave` and routes events elsewhere
+
+**Full-window MouseAreas in the drawers window:**
+Any `MouseArea { anchors.fill: parent }` placed as a sibling of `Interactions` in the StyledWindow will sit above it in z-order and intercept ALL click events. Such MouseAreas MUST be guarded with `enabled: <condition>` to prevent blocking the entire bar's click interactivity. Reference: `modules/keychords/Overlay.qml` guards its dismiss-on-click MouseArea with `enabled: root.shouldShow`.
+
 ### C++ Plugin Modules
 Located in `plugin/src/Symmetria/`:
 - **Symmetria** - Core utilities (Qalculator, Toaster, ImageAnalyser, AppDb, Requests)
@@ -374,54 +446,142 @@ export SUDO_ASKPASS="$HOME/.dotfiles/scripts/symmetria-askpass.sh"
 - `modules/askpass/AskpassWindow.qml` - Overlay dialog (based on WirelessPasswordDialog pattern)
 - `~/.dotfiles/scripts/symmetria-askpass.sh` - Wrapper script for sudo
 
-### HyprWhspr (Speech-to-Text Drawer)
+### Native Speech-to-Text (STT)
 
-The HyprWhspr module (`modules/hyprwhspr/`) provides a native drawer overlay for the HyprWhspr speech-to-text system. The drawer auto-shows when HyprWhspr becomes active and displays state-based UI throughout the transcription lifecycle.
+The STT module (`modules/stt/`) provides native speech-to-text using `pw-record` for audio capture and OpenAI's GPT-4o Transcribe API for transcription. Unlike the previous HyprWhspr integration, this system owns the entire pipeline — no external daemons, no file-watching, no inotifywait.
 
 **Prerequisites:**
-- HyprWhspr must be installed and configured
-- State files at `~/.config/hyprwhspr/`:
-  - `visualizer_state` - Current state (recording, paused, processing, error, success)
-  - `audio_level` - Float 0.0-1.0 (updated during recording)
-  - `recording_control` - FIFO for commands
+- `pipewire` (pw-record) — already installed on any PipeWire system
+- `curl` — for API calls
+- `wl-clipboard` (wl-copy) — for clipboard delivery
+- `ffmpeg` — optional, for pause/resume segment concatenation
+- `OPENAI_API_KEY` environment variable (or `stt.apiKey` in shell.json)
+
+**Architecture:**
+```
+Keybind → qs ipc call stt toggle en
+                    ↓ IPC
+SttService → spawns pw-record → WAV file
+           → spawns level monitor (pw-record | od | awk → stdout)
+           → on stop: curl → OpenAI API → wl-copy [→ sendshortcut inject [→ Enter submit]]
+```
+
+**IPC Commands:**
+
+| Command | IPC Call | Description |
+|---------|----------|-------------|
+| Toggle | `qs -c symmetria ipc call stt toggle en` | Start if idle, submit if active |
+| Start | `qs -c symmetria ipc call stt start en` | Start with language |
+| Stop | `qs -c symmetria ipc call stt stop` | Submit for transcription |
+| Pause | `qs -c symmetria ipc call stt pause` | Toggle pause/resume |
+| Resume | `qs -c symmetria ipc call stt resume` | Explicit resume |
+| Cancel | `qs -c symmetria ipc call stt cancel` | Kill processes, discard audio |
+| Restart | `qs -c symmetria ipc call stt restart` | Cancel + re-start recording |
+| Retry | `qs -c symmetria ipc call stt retry` | Re-submit failed transcription |
+| Set mode | `qs -c symmetria ipc call stt mode submit` | Switch ask-mode radio to given choice |
+
+**Keyboard Shortcuts:**
+
+| Key | Action |
+|-----|--------|
+| Super+Alt+D | Toggle STT (English) |
+| Super+Alt+E | Toggle STT (Spanish) |
+| Alt+Space | Pause/Resume |
+| Alt+X | Cancel (discard) |
+| Alt+R | Restart recording |
 
 **State Machine:**
 
 | State | Description | UI Response |
 |-------|-------------|-------------|
-| `recording` | User is speaking | Animated audio level bars |
-| `paused` | Recording paused | Frozen audio bars + pause icon (amber) |
-| `processing` | Transcribing audio | CircularIndicator spinner |
-| `error` | Transcription failed | Error icon + hint text |
+| `recording` | User is speaking | Animated audio level bars + control buttons |
+| `paused` | Recording paused | Frozen bars + pause icon + control buttons |
+| `processing` | Transcribing audio | Flowing wave animation |
+| `error` | Transcription failed | Error icon + hint text + retry/cancel buttons |
 | `success` | Transcription complete | Checkmark icon, auto-hide after delay |
 
-**How it works:**
-1. HyprWhspr writes state to `~/.config/hyprwhspr/visualizer_state`
-2. `HyprWhsprService` uses `inotifywait` for efficient file-change detection (not polling)
-3. State is read directly from file content (`recording`, `paused`, `processing`, `error`, `success`)
-4. File deletion signals return to `idle` state
-5. Audio level bars animate during recording (polled at 60fps from `audio_level` file)
-6. On `success` state, drawer auto-hides after configurable delay
+**Audio Level Pipeline:** A separate `pw-record | od | awk` pipeline outputs RMS level at ~10Hz via stdout. QML reads via `Process.stdout: SplitParser`. PipeWire multiplexes multiple readers natively.
+
+**Pause/Resume:** Each pause saves the current segment (SIGTERM → pw-record finalizes WAV). Resume starts a new segment. On submit, multiple segments are concatenated via `ffmpeg -filter_complex concat`.
+
+**Delivery Modes:**
+
+| Mode | `deliveryMode` | Behavior |
+|------|----------------|----------|
+| Clipboard only | `"clipboard"` (default) | Copies transcription to clipboard via `wl-copy` |
+| Window inject | `"inject"` | Clipboard copy **+** paste into the window that was active at submit time |
+| Auto-submit | `"submit"` | Clipboard copy **+** paste **+** send Enter to auto-submit |
+| Ask (radio) | `"ask"` | Shows radio toggle in drawer; user picks delivery per-recording |
+
+**Window Injection Flow (Modes B & C):**
+1. User presses Submit (stop) → `_captureTargetWindow()` saves the active window's Hyprland address + class
+2. Transcription completes → `wl-copy` writes text to clipboard
+3. `clipboardProcess.onExited` chains `stt-inject.sh` with the captured address
+4. Script verifies window exists, detects terminal vs GUI, sends `Ctrl+V` or `Ctrl+Shift+V` via `hyprctl dispatch sendshortcut address:0x...`
+5. In submit mode: after a 150ms delay, sends `Return` to the same address to auto-submit
+
+**Key design decisions:**
+- **No focus change** — `sendshortcut` with address targeting pastes without stealing focus
+- **Best-effort** — injection failure is non-fatal (clipboard always has the text)
+- **Terminal detection** — Ghostty, Alacritty, Kitty, Foot, WezTerm, Warp, Konsole, etc. use `Ctrl+Shift+V`; all others use `Ctrl+V`
+- **Retry preserves target** — `retry()` does NOT clear the captured window, so re-transcription injects to the same target
+- **50ms clipboard propagation delay** — ensures `wl-copy` data reaches the Wayland compositor before `sendshortcut`
+- **Auto-submit delay** — 150ms between paste and Enter allows the application to process clipboard content
+- **Universal Enter** — `Return` key without modifiers works in both terminals and GUI apps
+
+**Ask Mode (Radio Toggle):**
+
+When `deliveryMode` is `"ask"`, a radio toggle row appears in the STT drawer during recording, paused, and processing states. The user can switch between Save (clipboard), Inject, and Submit at any time — including during processing. The selected option at transcription completion determines delivery behavior.
+
+- Three options: **Save** (clipboard icon), **Inject** (input icon), **Submit** (send icon)
+- Clickable chips with M3 primaryContainer styling for selected state
+- IPC: `qs -c symmetria ipc call stt mode inject` to switch programmatically
+- Last-used choice persists across recordings within the same shell session (first default: clipboard)
+- Resolves to effective mode at delivery time via `effectiveMode` in `clipboardProcess.onExited`
+- `_captureTargetWindow()` always runs (since `"ask" !== "clipboard"`), ensuring inject/submit targets are available
 
 **Configuration (`~/.config/symmetria/shell.json`):**
 ```json
 {
-  "hyprwhspr": {
+  "stt": {
     "enabled": true,
-    "autoHideDelay": 1500
+    "apiKey": "",
+    "backend": "openai",
+    "model": "gpt-4o-transcribe",
+    "autoHideDelay": 1500,
+    "processingTimeout": 120000,
+    "deliveryMode": "clipboard",
+    "recording": {
+      "format": "wav",
+      "sampleRate": 16000,
+      "channels": 1
+    },
+    "cache": {
+      "enabled": true,
+      "maxEntries": 10,
+      "deleteOnSuccess": true
+    }
   }
 }
 ```
 
 **Files:**
-- `services/HyprWhsprService.qml` - Singleton service (state file watcher)
-- `modules/hyprwhspr/HyprWhspr.qml` - Root component (auto-show logic)
-- `modules/hyprwhspr/Wrapper.qml` - Animation wrapper (top-hanging)
-- `modules/hyprwhspr/Content.qml` - State-based UI content
-- `modules/hyprwhspr/HyprWhsprBackground.qml` - Background shape
-- `config/HyprWhsprConfig.qml` - Configuration defaults
 
-**Note:** Unlike Askpass (IPC-triggered), HyprWhspr uses file-based state watching. The drawer doesn't capture keyboard focus since the user is dictating via voice.
+| File | Purpose |
+|------|---------|
+| `services/SttService.qml` | Core service: process management, state machine, API calls |
+| `modules/stt/Stt.qml` | Root component (auto-show logic, IPC handler) |
+| `modules/stt/Wrapper.qml` | Animation wrapper (top-hanging slide-down) |
+| `modules/stt/Content.qml` | State-based UI: audio bars, controls, error display |
+| `modules/stt/SttBackground.qml` | Background shape (uses TopHangingBackground) |
+| `config/SttConfig.qml` | Configuration defaults |
+| `scripts/stt-level-monitor.sh` | Audio level pipeline (pw-record → od → awk) |
+| `scripts/stt-transcribe.sh` | OpenAI API curl wrapper with error categorization |
+| `scripts/stt-inject.sh` | Window injection via hyprctl sendshortcut (best-effort) |
+
+**API Key Resolution:** SttService checks `Config.stt.apiKey` first, then falls back to `$OPENAI_API_KEY` env var. If neither is set, starting STT shows an error with configuration hint.
+
+**Cancel/Restart:** Cancel kills all active processes (SIGKILL for pw-record, SIGTERM for others) and deletes temp files. Restart saves the language, cancels, then re-starts after a 500ms delay.
 
 ### Clipboard Manager
 
@@ -522,6 +682,78 @@ bind = $mainMod SHIFT, C, exec, qs -c symmetria ipc call drawers toggle calculat
 - Functions: `sqrt(144)`, `sin(45deg)`, `log(100)`
 - Unit conversions: `5km to miles`, `100F to C`
 - Constants: `pi`, `e`, `c` (speed of light)
+
+### KeyChords (Which-Key Overlay)
+
+The KeyChords module (`modules/keychords/`) provides a "which-key" style chord overlay. When a chord group is activated via IPC, a centered dialog appears showing available key-label pairs. Pressing a key executes the associated command.
+
+**Configuration File:** `~/.config/symmetria/chords.json` (see `chords.example.json` for schema)
+
+**Schema:**
+```json
+{
+  "groupName": {
+    "title": "Display Title",
+    "chords": [
+      { "key": "x", "label": "Description", "command": "shell command" }
+    ]
+  }
+}
+```
+
+**Validation Rules:**
+- `key` must be a single character
+- `label` must be a non-empty string
+- `command` must be a non-empty string (executed via `sh -c`)
+- Empty or invalid groups are silently skipped
+- File is hot-reloaded on changes (via `FileView.watchChanges`)
+
+**IPC:**
+```bash
+# Activate a chord group
+qs -c symmetria ipc call chords activate screenshot
+
+# Dismiss overlay
+qs -c symmetria ipc call chords dismiss
+```
+
+**Hyprland Keybinding Example:**
+```conf
+bind = $mainMod, S, exec, qs -c symmetria ipc call chords activate screenshot
+```
+
+**Keyboard Behavior:**
+| Key | Action |
+|-----|--------|
+| Matched key | Execute command, close overlay |
+| Escape | Dismiss overlay |
+| Click outside | Dismiss overlay |
+| Unmatched key | Silently consumed |
+
+**Configuration (`~/.config/symmetria/shell.json`):**
+```json
+{
+  "keychords": {
+    "enabled": true,
+    "sizes": {
+      "maxWidth": 500,
+      "keyWidth": 32,
+      "itemHeight": 28
+    }
+  }
+}
+```
+
+**Files:**
+| File | Purpose |
+|------|---------|
+| `services/KeyChordsService.qml` | Singleton: chord group loading, key dispatch, command execution |
+| `modules/keychords/KeyChords.qml` | Root component: IPC handler, visibility management |
+| `modules/keychords/Overlay.qml` | Centered floating dialog with key grid |
+| `modules/keychords/ChordKey.qml` | Individual key chip (badge + label + click) |
+| `config/KeyChordsConfig.qml` | Configuration defaults |
+
+**Security:** Commands in `chords.json` are executed via `sh -c` without sanitization. This file is trusted at the same level as `~/.bashrc` -- shell expansion is intentional.
 
 ## Configuration
 

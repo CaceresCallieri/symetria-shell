@@ -10,7 +10,7 @@ import qs.modules.utilities as Utilities
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
-import qs.modules.hyprwhspr as HyprWhsprModule
+import qs.modules.stt as SttModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
 import QtQuick
@@ -107,8 +107,8 @@ Item {
             startY: 0  // Start at top-left (clockwise path like bar popouts)
         }
 
-        HyprWhsprModule.HyprWhsprBackground {
-            wrapper: root.panels.hyprwhspr
+        SttModule.SttBackground {
+            wrapper: root.panels.stt
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0  // Start at top-left (clockwise path like bar popouts)

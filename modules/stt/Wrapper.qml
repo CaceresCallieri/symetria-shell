@@ -6,7 +6,7 @@ import qs.services
 import Quickshell
 import QtQuick
 
-/// Animation wrapper for HyprWhspr drawer.
+/// Animation wrapper for STT drawer.
 ///
 /// Handles slide-down animation from top of screen, similar to Askpass.
 /// Content is anchored to bottom so it reveals top-down as height grows.
@@ -17,7 +17,7 @@ Item {
     required property PersistentProperties visibilities
     required property var panels
 
-    readonly property bool shouldBeActive: visibilities.hyprwhspr && Config.hyprwhspr.enabled
+    readonly property bool shouldBeActive: visibilities.stt && Config.stt.enabled
     property int contentHeight
 
     visible: height > 0
@@ -67,7 +67,7 @@ Item {
     }
 
     Connections {
-        target: Config.hyprwhspr
+        target: Config.stt
 
         function onEnabledChanged(): void {
             timer.start();
@@ -109,10 +109,16 @@ Item {
         sourceComponent: Content {
             screen: root.screen
             visibilities: root.visibilities
-            serviceState: HyprWhsprService.state
-            serviceAudioLevel: HyprWhsprService.audioLevel
-            serviceElapsedSeconds: HyprWhsprService.elapsedSeconds
-            serviceLanguage: HyprWhsprService.language
+            serviceState: SttService.state
+            serviceAudioLevel: SttService.audioLevel
+            serviceElapsedSeconds: SttService.elapsedSeconds
+            serviceLanguage: SttService.language
+            serviceErrorDetail: SttService.errorDetail
+            serviceErrorHint: SttService.errorHint
+            serviceErrorRaw: SttService.errorRaw
+            serviceErrorSource: SttService.errorSource
+            serviceIsAskMode: SttService.isAskMode
+            serviceDeliveryChoice: SttService.activeDeliveryChoice
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

@@ -28,10 +28,11 @@ Singleton {
     property alias paths: adapter.paths
     property alias clipboard: adapter.clipboard
     property alias askpass: adapter.askpass
-    property alias hyprwhspr: adapter.hyprwhspr
+    property alias stt: adapter.stt
     property alias keycaster: adapter.keycaster
     property alias calculator: adapter.calculator
     property alias packages: adapter.packages
+    property alias keychords: adapter.keychords
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -104,10 +105,11 @@ Singleton {
             paths: serializePaths(),
             clipboard: serializeClipboard(),
             askpass: serializeAskpass(),
-            hyprwhspr: serializeHyprWhspr(),
+            stt: serializeStt(),
             keycaster: serializeKeycaster(),
             calculator: serializeCalculator(),
-            packages: serializePackages()
+            packages: serializePackages(),
+            keychords: serializeKeyChords()
         };
     }
 
@@ -448,10 +450,25 @@ Singleton {
         };
     }
 
-    function serializeHyprWhspr(): var {
+    function serializeStt(): var {
         return {
-            enabled: hyprwhspr.enabled,
-            autoHideDelay: hyprwhspr.autoHideDelay
+            enabled: stt.enabled,
+            apiKey: stt.apiKey,
+            backend: stt.backend,
+            model: stt.model,
+            autoHideDelay: stt.autoHideDelay,
+            processingTimeout: stt.processingTimeout,
+            deliveryMode: stt.deliveryMode,
+            recording: {
+                format: stt.recording.format,
+                sampleRate: stt.recording.sampleRate,
+                channels: stt.recording.channels
+            },
+            cache: {
+                enabled: stt.cache.enabled,
+                maxEntries: stt.cache.maxEntries,
+                deleteOnSuccess: stt.cache.deleteOnSuccess
+            }
         };
     }
 
@@ -486,6 +503,17 @@ Singleton {
             sizes: {
                 width: packages.sizes.width,
                 itemHeight: packages.sizes.itemHeight
+            }
+        };
+    }
+
+    function serializeKeyChords(): var {
+        return {
+            enabled: keychords.enabled,
+            sizes: {
+                maxWidth: keychords.sizes.maxWidth,
+                keyWidth: keychords.sizes.keyWidth,
+                itemHeight: keychords.sizes.itemHeight
             }
         };
     }
@@ -547,10 +575,11 @@ Singleton {
             property UserPaths paths: UserPaths {}
             property ClipboardConfig clipboard: ClipboardConfig {}
             property AskpassConfig askpass: AskpassConfig {}
-            property HyprWhsprConfig hyprwhspr: HyprWhsprConfig {}
+            property SttConfig stt: SttConfig {}
             property KeycasterConfig keycaster: KeycasterConfig {}
             property CalculatorConfig calculator: CalculatorConfig {}
             property PackagesConfig packages: PackagesConfig {}
+            property KeyChordsConfig keychords: KeyChordsConfig {}
         }
     }
 }

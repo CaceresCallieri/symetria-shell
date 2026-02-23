@@ -92,7 +92,7 @@ Singleton {
         interval: 5000  // 5 second timeout
         onTriggered: {
             console.error("Askpass: Write timeout - forcing close");
-            writeProcess.kill();
+            writeProcess.signal(9);
             root.hide();
         }
     }
@@ -126,7 +126,7 @@ Singleton {
         interval: 5000  // 5 second timeout
         onTriggered: {
             console.error("Askpass: Cancel timeout - forcing close");
-            cancelProcess.kill();
+            cancelProcess.signal(9);
             root.hide();
         }
     }

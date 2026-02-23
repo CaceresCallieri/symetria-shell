@@ -1,0 +1,20 @@
+{
+    "screenshot": {
+        "title": "Screenshot",
+        "chords": [
+            { "key": "f", "label": "Fullscreen", "command": "grim ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png" },
+            { "key": "s", "label": "Selection", "command": "grim -g \"$(slurp)\" ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png" },
+            { "key": "w", "label": "Active Window", "command": "grim -g \"$(hyprctl activewindow -j | jq -r '.at[0],.at[1],.size[0],.size[1]' | tr '\\n' ' ' | awk '{printf \"%d,%d %dx%d\",$1,$2,$3,$4}')\" ~/Pictures/Screenshots/$(date +%Y%m%d_%H%M%S).png" },
+            { "key": "c", "label": "To Clipboard", "command": "grim -g \"$(slurp)\" - | wl-copy" }
+        ]
+    },
+    "apps": {
+        "title": "Launch App",
+        "chords": [
+            { "key": "t", "label": "Terminal", "command": "ghostty" },
+            { "key": "b", "label": "Browser", "command": "firefox" },
+            { "key": "f", "label": "File Manager", "command": "nautilus" },
+            { "key": "e", "label": "Editor", "command": "neovide" }
+        ]
+    }
+}

@@ -6,7 +6,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-RowLayout {
+Item {
     id: root
 
     required property int wsId
@@ -60,56 +60,87 @@ RowLayout {
     Layout.leftMargin: isActive ? activePadding + activeMargin : 0
     Layout.rightMargin: isActive ? activePadding + activeMargin : 0
 
-    spacing: 0
+    implicitWidth: innerLayout.implicitWidth
+    implicitHeight: innerLayout.implicitHeight
 
-    WorkspaceContent {
-        id: content
+    // Workspace-level click: switch workspace or toggle special.
+    // Declared before innerLayout so it has lower z-order — app icon
+    // MouseAreas inside innerLayout sit on top and receive clicks first.
+    MouseArea {
+        anchors.fill: parent
 
-        wsId: root.ws
-        icon: root.rawIcon
-        hasWindows: root.hasWindows
-        labelColor: root.indicatorColor
-        animateLabel: true
-        windowsLeftMargin: -Config.bar.sizes.innerWidth / 10  // Pull icons closer for tighter grouping
-        animateWindowsWidth: false  // Root RowLayout animates width; inner animation would double-ease
+        onClicked: event => {
+            if (!root.isActive) {
+                // Named workspaces (negative IDs) need "workspace name:<name>" syntax
+                if (root.ws < 0) {
+                    const wsObj = Hypr.workspaces.values.find(w => w.id === root.ws);
+                    if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
+                } else {
+                    Hypr.dispatch(`workspace ${root.ws}`);
+                }
+            } else if (event.x < content.labelWidth) {
+                // Only toggle special workspace when clicking on the label area,
+                // not on app icons gaps or the fullscreen indicator
+                Hypr.dispatch("togglespecialworkspace special");
+            }
+        }
     }
 
-    // Fullscreen/Maximize indicator - shows at end of active workspace
-    MaterialIcon {
-        id: fullscreenIndicator
+    RowLayout {
+        id: innerLayout
 
-        // Detect maximize mode (fullscreen 1) on this workspace
-        // Note: Intentionally excludes true fullscreen (mode 2) as those typically hide the bar
-        readonly property bool hasMaximized: {
-            // Use cached workspace with explicit null safety
-            if (!root.currentWorkspace?.toplevels?.values) return false;
+        anchors.fill: parent
+        spacing: 0
 
-            // Manual iteration for better reactivity and null safety
-            for (const toplevel of root.currentWorkspace.toplevels.values) {
-                if (toplevel?.lastIpcObject?.fullscreen === 1) {
-                    return true;
-                }
-            }
-            return false;
+        WorkspaceContent {
+            id: content
+
+            wsId: root.ws
+            icon: root.rawIcon
+            hasWindows: root.hasWindows
+            labelColor: root.indicatorColor
+            animateLabel: true
+            windowsLeftMargin: -Config.bar.sizes.innerWidth / 10  // Pull icons closer for tighter grouping
+            animateWindowsWidth: false  // Root RowLayout animates width; inner animation would double-ease
         }
 
-        // Combined condition for cleaner bindings
-        readonly property bool shouldShow: hasMaximized && root.isActive
+        // Fullscreen/Maximize indicator - shows at end of active workspace
+        MaterialIcon {
+            id: fullscreenIndicator
 
-        Layout.alignment: Qt.AlignVCenter
-        Layout.leftMargin: shouldShow ? Appearance.spacing.small : 0
+            // Detect maximize mode (fullscreen 1) on this workspace
+            // Note: Intentionally excludes true fullscreen (mode 2) as those typically hide the bar
+            readonly property bool hasMaximized: {
+                // Use cached workspace with explicit null safety
+                if (!root.currentWorkspace?.toplevels?.values) return false;
 
-        visible: hasMaximized  // Only allocate layout space when needed
-        scale: shouldShow ? 1 : 0
-        opacity: shouldShow ? 1 : 0
+                // Manual iteration for better reactivity and null safety
+                for (const toplevel of root.currentWorkspace.toplevels.values) {
+                    if (toplevel?.lastIpcObject?.fullscreen === 1) {
+                        return true;
+                    }
+                }
+                return false;
+            }
 
-        text: "fullscreen"
-        color: Colours.palette.m3onSurface
-        font.pointSize: Appearance.font.size.small
+            // Combined condition for cleaner bindings
+            readonly property bool shouldShow: hasMaximized && root.isActive
 
-        Behavior on opacity { Anim {} }
-        Behavior on scale { Anim {} }
-        Behavior on Layout.leftMargin { Anim {} }
+            Layout.alignment: Qt.AlignVCenter
+            Layout.leftMargin: shouldShow ? Appearance.spacing.small : 0
+
+            visible: hasMaximized  // Only allocate layout space when needed
+            scale: shouldShow ? 1 : 0
+            opacity: shouldShow ? 1 : 0
+
+            text: "fullscreen"
+            color: Colours.palette.m3onSurface
+            font.pointSize: Appearance.font.size.small
+
+            Behavior on opacity { Anim {} }
+            Behavior on scale { Anim {} }
+            Behavior on Layout.leftMargin { Anim {} }
+        }
     }
 
     Behavior on Layout.preferredWidth {

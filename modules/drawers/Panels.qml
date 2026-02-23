@@ -10,7 +10,7 @@ import qs.modules.utilities.toasts as Toasts
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
-import qs.modules.hyprwhspr as HyprWhsprModule
+import qs.modules.stt as SttModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
 import Quickshell
@@ -34,7 +34,7 @@ Item {
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
-    readonly property alias hyprwhspr: hyprwhspr
+    readonly property alias stt: stt
     readonly property alias calculator: calculator
     readonly property alias packages: packages
 
@@ -139,8 +139,8 @@ Item {
         anchors.top: parent.top
     }
 
-    HyprWhsprModule.Wrapper {
-        id: hyprwhspr
+    SttModule.Wrapper {
+        id: stt
 
         screen: root.screen
         visibilities: root.visibilities

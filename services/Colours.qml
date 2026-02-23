@@ -238,6 +238,7 @@ Singleton {
         readonly property color m3onSuccess: root.layer(root.palette.m3onSuccess)
         readonly property color m3successContainer: root.layer(root.palette.m3successContainer)
         readonly property color m3onSuccessContainer: root.layer(root.palette.m3onSuccessContainer)
+        readonly property color m3confirm: root.layer(root.palette.m3confirm)
         readonly property color m3primaryFixed: root.layer(root.palette.m3primaryFixed)
         readonly property color m3primaryFixedDim: root.layer(root.palette.m3primaryFixedDim)
         readonly property color m3onPrimaryFixed: root.layer(root.palette.m3onPrimaryFixed)
@@ -299,6 +300,7 @@ Singleton {
         property color m3onSuccess: "#213528"
         property color m3successContainer: "#374B3E"
         property color m3onSuccessContainer: "#D1E9D6"
+        property color m3confirm: "#A3CCA7"
         property color m3powerButton: "#E0685F"
         property color m3primaryFixed: "#ffd9e3"
         property color m3primaryFixedDim: "#ffb0ca"
