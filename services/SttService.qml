@@ -105,8 +105,10 @@ Singleton {
     // Target window for inject delivery (captured at submit time)
     property string _targetWindowAddress: ""
     property string _targetWindowClass: ""
+    property int _targetWindowPid: -1
     // Target Neovim socket (captured at stop-time to avoid focus drift during transcription)
     property string _targetNvimSocket: ""
+    property int _targetNvimActiveBuf: -1
 
     // Pending action for recordProcess.onExited callback
     // Values: "" (none), "pause", "submit", "cancel"
@@ -233,7 +235,9 @@ Singleton {
             "| class:", _targetWindowClass);
 
         if (_state === "paused") {
-            // Already paused — no active recording, go straight to processing
+            // Already paused — no active recording, go straight to processing.
+            // socketCaptureProcess (started above) races transcription but will
+            // finish (~1s/socket timeout) before the API returns (2-10s).
             console.log("[STT:D03] paused path → direct _submitForTranscription()");
             _submitForTranscription();
             return;
@@ -358,8 +362,9 @@ Singleton {
             // .address lacks "0x" prefix; sendshortcut needs it
             _targetWindowAddress = `0x${toplevel.address}`;
             _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
+            _targetWindowPid = toplevel.lastIpcObject?.pid ?? -1;
             console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
-                "| class:", _targetWindowClass,
+                "| class:", _targetWindowClass, "| pid:", _targetWindowPid,
                 "| prevAddress:", prevAddr,
                 "| changed:", prevAddr !== _targetWindowAddress);
         } else {
@@ -369,18 +374,23 @@ Singleton {
         // If no toplevel, preserve any previously captured value (start-time fallback)
     }
 
-    /// Capture the Neovim socket most likely to be the STT target at stop-time.
+    /// Capture the Neovim socket for STT injection at stop-time.
     /// Must run at stop() — by inject-time (2-10s later), the user may have
-    /// switched Neovim windows, changing which socket has the highest focus_timestamp.
+    /// switched windows, changing which Neovim has focus.
     ///
-    /// Timing: stt-select-socket.sh queries each socket with a 1s timeout.
-    /// With N sockets, worst case is N seconds. Transcription typically takes >2s.
+    /// Passes the target window PID to stt-select-socket.sh for PID-scoped
+    /// socket discovery. The script also verifies has_focus=true, so only the
+    /// Neovim in the active terminal window matches.
+    ///
+    /// Timing: queries each candidate socket with a 1s timeout.
     /// If socket capture hasn't completed when clipboardProcess.onExited fires,
-    /// _targetNvimSocket will be empty and stt-inject.sh falls back to Pass 1.
+    /// _targetNvimSocket will be empty and stt-inject.sh falls back to sendshortcut.
     function _captureTargetNvimSocket(): void {
         if (_deliveryMode === "clipboard") return;
         _targetNvimSocket = "";
-        socketCaptureProcess.command = [_selectSocketScript];
+        _targetNvimActiveBuf = -1;
+        const pid = _targetWindowPid > 0 ? _targetWindowPid.toString() : "0";
+        socketCaptureProcess.command = [_selectSocketScript, pid];
         socketCaptureProcess.running = true;
     }
 
@@ -440,7 +450,9 @@ Singleton {
         _currentAudioFile = "";
         _targetWindowAddress = "";
         _targetWindowClass = "";
+        _targetWindowPid = -1;
         _targetNvimSocket = "";
+        _targetNvimActiveBuf = -1;
         _sessionId = "";
         _pendingRecordAction = "";
         _clearErrorState();
@@ -790,10 +802,11 @@ Singleton {
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
                 console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
-                // Pass expected text and pre-determined Neovim socket (captured at stop-time)
+                // Pass expected text, pre-determined Neovim socket + buffer (captured at stop-time)
                 injectProcess.environment = ({
                     STT_EXPECTED_TEXT: root._transcribedText,
-                    STT_NVIM_SOCKET: root._targetNvimSocket
+                    STT_NVIM_SOCKET: root._targetNvimSocket,
+                    STT_NVIM_ACTIVE_BUF: root._targetNvimActiveBuf.toString()
                 });
                 injectProcess.command = cmd;
                 injectProcess.running = true;
@@ -825,20 +838,24 @@ Singleton {
     }
 
     // Neovim socket capture at stop-time (runs stt-select-socket.sh)
+    // Output format: "<socket_path> <last_active_buf>" or empty
     Process {
         id: socketCaptureProcess
         stdout: SplitParser {
             onRead: data => {
-                const socket = data.trim();
+                const parts = data.trim().split(/\s+/);
+                const socket = parts[0] || "";
+                const activeBuf = parseInt(parts[1]);
                 if (socket !== "") {
                     root._targetNvimSocket = socket;
-                    console.log("[STT:D04a] captured Neovim socket:", socket);
+                    root._targetNvimActiveBuf = isNaN(activeBuf) ? -1 : activeBuf;
+                    console.log("[STT:D04a] captured Neovim socket:", socket, "activeBuf:", root._targetNvimActiveBuf);
                 }
             }
         }
         onExited: (code, status) => {
             console.log("[STT:D04a] socketCaptureProcess.onExited | code:", code,
-                "| socket:", root._targetNvimSocket);
+                "| socket:", root._targetNvimSocket, "| activeBuf:", root._targetNvimActiveBuf);
         }
     }
 

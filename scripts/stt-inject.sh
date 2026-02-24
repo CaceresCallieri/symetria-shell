@@ -4,8 +4,8 @@
 # Assumes clipboard already contains the transcription (wl-copy ran first).
 #
 # For terminal windows, tries Neovim RPC injection first (bypasses clipboard
-# race conditions entirely). Falls back to sendshortcut if no Neovim/Orchestrator
-# instance is found.
+# race conditions entirely). Uses PID-scoped socket + focus verification for
+# deterministic targeting. Falls back to sendshortcut if no match.
 #
 # Usage: stt-inject.sh <window_address> <window_class> [submit]
 #   window_address: Hyprland window address (e.g., "0x5a3b2c1d")
@@ -13,8 +13,9 @@
 #   submit:         If non-empty, send Enter after pasting (auto-submit)
 #
 # Environment:
-#   STT_EXPECTED_TEXT: The text that should be in the clipboard (for verification)
-#   STT_NVIM_SOCKET:  Pre-determined Neovim socket (captured at stop-time; skips Pass 1)
+#   STT_EXPECTED_TEXT:    The text that should be in the clipboard (for verification)
+#   STT_NVIM_SOCKET:     Pre-determined Neovim socket (PID-scoped + focus-verified)
+#   STT_NVIM_ACTIVE_BUF: Buffer number captured at stop-time for target_buf parameter
 #
 # Always exits 0 — injection failure is non-fatal (clipboard still has text).
 
@@ -23,10 +24,9 @@ WINDOW_CLASS="$2"
 SUBMIT="$3"
 EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
+NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
 
-echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET" >&2
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET | nvimActiveBuf=$NVIM_ACTIVE_BUF" >&2
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,38 +61,36 @@ verify_clipboard() {
 }
 
 # ── Neovim RPC injection ─────────────────────────────────────────────────────
-# Tries to inject text directly into a Claude Code terminal via Neovim's RPC
-# socket and the Orchestrator plugin. Bypasses clipboard entirely.
-# Returns 0 on success, 1 on failure (caller should fall back to sendshortcut).
+# Injects text directly into a Claude Code terminal via Neovim's RPC socket
+# and the Orchestrator plugin. Bypasses clipboard entirely.
 #
-# Fallback chain:
-#   1. Pre-determined socket (captured at stop-time via STT_NVIM_SOCKET)
-#   2. Real-time socket selection (stt-select-socket.sh queries all sockets)
-#   3. Give up → caller falls back to sendshortcut paste
+# Uses pre-determined socket from stop-time (PID-scoped + focus-verified).
+# No real-time re-selection — if no socket was captured, falls back to paste.
 
 # Attempt RPC injection on a single Neovim socket.
-# Args: $1=socket $2=tmpfile $3=submit_bool ("true"/"false")
+# Args: $1=socket $2=tmpfile $3=submit_bool ("true"/"false") $4=target_buf (number, -1=auto)
 # Returns 0 on success, 1 on failure. Caller cleans up tmpfile.
 _try_rpc() {
-    local sock="$1" tmpfile="$2" submit="$3"
+    local sock="$1" tmpfile="$2" submit="$3" target_buf="$4"
+    [ -z "$target_buf" ] && target_buf="-1"
 
     RESULT=$(timeout 2s nvim --server "$sock" --remote-expr \
-        "luaeval('require(\"orchestrator\").stt_inject(_A[1], _A[2])', ['$tmpfile', v:$submit])" 2>/dev/null)
+        "luaeval('require(\"orchestrator\").stt_inject(_A[1], _A[2], _A[3])', ['$tmpfile', v:$submit, $target_buf])" 2>/dev/null)
     if [ $? -ne 0 ]; then
-        echo "[STT:INJ-NVIM] RPC failed on $sock" >&2
+        echo "[STT:INJ-NVIM] RPC failed on $sock (target_buf=$target_buf)" >&2
         return 1
     fi
 
-    echo "[STT:INJ-NVIM] response from $sock: $RESULT" >&2
+    echo "[STT:INJ-NVIM] response from $sock (target_buf=$target_buf): $RESULT" >&2
 
     if echo "$RESULT" | grep -q '"ok":true'; then
         INSTANCE_CWD=$(echo "$RESULT" | grep -o '"instance_cwd":"[^"]*"' | sed 's/"instance_cwd":"//' | sed 's/"$//')
-        echo "[STT:INJ-NVIM] injection succeeded | socket=$sock | cwd=$INSTANCE_CWD" >&2
+        echo "[STT:INJ-NVIM] injection succeeded | socket=$sock | cwd=$INSTANCE_CWD | target_buf=$target_buf" >&2
         return 0
     fi
 
     ERROR=$(echo "$RESULT" | grep -o '"error":"[^"]*"' | sed 's/"error":"//' | sed 's/"$//')
-    echo "[STT:INJ-NVIM] injection failed | socket=$sock | error=$ERROR" >&2
+    echo "[STT:INJ-NVIM] injection failed | socket=$sock | error=$ERROR | target_buf=$target_buf" >&2
     return 1
 }
 
@@ -103,6 +101,19 @@ try_neovim_inject() {
         *)      submit_bool="false" ;;
     esac
 
+    # Require pre-determined socket (PID-scoped + focus-verified at stop-time).
+    # No fallback to real-time re-selection — if the socket wasn't captured,
+    # the user wasn't in a Neovim terminal when they pressed stop.
+    if [ -z "$NVIM_SOCKET" ]; then
+        echo "[STT:INJ-NVIM] no pre-determined socket — skipping RPC" >&2
+        return 1
+    fi
+
+    if [ ! -S "$NVIM_SOCKET" ]; then
+        echo "[STT:INJ-NVIM] pre-determined socket gone: $NVIM_SOCKET" >&2
+        return 1
+    fi
+
     # Write text to temp file (avoids all shell/Lua escaping issues)
     local NVIM_TMPFILE
     NVIM_TMPFILE=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/stt-nvim-inject.XXXXXX")
@@ -111,45 +122,11 @@ try_neovim_inject() {
         return 1
     fi
     printf '%s' "$EXPECTED_TEXT" > "$NVIM_TMPFILE"
-    echo "[STT:INJ-NVIM] wrote ${#EXPECTED_TEXT} chars to $NVIM_TMPFILE" >&2
+    echo "[STT:INJ-NVIM] wrote ${#EXPECTED_TEXT} chars to $NVIM_TMPFILE | socket=$NVIM_SOCKET | activeBuf=$NVIM_ACTIVE_BUF" >&2
 
-    # Verify Neovim sockets exist at all
-    local NVIM_SOCKETS
-    NVIM_SOCKETS=$(find "/run/user/$(id -u)/" -maxdepth 1 -name 'nvim.*.0' 2>/dev/null)
-    if [ -z "$NVIM_SOCKETS" ]; then
-        echo "[STT:INJ-NVIM] no Neovim sockets found" >&2
+    if _try_rpc "$NVIM_SOCKET" "$NVIM_TMPFILE" "$submit_bool" "$NVIM_ACTIVE_BUF"; then
         rm -f "$NVIM_TMPFILE"
-        return 1
-    fi
-    echo "[STT:INJ-NVIM] found sockets: $(echo "$NVIM_SOCKETS" | tr '\n' ' ')" >&2
-
-    # ── Strategy 1: Pre-determined socket from stop-time capture ──────────
-    if [ -n "$NVIM_SOCKET" ]; then
-        if [ -S "$NVIM_SOCKET" ]; then
-            echo "[STT:INJ-NVIM] trying pre-determined socket: $NVIM_SOCKET" >&2
-            if _try_rpc "$NVIM_SOCKET" "$NVIM_TMPFILE" "$submit_bool"; then
-                rm -f "$NVIM_TMPFILE"
-                return 0
-            fi
-            echo "[STT:INJ-NVIM] pre-determined socket failed — trying real-time selection" >&2
-        else
-            echo "[STT:INJ-NVIM] pre-determined socket gone: $NVIM_SOCKET — trying real-time selection" >&2
-        fi
-    fi
-
-    # ── Strategy 2: Real-time selection (fallback or primary) ─────────────
-    local BEST_SOCKET
-    BEST_SOCKET=$("$SCRIPT_DIR/stt-select-socket.sh" 2>/dev/null)
-    if [ -n "$BEST_SOCKET" ] && [ "$BEST_SOCKET" != "$NVIM_SOCKET" ]; then
-        echo "[STT:INJ-NVIM] real-time selection: $BEST_SOCKET" >&2
-        if _try_rpc "$BEST_SOCKET" "$NVIM_TMPFILE" "$submit_bool"; then
-            rm -f "$NVIM_TMPFILE"
-            return 0
-        fi
-    elif [ -n "$BEST_SOCKET" ]; then
-        echo "[STT:INJ-NVIM] real-time selected same socket as pre-determined — skipping retry" >&2
-    else
-        echo "[STT:INJ-NVIM] no socket with Claude instances found" >&2
+        return 0
     fi
 
     rm -f "$NVIM_TMPFILE"
