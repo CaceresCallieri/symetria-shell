@@ -26,7 +26,12 @@ Item {
 
     onShouldBeActiveChanged: {
         if (shouldBeActive) {
-            timer.stop();
+            // If the pre-load timer is still running, finalize immediately
+            // so content becomes visible before the show animation starts.
+            if (timer.running) {
+                timer.stop();
+                timer.finalize();
+            }
             hideAnim.stop();
             showAnim.start();
         } else {
@@ -70,7 +75,7 @@ Item {
         target: Config.stt
 
         function onEnabledChanged(): void {
-            timer.start();
+            timer.startPreload();
         }
     }
 
@@ -78,20 +83,32 @@ Item {
         id: timer
 
         interval: Appearance.anim.durations.extraLarge
-        onRunningChanged: {
-            if (running && !root.shouldBeActive) {
+
+        /// Pre-load content invisibly so it can measure its layout.
+        /// If the drawer is already active, skip the timer and finalize immediately.
+        function startPreload(): void {
+            if (!root.shouldBeActive) {
                 content.visible = false;
                 content.active = true;
+                start();
             } else {
-                root.contentHeight = content.implicitHeight;
-                content.active = Qt.binding(() => root.shouldBeActive || root.visible);
-                content.visible = true;
-                if (showAnim.running) {
-                    showAnim.stop();
-                    showAnim.start();
-                }
+                finalize();
             }
         }
+
+        /// Finalize layout after pre-load: capture content height, restore
+        /// the active binding, and re-sync the show animation if needed.
+        function finalize(): void {
+            root.contentHeight = content.implicitHeight;
+            content.active = Qt.binding(() => root.shouldBeActive || root.visible);
+            content.visible = true;
+            if (showAnim.running) {
+                showAnim.stop();
+                showAnim.start();
+            }
+        }
+
+        onTriggered: finalize()
     }
 
     Loader {
@@ -104,7 +121,7 @@ Item {
 
         visible: false
         active: false
-        Component.onCompleted: timer.start()
+        Component.onCompleted: timer.startPreload()
 
         sourceComponent: Content {
             screen: root.screen

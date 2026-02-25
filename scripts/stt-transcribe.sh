@@ -61,7 +61,7 @@ case "$HTTP_CODE" in
         ;;
     *)
         # Try to extract error message from response
-        ERR_MSG=$(cat "$RESP_BODY" 2>/dev/null || true | head -c 200)
+        ERR_MSG=$(cat "$RESP_BODY" 2>/dev/null | head -c 200)
         echo "ERROR:$HTTP_CODE:$ERR_MSG" >&2
         exit 1
         ;;
