@@ -32,10 +32,10 @@ Singleton {
     readonly property real audioLevel: _audioLevel
 
     /// Whether any non-idle state is active (controls drawer visibility).
-    /// _orchestratorActive can diverge from _state in the API-key-missing path:
-    /// start() sets _orchestratorActive=true, then _setErrorState moves to "error".
-    /// Without _orchestratorActive, the brief idle→error transition would flicker the drawer.
-    readonly property bool active: _state !== "idle" && _orchestratorActive
+    /// _keepDrawerOpen can diverge from _state in the API-key-missing path:
+    /// start() sets _keepDrawerOpen=true, then _setErrorState moves to "error".
+    /// Without _keepDrawerOpen, the brief idle→error transition would flicker the drawer.
+    readonly property bool active: _state !== "idle" && _keepDrawerOpen
 
     /// Whether currently recording
     readonly property bool recording: _state === "recording"
@@ -103,7 +103,7 @@ Singleton {
 
     property string _state: "idle"
     property real _audioLevel: 0.0
-    property bool _orchestratorActive: false
+    property bool _keepDrawerOpen: false
     property string _currentLanguage: ""
     property string _pendingRestartLang: ""
     property string _transcribedText: ""
@@ -180,6 +180,9 @@ Singleton {
     }
 
     // Current segment file path (computed from session + counter)
+    // Note: _segmentCounter is incremented in resume() before _startRecording()
+    // is called, so this path is always correct at _startRecording() time.
+    // The actual path used for recording is snapshotted via recordProcess.capturedSegmentPath.
     readonly property string _currentSegmentPath: {
         if (_sessionId === "") return "";
         return `${_tempDir}/session_${_sessionId}_segment_${_segmentCounter}.wav`;
@@ -197,9 +200,9 @@ Singleton {
             return;
         }
         console.log("[STT:D19] toggle() | state:", _state,
-            "| orchestratorActive:", _orchestratorActive, "| lang:", lang);
+            "| keepDrawerOpen:", _keepDrawerOpen, "| lang:", lang);
 
-        if (_state === "idle" || !_orchestratorActive) {
+        if (_state === "idle" || !_keepDrawerOpen) {
             _lastToggleTime = now;
             start(lang);
         } else if (_state === "recording" || _state === "paused") {
@@ -214,12 +217,16 @@ Singleton {
 
     /// Start recording with optional language code.
     function start(lang: string): void {
+        if (_state === "recording" || _state === "paused" || _state === "processing") {
+            console.warn("[STT] start() called while already active — ignoring");
+            return;
+        }
         console.log("[STT:D18] start() called | lang:", lang,
             "| currentState:", _state,
             "| deliveryMode:", _deliveryMode);
         // Check API key before starting
         if (_resolvedApiKey === "") {
-            _orchestratorActive = true;
+            _keepDrawerOpen = true;
             _setErrorState("config", "API key not configured",
                 "Set OPENAI_API_KEY env var or stt.apiKey in shell.json");
             return;
@@ -233,7 +240,7 @@ Singleton {
             _transcribedText = "";
         }
 
-        _orchestratorActive = true;
+        _keepDrawerOpen = true;
         if (safeLang) _currentLanguage = safeLang;
 
         // Initialize session
@@ -255,6 +262,12 @@ Singleton {
         _captureTargetNvimSocket();
         console.log("[STT:D18] session initialized | id:", _sessionId,
             "| eagerTarget:", _targetWindowAddress, "class:", _targetWindowClass);
+
+        // Transition to recording before async tempDirProcess so that:
+        // 1. active (= _state !== "idle" && _keepDrawerOpen) becomes true → drawer opens
+        // 2. tempDirProcess.onExited guard (root._state === "idle") passes for normal flow
+        //    but still catches cancel (which synchronously resets _state to "idle")
+        _state = "recording";
 
         // Ensure temp dir exists, then start recording
         tempDirProcess.running = true;
@@ -383,6 +396,16 @@ Singleton {
         _errorDetail = detail;
         _errorHint = hint;
         _state = "error";
+        // Clean up temp segment files on error. The combined/single audio file
+        // (_currentAudioFile) is preserved for retry; only raw segments are cleaned.
+        if (_sessionId !== "" && _segmentFiles.length > 0 && _currentAudioFile !== "") {
+            // Delete individual segments but keep the combined file for retry
+            for (const seg of _segmentFiles) {
+                if (seg !== _currentAudioFile) {
+                    Quickshell.execDetached(["rm", "-f", seg]);
+                }
+            }
+        }
     }
 
     function _clearErrorState(): void {
@@ -491,12 +514,17 @@ Singleton {
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
         if (socketCaptureProcess.running) socketCaptureProcess.running = false;
+        if (tempDirProcess.running) tempDirProcess.running = false;
+
+        // clipboardProcess and injectProcess are intentionally not interrupted —
+        // if delivery is already in flight, completing silently is acceptable
+        // (clipboard always has the text as fallback).
 
         // Clean up temp files
         _cleanupTempFiles();
 
         // Reset all state
-        _orchestratorActive = false;
+        _keepDrawerOpen = false;
         _state = "idle";
         _currentLanguage = "";
         _pendingRestartLang = "";
@@ -638,7 +666,7 @@ Singleton {
                 "| delay was:", interval, "ms");
             if (root._state === "success") {
                 console.log("[STT:D17] → auto-hiding (idle)");
-                root._orchestratorActive = false;
+                root._keepDrawerOpen = false;
                 root._state = "idle";
             }
         }
@@ -677,6 +705,8 @@ Singleton {
         id: tempDirProcess
         command: ["mkdir", "-p", root._tempDir]
         onExited: (code, status) => {
+            // Guard: if cancel fired while mkdir was running, don't start recording
+            if (root._state === "idle") return;
             if (code !== 0) {
                 console.error("[STT] Failed to create temp directory:", root._tempDir);
                 root._setErrorState("internal", "Failed to create temp directory", "Check permissions");
@@ -807,6 +837,11 @@ Singleton {
         }
         onExited: (code, status) => {
             processingTimeoutTimer.stop();
+            // Guard: if cancel already reset state, don't overwrite with error
+            if (root._state !== "processing") {
+                console.log("[STT:D10] transcribeProcess.onExited — state is not processing (" + root._state + "), ignoring");
+                return;
+            }
             console.log("[STT:D10] transcribeProcess.onExited | code:", code,
                 "| textLength:", root._transcribedText.length,
                 "| textPreview:", root._transcribedText.substring(0, 80),
@@ -815,6 +850,7 @@ Singleton {
                 root._state = "success";
                 console.log("[STT:D11] → success, chaining wl-copy | textLength:", root._transcribedText.length);
                 // Copy to clipboard
+                clipboardProcess.capturedSessionId = root._sessionId;
                 clipboardProcess.command = ["wl-copy", root._transcribedText];
                 clipboardProcess.running = true;
                 // Clean up temp files on success
@@ -839,6 +875,7 @@ Singleton {
     // Clipboard delivery via wl-copy
     Process {
         id: clipboardProcess
+        property string capturedSessionId: ""
         onExited: (code, status) => {
             console.log("[STT:D12] clipboardProcess.onExited | code:", code,
                 "| deliveryMode:", root._deliveryMode,
@@ -849,6 +886,10 @@ Singleton {
                 console.error("[STT:D12] wl-copy FAILED (exit", code + ") — clearing target, aborting inject chain");
                 root._targetWindowAddress = "";
                 root._targetWindowClass = "";
+                return;
+            }
+            if (clipboardProcess.capturedSessionId !== root._sessionId) {
+                console.warn("[STT:D12] session changed — discarding stale injection");
                 return;
             }
             // Resolve effective delivery mode ("ask" → runtime choice)

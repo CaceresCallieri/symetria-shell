@@ -77,6 +77,7 @@ _try_rpc() {
     # Reject paths that would break single-quoted Lua string interpolation
     case "$tmpfile" in
         *\'*) echo "[STT:INJ-NVIM] tmpfile path contains single quote — aborting RPC" >&2; return 1 ;;
+        *' '*) echo "[STT:INJ-NVIM] tmpfile path contains spaces — aborting RPC" >&2; return 1 ;;
     esac
 
     RESULT=$(timeout 2s nvim --server "$sock" --remote-expr \
@@ -122,6 +123,7 @@ try_neovim_inject() {
     # Write text to temp file (avoids all shell/Lua escaping issues)
     local NVIM_TMPFILE
     NVIM_TMPFILE=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/stt-nvim-inject.XXXXXX")
+    trap 'rm -f "$NVIM_TMPFILE"' EXIT
     if [ -z "$NVIM_TMPFILE" ]; then
         echo "[STT:INJ-NVIM] failed to create temp file" >&2
         return 1
