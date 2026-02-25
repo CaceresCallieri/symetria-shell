@@ -32,6 +32,7 @@ Item {
     required property string serviceErrorSource
     required property bool serviceIsAskMode
     required property string serviceDeliveryChoice
+    required property string serviceTargetInfo
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -607,6 +608,20 @@ Item {
                     font.family: Appearance.font.family.mono
                     color: Colours.palette.m3outline
                     opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
+                }
+            }
+
+            // Target info: "Agent Title · project · WS 3" (shown during recording/paused/processing/success)
+            // State gating is in SttService.targetInfo itself — it returns "" during idle/error
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.serviceTargetInfo !== ""
+
+                StyledText {
+                    text: root.serviceTargetInfo
+                    font.pointSize: Appearance.font.size.small
+                    color: Colours.palette.m3outline
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
 

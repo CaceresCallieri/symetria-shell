@@ -13,10 +13,11 @@
 #   window_pid: PID of the terminal window (from Hyprland IPC)
 #               If 0 or omitted, queries all sockets globally (backward compat)
 #
-# Output: "<socket_path> <last_active_buf>" or empty string
+# Output: "<socket_path>\t<last_active_buf>\t<instance_title>\t<instance_cwd>" (tab-delimited)
+#         or empty string on failure/no match
 
 WINDOW_PID="${1:-0}"
-USER_ID=$(id -u 2>/dev/null) || { printf ''; exit 0; }
+USER_ID=$(id -u 2>/dev/null) || exit 0
 SOCKET_DIR="/run/user/$USER_ID"
 
 # ── Collect candidate sockets ────────────────────────────────────────────────
@@ -64,7 +65,6 @@ fi
 CANDIDATE_SOCKETS="${CANDIDATE_SOCKETS# }"
 
 if [ -z "$CANDIDATE_SOCKETS" ]; then
-    printf ''
     exit 0
 fi
 
@@ -72,6 +72,8 @@ fi
 
 RESULT_SOCKET=""
 RESULT_BUF=""
+RESULT_TITLE=""
+RESULT_CWD=""
 MATCH_COUNT=0
 
 for sock in $CANDIDATE_SOCKETS; do
@@ -79,25 +81,29 @@ for sock in $CANDIDATE_SOCKETS; do
         'luaeval("require(\"orchestrator\").stt_target_info()")' 2>/dev/null)
     [ $? -ne 0 ] && continue
 
-    # Check has_instances=true
-    echo "$INFO" | grep -q '"has_instances":true' || continue
+    # Parse all fields in one jq pass: "has_instances has_focus last_active_buf title cwd"
+    # Using tab-delimited output to handle spaces in title/cwd
+    PARSED=$(printf '%s' "$INFO" | jq -r \
+        '[.has_instances, .has_focus, (.last_active_buf // -1), (.instance_title // ""), (.instance_cwd // "")] | @tsv' 2>/dev/null)
+    [ $? -ne 0 ] && continue
 
-    # Check has_focus=true
-    echo "$INFO" | grep -q '"has_focus":true' || continue
+    IFS=$'\t' read -r HAS_INST HAS_FOCUS BUF TITLE CWD <<< "$PARSED"
 
-    # Extract last_active_buf
-    BUF=$(echo "$INFO" | grep -o '"last_active_buf":[0-9-]*' | sed 's/"last_active_buf"://')
+    [ "$HAS_INST" = "true" ] || continue
+    [ "$HAS_FOCUS" = "true" ] || continue
     [ -z "$BUF" ] && BUF="-1"
 
     MATCH_COUNT=$((MATCH_COUNT + 1))
     RESULT_SOCKET="$sock"
     RESULT_BUF="$BUF"
+    RESULT_TITLE="$TITLE"
+    RESULT_CWD="$CWD"
 done
 
 # ── Output: exactly 1 match → deterministic; otherwise → empty ───────────────
 
 if [ "$MATCH_COUNT" -eq 1 ]; then
-    printf '%s %s' "$RESULT_SOCKET" "$RESULT_BUF"
+    printf '%s\t%s\t%s\t%s' "$RESULT_SOCKET" "$RESULT_BUF" "$RESULT_TITLE" "$RESULT_CWD"
 elif [ "$MATCH_COUNT" -gt 1 ]; then
     echo "[STT:SEL] ambiguous: $MATCH_COUNT sockets matched — falling back to paste" >&2
 else

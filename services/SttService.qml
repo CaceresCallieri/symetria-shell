@@ -65,6 +65,38 @@ Singleton {
     /// The user's runtime delivery choice for "ask" mode
     readonly property string activeDeliveryChoice: _activeDeliveryChoice
 
+    /// Target info string for display during recording through success states.
+    /// Returns e.g. "Implementing auth · symmetria · WS 2" or "" when not applicable.
+    /// Visible during: recording, paused, processing, success (socket data arrives ~300ms into recording).
+    /// Empty when: clipboard mode, idle/error states, or no target data.
+    readonly property string targetInfo: {
+        // Hidden during idle (no capture yet) and error (not useful)
+        if (_state === "idle" || _state === "error")
+            return "";
+
+        const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
+        if (effectiveMode === "clipboard")
+            return "";
+
+        const parts = [];
+
+        // Agent title (from orchestrator via stt-select-socket.sh)
+        if (_targetInstanceTitle)
+            parts.push(_targetInstanceTitle);
+
+        // Project folder (basename of cwd)
+        if (_targetInstanceCwd) {
+            const basename = _targetInstanceCwd.split("/").pop();
+            if (basename) parts.push(basename);
+        }
+
+        // Workspace (shown immediately since it's captured synchronously)
+        if (_targetWorkspaceId > 0)
+            parts.push(`WS ${_targetWorkspaceId}`);
+
+        return parts.length > 0 ? parts.join(" · ") : "";
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal state
     // ─────────────────────────────────────────────────────────────────────────
@@ -106,9 +138,13 @@ Singleton {
     property string _targetWindowAddress: ""
     property string _targetWindowClass: ""
     property int _targetWindowPid: -1
-    // Target Neovim socket (captured at stop-time to avoid focus drift during transcription)
+    // Target Neovim socket (captured at start-time; re-captured at stop-time only if PID changed)
     property string _targetNvimSocket: ""
     property int _targetNvimActiveBuf: -1
+    // Target info for display (captured at start-time from socket query + Hyprland)
+    property string _targetInstanceTitle: ""
+    property string _targetInstanceCwd: ""
+    property int _targetWorkspaceId: -1
 
     // Pending action for recordProcess.onExited callback
     // Values: "" (none), "pause", "submit", "cancel"
@@ -210,9 +246,13 @@ Singleton {
         _currentElapsed = 0;
         _pendingRecordAction = "";
 
-        // Eagerly capture target window as fallback for inject delivery;
-        // stop() will overwrite with a fresher value if available
+        // Capture target window and start async Neovim socket query.
+        // The user just pressed the STT keybind from their focused terminal,
+        // so has_focus=true is valid. The ~300ms socket query runs concurrently
+        // with recording — by the time the user submits, data is cached.
+        // stop() will re-capture only if the target window PID changed.
         _captureTargetWindow();
+        _captureTargetNvimSocket();
         console.log("[STT:D18] session initialized | id:", _sessionId,
             "| eagerTarget:", _targetWindowAddress, "class:", _targetWindowClass);
 
@@ -229,15 +269,21 @@ Singleton {
             "| sessionId:", _sessionId,
             "| segments:", _segmentFiles.length);
         actionTriggered("stop");
+        // Re-capture target window; only re-query Neovim socket if PID changed
+        // (common case: same window → reuse start-time cache, instant)
+        const prevPid = _targetWindowPid;
         _captureTargetWindow();
-        _captureTargetNvimSocket();
+        if (_targetWindowPid !== prevPid && _targetWindowPid > 0) {
+            _captureTargetNvimSocket();
+        }
         console.log("[STT:D02] after _captureTargetWindow() | address:", _targetWindowAddress,
-            "| class:", _targetWindowClass);
+            "| class:", _targetWindowClass,
+            "| pidChanged:", _targetWindowPid !== prevPid);
 
         if (_state === "paused") {
             // Already paused — no active recording, go straight to processing.
-            // socketCaptureProcess (started above) races transcription but will
-            // finish (~1s/socket timeout) before the API returns (2-10s).
+            // If PID changed, socketCaptureProcess was re-started above and races
+            // transcription, but will finish (~1s timeout) before the API returns (2-10s).
             console.log("[STT:D03] paused path → direct _submitForTranscription()");
             _submitForTranscription();
             return;
@@ -363,8 +409,10 @@ Singleton {
             _targetWindowAddress = `0x${toplevel.address}`;
             _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
             _targetWindowPid = toplevel.lastIpcObject?.pid ?? -1;
+            _targetWorkspaceId = toplevel.workspace?.id ?? -1;
             console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
                 "| class:", _targetWindowClass, "| pid:", _targetWindowPid,
+                "| workspace:", _targetWorkspaceId,
                 "| prevAddress:", prevAddr,
                 "| changed:", prevAddr !== _targetWindowAddress);
         } else {
@@ -374,13 +422,19 @@ Singleton {
         // If no toplevel, preserve any previously captured value (start-time fallback)
     }
 
-    /// Capture the Neovim socket for STT injection at stop-time.
-    /// Must run at stop() — by inject-time (2-10s later), the user may have
-    /// switched windows, changing which Neovim has focus.
+    /// Capture the Neovim socket for STT injection.
+    /// Called at start() (primary) and conditionally at stop() (if PID changed).
+    ///
+    /// At start-time, the user just activated the keybind from their focused
+    /// terminal, so has_focus=true is valid. The ~300ms query runs concurrently
+    /// with recording — by submit time, data is already cached.
+    ///
+    /// At stop-time, only re-runs if the target window PID changed (user switched
+    /// windows during recording). Clears title/cwd to prevent stale start-time
+    /// data from persisting during re-capture.
     ///
     /// Passes the target window PID to stt-select-socket.sh for PID-scoped
-    /// socket discovery. The script also verifies has_focus=true, so only the
-    /// Neovim in the active terminal window matches.
+    /// socket discovery. The script also verifies has_focus=true.
     ///
     /// Timing: queries each candidate socket with a 1s timeout.
     /// If socket capture hasn't completed when clipboardProcess.onExited fires,
@@ -389,6 +443,8 @@ Singleton {
         if (_deliveryMode === "clipboard") return;
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
+        _targetInstanceTitle = "";
+        _targetInstanceCwd = "";
         if (socketCaptureProcess.running) socketCaptureProcess.running = false;
         const pid = _targetWindowPid > 0 ? _targetWindowPid.toString() : "0";
         socketCaptureProcess.command = [_selectSocketScript, pid];
@@ -454,6 +510,9 @@ Singleton {
         _targetWindowPid = -1;
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
+        _targetInstanceTitle = "";
+        _targetInstanceCwd = "";
+        _targetWorkspaceId = -1;
         _sessionId = "";
         _pendingRecordAction = "";
         _clearErrorState();
@@ -841,19 +900,28 @@ Singleton {
         }
     }
 
-    // Neovim socket capture at stop-time (runs stt-select-socket.sh)
-    // Output format: "<socket_path> <last_active_buf>" or empty
+    // Neovim socket capture (runs stt-select-socket.sh at start-time; re-runs at stop-time if PID changed)
+    // Output format: "<socket_path>\t<last_active_buf>\t<title>\t<cwd>" (tab-delimited) or empty
     Process {
         id: socketCaptureProcess
         stdout: SplitParser {
             onRead: data => {
-                const parts = data.trim().split(/\s+/);
+                // Guard: discard stale output if cancel already reset state
+                if (root._state === "idle") return;
+                const parts = data.trim().split("\t");
                 const socket = parts[0] || "";
                 const activeBuf = parseInt(parts[1]);
+                const title = parts[2] || "";
+                const cwd = parts[3] || "";
                 if (socket !== "") {
                     root._targetNvimSocket = socket;
                     root._targetNvimActiveBuf = isNaN(activeBuf) ? -1 : activeBuf;
-                    console.log("[STT:D04a] captured Neovim socket:", socket, "activeBuf:", root._targetNvimActiveBuf);
+                    root._targetInstanceTitle = title;
+                    root._targetInstanceCwd = cwd;
+                    console.log("[STT:D04a] captured Neovim socket:", socket,
+                        "activeBuf:", root._targetNvimActiveBuf,
+                        "title:", root._targetInstanceTitle,
+                        "cwd:", root._targetInstanceCwd);
                 }
             }
         }
@@ -889,6 +957,9 @@ Singleton {
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
             _currentLanguage = "";
+            _targetInstanceTitle = "";
+            _targetInstanceCwd = "";
+            _targetWorkspaceId = -1;
         }
     }
 

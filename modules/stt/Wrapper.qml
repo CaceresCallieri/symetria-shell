@@ -119,6 +119,7 @@ Item {
             serviceErrorSource: SttService.errorSource
             serviceIsAskMode: SttService.isAskMode
             serviceDeliveryChoice: SttService.activeDeliveryChoice
+            serviceTargetInfo: SttService.targetInfo
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }
