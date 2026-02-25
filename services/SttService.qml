@@ -431,7 +431,8 @@ Singleton {
     ///
     /// At stop-time, only re-runs if the target window PID changed (user switched
     /// windows during recording). Clears title/cwd to prevent stale start-time
-    /// data from persisting during re-capture.
+    /// data from persisting during re-capture. Note: _targetWorkspaceId is
+    /// refreshed synchronously by the preceding _captureTargetWindow() call.
     ///
     /// Passes the target window PID to stt-select-socket.sh for PID-scoped
     /// socket discovery. The script also verifies has_focus=true.
@@ -440,11 +441,12 @@ Singleton {
     /// If socket capture hasn't completed when clipboardProcess.onExited fires,
     /// _targetNvimSocket will be empty and stt-inject.sh falls back to sendshortcut.
     function _captureTargetNvimSocket(): void {
-        if (_deliveryMode === "clipboard") return;
+        // Always clear stale data first, regardless of delivery mode
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
         _targetInstanceTitle = "";
         _targetInstanceCwd = "";
+        if (_deliveryMode === "clipboard") return;
         if (socketCaptureProcess.running) socketCaptureProcess.running = false;
         const pid = _targetWindowPid > 0 ? _targetWindowPid.toString() : "0";
         socketCaptureProcess.command = [_selectSocketScript, pid];
@@ -957,6 +959,9 @@ Singleton {
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
             _currentLanguage = "";
+            // Clear display fields for UI responsiveness.
+            // _targetWindowAddress/Pid/Class are cleared by _cancelInternal()
+            // and overwritten by _captureTargetWindow() on next start().
             _targetInstanceTitle = "";
             _targetInstanceCwd = "";
             _targetWorkspaceId = -1;

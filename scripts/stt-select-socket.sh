@@ -6,8 +6,8 @@
 #   2. Check if /run/user/$UID/nvim.<pid>.0 exists for each descendant
 #   3. Query matching sockets for stt_target_info()
 #   4. Filter: has_instances=true AND has_focus=true
-#   5. If exactly 1 match → output "<socket> <last_active_buf>"
-#   6. If 0 or 2+ → output empty (caller falls back to sendshortcut paste)
+#   5. If exactly 1 match → output "<socket>\t<buf>\t<title>\t<cwd>" (tab-delimited)
+#   6. If 0 or 2+ → output nothing (caller falls back to sendshortcut paste)
 #
 # Usage: stt-select-socket.sh [window_pid]
 #   window_pid: PID of the terminal window (from Hyprland IPC)
@@ -89,9 +89,11 @@ for sock in $CANDIDATE_SOCKETS; do
 
     IFS=$'\t' read -r HAS_INST HAS_FOCUS BUF TITLE CWD <<< "$PARSED"
 
+    # Normalize: jq @tsv outputs empty field for JSON null, not "false"
+    [ -z "$HAS_INST"  ] && HAS_INST="false"
+    [ -z "$HAS_FOCUS" ] && HAS_FOCUS="false"
     [ "$HAS_INST" = "true" ] || continue
     [ "$HAS_FOCUS" = "true" ] || continue
-    [ -z "$BUF" ] && BUF="-1"
 
     MATCH_COUNT=$((MATCH_COUNT + 1))
     RESULT_SOCKET="$sock"
