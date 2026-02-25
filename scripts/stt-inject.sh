@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Best-effort paste injection for Symmetria STT
 # Pastes clipboard content into the target window via hyprctl sendshortcut.
 # Assumes clipboard already contains the transcription (wl-copy ran first).
@@ -74,6 +74,11 @@ _try_rpc() {
     local sock="$1" tmpfile="$2" submit="$3" target_buf="$4"
     [ -z "$target_buf" ] && target_buf="-1"
 
+    # Reject paths that would break single-quoted Lua string interpolation
+    case "$tmpfile" in
+        *\'*) echo "[STT:INJ-NVIM] tmpfile path contains single quote — aborting RPC" >&2; return 1 ;;
+    esac
+
     RESULT=$(timeout 2s nvim --server "$sock" --remote-expr \
         "luaeval('require(\"orchestrator\").stt_inject(_A[1], _A[2], _A[3])', ['$tmpfile', v:$submit, $target_buf])" 2>/dev/null)
     if [ $? -ne 0 ]; then
@@ -84,7 +89,7 @@ _try_rpc() {
     echo "[STT:INJ-NVIM] response from $sock (target_buf=$target_buf): $RESULT" >&2
 
     if echo "$RESULT" | grep -q '"ok":true'; then
-        INSTANCE_CWD=$(echo "$RESULT" | grep -o '"instance_cwd":"[^"]*"' | sed 's/"instance_cwd":"//' | sed 's/"$//')
+        INSTANCE_CWD=$(echo "$RESULT" | grep -o '"instance_cwd":"[^"]*"' | sed 's/"instance_cwd":"//;s/"$//')
         echo "[STT:INJ-NVIM] injection succeeded | socket=$sock | cwd=$INSTANCE_CWD | target_buf=$target_buf" >&2
         return 0
     fi

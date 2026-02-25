@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Find the Neovim socket for STT injection using PID-scoped search + focus verification.
 #
 # Algorithm:
@@ -24,15 +24,20 @@ SOCKET_DIR="/run/user/$USER_ID"
 # Recursively collect all descendant PIDs of a given PID.
 # Uses iterative BFS via pgrep -P to avoid deep recursion.
 get_descendant_pids() {
-    local queue="$1" result="$1" next_queue="" pid children
+    local queue="$1" result="$1" next_queue="" pid children child
+    local seen=" $1 "
     while [ -n "$queue" ]; do
         next_queue=""
         for pid in $queue; do
             children=$(pgrep -P "$pid" 2>/dev/null)
-            if [ -n "$children" ]; then
-                result="$result $children"
-                next_queue="$next_queue $children"
-            fi
+            for child in $children; do
+                case "$seen" in
+                    *" $child "*) continue ;;
+                esac
+                seen="$seen$child "
+                result="$result $child"
+                next_queue="$next_queue $child"
+            done
         done
         queue="$next_queue"
     done
@@ -65,8 +70,8 @@ fi
 
 # ── Query each candidate ─────────────────────────────────────────────────────
 
-MATCH_SOCKET=""
-MATCH_BUF=""
+RESULT_SOCKET=""
+RESULT_BUF=""
 MATCH_COUNT=0
 
 for sock in $CANDIDATE_SOCKETS; do
@@ -85,14 +90,16 @@ for sock in $CANDIDATE_SOCKETS; do
     [ -z "$BUF" ] && BUF="-1"
 
     MATCH_COUNT=$((MATCH_COUNT + 1))
-    MATCH_SOCKET="$sock"
-    MATCH_BUF="$BUF"
+    RESULT_SOCKET="$sock"
+    RESULT_BUF="$BUF"
 done
 
 # ── Output: exactly 1 match → deterministic; otherwise → empty ───────────────
 
 if [ "$MATCH_COUNT" -eq 1 ]; then
-    printf '%s %s' "$MATCH_SOCKET" "$MATCH_BUF"
+    printf '%s %s' "$RESULT_SOCKET" "$RESULT_BUF"
+elif [ "$MATCH_COUNT" -gt 1 ]; then
+    echo "[STT:SEL] ambiguous: $MATCH_COUNT sockets matched — falling back to paste" >&2
 else
-    printf ''
+    echo "[STT:SEL] no socket matched for PID=$WINDOW_PID — falling back to paste" >&2
 fi

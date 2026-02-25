@@ -389,6 +389,7 @@ Singleton {
         if (_deliveryMode === "clipboard") return;
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
+        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
         const pid = _targetWindowPid > 0 ? _targetWindowPid.toString() : "0";
         socketCaptureProcess.command = [_selectSocketScript, pid];
         socketCaptureProcess.running = true;
@@ -799,6 +800,9 @@ Singleton {
             if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
                 if (root._targetWindowClass === "")
                     console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
+                if (socketCaptureProcess.running) {
+                    console.warn("[STT:D15] socketCaptureProcess still running at inject time — socket may be empty");
+                }
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
                 console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
