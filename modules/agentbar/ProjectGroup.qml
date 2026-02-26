@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
+import qs.utils
 import qs.config
 import QtQuick
 import QtQuick.Layouts
@@ -12,6 +13,12 @@ StyledRect {
 
     required property string project
     required property var agents  // Array of agent objects for this project
+
+    // Workspace badge: pick representative workspace for this group
+    readonly property var wsInfo: AgentService.workspaceForAgents(agents)
+    readonly property string wsIcon: wsInfo ? AgentService.workspaceIconForWsId(wsInfo.id) : ""
+    readonly property var parsedWsIcon: wsIcon ? Icons.parseIcon(wsIcon) : null
+    readonly property bool hasWsBadge: parsedWsIcon !== null && parsedWsIcon.iconText !== ""
 
     readonly property var glassStyle: Colours.glassmorphism(
         Colours.palette.m3surfaceContainerHigh,
@@ -44,6 +51,37 @@ StyledRect {
         Item {
             implicitWidth: Appearance.spacing.smaller
             implicitHeight: 1
+        }
+
+        // Workspace badge (Roman numeral or Material icon)
+        Loader {
+            id: wsBadge
+
+            active: root.hasWsBadge
+            visible: root.hasWsBadge
+            Layout.alignment: Qt.AlignVCenter
+            sourceComponent: root.parsedWsIcon?.useMaterial ? wsMatIcon : wsTextIcon
+
+            Component {
+                id: wsMatIcon
+
+                MaterialIcon {
+                    text: root.parsedWsIcon?.iconText ?? ""
+                    color: Colours.palette.m3onSurfaceVariant
+                    font.pointSize: Appearance.font.size.small - 2
+                }
+            }
+
+            Component {
+                id: wsTextIcon
+
+                StyledText {
+                    text: root.parsedWsIcon?.iconText ?? ""
+                    color: Colours.palette.m3onSurfaceVariant
+                    font.weight: Font.DemiBold
+                    font.pointSize: Appearance.font.size.small - 2
+                }
+            }
         }
 
         // Project name label

@@ -38,9 +38,47 @@ log = logging.getLogger("agent-bridge")
 class AgentBridge:
     """Aggregates agent state from all connected orchestrator instances."""
 
+    # Terminal emulator process names to match when walking /proc upward.
+    TERMINAL_NAMES = frozenset({
+        "ghostty", "kitty", "alacritty", "foot", "wezterm-gui",
+        "konsole", "gnome-terminal", "xfce4-terminal", "xterm",
+        "terminator", "tilix", "sakura", "st", "urxvt",
+    })
+
     def __init__(self):
         # {nvim_pid: {buf: instance_data, ...}}
         self._clients: dict[int, dict[int, dict]] = {}
+        # {nvim_pid: terminal_pid} — cached terminal PID per Neovim instance
+        self._terminal_pids: dict[int, int] = {}
+
+    @staticmethod
+    def _resolve_terminal_pid(nvim_pid: int) -> int:
+        """Walk /proc upward from nvim_pid to find the terminal emulator PID.
+
+        Reads /proc/{pid}/stat for each ancestor: field 2 is the comm name
+        (in parens), field 4 is the parent PID.  Returns 0 if no terminal
+        emulator is found before reaching PID 1.
+        """
+        pid = nvim_pid
+        visited: set[int] = set()
+        while pid > 1 and pid not in visited:
+            visited.add(pid)
+            try:
+                stat = Path(f"/proc/{pid}/stat").read_text()
+                # comm is in parens and may contain spaces: find the last ')'
+                lparen = stat.index("(")
+                rparen = stat.rindex(")")
+                comm = stat[lparen + 1:rparen]
+                if comm in AgentBridge.TERMINAL_NAMES:
+                    log.debug("_resolve_terminal_pid: %d → %s (pid %d)", nvim_pid, comm, pid)
+                    return pid
+                # Field after closing paren: state ppid ...
+                fields_after = stat[rparen + 2:].split()
+                pid = int(fields_after[1])  # ppid is the 2nd field after ')'
+            except (OSError, ValueError, IndexError):
+                break
+        log.debug("_resolve_terminal_pid: %d → no terminal found", nvim_pid)
+        return 0
 
     def _emit(self) -> None:
         """Write consolidated state to stdout (consumed by QML SplitParser)."""
@@ -61,6 +99,7 @@ class AgentBridge:
                     "dangerous": inst.get("dangerous", False),
                     "active": inst.get("active", False),
                     "spawn_type": inst.get("spawn_type", "fresh"),
+                    "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
                 })
 
         # Sort: by project, then by spawned_at within project
@@ -89,7 +128,11 @@ class AgentBridge:
 
         if msg_type == "hello":
             self._clients.setdefault(nvim_pid, {})
-            log.debug("  hello: registered client %s (total clients: %d)", nvim_pid, len(self._clients))
+            # Resolve terminal PID on first contact (stable for session lifetime)
+            if nvim_pid not in self._terminal_pids:
+                self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
+            log.debug("  hello: registered client %s (terminal_pid=%d, total clients: %d)",
+                       nvim_pid, self._terminal_pids.get(nvim_pid, 0), len(self._clients))
             # Don't emit: hello registers the client slot but carries no agent data.
             # The subsequent "sync" message will emit with the full initial state.
 
@@ -100,7 +143,11 @@ class AgentBridge:
                 if buf is not None:
                     instances[buf] = inst
             self._clients[nvim_pid] = instances
-            log.debug("  sync: %d instances from pid %s", len(instances), nvim_pid)
+            # Re-resolve terminal PID on sync (covers reconnect after bridge restart)
+            if nvim_pid not in self._terminal_pids:
+                self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
+            log.debug("  sync: %d instances from pid %s (terminal_pid=%d)",
+                       len(instances), nvim_pid, self._terminal_pids.get(nvim_pid, 0))
             self._emit()
 
         elif msg_type == "added":
@@ -162,6 +209,7 @@ class AgentBridge:
             log.info("remove_client: dropping pid=%s (%d instances), remaining clients: %d",
                      nvim_pid, count, len(self._clients) - 1)
             del self._clients[nvim_pid]
+            self._terminal_pids.pop(nvim_pid, None)
             self._emit()
         else:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
