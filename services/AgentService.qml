@@ -95,6 +95,18 @@ Singleton {
         return root._workspaceMap[agent.terminal_pid] ?? null;
     }
 
+    /// Focus the terminal window hosting a given agent (switches workspace if needed).
+    function focusTerminal(terminalPid: int): void {
+        if (terminalPid <= 0) return;
+        for (const toplevel of Hypr.toplevels.values) {
+            const ipc = toplevel.lastIpcObject;
+            if (ipc && ipc.pid === terminalPid) {
+                Hypr.dispatch(`focuswindow address:${ipc.address}`);
+                return;
+            }
+        }
+    }
+
     /// Pick representative workspace for a group of agents:
     /// active agent's workspace, or first agent's workspace.
     function workspaceForAgents(agents: var): var {

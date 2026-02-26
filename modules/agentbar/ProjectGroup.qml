@@ -23,6 +23,12 @@ StyledRect {
     // Active when this group's workspace matches the focused workspace
     readonly property bool isCurrentProject: wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
+    // Representative terminal PID: active agent's, or first agent's
+    readonly property int terminalPid: {
+        const active = agents.find(a => a.active);
+        return (active ?? agents[0])?.terminal_pid ?? 0;
+    }
+
     color: isCurrentProject
         ? Colours.glassmorphism(Colours.palette.m3primary, 1.0).background
         : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).background
@@ -126,6 +132,16 @@ StyledRect {
         Item {
             implicitWidth: Appearance.spacing.smaller
             implicitHeight: 1
+        }
+    }
+
+    // Click anywhere on the pill to focus the project's terminal window
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: root.terminalPid > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+        onClicked: {
+            if (root.terminalPid > 0)
+                AgentService.focusTerminal(root.terminalPid);
         }
     }
 }
