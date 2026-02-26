@@ -66,6 +66,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Qt.alpha("#000000", 0.35)
+        enabled: false
     }
 
     Loader {
