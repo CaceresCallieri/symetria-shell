@@ -33,7 +33,7 @@ Singleton {
     readonly property int _maxRestartDelay: 30000
 
     // Resolve script path relative to this QML file
-    readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace("file://", "")
+    readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace(/^file:\/\//, "")
 
     // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
     readonly property var palette: [

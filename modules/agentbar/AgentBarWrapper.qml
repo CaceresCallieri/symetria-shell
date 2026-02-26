@@ -20,6 +20,8 @@ Item {
 
     readonly property int padding: Math.max(Appearance.padding.smaller, Config.border.thickness)
     readonly property int contentHeight: Config.agentbar.sizes.innerHeight + padding * 2
+    // Snaps immediately so application windows shift before the visual animation completes
+    // (matches BarWrapper behavior — prevents content from being momentarily obscured)
     readonly property int exclusiveZone: shouldBeVisible ? contentHeight : Config.border.thickness
     readonly property bool shouldBeVisible: Config.agentbar.enabled && AgentService.agentCount > 0
 
@@ -64,7 +66,7 @@ Item {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
 
         active: root.shouldBeVisible || root.visible
 

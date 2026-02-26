@@ -42,13 +42,18 @@ CustomMouseArea {
     }
 
     function inBottomPanel(panel: Item, x: real, y: real): bool {
-        return y > root.height - agentBar.implicitHeight - panel.height - Config.border.rounding && withinPanelWidth(panel, x, y);
+        const panelBottomEdge = root.height - agentBar.implicitHeight;
+        return y < panelBottomEdge
+            && y > panelBottomEdge - panel.height - Config.border.rounding
+            && withinPanelWidth(panel, x, y);
     }
 
     function inBottomLeftPanel(panel: Item, x: real, y: real): bool {
-        return y > root.height - agentBar.implicitHeight - panel.height - Config.border.rounding
-               && x < Config.border.thickness + panel.x + panel.width + Config.border.rounding
-               && withinPanelWidth(panel, x, y);
+        const panelBottomEdge = root.height - agentBar.implicitHeight;
+        return y < panelBottomEdge
+            && y > panelBottomEdge - panel.height - Config.border.rounding
+            && x < Config.border.thickness + panel.x + panel.width + Config.border.rounding
+            && withinPanelWidth(panel, x, y);
     }
 
     function onWheel(event: WheelEvent): void {
