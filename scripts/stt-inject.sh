@@ -26,6 +26,7 @@ EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
 DOWNGRADED=""
+# Must be literal "true" or "false" — embedded as JSON boolean by emit_result()
 RPC_SUBMITTED="false"
 
 echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET | nvimActiveBuf=$NVIM_ACTIVE_BUF" >&2

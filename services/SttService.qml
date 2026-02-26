@@ -890,6 +890,7 @@ Singleton {
                 if (effectiveMode === "submit") cmd.push("submit");
                 console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
                 // Pass expected text, pre-determined Neovim socket + buffer (captured at stop-time)
+                injectProcess.capturedSessionId = root._sessionId;
                 injectProcess.environment = ({
                     STT_EXPECTED_TEXT: root._transcribedText,
                     STT_NVIM_SOCKET: root._targetNvimSocket,
@@ -909,15 +910,20 @@ Singleton {
     }
 
     // Window injection via stt-inject.sh (best-effort, non-fatal)
-    // Parses structured JSON from stdout: {"path":"rpc"|"paste"|"none","success":bool,"downgraded":bool}
+    // Parses structured JSON from stdout: {"path":"rpc"|"paste"|"none","success":bool,"downgraded":bool,"submitted":bool}
     Process {
         id: injectProcess
+        property string capturedSessionId: ""
         stdout: SplitParser {
             onRead: data => {
                 const line = data.trim();
                 if (!line.startsWith("{")) return;
                 try {
                     const result = JSON.parse(line);
+                    if (injectProcess.capturedSessionId !== root._sessionId) {
+                        console.warn("[STT:D16] session changed — discarding stale inject result");
+                        return;
+                    }
                     root._injectionPath = result.path ?? "";
                     root._injectionDowngraded = result.downgraded ?? false;
                     root._injectionSubmitted = result.submitted ?? false;
