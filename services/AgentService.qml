@@ -52,6 +52,7 @@ Singleton {
     }
 
     Component.onCompleted: {
+        console.log("[AgentService] INIT: agentbar.enabled =", Config.agentbar.enabled);
         if (Config.agentbar.enabled)
             _startBridge();
     }
@@ -62,7 +63,11 @@ Singleton {
     }
 
     function _startBridge(): void {
-        if (bridgeProcess.running) return;
+        if (bridgeProcess.running) {
+            console.log("[AgentService] _startBridge: already running, skipping");
+            return;
+        }
+        console.log("[AgentService] _startBridge: launching", _bridgeScript);
         bridgeProcess.command = ["python3", _bridgeScript];
         bridgeProcess.running = true;
     }
@@ -77,9 +82,11 @@ Singleton {
                 if (!text) return;
                 try {
                     const parsed = JSON.parse(text);
+                    const prevCount = root._agents.length;
                     root._agents = parsed.agents ?? [];
                     root._projects = parsed.projects ?? [];
                     root._restartCount = 0;  // Reset backoff on successful data
+                    console.log(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
                 } catch (e) {
                     console.warn("[AgentService] Failed to parse bridge output:", text);
                 }
@@ -87,16 +94,20 @@ Singleton {
         }
 
         onExited: (code, status) => {
+            console.log(`[AgentService] BRIDGE EXITED: code=${code}, status=${status}, had ${root._agents.length} agents`);
             // Clear state on exit
             root._agents = [];
             root._projects = [];
 
-            if (!Config.agentbar.enabled) return;
+            if (!Config.agentbar.enabled) {
+                console.log("[AgentService] agentbar disabled, not restarting");
+                return;
+            }
 
             // Restart with exponential backoff
             const delay = Math.min(1000 * Math.pow(2, root._restartCount), root._maxRestartDelay);
             root._restartCount++;
-            console.warn(`[AgentService] Bridge exited (code ${code}), restarting in ${delay}ms`);
+            console.warn(`[AgentService] Bridge exited (code ${code}), restarting in ${delay}ms (attempt #${root._restartCount})`);
             restartTimer.interval = delay;
             restartTimer.restart();
         }
