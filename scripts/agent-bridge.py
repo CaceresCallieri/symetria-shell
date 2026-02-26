@@ -21,10 +21,12 @@ from pathlib import Path
 
 SOCKET_PATH = Path(f"/run/user/{os.getuid()}/symmetria-agents.sock")
 
-# Debug logging to stderr (stdout is reserved for QML SplitParser data)
+# Debug logging to stderr (stdout is reserved for QML SplitParser data).
+# Default WARNING in production; override with AGENT_BRIDGE_LOG_LEVEL=DEBUG.
+_log_level = os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "WARNING").upper()
 logging.basicConfig(
     stream=sys.stderr,
-    level=logging.DEBUG,
+    level=getattr(logging, _log_level, logging.WARNING),
     format="[bridge.py %(levelname)s] %(message)s",
 )
 log = logging.getLogger("agent-bridge")
@@ -76,7 +78,7 @@ class AgentBridge:
         msg_type = msg.get("type")
         nvim_pid = msg.get("nvim_pid")
 
-        if not msg_type or not nvim_pid:
+        if not msg_type or nvim_pid is None:
             log.warning("handle_message: missing type or nvim_pid in %s", msg)
             return
 
@@ -85,7 +87,8 @@ class AgentBridge:
         if msg_type == "hello":
             self._clients.setdefault(nvim_pid, {})
             log.debug("  hello: registered client %s (total clients: %d)", nvim_pid, len(self._clients))
-            # Don't emit on hello alone — wait for sync
+            # Don't emit: hello registers the client slot but carries no agent data.
+            # The subsequent "sync" message will emit with the full initial state.
 
         elif msg_type == "sync":
             instances = {}
@@ -104,6 +107,8 @@ class AgentBridge:
                 self._clients.setdefault(nvim_pid, {})[buf] = inst
                 log.debug("  added: buf=%s from pid %s", buf, nvim_pid)
                 self._emit()
+            else:
+                log.warning("  added: missing buf from pid %s", nvim_pid)
 
         elif msg_type == "removed":
             buf = msg.get("buf")
@@ -111,6 +116,9 @@ class AgentBridge:
                 del self._clients[nvim_pid][buf]
                 log.debug("  removed: buf=%s from pid %s", buf, nvim_pid)
                 self._emit()
+            else:
+                log.warning("  removed: unknown buf=%s for pid=%s (known: %s)",
+                            buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
 
         elif msg_type == "updated":
             buf = msg.get("buf")
@@ -121,6 +129,9 @@ class AgentBridge:
                         self._clients[nvim_pid][buf][key] = msg[key]
                 log.debug("  updated: buf=%s from pid %s", buf, nvim_pid)
                 self._emit()
+            else:
+                log.warning("  updated: unknown buf=%s for pid=%s (known: %s)",
+                            buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
 
         elif msg_type == "focus":
             buf = msg.get("buf")
@@ -130,6 +141,8 @@ class AgentBridge:
                     inst["active"] = (b == buf)
                 log.debug("  focus: buf=%s from pid %s", buf, nvim_pid)
                 self._emit()
+            else:
+                log.warning("  focus: unknown pid=%s (not registered)", nvim_pid)
 
         elif msg_type == "goodbye":
             if nvim_pid in self._clients:
@@ -147,8 +160,7 @@ class AgentBridge:
                      nvim_pid, count, len(self._clients) - 1)
             del self._clients[nvim_pid]
             self._emit()
-        else:
-            log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
+        # No else log — normal after a clean "goodbye" message
 
 
 bridge = AgentBridge()
@@ -184,6 +196,10 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
         writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass  # Already closed or broken pipe — not actionable
         if nvim_pid is not None:
             bridge.remove_client(nvim_pid)
 
@@ -202,15 +218,17 @@ async def main():
     SOCKET_PATH.unlink(missing_ok=True)
     atexit.register(cleanup_socket)
 
+    # Restrict socket permissions before accepting connections
+    old_umask = os.umask(0o177)
     server = await asyncio.start_unix_server(handle_client, path=str(SOCKET_PATH))
-    # Ensure socket is accessible
-    SOCKET_PATH.chmod(0o600)
+    os.umask(old_umask)
     log.info("LISTENING on %s (pid=%d)", SOCKET_PATH, os.getpid())
 
-    # Handle signals for clean shutdown
+    # Handle signals for clean shutdown — single handler avoids lambda-in-loop
     loop = asyncio.get_running_loop()
+    shutdown_handler = lambda: loop.create_task(shutdown(server))  # noqa: E731
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda: loop.create_task(shutdown(server)))
+        loop.add_signal_handler(sig, shutdown_handler)
 
     async with server:
         await server.serve_forever()
@@ -229,11 +247,15 @@ async def shutdown(server):
     log.info("SHUTDOWN: closing server...")
     server.close()
     await server.wait_closed()
-    log.info("SHUTDOWN: server closed, cancelling %d tasks", len(asyncio.all_tasks()) - 1)
-    # Socket cleanup handled by atexit handler
-    for task in asyncio.all_tasks():
-        if task is not asyncio.current_task():
-            task.cancel()
+
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    log.info("SHUTDOWN: cancelling %d tasks", len(tasks))
+    for task in tasks:
+        task.cancel()
+
+    # Wait for all tasks to finish their finally blocks (writer.close, remove_client)
+    await asyncio.gather(*tasks, return_exceptions=True)
+    log.info("SHUTDOWN: all tasks finished")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,10 @@ Singleton {
     readonly property var agents: _agents
     readonly property var projects: _projects
     readonly property int agentCount: _agents.length
-    readonly property bool connected: bridgeProcess.running
+
+    /// Whether the bridge process is alive (does NOT mean the socket is ready —
+    /// there is a ~50-100ms startup window before the asyncio server binds).
+    readonly property bool bridgeRunning: bridgeProcess.running
 
     // Internal state — always reassigned (never mutated in-place) so QML
     // bindings on agents/agentCount fire correctly. Do not use .push()/.splice().
@@ -33,6 +36,7 @@ Singleton {
     readonly property int _maxRestartDelay: 30000
 
     // Resolve script path relative to this QML file
+    // Qt.resolvedUrl returns "file:///abs/path" on Linux; strip "file://" to get "/abs/path"
     readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace(/^file:\/\//, "")
 
     // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
@@ -85,7 +89,12 @@ Singleton {
                     const prevCount = root._agents.length;
                     root._agents = parsed.agents ?? [];
                     root._projects = parsed.projects ?? [];
-                    root._restartCount = 0;  // Reset backoff on successful data
+                    // Debounced backoff reset: only clear _restartCount after the
+                    // bridge has been running stably for 10s. This prevents a
+                    // crash-on-init loop from defeating exponential backoff (a
+                    // bridge that emits one line then crashes would reset the
+                    // counter immediately without this guard).
+                    backoffResetTimer.restart();
                     console.log(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
                 } catch (e) {
                     console.warn("[AgentService] Failed to parse bridge output:", text);
@@ -98,15 +107,17 @@ Singleton {
             // Clear state on exit
             root._agents = [];
             root._projects = [];
+            backoffResetTimer.stop();
 
             if (!Config.agentbar.enabled) {
                 console.log("[AgentService] agentbar disabled, not restarting");
                 return;
             }
 
-            // Restart with exponential backoff
+            // Restart with exponential backoff (capped at _maxRestartDelay)
             const delay = Math.min(1000 * Math.pow(2, root._restartCount), root._maxRestartDelay);
-            root._restartCount++;
+            // Cap _restartCount to prevent unbounded growth (2^10 = 1024s, well past 30s cap)
+            root._restartCount = Math.min(root._restartCount + 1, 10);
             console.warn(`[AgentService] Bridge exited (code ${code}), restarting in ${delay}ms (attempt #${root._restartCount})`);
             restartTimer.interval = delay;
             restartTimer.restart();
@@ -118,6 +129,17 @@ Singleton {
         onTriggered: root._startBridge()
     }
 
+    // Only reset backoff after the bridge has been running stably for 10 seconds.
+    // This prevents crash-on-init loops from resetting the counter prematurely.
+    Timer {
+        id: backoffResetTimer
+        interval: 10000
+        onTriggered: {
+            root._restartCount = 0;
+            console.log("[AgentService] Bridge stable for 10s, backoff reset");
+        }
+    }
+
     IpcHandler {
         target: "agentbar"
 
@@ -125,7 +147,7 @@ Singleton {
             return JSON.stringify({
                 agents: root.agentCount,
                 projects: root.projects,
-                connected: root.connected
+                bridgeRunning: root.bridgeRunning,
             });
         }
     }
