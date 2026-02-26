@@ -58,7 +58,6 @@ StyledRect {
             id: wsBadge
 
             active: root.hasWsBadge
-            visible: root.hasWsBadge
             Layout.alignment: Qt.AlignVCenter
             sourceComponent: root.parsedWsIcon?.useMaterial ? wsMatIcon : wsTextIcon
 

@@ -197,6 +197,7 @@ class AgentBridge:
         elif msg_type == "goodbye":
             if nvim_pid in self._clients:
                 del self._clients[nvim_pid]
+                self._terminal_pids.pop(nvim_pid, None)
                 log.debug("  goodbye: removed client %s (remaining: %d)", nvim_pid, len(self._clients))
                 self._emit()
         else:

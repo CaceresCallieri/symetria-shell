@@ -131,12 +131,17 @@ Singleton {
         onTriggered: root._rebuildWorkspaceMap()
     }
 
+    // Events that affect window-to-workspace mapping (Set for O(1) lookup)
+    readonly property var _wsLayoutEvents: new Set([
+        "movewindow", "movewindowv2", "openwindow", "closewindow", "activespecial"
+    ])
+
     // Listen to Hyprland events that affect window-to-workspace mapping
     Connections {
         target: Hyprland
 
         function onRawEvent(event: HyprlandEvent): void {
-            if (["movewindow", "openwindow", "closewindow", "activespecial"].includes(event.name))
+            if (root._wsLayoutEvents.has(event.name))
                 wsRebuildDebounce.restart();
         }
     }
