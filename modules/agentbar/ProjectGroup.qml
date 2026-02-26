@@ -23,6 +23,12 @@ StyledRect {
     // Active when this group's workspace matches the focused workspace
     readonly property bool isCurrentProject: wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
+    // True when this project is the STT injection target
+    readonly property bool isSttTarget: {
+        if (AgentService.sttTargetTerminalPid <= 0) return false;
+        return root.agents.some(a => a.terminal_pid === AgentService.sttTargetTerminalPid);
+    }
+
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
@@ -30,14 +36,23 @@ StyledRect {
         ? Colours.glassmorphism(Colours.palette.m3primary, 1.0).background
         : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).background
     radius: Appearance.rounding.full
-    border.width: 1
-    border.color: isCurrentProject
-        ? Colours.glassmorphism(Colours.palette.m3primary, 1.0).border
-        : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).border
+    border.width: isSttTarget ? 2 : 1
+    border.color: {
+        if (isSttTarget) return Colours.palette.m3error;
+        if (isCurrentProject) return Colours.glassmorphism(Colours.palette.m3primary, 1.0).border;
+        return Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).border;
+    }
     clip: true
 
     Behavior on color {
         ColorAnimation {
+            duration: Appearance.anim.durations.normal
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on border.width {
+        Anim {
             duration: Appearance.anim.durations.normal
             easing.type: Easing.OutCubic
         }
@@ -122,6 +137,9 @@ StyledRect {
                 title: modelData.title ?? ""
                 dotColor: AgentService.colorForIndex(modelData.color_idx ?? 0)
                 active: modelData.active ?? false
+                isSttTarget: AgentService.sttTargetTerminalPid > 0
+                    && modelData.terminal_pid === AgentService.sttTargetTerminalPid
+                    && (AgentService.sttTargetBufId < 0 || modelData.buf === AgentService.sttTargetBufId)
             }
         }
 

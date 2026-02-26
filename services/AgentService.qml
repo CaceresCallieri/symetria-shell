@@ -30,6 +30,12 @@ Singleton {
     /// there is a ~50-100ms startup window before the asyncio server binds).
     readonly property bool bridgeRunning: bridgeProcess.running
 
+    // ── STT target tracking ────────────────────────────────────────────
+    // Set by SttService at recording start; cleared on idle/cancel.
+    // ProjectGroup reads these to show a red border on the targeted pill.
+    readonly property int sttTargetTerminalPid: _sttTargetTerminalPid
+    readonly property int sttTargetBufId: _sttTargetBufId  // -1 = representative agent
+
     // Internal state — always reassigned (never mutated in-place) so QML
     // bindings on agents/agentCount fire correctly. Do not use .push()/.splice().
     property var _agents: []
@@ -60,6 +66,9 @@ Singleton {
     // ── Workspace detection ──────────────────────────────────────────
     // Maps terminal_pid → {id, name} by scanning Hypr.toplevels.
     // Rebuilt on Hyprland window events and when _agents changes.
+
+    property int _sttTargetTerminalPid: -1
+    property int _sttTargetBufId: -1
 
     /// terminal_pid → {id: int, name: string}
     property var _workspaceMap: ({})
@@ -141,6 +150,43 @@ Singleton {
         // Regular numbered workspace → Roman numeral
         return Icons.romanize(wsId);
     }
+
+    // ── STT integration ────────────────────────────────────────────────
+
+    /// Set the STT injection target. Called by SttService.start().
+    function setSttTarget(terminalPid: int, bufId: int): void {
+        _sttTargetTerminalPid = terminalPid;
+        _sttTargetBufId = bufId;
+    }
+
+    /// Clear the STT target highlight. Called by SttService on cancel/idle.
+    function clearSttTarget(): void {
+        _sttTargetTerminalPid = -1;
+        _sttTargetBufId = -1;
+    }
+
+    /// Find the matching agent for a terminal PID. Returns agent object or null.
+    function agentForTerminal(terminalPid: int): var {
+        if (terminalPid <= 0) return null;
+        const matching = _agents.filter(a => a.terminal_pid === terminalPid);
+        if (matching.length === 0) return null;
+        return representativeAgent(matching);
+    }
+
+    /// Derive Neovim socket path from agent's nvim_pid.
+    /// Pattern: /run/user/$UID/nvim.<nvim_pid>.0
+    function nvimSocketForAgent(agent: var): string {
+        if (!agent || !agent.nvim_pid) return "";
+        const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000";
+        return `${runtimeDir}/nvim.${agent.nvim_pid}.0`;
+    }
+
+    // TODO [Level 2]: Add injectText(text: string, submit: bool) method that:
+    // 1. Uses nvimSocketForAgent() to resolve socket
+    // 2. Calls orchestrator.stt_inject() via Neovim RPC
+    // 3. Falls back to sendshortcut paste if no agent match
+    // This would make AgentService the injection middleman, replacing
+    // SttService's direct stt-inject.sh calls.
 
     // Debounce timer for workspace map rebuilds (100ms)
     Timer {

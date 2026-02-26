@@ -14,6 +14,7 @@ RowLayout {
     required property string title
     required property color dotColor
     required property bool active
+    property bool isSttTarget: false
 
     spacing: Appearance.spacing.small
 
@@ -24,9 +25,17 @@ RowLayout {
         radius: 3
         color: root.dotColor
         opacity: root.active ? 1.0 : 0.5
+        scale: root.isSttTarget ? 1.5 : 1.0
 
         Behavior on opacity {
             Anim {}
+        }
+
+        Behavior on scale {
+            Anim {
+                duration: Appearance.anim.durations.normal
+                easing.type: Easing.OutCubic
+            }
         }
     }
 

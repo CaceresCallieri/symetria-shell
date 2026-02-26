@@ -1,6 +1,7 @@
 pragma Singleton
 
 import qs.config
+import qs.services
 import qs.utils
 import Quickshell
 import Quickshell.Io
@@ -65,38 +66,6 @@ Singleton {
     /// The user's runtime delivery choice for "ask" mode
     readonly property string activeDeliveryChoice: _activeDeliveryChoice
 
-    /// Target info string for display during recording through success states.
-    /// Returns e.g. "Implementing auth · symmetria · WS 2" or "" when not applicable.
-    /// Visible during: recording, paused, processing, success (socket data arrives ~300ms into recording).
-    /// Empty when: clipboard mode, idle/error states, or no target data.
-    readonly property string targetInfo: {
-        // Hidden during idle (no capture yet) and error (not useful)
-        if (_state === "idle" || _state === "error")
-            return "";
-
-        const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
-        if (effectiveMode === "clipboard")
-            return "";
-
-        const parts = [];
-
-        // Agent title (from orchestrator via stt-select-socket.sh)
-        if (_targetInstanceTitle)
-            parts.push(_targetInstanceTitle);
-
-        // Project folder (basename of cwd)
-        if (_targetInstanceCwd) {
-            const basename = _targetInstanceCwd.split("/").pop();
-            if (basename) parts.push(basename);
-        }
-
-        // Workspace (shown immediately since it's captured synchronously)
-        if (_targetWorkspaceId > 0)
-            parts.push(`WS ${_targetWorkspaceId}`);
-
-        return parts.length > 0 ? parts.join(" · ") : "";
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // Internal state
     // ─────────────────────────────────────────────────────────────────────────
@@ -138,13 +107,9 @@ Singleton {
     property string _targetWindowAddress: ""
     property string _targetWindowClass: ""
     property int _targetWindowPid: -1
-    // Target Neovim socket (captured at start-time; re-captured at stop-time only if PID changed)
+    // Target Neovim socket (resolved from AgentService at start-time)
     property string _targetNvimSocket: ""
     property int _targetNvimActiveBuf: -1
-    // Target info for display (captured at start-time from socket query + Hyprland)
-    property string _targetInstanceTitle: ""
-    property string _targetInstanceCwd: ""
-    property int _targetWorkspaceId: -1
 
     // Pending action for recordProcess.onExited callback
     // Values: "" (none), "pause", "submit", "cancel"
@@ -163,7 +128,6 @@ Singleton {
     readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace("file://", "")
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
     readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
-    readonly property string _selectSocketScript: Qt.resolvedUrl("../scripts/stt-select-socket.sh").toString().replace("file://", "")
 
     // Delivery mode: "clipboard" (default), "inject", "submit", or "ask" (runtime radio toggle)
     readonly property string _deliveryMode: {
@@ -253,15 +217,14 @@ Singleton {
         _currentElapsed = 0;
         _pendingRecordAction = "";
 
-        // Capture target window and start async Neovim socket query.
-        // The user just pressed the STT keybind from their focused terminal,
-        // so has_focus=true is valid. The ~300ms socket query runs concurrently
-        // with recording — by the time the user submits, data is cached.
-        // stop() will re-capture only if the target window PID changed.
+        // Capture target window and resolve agent data synchronously.
+        // The user just pressed the STT keybind from their focused terminal.
+        // AgentService provides instant Neovim socket lookup (no async shell script).
         _captureTargetWindow();
-        _captureTargetNvimSocket();
+        _resolveAgentTarget();
         console.log("[STT:D18] session initialized | id:", _sessionId,
-            "| eagerTarget:", _targetWindowAddress, "class:", _targetWindowClass);
+            "| target:", _targetWindowAddress, "class:", _targetWindowClass,
+            "| nvimSocket:", _targetNvimSocket);
 
         // Transition to recording before async tempDirProcess so that:
         // 1. active (= _state !== "idle" && _keepDrawerOpen) becomes true → drawer opens
@@ -282,21 +245,14 @@ Singleton {
             "| sessionId:", _sessionId,
             "| segments:", _segmentFiles.length);
         actionTriggered("stop");
-        // Re-capture target window; only re-query Neovim socket if PID changed
-        // (common case: same window → reuse start-time cache, instant)
-        const prevPid = _targetWindowPid;
-        _captureTargetWindow();
-        if (_targetWindowPid !== prevPid && _targetWindowPid > 0) {
-            _captureTargetNvimSocket();
-        }
-        console.log("[STT:D02] after _captureTargetWindow() | address:", _targetWindowAddress,
+        // Target was fixed at start() — no re-capture needed.
+        // The user may have switched windows during recording, but injection
+        // goes to the terminal that was active when recording started.
+        console.log("[STT:D02] stop() | target:", _targetWindowAddress,
             "| class:", _targetWindowClass,
-            "| pidChanged:", _targetWindowPid !== prevPid);
+            "| nvimSocket:", _targetNvimSocket);
 
         if (_state === "paused") {
-            // Already paused — no active recording, go straight to processing.
-            // If PID changed, socketCaptureProcess was re-started above and races
-            // transcription, but will finish (~1s timeout) before the API returns (2-10s).
             console.log("[STT:D03] paused path → direct _submitForTranscription()");
             _submitForTranscription();
             return;
@@ -432,10 +388,8 @@ Singleton {
             _targetWindowAddress = `0x${toplevel.address}`;
             _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
             _targetWindowPid = toplevel.lastIpcObject?.pid ?? -1;
-            _targetWorkspaceId = toplevel.workspace?.id ?? -1;
             console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
                 "| class:", _targetWindowClass, "| pid:", _targetWindowPid,
-                "| workspace:", _targetWorkspaceId,
                 "| prevAddress:", prevAddr,
                 "| changed:", prevAddr !== _targetWindowAddress);
         } else {
@@ -445,35 +399,31 @@ Singleton {
         // If no toplevel, preserve any previously captured value (start-time fallback)
     }
 
-    /// Capture the Neovim socket for STT injection.
-    /// Called at start() (primary) and conditionally at stop() (if PID changed).
-    ///
-    /// At start-time, the user just activated the keybind from their focused
-    /// terminal, so has_focus=true is valid. The ~300ms query runs concurrently
-    /// with recording — by submit time, data is already cached.
-    ///
-    /// At stop-time, only re-runs if the target window PID changed (user switched
-    /// windows during recording). Clears title/cwd to prevent stale start-time
-    /// data from persisting during re-capture. Note: _targetWorkspaceId is
-    /// refreshed synchronously by the preceding _captureTargetWindow() call.
-    ///
-    /// Passes the target window PID to stt-select-socket.sh for PID-scoped
-    /// socket discovery. The script also verifies has_focus=true.
-    ///
-    /// Timing: queries each candidate socket with a 1s timeout.
-    /// If socket capture hasn't completed when clipboardProcess.onExited fires,
-    /// _targetNvimSocket will be empty and stt-inject.sh falls back to sendshortcut.
-    function _captureTargetNvimSocket(): void {
-        // Always clear stale data first, regardless of delivery mode
+    /// Resolve agent data from AgentService using captured terminal PID.
+    /// Sets _targetNvimSocket and _targetNvimActiveBuf deterministically.
+    /// Notifies AgentService for project pill red border.
+    function _resolveAgentTarget(): void {
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
-        _targetInstanceTitle = "";
-        _targetInstanceCwd = "";
-        if (_deliveryMode === "clipboard") return;
-        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
-        const pid = _targetWindowPid > 0 ? _targetWindowPid.toString() : "0";
-        socketCaptureProcess.command = [_selectSocketScript, pid];
-        socketCaptureProcess.running = true;
+
+        if (!AgentService.bridgeRunning) {
+            return;  // No agent data available — sendshortcut fallback
+        }
+
+        const agent = AgentService.agentForTerminal(_targetWindowPid);
+        if (!agent) {
+            AgentService.clearSttTarget();
+            return;  // Non-agent window — sendshortcut fallback
+        }
+
+        _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
+        _targetNvimActiveBuf = agent.buf ?? -1;
+
+        // Set highlight based on effective delivery mode
+        const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
+        if (effectiveMode !== "clipboard") {
+            AgentService.setSttTarget(_targetWindowPid, agent.buf ?? -1);
+        }
     }
 
     /// Categorize API errors from stt-transcribe.sh stderr output.
@@ -513,7 +463,6 @@ Singleton {
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
-        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
         if (tempDirProcess.running) tempDirProcess.running = false;
 
         // clipboardProcess and injectProcess are intentionally not interrupted —
@@ -540,9 +489,7 @@ Singleton {
         _targetWindowPid = -1;
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
-        _targetInstanceTitle = "";
-        _targetInstanceCwd = "";
-        _targetWorkspaceId = -1;
+        AgentService.clearSttTarget();
         _sessionId = "";
         _pendingRecordAction = "";
         _clearErrorState();
@@ -713,7 +660,6 @@ Singleton {
                 return;
             }
             root._startRecording();
-            root._state = "recording";
         }
     }
 
@@ -902,9 +848,6 @@ Singleton {
             if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
                 if (root._targetWindowClass === "")
                     console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
-                if (socketCaptureProcess.running) {
-                    console.warn("[STT:D15] socketCaptureProcess still running at inject time — socket may be empty");
-                }
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
                 console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
@@ -943,37 +886,6 @@ Singleton {
         }
     }
 
-    // Neovim socket capture (runs stt-select-socket.sh at start-time; re-runs at stop-time if PID changed)
-    // Output format: "<socket_path>\t<last_active_buf>\t<title>\t<cwd>" (tab-delimited) or empty
-    Process {
-        id: socketCaptureProcess
-        stdout: SplitParser {
-            onRead: data => {
-                // Guard: discard stale output if cancel already reset state
-                if (root._state === "idle") return;
-                const parts = data.trim().split("\t");
-                const socket = parts[0] || "";
-                const activeBuf = parseInt(parts[1]);
-                const title = parts[2] || "";
-                const cwd = parts[3] || "";
-                if (socket !== "") {
-                    root._targetNvimSocket = socket;
-                    root._targetNvimActiveBuf = isNaN(activeBuf) ? -1 : activeBuf;
-                    root._targetInstanceTitle = title;
-                    root._targetInstanceCwd = cwd;
-                    console.log("[STT:D04a] captured Neovim socket:", socket,
-                        "activeBuf:", root._targetNvimActiveBuf,
-                        "title:", root._targetInstanceTitle,
-                        "cwd:", root._targetInstanceCwd);
-                }
-            }
-        }
-        onExited: (code, status) => {
-            console.log("[STT:D04a] socketCaptureProcess.onExited | code:", code,
-                "| socket:", root._targetNvimSocket, "| activeBuf:", root._targetNvimActiveBuf);
-        }
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // State change handlers
     // ─────────────────────────────────────────────────────────────────────────
@@ -1000,12 +912,7 @@ Singleton {
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
             _currentLanguage = "";
-            // Clear display fields for UI responsiveness.
-            // _targetWindowAddress/Pid/Class are cleared by _cancelInternal()
-            // and overwritten by _captureTargetWindow() on next start().
-            _targetInstanceTitle = "";
-            _targetInstanceCwd = "";
-            _targetWorkspaceId = -1;
+            AgentService.clearSttTarget();
         }
     }
 
@@ -1014,13 +921,23 @@ Singleton {
             _audioLevel = 0.0;
     }
 
+    // Toggle red border when user switches delivery choice in "ask" mode
+    onActiveDeliveryChoiceChanged: {
+        if (_deliveryMode !== "ask" || _state === "idle") return;
+        if (_activeDeliveryChoice === "clipboard") {
+            AgentService.clearSttTarget();
+        } else if (_targetWindowPid > 0 && AgentService.bridgeRunning) {
+            const agent = AgentService.agentForTerminal(_targetWindowPid);
+            if (agent) AgentService.setSttTarget(_targetWindowPid, agent.buf ?? -1);
+        }
+    }
+
     Component.onDestruction: {
         _stopAllTimers();
         if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
-        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
         if (clipboardProcess.running) clipboardProcess.running = false;
         if (injectProcess.running) injectProcess.running = false;
     }

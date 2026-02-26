@@ -1,4 +1,7 @@
 #!/bin/bash
+# DEPRECATED: No longer called by SttService. Socket resolution moved to AgentService.
+# TODO [Level 2]: Delete file entirely once new approach is verified stable.
+#
 # Find the Neovim socket for STT injection using PID-scoped search + focus verification.
 #
 # Algorithm:
