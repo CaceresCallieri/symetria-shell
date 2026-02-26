@@ -96,6 +96,8 @@ Singleton {
     }
 
     /// Focus the terminal window hosting a given agent (switches workspace if needed).
+    /// No-ops silently if the window is not found in Hypr.toplevels (e.g., within
+    /// the ~100ms debounce window after a window open event).
     function focusTerminal(terminalPid: int): void {
         if (terminalPid <= 0) return;
         for (const toplevel of Hypr.toplevels.values) {
@@ -107,12 +109,16 @@ Singleton {
         }
     }
 
+    /// Returns the active agent in a group, or the first agent if none is active.
+    function representativeAgent(agents: var): var {
+        if (!agents || agents.length === 0) return null;
+        return agents.find(a => a.active) ?? agents[0];
+    }
+
     /// Pick representative workspace for a group of agents:
     /// active agent's workspace, or first agent's workspace.
     function workspaceForAgents(agents: var): var {
-        if (!agents || agents.length === 0) return null;
-        const active = agents.find(a => a.active);
-        return root.workspaceForAgent(active ?? agents[0]);
+        return root.workspaceForAgent(root.representativeAgent(agents));
     }
 
     /// Resolve workspace to display icon, matching the workspace bar's chain:

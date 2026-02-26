@@ -24,10 +24,7 @@ StyledRect {
     readonly property bool isCurrentProject: wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
     // Representative terminal PID: active agent's, or first agent's
-    readonly property int terminalPid: {
-        const active = agents.find(a => a.active);
-        return (active ?? agents[0])?.terminal_pid ?? 0;
-    }
+    readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
     color: isCurrentProject
         ? Colours.glassmorphism(Colours.palette.m3primary, 1.0).background
@@ -135,7 +132,10 @@ StyledRect {
         }
     }
 
-    // Click anywhere on the pill to focus the project's terminal window
+    // Click-to-focus overlay — sits above RowLayout content in z-order.
+    // Safe because AgentChip is a pure display component (no interactive children).
+    // If interactive elements are added to AgentChip later, restructure this
+    // (e.g., use a TapHandler on root, or move interactivity into AgentChip).
     MouseArea {
         anchors.fill: parent
         cursorShape: root.terminalPid > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
