@@ -17,7 +17,7 @@ Item {
         id: layout
 
         anchors.centerIn: parent
-        spacing: Appearance.spacing.normal
+        spacing: Appearance.spacing.small
 
         Repeater {
             model: AgentService.projects

@@ -18,7 +18,7 @@ import QtQuick
 Item {
     id: root
 
-    readonly property int padding: Math.max(Appearance.padding.smaller, Config.border.thickness)
+    readonly property int padding: Math.max(Appearance.padding.small, Config.border.thickness)
     readonly property int contentHeight: Config.agentbar.sizes.innerHeight + padding * 2
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches BarWrapper behavior — prevents content from being momentarily obscured)

@@ -15,13 +15,13 @@ RowLayout {
     required property color dotColor
     required property bool active
 
-    spacing: Appearance.spacing.smaller
+    spacing: Appearance.spacing.small
 
     // Colored dot
     Rectangle {
-        implicitWidth: 8
-        implicitHeight: 8
-        radius: 4
+        implicitWidth: 6
+        implicitHeight: 6
+        radius: 3
         color: root.dotColor
         opacity: root.active ? 1.0 : 0.5
 
@@ -35,8 +35,8 @@ RowLayout {
         text: `#${root.instanceNum} ${root.title}`
         color: root.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
         font.weight: root.active ? Font.DemiBold : Font.Normal
-        font.pointSize: Appearance.font.size.smaller
+        font.pointSize: Appearance.font.size.small
         elide: Text.ElideRight
-        Layout.maximumWidth: 200
+        Layout.maximumWidth: 150
     }
 }
