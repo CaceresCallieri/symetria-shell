@@ -217,6 +217,14 @@ Singleton {
         _currentElapsed = 0;
         _pendingRecordAction = "";
 
+        // Transition to recording before capture so that:
+        // 1. active (= _state !== "idle" && _keepDrawerOpen) becomes true → drawer opens
+        // 2. tempDirProcess.onExited guard (root._state === "idle") passes for normal flow
+        //    but still catches cancel (which synchronously resets _state to "idle")
+        // 3. setSttTarget() in _resolveAgentTarget() fires after state is "recording",
+        //    so the red border and drawer appear simultaneously
+        _state = "recording";
+
         // Capture target window and resolve agent data synchronously.
         // The user just pressed the STT keybind from their focused terminal.
         // AgentService provides instant Neovim socket lookup (no async shell script).
@@ -225,12 +233,6 @@ Singleton {
         console.log("[STT:D18] session initialized | id:", _sessionId,
             "| target:", _targetWindowAddress, "class:", _targetWindowClass,
             "| nvimSocket:", _targetNvimSocket);
-
-        // Transition to recording before async tempDirProcess so that:
-        // 1. active (= _state !== "idle" && _keepDrawerOpen) becomes true → drawer opens
-        // 2. tempDirProcess.onExited guard (root._state === "idle") passes for normal flow
-        //    but still catches cancel (which synchronously resets _state to "idle")
-        _state = "recording";
 
         // Ensure temp dir exists, then start recording
         tempDirProcess.running = true;
@@ -412,8 +414,7 @@ Singleton {
 
         const agent = AgentService.agentForTerminal(_targetWindowPid);
         if (!agent) {
-            AgentService.clearSttTarget();
-            return;  // Non-agent window — sendshortcut fallback
+            return;  // Non-agent window — no highlight, sendshortcut fallback
         }
 
         _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
@@ -922,7 +923,7 @@ Singleton {
     }
 
     // Toggle red border when user switches delivery choice in "ask" mode
-    onActiveDeliveryChoiceChanged: {
+    on_ActiveDeliveryChoiceChanged: {
         if (_deliveryMode !== "ask" || _state === "idle") return;
         if (_activeDeliveryChoice === "clipboard") {
             AgentService.clearSttTarget();
