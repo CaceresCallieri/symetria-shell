@@ -20,16 +20,40 @@ StyledRect {
     readonly property var parsedWsIcon: wsIcon ? Icons.parseIcon(wsIcon) : null
     readonly property bool hasWsBadge: parsedWsIcon !== null && parsedWsIcon.iconText !== ""
 
-    readonly property var glassStyle: Colours.glassmorphism(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
+    // Active when this group's workspace matches the focused workspace
+    readonly property bool isCurrentProject: wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
-    color: glassStyle.background
+    onWsInfoChanged: console.log(`[ProjectGroup] "${project}" wsInfo changed:`, JSON.stringify(wsInfo))
+    onIsCurrentProjectChanged: console.log(`[ProjectGroup] "${project}" isCurrentProject:`, isCurrentProject,
+        "wsInfo:", JSON.stringify(wsInfo), "activeWsId:", Hypr.activeWsId)
+
+    Component.onCompleted: console.log(`[ProjectGroup] "${project}" INIT: wsInfo=`, JSON.stringify(wsInfo),
+        "activeWsId=", Hypr.activeWsId, "isCurrentProject=", isCurrentProject)
+
+    readonly property var activeGlass: Colours.glassmorphism(Colours.palette.m3primary, 1.0)
+    readonly property var inactiveGlass: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15)
+
+    color: isCurrentProject ? activeGlass.background : inactiveGlass.background
     radius: Appearance.rounding.full
     border.width: 1
-    border.color: glassStyle.border
+    border.color: isCurrentProject
+        ? Qt.alpha(Colours.palette.m3primary, 0.85)
+        : inactiveGlass.border
     clip: true
+
+    Behavior on color {
+        ColorAnimation {
+            duration: Appearance.anim.durations.normal
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on border.color {
+        ColorAnimation {
+            duration: Appearance.anim.durations.normal
+            easing.type: Easing.OutCubic
+        }
+    }
 
     implicitHeight: Config.agentbar.sizes.innerHeight
     implicitWidth: content.implicitWidth

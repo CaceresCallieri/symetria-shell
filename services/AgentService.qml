@@ -78,6 +78,7 @@ Singleton {
         }
 
         const newMap = {};
+        const toplevelCount = Hypr.toplevels.values.length;
         for (const toplevel of Hypr.toplevels.values) {
             const ipc = toplevel.lastIpcObject;
             if (ipc && pids.has(ipc.pid)) {
@@ -86,6 +87,7 @@ Singleton {
                     newMap[ipc.pid] = { id: ws.id, name: ws.name };
             }
         }
+        console.log(`[AgentService] _rebuildWorkspaceMap: wanted pids=[${[...pids]}], toplevels=${toplevelCount}, matched=${Object.keys(newMap).length}, map=${JSON.stringify(newMap)}, activeWsId=${Hypr.activeWsId}`);
         root._workspaceMap = newMap;
     }
 

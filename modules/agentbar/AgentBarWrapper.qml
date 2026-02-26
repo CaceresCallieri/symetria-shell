@@ -61,6 +61,13 @@ Item {
         }
     ]
 
+    // Dark overlay behind pills — deepens the border strip to a Ghostty-like
+    // semi-transparent black, making glassmorphism pills pop against it.
+    Rectangle {
+        anchors.fill: parent
+        color: Qt.alpha("#000000", 0.35)
+    }
+
     Loader {
         id: content
 
