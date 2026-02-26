@@ -232,7 +232,8 @@ async def solicit_neovim_instance(socket_path: str) -> bool:
     except asyncio.TimeoutError:
         log.debug("solicit %s: timed out (2s)", socket_path)
         try:
-            proc.kill()
+            proc.kill()  # type: ignore[possibly-undefined]  # only wait_for raises TimeoutError, after proc is assigned
+            await proc.wait()
         except ProcessLookupError:
             pass
         return False
@@ -283,7 +284,7 @@ def _kill_stale_bridges() -> None:
     try:
         import subprocess
         result = subprocess.run(
-            ["pgrep", "-f", "agent-bridge\\.py"],
+            ["pgrep", "-u", str(os.getuid()), "-f", "agent-bridge\\.py"],
             capture_output=True, text=True, timeout=2,
         )
         for line in result.stdout.strip().splitlines():
@@ -342,11 +343,12 @@ async def shutdown(server):
     log.info("SHUTDOWN: closing server...")
     server.close()
     await server.wait_closed()
-    log.info("SHUTDOWN: server closed, cancelling %d tasks", len(asyncio.all_tasks()) - 1)
-    # Socket cleanup handled by atexit handler
-    for task in asyncio.all_tasks():
-        if task is not asyncio.current_task():
-            task.cancel()
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    log.info("SHUTDOWN: cancelling %d tasks", len(tasks))
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    log.info("SHUTDOWN: all tasks finished")
 
 
 if __name__ == "__main__":
