@@ -24,10 +24,12 @@ Item {
 
     required property Panels panels
     required property Item bar
+    required property Item agentBar
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
     anchors.topMargin: bar.implicitHeight
+    anchors.bottomMargin: agentBar.implicitHeight
 
     // Enable layer rendering to prevent overlap artifacts
     layer.enabled: true

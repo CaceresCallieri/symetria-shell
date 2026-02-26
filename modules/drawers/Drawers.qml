@@ -5,6 +5,7 @@ import qs.components.containers
 import qs.services
 import qs.config
 import qs.modules.bar
+import qs.modules.agentbar as AgentBarModule
 import qs.modules.keychords as KeyChordsModule
 import Quickshell
 import Quickshell.Wayland
@@ -37,6 +38,7 @@ Variants {
         Exclusions {
             screen: scope.modelData
             bar: bar
+            agentBar: agentBar
         }
 
         StyledWindow {
@@ -77,7 +79,7 @@ Variants {
                 x: Config.border.thickness + win.dragMaskPadding
                 y: bar.implicitHeight + win.dragMaskPadding
                 width: win.width - Config.border.thickness * 2 - win.dragMaskPadding * 2
-                height: win.height - bar.implicitHeight - Config.border.thickness - win.dragMaskPadding * 2
+                height: win.height - bar.implicitHeight - agentBar.implicitHeight - win.dragMaskPadding * 2
                 intersection: Intersection.Xor
 
                 regions: regions.instances
@@ -147,11 +149,13 @@ Variants {
 
                 Border {
                     bar: bar
+                    agentBar: agentBar
                 }
 
                 Backgrounds {
                     panels: panels
                     bar: bar
+                    agentBar: agentBar
                 }
             }
 
@@ -182,6 +186,7 @@ Variants {
                 visibilities: visibilities
                 panels: panels
                 bar: bar
+                agentBar: agentBar
 
                 Panels {
                     id: panels
@@ -189,6 +194,7 @@ Variants {
                     screen: scope.modelData
                     visibilities: visibilities
                     bar: bar
+                    agentBar: agentBar
                 }
 
                 BarWrapper {
@@ -205,6 +211,14 @@ Variants {
                     disabled: scope.barDisabled
 
                     Component.onCompleted: Visibilities.bars.set(scope.modelData, this)
+                }
+
+                AgentBarModule.AgentBarWrapper {
+                    id: agentBar
+
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
                 }
             }
 

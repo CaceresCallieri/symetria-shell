@@ -22,6 +22,7 @@ Item {
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property Item bar
+    required property Item agentBar
 
     readonly property alias osd: osd
     readonly property alias notifications: notifications
@@ -41,6 +42,7 @@ Item {
     anchors.fill: parent
     anchors.margins: Config.border.thickness
     anchors.topMargin: bar.implicitHeight
+    anchors.bottomMargin: agentBar.implicitHeight
 
     Osd.Wrapper {
         id: osd

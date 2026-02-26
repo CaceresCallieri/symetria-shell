@@ -33,6 +33,7 @@ Singleton {
     property alias calculator: adapter.calculator
     property alias packages: adapter.packages
     property alias keychords: adapter.keychords
+    property alias agentbar: adapter.agentbar
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -109,7 +110,8 @@ Singleton {
             keycaster: serializeKeycaster(),
             calculator: serializeCalculator(),
             packages: serializePackages(),
-            keychords: serializeKeyChords()
+            keychords: serializeKeyChords(),
+            agentbar: serializeAgentBar()
         };
     }
 
@@ -518,6 +520,15 @@ Singleton {
         };
     }
 
+    function serializeAgentBar(): var {
+        return {
+            enabled: agentbar.enabled,
+            sizes: {
+                innerHeight: agentbar.sizes.innerHeight
+            }
+        };
+    }
+
     FileView {
         id: fileView
 
@@ -580,6 +591,7 @@ Singleton {
             property CalculatorConfig calculator: CalculatorConfig {}
             property PackagesConfig packages: PackagesConfig {}
             property KeyChordsConfig keychords: KeyChordsConfig {}
+            property AgentBarConfig agentbar: AgentBarConfig {}
         }
     }
 }

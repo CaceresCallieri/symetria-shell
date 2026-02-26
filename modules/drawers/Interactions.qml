@@ -12,6 +12,7 @@ CustomMouseArea {
     required property PersistentProperties visibilities
     required property Panels panels
     required property Item bar
+    required property Item agentBar
 
     property point dragStart
     property bool dashboardShortcutActive
@@ -41,11 +42,11 @@ CustomMouseArea {
     }
 
     function inBottomPanel(panel: Item, x: real, y: real): bool {
-        return y > root.height - Config.border.thickness - panel.height - Config.border.rounding && withinPanelWidth(panel, x, y);
+        return y > root.height - agentBar.implicitHeight - panel.height - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
     function inBottomLeftPanel(panel: Item, x: real, y: real): bool {
-        return y > root.height - Config.border.thickness - panel.height - Config.border.rounding
+        return y > root.height - agentBar.implicitHeight - panel.height - Config.border.rounding
                && x < Config.border.thickness + panel.x + panel.width + Config.border.rounding
                && withinPanelWidth(panel, x, y);
     }
