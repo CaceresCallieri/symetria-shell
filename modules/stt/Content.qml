@@ -34,6 +34,7 @@ Item {
     required property string serviceDeliveryChoice
     required property string serviceInjectionPath
     required property bool serviceInjectionDowngraded
+    required property bool serviceInjectionSubmitted
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -255,7 +256,10 @@ Item {
                     if (root.serviceInjectionDowngraded)
                         return qsTr("Pasted (submit skipped)");
                     switch (root.serviceInjectionPath) {
-                        case "rpc": return qsTr("Injected");
+                        case "rpc":
+                            return root.serviceInjectionSubmitted
+                                ? qsTr("Submitted")
+                                : qsTr("Injected");
                         case "paste": return qsTr("Pasted");
                         default: return qsTr("Copied");
                     }

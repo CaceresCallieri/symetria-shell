@@ -26,6 +26,7 @@ EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
 DOWNGRADED=""
+RPC_SUBMITTED="false"
 
 echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET | nvimActiveBuf=$NVIM_ACTIVE_BUF" >&2
 
@@ -81,7 +82,7 @@ _try_rpc() {
         *' '*) echo "[STT:INJ-NVIM] tmpfile path contains spaces — aborting RPC" >&2; return 1 ;;
     esac
 
-    RESULT=$(timeout 2s nvim --server "$sock" --remote-expr \
+    RESULT=$(timeout 3s nvim --server "$sock" --remote-expr \
         "luaeval('require(\"orchestrator\").stt_inject(_A[1], _A[2], _A[3])', ['$tmpfile', v:$submit, $target_buf])" 2>/dev/null)
     if [ $? -ne 0 ]; then
         echo "[STT:INJ-NVIM] RPC failed on $sock (target_buf=$target_buf)" >&2
@@ -92,7 +93,12 @@ _try_rpc() {
 
     if echo "$RESULT" | grep -q '"ok":true'; then
         INSTANCE_CWD=$(echo "$RESULT" | grep -o '"instance_cwd":"[^"]*"' | sed 's/"instance_cwd":"//;s/"$//')
-        echo "[STT:INJ-NVIM] injection succeeded | socket=$sock | cwd=$INSTANCE_CWD | target_buf=$target_buf" >&2
+        if echo "$RESULT" | grep -q '"submitted":true'; then
+            RPC_SUBMITTED="true"
+        else
+            RPC_SUBMITTED="false"
+        fi
+        echo "[STT:INJ-NVIM] injection succeeded | socket=$sock | cwd=$INSTANCE_CWD | target_buf=$target_buf | submitted=$RPC_SUBMITTED" >&2
         return 0
     fi
 
@@ -158,7 +164,9 @@ is_terminal_class() {
 emit_result() {
     local path="$1" success="$2"
     local downgraded="${DOWNGRADED:-false}"
-    printf '{"path":"%s","success":%s,"downgraded":%s}\n' "$path" "$success" "$downgraded"
+    local submitted="${RPC_SUBMITTED:-false}"
+    printf '{"path":"%s","success":%s,"downgraded":%s,"submitted":%s}\n' \
+        "$path" "$success" "$downgraded" "$submitted"
 }
 
 # ── Validate arguments ───────────────────────────────────────────────────────

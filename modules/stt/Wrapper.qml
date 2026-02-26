@@ -138,6 +138,7 @@ Item {
             serviceDeliveryChoice: SttService.activeDeliveryChoice
             serviceInjectionPath: SttService.injectionPath
             serviceInjectionDowngraded: SttService.injectionDowngraded
+            serviceInjectionSubmitted: SttService.injectionSubmitted
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

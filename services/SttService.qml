@@ -73,6 +73,9 @@ Singleton {
     /// Whether submit was downgraded to inject (RPC unavailable on sendshortcut path)
     readonly property bool injectionDowngraded: _injectionDowngraded
 
+    /// Whether the RPC path confirmed that Enter (submit) was actually sent
+    readonly property bool injectionSubmitted: _injectionSubmitted
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal state
     // ─────────────────────────────────────────────────────────────────────────
@@ -130,6 +133,7 @@ Singleton {
     // Injection result feedback (populated by injectProcess stdout parsing)
     property string _injectionPath: ""         // "rpc" | "paste" | "" (clipboard-only/none)
     property bool _injectionDowngraded: false  // true if submit was downgraded to inject
+    property bool _injectionSubmitted: false   // true if RPC confirmed Enter was sent
 
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
@@ -229,6 +233,7 @@ Singleton {
         _pendingRecordAction = "";
         _injectionPath = "";
         _injectionDowngraded = false;
+        _injectionSubmitted = false;
 
         // Transition to recording before capture so that:
         // 1. active (= _state !== "idle" && _keepDrawerOpen) becomes true → drawer opens
@@ -505,6 +510,7 @@ Singleton {
         _targetNvimActiveBuf = -1;
         _injectionPath = "";
         _injectionDowngraded = false;
+        _injectionSubmitted = false;
         AgentService.clearSttTarget();
         _sessionId = "";
         _pendingRecordAction = "";
@@ -897,6 +903,7 @@ Singleton {
                     root._targetWindowAddress === "" ? "no targetWindowAddress" : "unknown");
                 root._injectionPath = "";  // No injection attempted
                 root._injectionDowngraded = false;
+                root._injectionSubmitted = false;
             }
         }
     }
@@ -913,6 +920,7 @@ Singleton {
                     const result = JSON.parse(line);
                     root._injectionPath = result.path ?? "";
                     root._injectionDowngraded = result.downgraded ?? false;
+                    root._injectionSubmitted = result.submitted ?? false;
 
                     if (result.downgraded) {
                         Toaster.toast(
@@ -921,6 +929,18 @@ Singleton {
                             "",
                             Toast.Warning
                         );
+                    } else if (result.path === "rpc" && !result.submitted) {
+                        // Check if user actually requested submit
+                        const userRequestedSubmit = root._deliveryMode === "submit" ||
+                            (root._deliveryMode === "ask" && root._activeDeliveryChoice === "submit");
+                        if (userRequestedSubmit) {
+                            Toaster.toast(
+                                qsTr("STT: Submit unconfirmed"),
+                                qsTr("Text injected but Enter delivery could not be confirmed"),
+                                "",
+                                Toast.Warning
+                            );
+                        }
                     }
                     console.log("[STT:D16] inject result parsed:", JSON.stringify(result));
                 } catch (e) {
@@ -970,6 +990,7 @@ Singleton {
             _currentLanguage = "";
             _injectionPath = "";
             _injectionDowngraded = false;
+            _injectionSubmitted = false;
             AgentService.clearSttTarget();
         }
     }
