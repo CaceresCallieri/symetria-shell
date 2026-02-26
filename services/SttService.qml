@@ -5,6 +5,7 @@ import qs.services
 import qs.utils
 import Quickshell
 import Quickshell.Io
+import Symmetria
 import QtQuick
 
 /// Native speech-to-text service using pw-record + OpenAI API.
@@ -66,6 +67,12 @@ Singleton {
     /// The user's runtime delivery choice for "ask" mode
     readonly property string activeDeliveryChoice: _activeDeliveryChoice
 
+    /// Injection delivery path: "rpc" (Neovim), "paste" (sendshortcut), "" (clipboard-only/none)
+    readonly property string injectionPath: _injectionPath
+
+    /// Whether submit was downgraded to inject (RPC unavailable on sendshortcut path)
+    readonly property bool injectionDowngraded: _injectionDowngraded
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal state
     // ─────────────────────────────────────────────────────────────────────────
@@ -119,6 +126,10 @@ Singleton {
     // Persists across recordings within the same shell session.
     // First-time default is "clipboard" (safest).
     property string _activeDeliveryChoice: "clipboard"
+
+    // Injection result feedback (populated by injectProcess stdout parsing)
+    property string _injectionPath: ""         // "rpc" | "paste" | "" (clipboard-only/none)
+    property bool _injectionDowngraded: false  // true if submit was downgraded to inject
 
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
@@ -216,6 +227,8 @@ Singleton {
         _accumulatedSeconds = 0;
         _currentElapsed = 0;
         _pendingRecordAction = "";
+        _injectionPath = "";
+        _injectionDowngraded = false;
 
         // Transition to recording before capture so that:
         // 1. active (= _state !== "idle" && _keepDrawerOpen) becomes true → drawer opens
@@ -490,6 +503,8 @@ Singleton {
         _targetWindowPid = -1;
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
+        _injectionPath = "";
+        _injectionDowngraded = false;
         AgentService.clearSttTarget();
         _sessionId = "";
         _pendingRecordAction = "";
@@ -845,6 +860,22 @@ Singleton {
                 : root._deliveryMode;
             console.log("[STT:D13] effectiveMode resolved:", effectiveMode,
                 "| from:", root._deliveryMode === "ask" ? "ask→" + root._activeDeliveryChoice : root._deliveryMode);
+
+            // Refresh socket/buffer from AgentService — may have changed during recording
+            if (root._targetWindowPid > 0 && AgentService.bridgeRunning) {
+                const freshAgent = AgentService.agentForTerminal(root._targetWindowPid);
+                if (freshAgent) {
+                    const freshSocket = AgentService.nvimSocketForAgent(freshAgent);
+                    const freshBuf = freshAgent.buf ?? -1;
+                    if (freshSocket !== root._targetNvimSocket || freshBuf !== root._targetNvimActiveBuf) {
+                        console.log("[STT:D13] socket refreshed | old:", root._targetNvimSocket,
+                            "→ new:", freshSocket, "| oldBuf:", root._targetNvimActiveBuf, "→ newBuf:", freshBuf);
+                        root._targetNvimSocket = freshSocket;
+                        root._targetNvimActiveBuf = freshBuf;
+                    }
+                }
+            }
+
             // Chain window injection after successful clipboard write
             if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
                 if (root._targetWindowClass === "")
@@ -864,13 +895,39 @@ Singleton {
                 console.log("[STT:D14] inject SKIPPED | reason:",
                     effectiveMode === "clipboard" ? "effectiveMode=clipboard" :
                     root._targetWindowAddress === "" ? "no targetWindowAddress" : "unknown");
+                root._injectionPath = "";  // No injection attempted
+                root._injectionDowngraded = false;
             }
         }
     }
 
     // Window injection via stt-inject.sh (best-effort, non-fatal)
+    // Parses structured JSON from stdout: {"path":"rpc"|"paste"|"none","success":bool,"downgraded":bool}
     Process {
         id: injectProcess
+        stdout: SplitParser {
+            onRead: data => {
+                const line = data.trim();
+                if (!line.startsWith("{")) return;
+                try {
+                    const result = JSON.parse(line);
+                    root._injectionPath = result.path ?? "";
+                    root._injectionDowngraded = result.downgraded ?? false;
+
+                    if (result.downgraded) {
+                        Toaster.toast(
+                            qsTr("STT: Submit downgraded"),
+                            qsTr("Agent RPC unavailable — text pasted but not submitted"),
+                            "",
+                            Toast.Warning
+                        );
+                    }
+                    console.log("[STT:D16] inject result parsed:", JSON.stringify(result));
+                } catch (e) {
+                    console.warn("[STT:D16] failed to parse inject stdout:", line);
+                }
+            }
+        }
         stderr: SplitParser {
             onRead: data => {
                 console.log("[STT:D16:stderr]", data.trim());
@@ -878,12 +935,10 @@ Singleton {
         }
         onExited: (code, status) => {
             console.log("[STT:D16] injectProcess.onExited | code:", code,
-                "| targetAddr:", root._targetWindowAddress,
-                "| targetClass:", root._targetWindowClass);
+                "| path:", root._injectionPath,
+                "| downgraded:", root._injectionDowngraded);
             if (code !== 0)
                 console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal, clipboard still has text");
-            else
-                console.log("[STT:D16] inject completed successfully");
         }
     }
 
@@ -913,6 +968,8 @@ Singleton {
             _accumulatedSeconds = 0;
             _currentElapsed = 0;
             _currentLanguage = "";
+            _injectionPath = "";
+            _injectionDowngraded = false;
             AgentService.clearSttTarget();
         }
     }

@@ -136,6 +136,8 @@ Item {
             serviceErrorSource: SttService.errorSource
             serviceIsAskMode: SttService.isAskMode
             serviceDeliveryChoice: SttService.activeDeliveryChoice
+            serviceInjectionPath: SttService.injectionPath
+            serviceInjectionDowngraded: SttService.injectionDowngraded
 
             Component.onCompleted: root.contentHeight = implicitHeight
         }

@@ -25,6 +25,7 @@ SUBMIT="$3"
 EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
+DOWNGRADED=""
 
 echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET | nvimActiveBuf=$NVIM_ACTIVE_BUF" >&2
 
@@ -152,10 +153,19 @@ is_terminal_class() {
     esac
 }
 
+# Emit structured JSON result to stdout for QML parsing.
+# Args: $1=path ("rpc"|"paste"|"none") $2=success ("true"|"false")
+emit_result() {
+    local path="$1" success="$2"
+    local downgraded="${DOWNGRADED:-false}"
+    printf '{"path":"%s","success":%s,"downgraded":%s}\n' "$path" "$success" "$downgraded"
+}
+
 # ── Validate arguments ───────────────────────────────────────────────────────
 
 if [ -z "$ADDRESS" ]; then
     echo "[STT:INJ01] ABORT — missing window address" >&2
+    emit_result "none" "false"
     exit 0
 fi
 
@@ -165,6 +175,7 @@ echo "[STT:INJ02] checking if window $ADDRESS still exists..." >&2
 if ! hyprctl clients -j 2>/dev/null | grep -qF "\"address\": \"$ADDRESS\""; then
     echo "[STT:INJ02] ABORT — target window $ADDRESS no longer exists" >&2
     notify_failure "STT Inject Skipped" "Target window no longer exists. Text saved to clipboard."
+    emit_result "none" "false"
     exit 0
 fi
 echo "[STT:INJ02] window exists" >&2
@@ -179,9 +190,20 @@ if is_terminal_class "$CLASS_LOWER" && [ -n "$EXPECTED_TEXT" ]; then
     echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2
     if try_neovim_inject; then
         echo "[STT:INJ-NVIM] Neovim injection succeeded — skipping sendshortcut" >&2
+        emit_result "rpc" "true"
         exit 0
     fi
     echo "[STT:INJ-NVIM] Neovim injection failed — falling back to sendshortcut paste" >&2
+fi
+
+# ── Downgrade submit on sendshortcut path ────────────────────────────────────
+# Submit (auto-Enter) is only safe via Neovim RPC where orchestrator handles
+# injection+submission atomically. On the sendshortcut path, paste delivery
+# is unconfirmed — sending Enter risks submitting to the wrong input.
+if [ "$SUBMIT" = "submit" ]; then
+    echo "[STT:INJ-DOWN] downgrading submit→inject (sendshortcut has no paste confirmation)" >&2
+    SUBMIT=""
+    DOWNGRADED="true"
 fi
 
 # ── Determine paste shortcut ─────────────────────────────────────────────────
@@ -209,6 +231,7 @@ CLIP_CHECK=$(wl-paste --no-newline 2>/dev/null)
 if [ -z "$CLIP_CHECK" ]; then
     echo "[STT:INJ05] clipboard is EMPTY — wl-copy may have failed silently" >&2
     notify_failure "STT Inject Failed" "Clipboard is empty. wl-copy may have failed silently."
+    emit_result "none" "false"
     exit 0
 fi
 echo "[STT:INJ05] clipboard non-empty (len=${#CLIP_CHECK}) — proceeding" >&2
@@ -226,10 +249,15 @@ echo "[STT:INJ07] paste result | exit=$PASTE_CODE | output=$PASTE_RESULT" >&2
 
 if [ "$PASTE_CODE" -ne 0 ]; then
     notify_failure "STT Inject Failed" "sendshortcut paste failed (exit $PASTE_CODE). Text saved to clipboard."
+    emit_result "paste" "false"
     exit 0
 fi
 
 # ── Auto-submit: guarded Enter ───────────────────────────────────────────────
+# NOTE: On the sendshortcut path, SUBMIT is always cleared by the downgrade
+# logic above (submit is only safe via RPC). This block is intentional dead
+# code under current logic but serves as a safety net if the downgrade guard
+# is ever bypassed or a new code path is added above it.
 
 if [ "$SUBMIT" = "submit" ]; then
     # 250ms: allow application to process pasted text before verifying + submitting
@@ -240,6 +268,7 @@ if [ "$SUBMIT" = "submit" ]; then
     if ! hyprctl clients -j 2>/dev/null | grep -qF "\"address\": \"$ADDRESS\""; then
         echo "[STT:INJ08] target window closed during paste delay — skipping Enter" >&2
         notify_failure "STT Submit Skipped" "Target window closed after paste. Text was pasted but Enter was not sent."
+        emit_result "paste" "true"
         exit 0
     fi
 
@@ -247,6 +276,7 @@ if [ "$SUBMIT" = "submit" ]; then
     if ! verify_clipboard "INJ09"; then
         echo "[STT:INJ09] clipboard changed between paste and Enter — skipping Enter" >&2
         notify_failure "STT Submit Skipped" "Clipboard was overwritten after paste. Enter was not sent to avoid submitting wrong content."
+        emit_result "paste" "true"
         exit 0
     fi
 
@@ -257,9 +287,13 @@ if [ "$SUBMIT" = "submit" ]; then
 
     if [ "$ENTER_CODE" -ne 0 ]; then
         notify_failure "STT Submit Failed" "Paste succeeded but Enter key failed (exit $ENTER_CODE). Text was pasted but not submitted."
+        emit_result "paste" "true"
+    else
+        emit_result "paste" "true"
     fi
 else
     echo "[STT:INJ08] submit not requested — done (clipboard+paste only)" >&2
+    emit_result "paste" "true"
 fi
 
 echo "[STT:INJ11] stt-inject.sh finished" >&2

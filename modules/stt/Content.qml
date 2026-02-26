@@ -32,6 +32,8 @@ Item {
     required property string serviceErrorSource
     required property bool serviceIsAskMode
     required property string serviceDeliveryChoice
+    required property string serviceInjectionPath
+    required property bool serviceInjectionDowngraded
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -229,6 +231,40 @@ Item {
             text: root.stateConfig.icon
             color: root.stateConfig.iconColor
             font.pointSize: Appearance.font.size.extraLarge
+        }
+    }
+
+    // Success state: checkmark icon + delivery method subtitle
+    Component {
+        id: successComponent
+
+        ColumnLayout {
+            spacing: Appearance.spacing.small
+
+            MaterialIcon {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.stateConfig.icon
+                color: root.stateConfig.iconColor
+                font.pointSize: Appearance.font.size.extraLarge
+            }
+
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                visible: text !== ""
+                text: {
+                    if (root.serviceInjectionDowngraded)
+                        return qsTr("Pasted (submit skipped)");
+                    switch (root.serviceInjectionPath) {
+                        case "rpc": return qsTr("Injected");
+                        case "paste": return qsTr("Pasted");
+                        default: return qsTr("Copied");
+                    }
+                }
+                color: root.serviceInjectionDowngraded
+                    ? Colours.palette.m3error
+                    : Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+            }
         }
     }
 
@@ -732,7 +768,7 @@ Item {
                 sourceComponent: {
                     switch (root.serviceState) {
                         case "success":
-                            return stateIconComponent;
+                            return successComponent;
                         case "error":
                             return errorComponent;
                         default:
