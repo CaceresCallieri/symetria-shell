@@ -21,6 +21,9 @@ from pathlib import Path
 
 SOCKET_PATH = Path(f"/run/user/{os.getuid()}/symmetria-agents.sock")
 
+# Inode of the socket we created — used to avoid deleting a newer process's socket
+_our_socket_inode: int | None = None
+
 # Debug logging to stderr (stdout is reserved for QML SplitParser data).
 # Default WARNING in production; override with AGENT_BRIDGE_LOG_LEVEL=DEBUG.
 _log_level = os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "WARNING").upper()
@@ -160,7 +163,8 @@ class AgentBridge:
                      nvim_pid, count, len(self._clients) - 1)
             del self._clients[nvim_pid]
             self._emit()
-        # No else log — normal after a clean "goodbye" message
+        else:
+            log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
 
 
 bridge = AgentBridge()
@@ -196,39 +200,130 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
         writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:
-            pass  # Already closed or broken pipe — not actionable
         if nvim_pid is not None:
             bridge.remove_client(nvim_pid)
 
 
-def cleanup_socket():
-    """Remove socket file on exit."""
+async def solicit_neovim_instance(socket_path: str) -> bool:
+    """Trigger reconnect() on a single Neovim instance via RPC.
+
+    Uses nvim --remote-expr to call bridge.reconnect() in the target Neovim.
+    Returns True if the call succeeded, False otherwise.
+    """
+    cmd = [
+        "nvim", "--server", socket_path, "--remote-expr",
+        'luaeval("require(\'orchestrator.bridge\').reconnect()")',
+    ]
     try:
-        SOCKET_PATH.unlink(missing_ok=True)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+        result = stdout.decode().strip() if stdout else ""
+        if proc.returncode == 0:
+            log.info("solicit %s: ok (result=%s)", socket_path, result)
+            return True
+        else:
+            log.debug("solicit %s: failed (rc=%d, stderr=%s)",
+                      socket_path, proc.returncode, stderr.decode().strip()[:100] if stderr else "")
+            return False
+    except asyncio.TimeoutError:
+        log.debug("solicit %s: timed out (2s)", socket_path)
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        return False
+    except OSError as e:
+        log.debug("solicit %s: OSError %s", socket_path, e)
+        return False
+
+
+async def solicit_neovim_instances() -> None:
+    """Discover running Neovim instances and trigger reconnection.
+
+    Scans /run/user/$UID/nvim.*.0 for Neovim server sockets and issues
+    parallel RPC calls to each, triggering orchestrator.bridge.reconnect().
+    """
+    socket_dir = Path(f"/run/user/{os.getuid()}")
+    sockets = sorted(socket_dir.glob("nvim.*.0"))
+
+    if not sockets:
+        log.info("solicit: no Neovim sockets found in %s", socket_dir)
+        return
+
+    log.info("solicit: found %d Neovim socket(s), triggering reconnect...", len(sockets))
+    results = await asyncio.gather(
+        *(solicit_neovim_instance(str(s)) for s in sockets),
+        return_exceptions=True,
+    )
+
+    succeeded = sum(1 for r in results if r is True)
+    log.info("solicit: %d/%d Neovim instances reconnected", succeeded, len(sockets))
+
+
+def cleanup_socket():
+    """Remove socket file on exit — only if we created it.
+
+    Prevents a stale bridge.py process from deleting a newer process's socket
+    when its atexit handler runs after the new process has already bound.
+    """
+    try:
+        if _our_socket_inode is not None and SOCKET_PATH.stat().st_ino == _our_socket_inode:
+            SOCKET_PATH.unlink(missing_ok=True)
     except OSError:
         pass
 
 
+def _kill_stale_bridges() -> None:
+    """Kill any other agent-bridge.py processes from previous Symmetria sessions."""
+    my_pid = os.getpid()
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pgrep", "-f", "agent-bridge\\.py"],
+            capture_output=True, text=True, timeout=2,
+        )
+        for line in result.stdout.strip().splitlines():
+            pid = int(line.strip())
+            if pid != my_pid:
+                log.info("killing stale bridge.py pid=%d", pid)
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    except Exception as e:
+        log.debug("_kill_stale_bridges: %s", e)
+
+
 async def main():
+    global _our_socket_inode
+
+    # Kill orphaned bridge.py processes from previous sessions
+    _kill_stale_bridges()
+
     # Clean up stale socket
     log.info("STARTING: cleaning stale socket at %s", SOCKET_PATH)
     SOCKET_PATH.unlink(missing_ok=True)
     atexit.register(cleanup_socket)
 
-    # Restrict socket permissions before accepting connections
-    old_umask = os.umask(0o177)
     server = await asyncio.start_unix_server(handle_client, path=str(SOCKET_PATH))
-    os.umask(old_umask)
-    log.info("LISTENING on %s (pid=%d)", SOCKET_PATH, os.getpid())
+    # Ensure socket is accessible
+    SOCKET_PATH.chmod(0o600)
 
-    # Handle signals for clean shutdown — single handler avoids lambda-in-loop
+    # Record our socket's inode for ownership-safe cleanup
+    _our_socket_inode = SOCKET_PATH.stat().st_ino
+    log.info("LISTENING on %s (pid=%d, inode=%d)", SOCKET_PATH, os.getpid(), _our_socket_inode)
+
+    # Actively solicit running Neovim instances to reconnect
+    asyncio.create_task(solicit_neovim_instances())
+
+    # Handle signals for clean shutdown
     loop = asyncio.get_running_loop()
-    shutdown_handler = lambda: loop.create_task(shutdown(server))  # noqa: E731
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, shutdown_handler)
+        loop.add_signal_handler(sig, lambda: loop.create_task(shutdown(server)))
 
     async with server:
         await server.serve_forever()
@@ -247,15 +342,11 @@ async def shutdown(server):
     log.info("SHUTDOWN: closing server...")
     server.close()
     await server.wait_closed()
-
-    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    log.info("SHUTDOWN: cancelling %d tasks", len(tasks))
-    for task in tasks:
-        task.cancel()
-
-    # Wait for all tasks to finish their finally blocks (writer.close, remove_client)
-    await asyncio.gather(*tasks, return_exceptions=True)
-    log.info("SHUTDOWN: all tasks finished")
+    log.info("SHUTDOWN: server closed, cancelling %d tasks", len(asyncio.all_tasks()) - 1)
+    # Socket cleanup handled by atexit handler
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
 
 
 if __name__ == "__main__":
