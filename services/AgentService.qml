@@ -217,6 +217,28 @@ Singleton {
         _sttTargetBufId = -1;
     }
 
+    // ── Activity helpers (used by: future tooltip in ProjectGroup, agent dashboard) ──
+
+    /// Returns human-readable activity text for an agent.
+    function activityText(agent: var): string {
+        const state = agent?.activity_state ?? "";
+        const tool = agent?.activity_tool ?? "";
+        switch (state) {
+            case "working": return tool || "Working...";
+            case "thinking": return "Thinking...";
+            case "idle": return "Idle";
+            case "needs_permission": return "Needs approval";
+            case "starting": return "Starting...";
+            default: return "";
+        }
+    }
+
+    /// True if agent is actively processing (thinking or working).
+    function isAgentBusy(agent: var): bool {
+        const s = agent?.activity_state ?? "";
+        return s === "thinking" || s === "working";
+    }
+
     /// Find the currently active agent for a terminal PID. Returns the agent that is
     /// currently active (via representativeAgent) among those matching the PID, or null.
     function activeAgentForTerminal(terminalPid: int): var {

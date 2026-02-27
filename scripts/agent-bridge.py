@@ -50,6 +50,8 @@ class AgentBridge:
         self._clients: dict[int, dict[int, dict]] = {}
         # {nvim_pid: terminal_pid} — cached terminal PID per Neovim instance
         self._terminal_pids: dict[int, int] = {}
+        # {agent_id: {"state": str, "tool": str}} — activity state from hook scripts
+        self._activities: dict[str, dict] = {}
 
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
@@ -89,8 +91,10 @@ class AgentBridge:
             for buf, inst in instances.items():
                 project = inst.get("project", "unknown")
                 projects.add(project)
+                agent_id = f"{nvim_pid}_{buf}"
+                activity = self._activities.get(agent_id, {})
                 agents.append({
-                    "id": f"{nvim_pid}_{buf}",
+                    "id": agent_id,
                     "nvim_pid": nvim_pid,
                     "buf": buf,
                     "project": project,
@@ -100,6 +104,8 @@ class AgentBridge:
                     "active": inst.get("active", False),
                     "spawn_type": inst.get("spawn_type", "fresh"),
                     "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
+                    "activity_state": activity.get("state", ""),
+                    "activity_tool": activity.get("tool", ""),
                 })
 
         # Sort: by project, then by spawned_at within project
@@ -116,8 +122,27 @@ class AgentBridge:
         sys.stdout.flush()
 
     def handle_message(self, msg: dict) -> None:
-        """Process a single JSON message from an orchestrator client."""
+        """Process a single JSON message from an orchestrator or hook client."""
         msg_type = msg.get("type")
+
+        # Activity messages come from hook scripts (ephemeral connections)
+        # and use agent_id instead of nvim_pid — handle before validation.
+        # Note: states like "needs_permission" are cleared implicitly when
+        # any subsequent event overwrites the entry (e.g., PreToolUse → "working").
+        if msg_type == "activity":
+            agent_id = msg.get("agent_id", "")
+            if not agent_id:
+                return
+            state = msg.get("state", "")
+            if state == "offline":
+                self._activities.pop(agent_id, None)
+            else:
+                self._activities[agent_id] = {"state": state, "tool": msg.get("tool", "")}
+            log.debug("handle_message: activity agent_id=%s state=%s tool=%s",
+                       agent_id, state, msg.get("tool", ""))
+            self._emit()
+            return
+
         nvim_pid = msg.get("nvim_pid")
 
         if not msg_type or nvim_pid is None:
@@ -164,6 +189,7 @@ class AgentBridge:
             buf = msg.get("buf")
             if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
                 del self._clients[nvim_pid][buf]
+                self._activities.pop(f"{nvim_pid}_{buf}", None)
                 log.debug("  removed: buf=%s from pid %s", buf, nvim_pid)
                 self._emit()
             else:
@@ -199,6 +225,9 @@ class AgentBridge:
 
         elif msg_type == "goodbye":
             if nvim_pid in self._clients:
+                # Clean up activities for all agents belonging to this nvim instance
+                for buf in self._clients[nvim_pid]:
+                    self._activities.pop(f"{nvim_pid}_{buf}", None)
                 del self._clients[nvim_pid]
                 self._terminal_pids.pop(nvim_pid, None)
                 log.debug("  goodbye: removed client %s (remaining: %d)", nvim_pid, len(self._clients))
@@ -212,6 +241,9 @@ class AgentBridge:
             count = len(self._clients[nvim_pid])
             log.info("remove_client: dropping pid=%s (%d instances), remaining clients: %d",
                      nvim_pid, count, len(self._clients) - 1)
+            # Clean up activities for all agents belonging to this nvim instance
+            for buf in self._clients[nvim_pid]:
+                self._activities.pop(f"{nvim_pid}_{buf}", None)
             del self._clients[nvim_pid]
             self._terminal_pids.pop(nvim_pid, None)
             self._emit()
