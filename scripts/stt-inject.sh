@@ -29,6 +29,12 @@ DOWNGRADED=""
 # Must be literal "true" or "false" — embedded as JSON boolean by emit_result()
 RPC_SUBMITTED="false"
 
+# Unified debug log (shared timeline with QML/Lua/C++)
+LOGFILE="${XDG_STATE_HOME:-$HOME/.local/state}/symmetria/debug.log"
+mkdir -p "$(dirname "$LOGFILE")" 2>/dev/null
+stt_log() { printf '%s [bash:%s] %s\n' "$(date +%H:%M:%S.%3N)" "$1" "$2" >> "$LOGFILE" 2>/dev/null; }
+
+stt_log "inject" "started | addr=$ADDRESS class=$WINDOW_CLASS submit=$SUBMIT"
 echo "[STT:INJ01] stt-inject.sh started | address=$ADDRESS | class=$WINDOW_CLASS | submit=$SUBMIT | expectedLen=${#EXPECTED_TEXT} | nvimSocket=$NVIM_SOCKET | nvimActiveBuf=$NVIM_ACTIVE_BUF" >&2
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -187,6 +193,7 @@ if ! hyprctl clients -j 2>/dev/null | grep -qF "\"address\": \"$ADDRESS\""; then
     emit_result "none" "false"
     exit 0
 fi
+stt_log "inject" "window-verified | addr=$ADDRESS"
 echo "[STT:INJ02] window exists" >&2
 
 # ── Try Neovim RPC injection for terminal windows ───────────────────────────
@@ -196,12 +203,15 @@ echo "[STT:INJ02] window exists" >&2
 CLASS_LOWER=$(echo "$WINDOW_CLASS" | tr '[:upper:]' '[:lower:]')
 
 if is_terminal_class "$CLASS_LOWER" && [ -n "$EXPECTED_TEXT" ]; then
+    stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
     echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2
     if try_neovim_inject; then
+        stt_log "inject" "rpc-success"
         echo "[STT:INJ-NVIM] Neovim injection succeeded — skipping sendshortcut" >&2
         emit_result "rpc" "true"
         exit 0
     fi
+    stt_log "inject" "rpc-failed | fallback=sendshortcut"
     echo "[STT:INJ-NVIM] Neovim injection failed — falling back to sendshortcut paste" >&2
 fi
 
@@ -251,6 +261,7 @@ echo "[STT:INJ05] clipboard non-empty (len=${#CLIP_CHECK}) — proceeding" >&2
 echo "[STT:INJ06] sleeping 150ms for clipboard propagation..." >&2
 sleep 0.15
 
+stt_log "inject" "paste-send | shortcut=$SHORTCUT addr=$ADDRESS"
 echo "[STT:INJ07] sending paste: hyprctl dispatch sendshortcut $SHORTCUT, address:$ADDRESS" >&2
 PASTE_RESULT=$(hyprctl dispatch sendshortcut "$SHORTCUT, address:$ADDRESS" 2>&1)
 PASTE_CODE=$?
@@ -305,5 +316,6 @@ else
     emit_result "paste" "true"
 fi
 
+stt_log "inject" "finished"
 echo "[STT:INJ11] stt-inject.sh finished" >&2
 exit 0

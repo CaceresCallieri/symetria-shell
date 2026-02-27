@@ -178,8 +178,7 @@ Singleton {
             console.log("[STT:D19] toggle() DEBOUNCED | elapsed:", now - _lastToggleTime, "ms");
             return;
         }
-        console.log("[STT:D19] toggle() | state:", _state,
-            "| keepDrawerOpen:", _keepDrawerOpen, "| lang:", lang);
+        Logger.log("qml", "stt", "toggle | state=" + _state + " lang=" + lang);
 
         if (_state === "idle" || !_keepDrawerOpen) {
             _lastToggleTime = now;
@@ -200,9 +199,7 @@ Singleton {
             console.warn("[STT] start() called while already active — ignoring");
             return;
         }
-        console.log("[STT:D18] start() called | lang:", lang,
-            "| currentState:", _state,
-            "| deliveryMode:", _deliveryMode);
+        Logger.log("qml", "stt", "start | lang=" + lang + " delivery=" + _deliveryMode);
         // Check API key before starting
         if (_resolvedApiKey === "") {
             _keepDrawerOpen = true;
@@ -248,9 +245,7 @@ Singleton {
         // AgentService provides instant Neovim socket lookup (no async shell script).
         _captureTargetWindow();
         _resolveAgentTarget();
-        console.log("[STT:D18] session initialized | id:", _sessionId,
-            "| target:", _targetWindowAddress, "class:", _targetWindowClass,
-            "| nvimSocket:", _targetNvimSocket);
+        Logger.log("qml", "stt", "session | id=" + _sessionId + " target=" + _targetWindowAddress + " class=" + _targetWindowClass);
 
         // Ensure temp dir exists, then start recording
         tempDirProcess.running = true;
@@ -259,11 +254,7 @@ Singleton {
     /// Stop recording and submit for transcription.
     function stop(): void {
         if (_state !== "recording" && _state !== "paused") return;
-        console.log("[STT:D01] stop() called | state:", _state,
-            "| deliveryMode:", _deliveryMode,
-            "| askChoice:", _activeDeliveryChoice,
-            "| sessionId:", _sessionId,
-            "| segments:", _segmentFiles.length);
+        Logger.log("qml", "stt", "stop | segments=" + _segmentFiles.length + " delivery=" + _deliveryMode);
         actionTriggered("stop");
         // Target was fixed at start() — no re-capture needed.
         // The user may have switched windows during recording, but injection
@@ -327,8 +318,7 @@ Singleton {
     function retry(): void {
         if (_state !== "error") return;
         actionTriggered("retry");
-        console.log("[STT:D21] retry() | audioFile:", _currentAudioFile,
-            "| targetAddr:", _targetWindowAddress, "| targetClass:", _targetWindowClass);
+        Logger.log("qml", "stt", "retry");
 
         if (_currentAudioFile === "") {
             _setErrorState("internal", "No audio file to retry", "Start a new recording");
@@ -545,8 +535,7 @@ Singleton {
 
     /// Proceed to transcription after recording is complete.
     function _submitForTranscription(): void {
-        console.log("[STT:D05] _submitForTranscription() | segments:", _segmentFiles.length,
-            "| files:", JSON.stringify(_segmentFiles));
+        Logger.log("qml", "stt", "transcribe | segments=" + _segmentFiles.length);
         if (_segmentFiles.length === 0) {
             console.error("[STT:D05] NO segments — aborting");
             _setErrorState("internal", "No audio segments", "Recording may have failed");
@@ -587,9 +576,7 @@ Singleton {
         processingTimeoutTimer.start();
         const model = Config.stt?.model ?? "gpt-4o-transcribe";
         const lang = _currentLanguage || "en";
-        console.log("[STT:D07] _startTranscription() | file:", audioFile,
-            "| model:", model, "| lang:", lang,
-            "| timeoutMs:", processingTimeoutTimer.interval);
+        Logger.log("qml", "stt", "api-call | file=" + audioFile);
 
         // Pass API key via environment to avoid exposure in /proc/<pid>/cmdline
         transcribeProcess.environment = ({ STT_API_KEY: _resolvedApiKey });
@@ -631,10 +618,8 @@ Singleton {
             return Math.max(root._minAutoHideDelay, Math.min(root._maxAutoHideDelay, delay));
         }
         onTriggered: {
-            console.log("[STT:D17] successTimer fired | state:", root._state,
-                "| delay was:", interval, "ms");
             if (root._state === "success") {
-                console.log("[STT:D17] → auto-hiding (idle)");
+                Logger.log("qml", "stt", "auto-hide");
                 root._keepDrawerOpen = false;
                 root._state = "idle";
             }
@@ -646,7 +631,7 @@ Singleton {
         id: processingTimeoutTimer
         interval: Config.stt?.processingTimeout ?? 120000
         onTriggered: {
-            console.error("[STT] Processing timed out");
+            Logger.log("qml", "stt", "timeout");
             if (transcribeProcess.running) transcribeProcess.signal(9);
             root._setErrorState("timeout", "Processing timed out", "Check your network connection");
         }
@@ -810,10 +795,7 @@ Singleton {
                 console.log("[STT:D10] transcribeProcess.onExited — state is not processing (" + root._state + "), ignoring");
                 return;
             }
-            console.log("[STT:D10] transcribeProcess.onExited | code:", code,
-                "| textLength:", root._transcribedText.length,
-                "| textPreview:", root._transcribedText.substring(0, 80),
-                "| errorDetail:", root._errorDetail);
+            Logger.log("qml", "stt", "transcribe-result | code=" + code + " textLen=" + root._transcribedText.length);
             if (code === 0 && root._transcribedText !== "") {
                 root._state = "success";
                 console.log("[STT:D11] → success, chaining wl-copy | textLength:", root._transcribedText.length);
@@ -825,10 +807,7 @@ Singleton {
                 if (Config.stt?.cache?.deleteOnSuccess ?? true)
                     root._cleanupTempFiles();
             } else {
-                console.error("[STT:D10] → error path | code:", code,
-                    "| hasText:", root._transcribedText !== "",
-                    "| errorDetail:", root._errorDetail,
-                    "| errorRaw:", root._errorRaw);
+                Logger.log("qml", "stt", "transcribe-error | code=" + code + " detail=" + root._errorDetail);
                 // Error — categorization already happened in stderr collector
                 if (root._errorDetail === "")
                     root._setErrorState("api", "Transcription failed", "Check logs for details");
@@ -845,11 +824,7 @@ Singleton {
         id: clipboardProcess
         property string capturedSessionId: ""
         onExited: (code, status) => {
-            console.log("[STT:D12] clipboardProcess.onExited | code:", code,
-                "| deliveryMode:", root._deliveryMode,
-                "| askChoice:", root._activeDeliveryChoice,
-                "| targetAddr:", root._targetWindowAddress,
-                "| targetClass:", root._targetWindowClass);
+            Logger.log("qml", "stt", "clipboard-done | code=" + code);
             if (code !== 0) {
                 console.error("[STT:D12] wl-copy FAILED (exit", code + ") — clearing target, aborting inject chain");
                 root._targetWindowAddress = "";
@@ -864,8 +839,7 @@ Singleton {
             const effectiveMode = root._deliveryMode === "ask"
                 ? root._activeDeliveryChoice
                 : root._deliveryMode;
-            console.log("[STT:D13] effectiveMode resolved:", effectiveMode,
-                "| from:", root._deliveryMode === "ask" ? "ask→" + root._activeDeliveryChoice : root._deliveryMode);
+            Logger.log("qml", "stt", "delivery | mode=" + effectiveMode);
 
             // Refresh socket/buffer from AgentService — may have changed during recording
             if (root._targetWindowPid > 0 && AgentService.bridgeRunning) {
@@ -888,7 +862,7 @@ Singleton {
                     console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
-                console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
+                Logger.log("qml", "stt", "inject-start | target=" + root._targetWindowAddress);
                 // Pass expected text, pre-determined Neovim socket + buffer (captured at stop-time)
                 injectProcess.capturedSessionId = root._sessionId;
                 injectProcess.environment = ({
@@ -948,7 +922,7 @@ Singleton {
                             );
                         }
                     }
-                    console.log("[STT:D16] inject result parsed:", JSON.stringify(result));
+                    Logger.log("qml", "stt", "inject-result | " + JSON.stringify(result));
                 } catch (e) {
                     console.warn("[STT:D16] failed to parse inject stdout:", line);
                 }

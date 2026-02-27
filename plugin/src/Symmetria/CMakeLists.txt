@@ -46,6 +46,7 @@ qml_module(symmetria
         requests.hpp requests.cpp
         toaster.hpp toaster.cpp
         imageanalyser.hpp imageanalyser.cpp
+        logger.hpp logger.cpp
     LIBRARIES
         Qt::Gui
         Qt::Quick
