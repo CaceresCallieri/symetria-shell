@@ -26,6 +26,10 @@ Singleton {
     readonly property var projects: _projects
     readonly property int agentCount: _agents.length
 
+    /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
+    /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
+    readonly property var sortedProjects: _sortProjectsByWorkspace(_projects, _agents, _workspaceMap)
+
     /// Whether the bridge process is alive (does NOT mean the socket is ready —
     /// there is a ~50-100ms startup window before the asyncio server binds).
     readonly property bool bridgeRunning: bridgeProcess.running
@@ -149,6 +153,56 @@ Singleton {
         }
         // Regular numbered workspace → Roman numeral
         return Icons.romanize(wsId);
+    }
+
+    // ── Project sorting by workspace ─────────────────────────────────
+
+    /// Workspace sort category:
+    ///   0 = named workspace (negative ID, no "special:" prefix) → leftmost
+    ///   1 = normal workspace (ID >= 1) → middle
+    ///   2 = special workspace (negative ID, "special:" prefix) → rightmost
+    ///   3 = no workspace detected → far right
+    function _wsSortKey(wsInfo: var): var {
+        if (!wsInfo) return { category: 3, order: 0, name: "" };
+
+        const id = wsInfo.id;
+        const name = wsInfo.name ?? "";
+
+        if (id < 0 && name.startsWith("special:"))
+            return { category: 2, order: id, name: name };
+        if (id < 0)
+            return { category: 0, order: 0, name: name };
+        return { category: 1, order: id, name: "" };
+    }
+
+    function _sortProjectsByWorkspace(projects: var, agents: var, wsMap: var): var {
+        return [...projects].sort((a, b) => {
+            const agentsA = agents.filter(ag => ag.project === a);
+            const agentsB = agents.filter(ag => ag.project === b);
+            const wsA = root.workspaceForAgents(agentsA);
+            const wsB = root.workspaceForAgents(agentsB);
+            const keyA = root._wsSortKey(wsA);
+            const keyB = root._wsSortKey(wsB);
+
+            // Primary: by category
+            if (keyA.category !== keyB.category)
+                return keyA.category - keyB.category;
+
+            // Within named: alphabetical by workspace name
+            if (keyA.category === 0)
+                return keyA.name.localeCompare(keyB.name);
+
+            // Within normal: ascending by workspace ID (1 → 10)
+            if (keyA.category === 1)
+                return keyA.order - keyB.order;
+
+            // Within special: by ID
+            if (keyA.category === 2)
+                return keyA.order - keyB.order;
+
+            // Fallback: alphabetical by project name
+            return a.localeCompare(b);
+        });
     }
 
     // ── STT integration ────────────────────────────────────────────────

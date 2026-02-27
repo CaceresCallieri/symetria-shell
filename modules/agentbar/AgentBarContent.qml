@@ -20,7 +20,7 @@ Item {
         spacing: Appearance.spacing.small
 
         Repeater {
-            model: AgentService.projects
+            model: AgentService.sortedProjects
 
             ProjectGroup {
                 required property string modelData
