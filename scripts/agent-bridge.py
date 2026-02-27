@@ -186,8 +186,11 @@ class AgentBridge:
         elif msg_type == "focus":
             buf = msg.get("buf")
             if nvim_pid in self._clients:
-                # Clear active on all, set on focused
-                for b, inst in self._clients[nvim_pid].items():
+                known_bufs = self._clients[nvim_pid]
+                if buf not in known_bufs:
+                    log.warning("  focus: buf=%s not in known instances for pid=%s (known: %s)",
+                                buf, nvim_pid, list(known_bufs.keys()))
+                for b, inst in known_bufs.items():
                     inst["active"] = (b == buf)
                 log.debug("  focus: buf=%s from pid %s", buf, nvim_pid)
                 self._emit()

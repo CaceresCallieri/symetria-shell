@@ -217,8 +217,9 @@ Singleton {
         _sttTargetBufId = -1;
     }
 
-    /// Find the matching agent for a terminal PID. Returns agent object or null.
-    function agentForTerminal(terminalPid: int): var {
+    /// Find the currently active agent for a terminal PID. Returns the agent that is
+    /// currently active (via representativeAgent) among those matching the PID, or null.
+    function activeAgentForTerminal(terminalPid: int): var {
         if (terminalPid <= 0) return null;
         const matching = _agents.filter(a => a.terminal_pid === terminalPid);
         if (matching.length === 0) return null;

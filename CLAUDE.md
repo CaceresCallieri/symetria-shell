@@ -514,13 +514,14 @@ SttService → spawns pw-record → WAV file
 | Ask (radio) | `"ask"` | Shows radio toggle in drawer; user picks delivery per-recording |
 
 **Window Injection Flow (Modes B & C):**
-1. User presses Submit (stop) → `_captureTargetWindow()` saves the active window's Hyprland address + class
-2. Transcription completes → `wl-copy` writes text to clipboard
-3. `clipboardProcess.onExited` chains `stt-inject.sh` with the captured address
+1. User presses STT keybind → `start()` calls `_captureTargetWindow()` (saves Hyprland address + class + PID) and `_resolveAgentTarget()` (resolves Neovim socket + buf via `activeAgentForTerminal`)
+2. Recording → stop → transcription completes → `wl-copy` writes text to clipboard
+3. `clipboardProcess.onExited` chains `stt-inject.sh` with the start-time captured address
 4. Script verifies window exists, detects terminal vs GUI, sends `Ctrl+V` or `Ctrl+Shift+V` via `hyprctl dispatch sendshortcut address:0x...`
 5. In submit mode: after a 150ms delay, sends `Return` to the same address to auto-submit
 
 **Key design decisions:**
+- **Target locked at start-time** — the injection target (window address, Neovim socket, agent buf) is captured once when `start()` runs and carried immutably through the entire async pipeline. Never re-resolve via `activeAgentForTerminal()` at delivery time (see "Identity-Unstable Lookups" below)
 - **No focus change** — `sendshortcut` with address targeting pastes without stealing focus
 - **Best-effort** — injection failure is non-fatal (clipboard always has the text)
 - **Terminal detection** — Ghostty, Alacritty, Kitty, Foot, WezTerm, Warp, Konsole, etc. use `Ctrl+Shift+V`; all others use `Ctrl+V`
@@ -528,6 +529,16 @@ SttService → spawns pw-record → WAV file
 - **50ms clipboard propagation delay** — ensures `wl-copy` data reaches the Wayland compositor before `sendshortcut`
 - **Auto-submit delay** — 150ms between paste and Enter allows the application to process clipboard content
 - **Universal Enter** — `Return` key without modifiers works in both terminals and GUI apps
+
+**⚠️ Identity-Unstable Lookups in Async Pipelines (CRITICAL)**
+
+`AgentService.activeAgentForTerminal(pid)` resolves identity through *current state* — it calls `representativeAgent()` which returns `agents.find(a => a.active) ?? agents[0]`. When multiple agents share a terminal PID (same Neovim instance), calling this function at different times returns different agents depending on which one is currently focused.
+
+**Rule:** Capture the agent target (socket, buf) **once at intent time** (e.g., `start()`) and carry that snapshot through the entire async pipeline. Never "refresh" by re-calling `activeAgentForTerminal()` at delivery time — the user may have switched agents during the pipeline, and re-resolution silently redirects to the wrong agent.
+
+**This has caused bugs twice:**
+1. `clipboardProcess.onExited` had a "refresh" block that re-resolved the agent → fixed by removing it
+2. `on_ActiveDeliveryChoiceChanged` re-resolved via `activeAgentForTerminal()` → fixed by using `_targetNvimActiveBuf` directly
 
 **Ask Mode (Radio Toggle):**
 

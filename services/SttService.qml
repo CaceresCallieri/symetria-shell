@@ -420,7 +420,7 @@ Singleton {
             return;  // No agent data available — sendshortcut fallback
         }
 
-        const agent = AgentService.agentForTerminal(_targetWindowPid);
+        const agent = AgentService.activeAgentForTerminal(_targetWindowPid);
         if (!agent) {
             return;  // Non-agent window — no highlight, sendshortcut fallback
         }
@@ -971,9 +971,8 @@ Singleton {
         if (_deliveryMode !== "ask" || _state === "idle") return;
         if (_activeDeliveryChoice === "clipboard") {
             AgentService.clearSttTarget();
-        } else if (_targetWindowPid > 0 && AgentService.bridgeRunning) {
-            const agent = AgentService.agentForTerminal(_targetWindowPid);
-            if (agent) AgentService.setSttTarget(_targetWindowPid, agent.buf ?? -1);
+        } else if (_targetWindowPid > 0 && _targetNvimActiveBuf >= 0) {
+            AgentService.setSttTarget(_targetWindowPid, _targetNvimActiveBuf);
         }
     }
 
