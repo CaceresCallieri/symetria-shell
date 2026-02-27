@@ -134,12 +134,7 @@ StyledRect {
                 required property int index
 
                 instanceNum: index + 1
-                title: modelData.title ?? ""
-                dotColor: AgentService.colorForIndex(modelData.color_idx ?? 0)
                 active: modelData.active ?? false
-                isSttTarget: AgentService.sttTargetTerminalPid > 0
-                    && modelData.terminal_pid === AgentService.sttTargetTerminalPid
-                    && (AgentService.sttTargetBufId < 0 || modelData.buf === AgentService.sttTargetBufId)
             }
         }
 
