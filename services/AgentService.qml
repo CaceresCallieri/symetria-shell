@@ -158,46 +158,44 @@ Singleton {
     // ── Project sorting by workspace ─────────────────────────────────
 
     /// Workspace sort category:
-    ///   0 = named workspace (negative ID, no "special:" prefix) → leftmost
+    ///   0 = persistent named workspace (negative ID, no "special:" prefix) → leftmost
     ///   1 = normal workspace (ID >= 1) → middle
     ///   2 = special workspace (negative ID, "special:" prefix) → rightmost
     ///   3 = no workspace detected → far right
     function _wsSortKey(wsInfo: var): var {
-        if (!wsInfo) return { category: 3, order: 0, name: "" };
+        if (!wsInfo) return { category: 3, order: 0 };
 
         const id = wsInfo.id;
         const name = wsInfo.name ?? "";
 
         if (id < 0 && name.startsWith("special:"))
-            return { category: 2, order: id, name: name };
+            return { category: 2, order: id };
         if (id < 0)
-            return { category: 0, order: 0, name: name };
-        return { category: 1, order: id, name: "" };
+            return { category: 0, order: id };
+        return { category: 1, order: id };
     }
 
+    // wsMap: intentionally unused in the body — included so QML tracks _workspaceMap
+    // as a dependency of the sortedProjects binding and re-sorts on workspace changes.
     function _sortProjectsByWorkspace(projects: var, agents: var, wsMap: var): var {
+        // Precompute per-project workspace keys once, O(A) total
+        const projectKey = {};
+        for (const project of projects) {
+            const projectAgents = agents.filter(ag => ag.project === project);
+            projectKey[project] = root._wsSortKey(root.workspaceForAgents(projectAgents));
+        }
+
         return [...projects].sort((a, b) => {
-            const agentsA = agents.filter(ag => ag.project === a);
-            const agentsB = agents.filter(ag => ag.project === b);
-            const wsA = root.workspaceForAgents(agentsA);
-            const wsB = root.workspaceForAgents(agentsB);
-            const keyA = root._wsSortKey(wsA);
-            const keyB = root._wsSortKey(wsB);
+            const keyA = projectKey[a];
+            const keyB = projectKey[b];
 
             // Primary: by category
             if (keyA.category !== keyB.category)
                 return keyA.category - keyB.category;
 
-            // Within named: alphabetical by workspace name
-            if (keyA.category === 0)
-                return keyA.name.localeCompare(keyB.name);
-
-            // Within normal: ascending by workspace ID (1 → 10)
-            if (keyA.category === 1)
-                return keyA.order - keyB.order;
-
-            // Within special: by ID
-            if (keyA.category === 2)
+            // Within any category: ascending by workspace ID
+            // (named: most-negative first; normal: 1→10; special: by ID)
+            if (keyA.order !== keyB.order)
                 return keyA.order - keyB.order;
 
             // Fallback: alphabetical by project name
@@ -251,7 +249,8 @@ Singleton {
 
     // Events that affect window-to-workspace mapping (Set for O(1) lookup)
     readonly property var _wsLayoutEvents: new Set([
-        "movewindow", "movewindowv2", "openwindow", "closewindow", "activespecial"
+        "movewindow", "movewindowv2", "openwindow", "closewindow", "activespecial",
+        "renameworkspace"
     ])
 
     // Listen to Hyprland events that affect window-to-workspace mapping
@@ -355,7 +354,7 @@ Singleton {
         function status(): string {
             return JSON.stringify({
                 agents: root.agentCount,
-                projects: root.projects,
+                projects: root.sortedProjects,
                 bridgeRunning: root.bridgeRunning,
             });
         }
