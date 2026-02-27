@@ -427,6 +427,7 @@ Singleton {
 
         _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
         _targetNvimActiveBuf = agent.buf ?? -1;
+        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket + " active=" + (agent.active ?? "?"));
 
         // Set highlight based on effective delivery mode
         const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
@@ -840,21 +841,6 @@ Singleton {
                 ? root._activeDeliveryChoice
                 : root._deliveryMode;
             Logger.log("qml", "stt", "delivery | mode=" + effectiveMode);
-
-            // Refresh socket/buffer from AgentService — may have changed during recording
-            if (root._targetWindowPid > 0 && AgentService.bridgeRunning) {
-                const freshAgent = AgentService.agentForTerminal(root._targetWindowPid);
-                if (freshAgent) {
-                    const freshSocket = AgentService.nvimSocketForAgent(freshAgent);
-                    const freshBuf = freshAgent.buf ?? -1;
-                    if (freshSocket !== root._targetNvimSocket || freshBuf !== root._targetNvimActiveBuf) {
-                        console.log("[STT:D13] socket refreshed | old:", root._targetNvimSocket,
-                            "→ new:", freshSocket, "| oldBuf:", root._targetNvimActiveBuf, "→ newBuf:", freshBuf);
-                        root._targetNvimSocket = freshSocket;
-                        root._targetNvimActiveBuf = freshBuf;
-                    }
-                }
-            }
 
             // Chain window injection after successful clipboard write
             if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
