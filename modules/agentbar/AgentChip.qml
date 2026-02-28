@@ -97,18 +97,11 @@ Row {
         property real _sttPulse: 1.0
 
         SequentialAnimation on _sttPulse {
-            running: root.isSttTarget
+            running: root.isSttTarget && !root.isBusy  // Row-level pulse handles busy state
             loops: Animation.Infinite
             onRunningChanged: if (!running) _sttPulse = 1.0
             NumberAnimation { from: 1.0; to: 0.4; duration: 600; easing.type: Easing.InOutSine }
             NumberAnimation { from: 0.4; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
-        }
-
-        Behavior on width {
-            Anim {
-                duration: Appearance.anim.durations.normal
-                easing.type: Easing.OutCubic
-            }
         }
     }
 }

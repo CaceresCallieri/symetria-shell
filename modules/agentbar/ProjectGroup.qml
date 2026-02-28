@@ -138,6 +138,7 @@ StyledRect {
                 isSttTarget: {
                     if (AgentService.sttTargetTerminalPid <= 0) return false;
                     if ((modelData.terminal_pid ?? 0) !== AgentService.sttTargetTerminalPid) return false;
+                    // -1 = agent had no buf at start-time; highlight the active (representative) agent
                     if (AgentService.sttTargetBufId === -1) return modelData.active ?? false;
                     return (modelData.buf ?? -1) === AgentService.sttTargetBufId;
                 }
