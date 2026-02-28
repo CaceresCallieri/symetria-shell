@@ -23,12 +23,6 @@ StyledRect {
     // Active when this group's workspace matches the focused workspace
     readonly property bool isCurrentProject: wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
-    // True when this project is the STT injection target
-    readonly property bool isSttTarget: {
-        if (AgentService.sttTargetTerminalPid <= 0) return false;
-        return root.agents.some(a => a.terminal_pid === AgentService.sttTargetTerminalPid);
-    }
-
     // True when any agent in this group needs permission approval
     readonly property bool hasPermissionNeeded:
         root.agents.some(a => (a.activity_state ?? "") === "needs_permission")
@@ -40,9 +34,8 @@ StyledRect {
         ? Colours.glassmorphism(Colours.palette.m3primary, 1.0).background
         : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).background
     radius: Appearance.rounding.full
-    border.width: (isSttTarget || hasPermissionNeeded) ? 2 : 1
+    border.width: hasPermissionNeeded ? 2 : 1
     border.color: {
-        if (isSttTarget) return Colours.palette.m3error;
         if (hasPermissionNeeded) return Colours.palette.m3tertiary;
         if (isCurrentProject) return Colours.glassmorphism(Colours.palette.m3primary, 1.0).border;
         return Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).border;
@@ -142,6 +135,12 @@ StyledRect {
                 active: modelData.active ?? false
                 activityState: modelData.activity_state ?? ""
                 activityTool: modelData.activity_tool ?? ""
+                isSttTarget: {
+                    if (AgentService.sttTargetTerminalPid <= 0) return false;
+                    if ((modelData.terminal_pid ?? 0) !== AgentService.sttTargetTerminalPid) return false;
+                    if (AgentService.sttTargetBufId === -1) return modelData.active ?? false;
+                    return (modelData.buf ?? -1) === AgentService.sttTargetBufId;
+                }
             }
         }
 

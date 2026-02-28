@@ -36,7 +36,7 @@ Singleton {
 
     // ── STT target tracking ────────────────────────────────────────────
     // Set by SttService at recording start; cleared on idle/cancel.
-    // ProjectGroup reads these to show a red border on the targeted pill.
+    // AgentChip reads these to show a sound wave badge on the targeted agent.
     readonly property int sttTargetTerminalPid: _sttTargetTerminalPid
     readonly property int sttTargetBufId: _sttTargetBufId  // -1 = representative agent
 

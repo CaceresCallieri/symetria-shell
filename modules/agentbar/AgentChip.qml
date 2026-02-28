@@ -13,8 +13,9 @@ Row {
     required property bool active
     required property string activityState
     required property string activityTool
+    required property bool isSttTarget
 
-    spacing: root._iconText !== "" ? 2 : 0
+    spacing: (root._iconText !== "" || root.isSttTarget) ? 2 : 0
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
@@ -82,5 +83,32 @@ Row {
         color: root._activityColor
         font.pointSize: Appearance.font.size.small
         fill: root.activityState === "needs_permission" ? 1 : 0
+    }
+
+    // ── STT target badge (sound wave icon) ────────────────────────────
+    MaterialIcon {
+        visible: root.isSttTarget
+        width: visible ? implicitWidth : 0
+        text: "graphic_eq"
+        color: root._activityColor
+        font.pointSize: Appearance.font.size.small
+        opacity: _sttPulse
+
+        property real _sttPulse: 1.0
+
+        SequentialAnimation on _sttPulse {
+            running: root.isSttTarget
+            loops: Animation.Infinite
+            onRunningChanged: if (!running) _sttPulse = 1.0
+            NumberAnimation { from: 1.0; to: 0.4; duration: 600; easing.type: Easing.InOutSine }
+            NumberAnimation { from: 0.4; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
+        }
+
+        Behavior on width {
+            Anim {
+                duration: Appearance.anim.durations.normal
+                easing.type: Easing.OutCubic
+            }
+        }
     }
 }
