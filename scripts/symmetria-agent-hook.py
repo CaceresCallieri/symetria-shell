@@ -40,6 +40,7 @@ TOOL_DISPLAY_NAMES = {
     "Grep": "Searching",
     "Task": "Delegating",
     "WebFetch": "Fetching",
+    "UrlFetch": "Fetching",
     "WebSearch": "Searching",
     "NotebookEdit": "Editing",
     "EnterPlanMode": "Planning",

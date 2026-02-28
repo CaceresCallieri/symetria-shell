@@ -139,7 +139,7 @@ class AgentBridge:
             if not agent_id:
                 return
             state = msg.get("state", "")
-            if state == "offline":
+            if state in ("offline", "idle"):
                 self._activities.pop(agent_id, None)
             else:
                 self._activities[agent_id] = {"state": state, "tool": msg.get("tool", ""), "ts": time.monotonic()}
@@ -434,7 +434,10 @@ async def main():
     async def activity_reaper():
         while True:
             await asyncio.sleep(5)  # Check every 5 seconds
-            bridge.reap_stale_activities()
+            try:
+                bridge.reap_stale_activities()
+            except Exception as exc:  # noqa: BLE001
+                log.error("activity_reaper: unexpected error: %s", exc)
     asyncio.create_task(activity_reaper())
 
     # Handle signals for clean shutdown

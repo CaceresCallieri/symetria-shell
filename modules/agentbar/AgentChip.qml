@@ -14,7 +14,7 @@ Row {
     required property string activityState
     required property string activityTool
 
-    spacing: 2
+    spacing: root._iconText !== "" ? 2 : 0
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
