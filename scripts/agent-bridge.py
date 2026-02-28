@@ -17,9 +17,14 @@ import logging
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 
 SOCKET_PATH = Path(f"/run/user/{os.getuid()}/symmetria-agents.sock")
+
+# Seconds of inactivity before an agent's activity state decays to idle.
+# Covers: user interrupts (Escape/Ctrl+C), hook failures, orphaned states.
+ACTIVITY_STALENESS_TIMEOUT = 15
 
 # Inode of the socket we created — used to avoid deleting a newer process's socket
 _our_socket_inode: int | None = None
@@ -50,7 +55,7 @@ class AgentBridge:
         self._clients: dict[int, dict[int, dict]] = {}
         # {nvim_pid: terminal_pid} — cached terminal PID per Neovim instance
         self._terminal_pids: dict[int, int] = {}
-        # {agent_id: {"state": str, "tool": str}} — activity state from hook scripts
+        # {agent_id: {"state": str, "tool": str, "ts": float}} — activity state from hook scripts
         self._activities: dict[str, dict] = {}
 
     @staticmethod
@@ -137,7 +142,7 @@ class AgentBridge:
             if state == "offline":
                 self._activities.pop(agent_id, None)
             else:
-                self._activities[agent_id] = {"state": state, "tool": msg.get("tool", "")}
+                self._activities[agent_id] = {"state": state, "tool": msg.get("tool", ""), "ts": time.monotonic()}
             log.debug("handle_message: activity agent_id=%s state=%s tool=%s",
                        agent_id, state, msg.get("tool", ""))
             self._emit()
@@ -249,6 +254,25 @@ class AgentBridge:
             self._emit()
         else:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
+
+    def reap_stale_activities(self) -> None:
+        """Clear activity entries that haven't been updated within the staleness timeout.
+
+        Called periodically by the event loop. Only reaps non-terminal states
+        (idle/offline entries are already cleaned or absent).
+        """
+        now = time.monotonic()
+        stale_ids = [
+            aid for aid, act in self._activities.items()
+            if act.get("state") not in ("idle", "")
+            and (now - act.get("ts", now)) > ACTIVITY_STALENESS_TIMEOUT
+        ]
+        if stale_ids:
+            for aid in stale_ids:
+                log.info("reap_stale_activities: %s stale (was %s), clearing to idle",
+                         aid, self._activities[aid].get("state"))
+                self._activities.pop(aid, None)
+            self._emit()
 
 
 bridge = AgentBridge()
@@ -404,6 +428,14 @@ async def main():
 
     # Actively solicit running Neovim instances to reconnect
     asyncio.create_task(solicit_neovim_instances())
+
+    # Periodic staleness reaper — clears activity states left behind by
+    # user interrupts (Escape/Ctrl+C) which don't fire any hook events.
+    async def activity_reaper():
+        while True:
+            await asyncio.sleep(5)  # Check every 5 seconds
+            bridge.reap_stale_activities()
+    asyncio.create_task(activity_reaper())
 
     # Handle signals for clean shutdown
     loop = asyncio.get_running_loop()

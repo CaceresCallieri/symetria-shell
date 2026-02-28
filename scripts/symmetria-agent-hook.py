@@ -23,6 +23,9 @@ EVENT_STATE_MAP = {
     "PostToolUse": "thinking",
     "PostToolUseFailure": "thinking",
     "PermissionRequest": "needs_permission",
+    "SubagentStart": "working",
+    "SubagentStop": "thinking",
+    "PreCompact": "thinking",
     "Stop": "idle",
     "SessionEnd": "offline",
 }
@@ -40,7 +43,13 @@ TOOL_DISPLAY_NAMES = {
     "WebSearch": "Searching",
     "NotebookEdit": "Editing",
     "EnterPlanMode": "Planning",
+    "ExitPlanMode": "Planning",
     "AskUserQuestion": "Asking",
+    "TodoWrite": "Organizing",
+    "TaskCreate": "Organizing",
+    "TaskUpdate": "Organizing",
+    "TaskList": "Organizing",
+    "TaskGet": "Organizing",
 }
 
 
@@ -62,11 +71,13 @@ def main():
     if not state:
         return
 
-    # Resolve tool display name for PreToolUse
+    # Resolve tool display name for tool-bearing events
     tool = ""
     if hook_name == "PreToolUse":
         tool_name = event.get("tool_name", "")
         tool = TOOL_DISPLAY_NAMES.get(tool_name, tool_name)
+    elif hook_name == "SubagentStart":
+        tool = "Delegating"
 
     # Send to bridge socket
     msg = json.dumps({
