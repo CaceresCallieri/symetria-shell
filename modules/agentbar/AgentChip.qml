@@ -37,9 +37,7 @@ Row {
         switch (state) {
             case "needs_permission": return "lock";
             case "starting":         return "play_arrow";
-            case "working":
-            case "thinking":         return "";
-            default:                 return "";
+            default:                 return ""; // working/thinking handled by ClaudeSparkle
         }
     }
 

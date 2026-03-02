@@ -28,36 +28,18 @@ Item {
     property int _currentFrame: 0
 
     readonly property int _frameCount: root.mode === "thinking" ? 9 : 8
-
-    // Working mode: 8-frame starburst rotation
-    Image {
-        id: workingSprite
-
-        visible: root.mode === "working"
-        source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/claude-sparkle-sprite.svg`)
-        sourceSize.width: root._size
-        sourceSize.height: root._size * 8
-        width: root._size
-        height: root._size * 8
-        y: -root._currentFrame * root._size
-
-        layer.enabled: true
-        layer.effect: Colouriser {
-            sourceColor: "black"
-            colorizationColor: root.color
-        }
+    onModeChanged: {
+        root._currentFrame = 0
+        console.assert(root.mode === "working" || root.mode === "thinking",
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working" or "thinking"`)
     }
 
-    // Thinking mode: 9-frame dot-to-starburst breathing
     Image {
-        id: thinkingSprite
-
-        visible: root.mode === "thinking"
-        source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/claude-sparkle-thinking-sprite.svg`)
+        source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/${root.mode === "thinking" ? "claude-sparkle-thinking-sprite" : "claude-sparkle-sprite"}.svg`)
         sourceSize.width: root._size
-        sourceSize.height: root._size * 9
+        sourceSize.height: root._size * root._frameCount
         width: root._size
-        height: root._size * 9
+        height: root._size * root._frameCount
         y: -root._currentFrame * root._size
 
         layer.enabled: true
