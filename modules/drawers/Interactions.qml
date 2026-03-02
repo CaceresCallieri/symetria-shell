@@ -48,6 +48,10 @@ CustomMouseArea {
             && withinPanelWidth(panel, x, y);
     }
 
+    function inAgentBarForPanel(panel: Item, x: real, y: real): bool {
+        return y >= root.height - agentBar.implicitHeight && withinPanelWidth(panel, x, y);
+    }
+
     function inBottomLeftPanel(panel: Item, x: real, y: real): bool {
         const panelBottomEdge = root.height - agentBar.implicitHeight;
         return y < panelBottomEdge
@@ -171,7 +175,7 @@ CustomMouseArea {
 
         // Show launcher on hover, or show/hide on drag if hover is disabled
         if (Config.launcher.showOnHover) {
-            if (!visibilities.launcher && inBottomPanel(panels.launcher, x, y))
+            if (!visibilities.launcher && (inBottomPanel(panels.launcher, x, y) || inAgentBarForPanel(panels.launcher, x, y)))
                 visibilities.launcher = true;
         } else if (pressed && inBottomPanel(panels.launcher, dragStart.x, dragStart.y) && withinPanelWidth(panels.launcher, x, y)) {
             if (dragY < -Config.launcher.dragThreshold)
@@ -181,7 +185,7 @@ CustomMouseArea {
         }
 
         // Show dashboard on hover (bottom-left panel)
-        const showDashboard = Config.dashboard.showOnHover && inBottomLeftPanel(panels.dashboard, x, y);
+        const showDashboard = Config.dashboard.showOnHover && (inBottomLeftPanel(panels.dashboard, x, y) || inAgentBarForPanel(panels.dashboard, x, y));
 
         // Always update visibility based on hover if not in shortcut mode
         if (!dashboardShortcutActive) {
@@ -201,7 +205,7 @@ CustomMouseArea {
         }
 
         // Show utilities on hover
-        const showUtilities = inBottomPanel(panels.utilities, x, y);
+        const showUtilities = inBottomPanel(panels.utilities, x, y) || inAgentBarForPanel(panels.utilities, x, y);
 
         // Always update visibility based on hover if not in shortcut mode
         if (!utilitiesShortcutActive) {
