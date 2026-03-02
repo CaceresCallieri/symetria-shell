@@ -56,6 +56,7 @@ Row {
         visible: root.isBusy
         width: visible ? implicitWidth : 0
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
+        mode: root.activityState === "thinking" ? "thinking" : "working"
     }
 
     // ── Activity state icon (non-busy states only) ──────────────────
