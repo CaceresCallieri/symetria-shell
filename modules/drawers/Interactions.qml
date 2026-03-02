@@ -49,7 +49,7 @@ CustomMouseArea {
     }
 
     function inAgentBarForPanel(panel: Item, x: real, y: real): bool {
-        return y >= root.height - agentBar.implicitHeight && withinPanelWidth(panel, x, y);
+        return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
     function inBottomLeftPanel(panel: Item, x: real, y: real): bool {
@@ -236,7 +236,8 @@ CustomMouseArea {
                 root.utilitiesShortcutActive = false;
 
                 // Also hide dashboard and OSD if they're not being hovered
-                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY);
+                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY)
+                    || root.inAgentBarForPanel(root.panels.dashboard, root.mouseX, root.mouseY);
                 const inOsdArea = root.inRightPanel(root.panels.osd, root.mouseX, root.mouseY);
 
                 if (!inDashboardArea) {
@@ -252,7 +253,8 @@ CustomMouseArea {
         function onDashboardChanged() {
             if (root.visibilities.dashboard) {
                 // Dashboard became visible, immediately check if this should be shortcut mode
-                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY);
+                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY)
+                    || root.inAgentBarForPanel(root.panels.dashboard, root.mouseX, root.mouseY);
                 if (!inDashboardArea) {
                     root.dashboardShortcutActive = true;
                 }
@@ -278,7 +280,8 @@ CustomMouseArea {
         function onUtilitiesChanged() {
             if (root.visibilities.utilities) {
                 // Utilities became visible, immediately check if this should be shortcut mode
-                const inUtilitiesArea = root.inBottomPanel(root.panels.utilities, root.mouseX, root.mouseY);
+                const inUtilitiesArea = root.inBottomPanel(root.panels.utilities, root.mouseX, root.mouseY)
+                    || root.inAgentBarForPanel(root.panels.utilities, root.mouseX, root.mouseY);
                 if (!inUtilitiesArea) {
                     root.utilitiesShortcutActive = true;
                 }
