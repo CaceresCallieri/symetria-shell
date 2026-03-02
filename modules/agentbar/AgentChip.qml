@@ -5,7 +5,7 @@ import qs.services
 import qs.config
 import QtQuick
 
-/// Individual agent display: instance number + activity icon with coloring and pulse.
+/// Individual agent display: instance number + sparkle animation (busy) or activity icon.
 Row {
     id: root
 
@@ -28,18 +28,7 @@ Row {
     readonly property int _fontWeight: (root.active || root.activityState === "working"
         || root.activityState === "thinking") ? Font.DemiBold : Font.Normal
 
-    // ── Pulse animation (on Row → both number and icon pulse together) ──
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
-    opacity: isBusy ? _pulseValue : 1.0
-    property real _pulseValue: 1.0
-
-    SequentialAnimation on _pulseValue {
-        running: root.isBusy
-        loops: Animation.Infinite
-        onRunningChanged: if (!running) _pulseValue = 1.0
-        NumberAnimation { from: 1.0; to: 0.35; duration: 700; easing.type: Easing.InOutSine }
-        NumberAnimation { from: 0.35; to: 1.0; duration: 700; easing.type: Easing.InOutSine }
-    }
 
     // ── Icon mapping ─────────────────────────────────────────────────
     readonly property string _iconText: _activityIcon(root.activityState, root.activityTool)
@@ -75,9 +64,17 @@ Row {
         font.pointSize: Appearance.font.size.small
     }
 
-    // ── Activity state icon ──────────────────────────────────────────
+    // ── Claude sparkle (replaces icon when busy) ─────────────────────
+    ClaudeSparkle {
+        visible: root.isBusy
+        width: visible ? implicitWidth : 0
+        running: root.isBusy
+        color: "#d97757" // Claude brand orange
+    }
+
+    // ── Activity state icon (non-busy states only) ──────────────────
     MaterialIcon {
-        visible: root._iconText !== ""
+        visible: !root.isBusy && root._iconText !== ""
         width: visible ? implicitWidth : 0
         text: root._iconText
         color: root._activityColor
@@ -97,7 +94,7 @@ Row {
         property real _sttPulse: 1.0
 
         SequentialAnimation on _sttPulse {
-            running: root.isSttTarget && !root.isBusy  // Row-level pulse handles busy state
+            running: root.isSttTarget && !root.isBusy  // sparkle handles busy state
             loops: Animation.Infinite
             onRunningChanged: if (!running) _sttPulse = 1.0
             NumberAnimation { from: 1.0; to: 0.4; duration: 600; easing.type: Easing.InOutSine }
