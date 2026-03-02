@@ -56,7 +56,7 @@ StyledRect {
         if (isCurrentProject) return Colours.glassmorphism(Colours.palette.m3primary, 1.0).border;
         return Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).border;
     }
-    clip: true
+    clip: true  // clips outer half of sweepCanvas halo stroke → inward glow effect
 
     Behavior on color {
         ColorAnimation {
@@ -106,7 +106,12 @@ StyledRect {
     // pre-rendered rotating Image with OpacityMask.
     FrameAnimation {
         running: root.hasSttTarget
-        onTriggered: root._sweepPhase += frameTime / 4.0
+        onTriggered: {
+            root._sweepPhase += frameTime / 4.0;
+            if (root._sweepPhase >= 1024.0)
+                root._sweepPhase -= 1024.0;
+            sweepCanvas.requestPaint();
+        }
         onRunningChanged: if (!running) root._sweepPhase = 0.0
     }
 
@@ -129,7 +134,6 @@ StyledRect {
         onPaint: root._drawSweep(getContext("2d"), width, height)
 
         Connections {
-            function on_SweepPhaseChanged(): void { sweepCanvas.requestPaint(); }
             function on_SweepColorChanged(): void { sweepCanvas.requestPaint(); }
             target: root
         }
@@ -238,6 +242,7 @@ StyledRect {
         const ew = w - bw;      // effective width inside border
         const eh = h - bw;      // effective height inside border
         const er = eh / 2;      // pill end-cap radius
+        if (ew < eh) return;
 
         const perimeter = 2 * (ew - eh) + Math.PI * eh;
         const segLen = perimeter * 0.18;
