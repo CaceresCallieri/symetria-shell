@@ -22,8 +22,8 @@ from pathlib import Path
 
 SOCKET_PATH = Path(f"/run/user/{os.getuid()}/symmetria-agents.sock")
 
-# Seconds of inactivity before an agent's activity state decays to idle.
-# Covers: user interrupts (Escape/Ctrl+C), hook failures, orphaned states.
+# Seconds before an orphaned activity entry (no live orchestrator connection)
+# is reaped. Registered agents are never reaped by timeout.
 ACTIVITY_STALENESS_TIMEOUT = 15
 
 # Inode of the socket we created — used to avoid deleting a newer process's socket
@@ -283,18 +283,36 @@ class AgentBridge:
     def reap_stale_activities(self) -> None:
         """Clear activity entries that haven't been updated within the staleness timeout.
 
-        Called periodically by the event loop. Only reaps non-terminal states
-        (idle/offline entries are already cleaned or absent).
+        Only reaps activities for agents NOT registered in _clients (orphaned
+        entries from crashed sessions or hook race conditions). Registered
+        agents are protected — their cleanup is handled by explicit events
+        (idle/offline hooks, removed, goodbye, client disconnect).
         """
         now = time.monotonic()
-        stale_ids = [
-            aid for aid, act in self._activities.items()
-            if act.get("state") not in ("idle", "")
-            and (now - act.get("ts", now)) > ACTIVITY_STALENESS_TIMEOUT
-        ]
+        stale_ids = []
+        for aid, act in self._activities.items():
+            if act.get("state") in ("idle", ""):
+                continue
+            if (now - act.get("ts", now)) <= ACTIVITY_STALENESS_TIMEOUT:
+                continue
+
+            # Check if agent is still registered (orchestrator connection alive)
+            nvim_pid_str, _, buf_str = aid.partition("_")
+            try:
+                nvim_pid = int(nvim_pid_str)
+                buf = int(buf_str)
+            except ValueError:
+                stale_ids.append(aid)  # Malformed ID — reap
+                continue
+
+            if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
+                continue  # Session alive — don't reap
+
+            stale_ids.append(aid)
+
         if stale_ids:
             for aid in stale_ids:
-                log.info("reap_stale_activities: %s stale (was %s), clearing to idle",
+                log.info("reap_stale_activities: %s orphaned+stale (was %s), clearing",
                          aid, self._activities[aid].get("state"))
                 self._activities.pop(aid, None)
             self._emit()
@@ -454,8 +472,8 @@ async def main():
     # Actively solicit running Neovim instances to reconnect
     asyncio.create_task(solicit_neovim_instances())
 
-    # Periodic staleness reaper — clears activity states left behind by
-    # user interrupts (Escape/Ctrl+C) which don't fire any hook events.
+    # Periodic staleness reaper — clears orphaned activity entries (no live
+    # orchestrator connection). Registered agents are never reaped.
     async def activity_reaper():
         while True:
             await asyncio.sleep(5)  # Check every 5 seconds
