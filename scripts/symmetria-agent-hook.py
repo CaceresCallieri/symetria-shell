@@ -5,6 +5,11 @@ Invoked by Claude Code's hooks system (async: true) on every lifecycle event.
 Reads SYMMETRIA_AGENT_ID from the environment (set by orchestrator.nvim) and
 sends activity state to the bridge's Unix socket.
 
+For attention-requiring events (Stop, PermissionRequest, Notification subtypes,
+PostToolUseFailure), a second "notification" message is sent on the same socket
+connection. The bridge enriches it with project/workspace info and AgentService
+spawns notify-send.
+
 Exit code is always 0 — hook failures must never block Claude Code.
 """
 
@@ -53,6 +58,80 @@ TOOL_DISPLAY_NAMES = {
     "TaskGet": "Organizing",
 }
 
+# Events that warrant a desktop notification (sent as a second message after activity).
+# Only events where the agent is BLOCKED and needs human attention belong here.
+# PostToolUseFailure is intentionally excluded — the agent recovers on its own.
+NOTIFICATION_EVENTS = {
+    "Stop": {
+        "title_suffix": "Ready",
+        "message": "Task completed. Awaiting your input.",
+        "urgency": "normal",
+    },
+    "PermissionRequest": {
+        "title_suffix": "Permission Required",
+        "urgency": "critical",
+    },
+}
+
+# Notification subtypes (for the "Notification" hook event).
+NOTIFICATION_SUBTYPES = {
+    "permission_prompt": {"title_suffix": "Permission Needed", "urgency": "critical"},
+    "elicitation_dialog": {"title_suffix": "Question", "urgency": "normal"},
+    "idle_prompt": {"title_suffix": "Waiting", "urgency": "normal"},
+}
+
+
+def _build_notification(hook_name: str, event: dict, agent_id: str) -> dict | None:
+    """Build a notification message if the event warrants user attention."""
+
+    # Direct event notifications (Stop, PermissionRequest)
+    if hook_name in NOTIFICATION_EVENTS:
+        info = NOTIFICATION_EVENTS[hook_name]
+        message = info.get("message", "")
+
+        # PermissionRequest: extract tool details
+        if hook_name == "PermissionRequest":
+            tool_name = event.get("tool_name", "a tool")
+            tool_command = event.get("tool_input", {}).get("command", "")
+            if tool_command:
+                message = f"Approve {tool_name}: {tool_command[:50]}..."
+            else:
+                message = f"Needs permission to use {tool_name}."
+
+        return {
+            "type": "notification",
+            "agent_id": agent_id,
+            "event": hook_name,
+            "title_suffix": info["title_suffix"],
+            "message": message,
+            "urgency": info["urgency"],
+        }
+
+    # Notification event subtypes
+    if hook_name == "Notification":
+        notification_type = event.get("notification_type", "")
+        if notification_type not in NOTIFICATION_SUBTYPES:
+            return None  # e.g., auth_success — not notification-worthy
+
+        info = NOTIFICATION_SUBTYPES[notification_type]
+        raw_message = event.get("message", "")
+        fallback = {
+            "permission_prompt": "Needs your permission to proceed.",
+            "elicitation_dialog": "Has a question for you.",
+            "idle_prompt": "Waiting for your input.",
+        }
+
+        return {
+            "type": "notification",
+            "agent_id": agent_id,
+            "event": hook_name,
+            "title_suffix": info["title_suffix"],
+            "message": raw_message or fallback.get(notification_type, ""),
+            "urgency": info["urgency"],
+        }
+
+    return None
+
 
 def main():
     # Bail silently if not spawned by orchestrator
@@ -69,7 +148,10 @@ def main():
     hook_name = event.get("hook_event_name", "")
 
     state = EVENT_STATE_MAP.get(hook_name, "")
-    if not state:
+
+    # Notification hook events have no activity state — they're notification-only.
+    # All other events must have a mapped state to proceed.
+    if not state and hook_name != "Notification":
         return
 
     # Resolve tool display name for tool-bearing events
@@ -80,18 +162,25 @@ def main():
     elif hook_name == "SubagentStart":
         tool = "Delegating"
 
-    # Send to bridge socket
-    msg = json.dumps({
-        "type": "activity",
-        "agent_id": agent_id,
-        "state": state,
-        "tool": tool,
-    })
-
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.settimeout(1.0)
     sock.connect(SOCKET_PATH)
-    sock.sendall((msg + "\n").encode())
+
+    # Send activity message (if this event has an activity state)
+    if state:
+        activity_msg = json.dumps({
+            "type": "activity",
+            "agent_id": agent_id,
+            "state": state,
+            "tool": tool,
+        })
+        sock.sendall((activity_msg + "\n").encode())
+
+    # Send notification message (if this event warrants user attention)
+    notif = _build_notification(hook_name, event, agent_id)
+    if notif:
+        sock.sendall((json.dumps(notif) + "\n").encode())
+
     sock.close()
 
 

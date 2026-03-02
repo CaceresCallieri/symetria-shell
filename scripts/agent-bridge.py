@@ -148,6 +148,31 @@ class AgentBridge:
             self._emit()
             return
 
+        # Notification messages are pass-through: enrich with project/terminal_pid
+        # and forward to stdout. No agent state change (no _emit call).
+        if msg_type == "notification":
+            agent_id = msg.get("agent_id", "")
+            if not agent_id:
+                return
+
+            nvim_pid_str, _, buf_str = agent_id.partition("_")
+            nvim_pid = int(nvim_pid_str) if nvim_pid_str.isdigit() else 0
+            buf = int(buf_str) if buf_str.isdigit() else -1
+
+            project = "unknown"
+            terminal_pid = 0
+            if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
+                project = self._clients[nvim_pid][buf].get("project", "unknown")
+            terminal_pid = self._terminal_pids.get(nvim_pid, 0)
+
+            enriched = {**msg, "project": project, "terminal_pid": terminal_pid}
+            line = json.dumps(enriched)
+            log.debug("handle_message: notification pass-through agent_id=%s project=%s terminal_pid=%d",
+                       agent_id, project, terminal_pid)
+            sys.stdout.write(line + "\n")
+            sys.stdout.flush()
+            return
+
         nvim_pid = msg.get("nvim_pid")
 
         if not msg_type or nvim_pid is None:

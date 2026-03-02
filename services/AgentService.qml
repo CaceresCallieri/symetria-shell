@@ -217,6 +217,61 @@ Singleton {
         _sttTargetBufId = -1;
     }
 
+    // ── Desktop notifications ────────────────────────────────────────
+    // Notification messages arrive from the bridge pre-enriched with project
+    // and terminal_pid. We add workspace info from _workspaceMap and spawn
+    // notify-send. This replaces the old claude-notify.sh shell script.
+
+    readonly property string _notifIcon: "/home/jc/.dotfiles/scripts/claude-icon.svg"
+
+    function _handleNotification(notif: var): void {
+        const project = notif.project ?? "unknown";
+        const terminalPid = notif.terminal_pid ?? 0;
+        const ws = _workspaceMap[terminalPid] ?? null;
+
+        // Format workspace display
+        let wsDisplay = "";
+        if (ws) {
+            wsDisplay = ws.name.startsWith("special:")
+                ? `[${ws.name.slice(8)}]`  // strip "special:" prefix
+                : `[WS ${workspaceIconForWsId(ws.id)}]`;
+        }
+
+        // Build title: "Agent [project] [WS III] - Ready"
+        const titleParts = ["Agent", `[${project}]`];
+        if (wsDisplay) titleParts.push(wsDisplay);
+        titleParts.push("-", notif.title_suffix ?? notif.event);
+        const title = titleParts.join(" ");
+
+        const message = notif.message ?? "";
+        const urgency = notif.urgency ?? "normal";
+
+        console.log(`[AgentService] NOTIFY: "${title}" — ${message} (${urgency})`);
+        _sendNotification(title, message, urgency);
+    }
+
+    function _sendNotification(title: string, message: string, urgency: string): void {
+        notifyProcess.title = title;
+        notifyProcess.body = message;
+        notifyProcess.urgency = urgency;
+        notifyProcess.running = true;
+    }
+
+    // One-shot notify-send — properties set before each invocation
+    Process {
+        id: notifyProcess
+        property string title: ""
+        property string body: ""
+        property string urgency: "normal"
+        command: ["notify-send",
+            "--app-name=Claude Code",
+            `--urgency=${urgency}`,
+            `--icon=${root._notifIcon}`,
+            "--expire-time=15000",
+            title,
+            body]
+    }
+
     // ── Activity helpers (used by: future tooltip in ProjectGroup, agent dashboard) ──
 
     /// Returns human-readable activity text for an agent.
@@ -317,6 +372,13 @@ Singleton {
                 if (!text) return;
                 try {
                     const parsed = JSON.parse(text);
+
+                    // Notification messages are pass-through (no agent state change)
+                    if (parsed.type === "notification") {
+                        root._handleNotification(parsed);
+                        return;
+                    }
+
                     const prevCount = root._agents.length;
                     root._agents = parsed.agents ?? [];
                     root._projects = parsed.projects ?? [];
