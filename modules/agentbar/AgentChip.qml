@@ -15,7 +15,7 @@ Row {
     required property string activityTool
     required property bool isSttTarget
 
-    spacing: (root._iconText !== "" || root.isSttTarget) ? 2 : 0
+    spacing: (root.isBusy || root._iconText !== "" || root.isSttTarget) ? 2 : 0
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
@@ -35,24 +35,11 @@ Row {
 
     function _activityIcon(state: string, tool: string): string {
         switch (state) {
-            case "thinking":         return "psychology";
             case "needs_permission": return "lock";
             case "starting":         return "play_arrow";
             case "working":
-                switch (tool) {
-                    case "Editing":    return "edit";
-                    case "Writing":    return "edit";
-                    case "Reading":    return "visibility";
-                    case "Running":    return "terminal";
-                    case "Searching":  return "search";
-                    case "Fetching":   return "language";
-                    case "Delegating": return "fork_right";
-                    case "Planning":   return "map";
-                    case "Asking":     return "chat_bubble";
-                    case "Organizing": return "checklist";
-                    default:           return "construction";
-                }
-            default: return "";
+            case "thinking":         return "";
+            default:                 return "";
         }
     }
 
@@ -68,8 +55,7 @@ Row {
     ClaudeSparkle {
         visible: root.isBusy
         width: visible ? implicitWidth : 0
-        running: root.isBusy
-        color: "#d97757" // Claude brand orange
+        color: "#d97757" // Claude brand orange — intentionally fixed, not themed
     }
 
     // ── Activity state icon (non-busy states only) ──────────────────

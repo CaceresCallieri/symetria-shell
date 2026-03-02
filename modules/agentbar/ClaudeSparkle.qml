@@ -16,7 +16,7 @@ Item {
     implicitWidth: _size
     implicitHeight: _size
 
-    // Match MaterialIcon sizing at Appearance.font.size.small
+    // ~1.4× font cap-height gives the starburst visual breathing room vs adjacent text
     readonly property real _size: Appearance.font.size.small * 1.4
 
     clip: true
@@ -48,7 +48,6 @@ Item {
         interval: 101 // 810ms / 8 frames
         repeat: true
         onTriggered: root._currentFrame = (root._currentFrame + 1) % 8
+        onRunningChanged: if (!running) root._currentFrame = 0
     }
-
-    onRunningChanged: if (!running) _currentFrame = 0
 }
