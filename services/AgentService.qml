@@ -222,7 +222,7 @@ Singleton {
     // and terminal_pid. We add workspace info from _workspaceMap and spawn
     // notify-send. This replaces the old claude-notify.sh shell script.
 
-    readonly property string _notifIcon: "/home/jc/.dotfiles/scripts/claude-icon.svg"
+    readonly property string _notifIcon: `${Paths.home}/.dotfiles/scripts/claude-icon.svg`
 
     function _handleNotification(notif: var): void {
         const project = notif.project ?? "unknown";
@@ -251,25 +251,21 @@ Singleton {
     }
 
     function _sendNotification(title: string, message: string, urgency: string): void {
-        notifyProcess.title = title;
-        notifyProcess.body = message;
-        notifyProcess.urgency = urgency;
-        notifyProcess.running = true;
-    }
-
-    // One-shot notify-send — properties set before each invocation
-    Process {
-        id: notifyProcess
-        property string title: ""
-        property string body: ""
-        property string urgency: "normal"
-        command: ["notify-send",
+        notifyProcess.command = [
+            "notify-send",
             "--app-name=Claude Code",
             `--urgency=${urgency}`,
             `--icon=${root._notifIcon}`,
             "--expire-time=15000",
             title,
-            body]
+            message,
+        ];
+        notifyProcess.running = true;
+    }
+
+    // One-shot notify-send — command set imperatively in _sendNotification
+    Process {
+        id: notifyProcess
     }
 
     // ── Activity helpers (used by: future tooltip in ProjectGroup, agent dashboard) ──

@@ -5,8 +5,8 @@ Invoked by Claude Code's hooks system (async: true) on every lifecycle event.
 Reads SYMMETRIA_AGENT_ID from the environment (set by orchestrator.nvim) and
 sends activity state to the bridge's Unix socket.
 
-For attention-requiring events (Stop, PermissionRequest, Notification subtypes,
-PostToolUseFailure), a second "notification" message is sent on the same socket
+For attention-requiring events (Stop, PermissionRequest, Notification subtypes),
+a second "notification" message is sent on the same socket
 connection. The bridge enriches it with project/workspace info and AgentService
 spawns notify-send.
 
@@ -94,7 +94,10 @@ def _build_notification(hook_name: str, event: dict, agent_id: str) -> dict | No
             tool_name = event.get("tool_name", "a tool")
             tool_command = event.get("tool_input", {}).get("command", "")
             if tool_command:
-                message = f"Approve {tool_name}: {tool_command[:50]}..."
+                if len(tool_command) > 50:
+                    message = f"Approve {tool_name}: {tool_command[:50]}..."
+                else:
+                    message = f"Approve {tool_name}: {tool_command}"
             else:
                 message = f"Needs permission to use {tool_name}."
 
@@ -162,11 +165,8 @@ def main():
     elif hook_name == "SubagentStart":
         tool = "Delegating"
 
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.settimeout(1.0)
-    sock.connect(SOCKET_PATH)
-
-    # Send activity message (if this event has an activity state)
+    # Build messages before opening socket
+    activity_msg = None
     if state:
         activity_msg = json.dumps({
             "type": "activity",
@@ -174,10 +174,18 @@ def main():
             "state": state,
             "tool": tool,
         })
-        sock.sendall((activity_msg + "\n").encode())
-
-    # Send notification message (if this event warrants user attention)
     notif = _build_notification(hook_name, event, agent_id)
+
+    # Only connect if there is something to send
+    if not activity_msg and not notif:
+        return
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(1.0)
+    sock.connect(SOCKET_PATH)
+
+    if activity_msg:
+        sock.sendall((activity_msg + "\n").encode())
     if notif:
         sock.sendall((json.dumps(notif) + "\n").encode())
 
