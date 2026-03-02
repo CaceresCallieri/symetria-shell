@@ -27,6 +27,22 @@ StyledRect {
     readonly property bool hasPermissionNeeded:
         root.agents.some(a => (a.activity_state ?? "") === "needs_permission")
 
+    // True when any agent in this group is the STT injection target
+    readonly property bool hasSttTarget: {
+        if (AgentService.sttTargetTerminalPid <= 0) return false;
+        return root.agents.some(a => {
+            if ((a.terminal_pid ?? 0) !== AgentService.sttTargetTerminalPid) return false;
+            if (AgentService.sttTargetBufId === -1) return a.active ?? false;
+            return (a.buf ?? -1) === AgentService.sttTargetBufId;
+        });
+    }
+
+    // --- Sweep animation state ---
+    property real _sweepPhase: 0.0  // 0.0–1.0, one full revolution
+    readonly property color _sweepColor: hasPermissionNeeded
+        ? Colours.palette.m3tertiary
+        : Colours.palette.m3primary
+
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
@@ -70,6 +86,52 @@ StyledRect {
         Anim {
             duration: Appearance.anim.durations.expressiveDefaultSpatial
             easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+        }
+    }
+
+    // KNOWN ISSUE: The sweep animation has a subtle periodic hitch that could not
+    // be resolved. Approaches tried:
+    //   1. NumberAnimation with loops: Animation.Infinite — hitches at loop boundary
+    //      (1-frame stall when value jumps from `to` back to `from`)
+    //   2. FrameAnimation with phase wrapping (% 1.0) — hitches at modulo wrap point
+    //      (lineDashOffset jumps ~perimeter in one frame; QML Canvas may not reduce
+    //       the offset modulo the dash array length before rendering)
+    //   3. FrameAnimation without wrapping (current) — phase grows monotonically,
+    //      no discontinuity in lineDashOffset, but a subtle hitch persists
+    //
+    // The hitch may be inherent to QML Canvas 2D repaint scheduling (clearRect +
+    // full path reconstruction + dual-pass stroke every frame). Potential alternatives
+    // not yet tried: Shape + ShapePath with animated dashOffset (GPU scene graph,
+    // but risky in Quickshell layer-shell at small sizes — see MEMORY.md), or a
+    // pre-rendered rotating Image with OpacityMask.
+    FrameAnimation {
+        running: root.hasSttTarget
+        onTriggered: root._sweepPhase += frameTime / 4.0
+        onRunningChanged: if (!running) root._sweepPhase = 0.0
+    }
+
+    // Rotating border glow overlay for STT injection target
+    Canvas {
+        id: sweepCanvas
+
+        anchors.fill: parent
+        opacity: root.hasSttTarget ? 1.0 : 0.0
+        visible: opacity > 0
+        renderStrategy: Canvas.Cooperative
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Appearance.anim.durations.normal
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        onPaint: root._drawSweep(getContext("2d"), width, height)
+
+        Connections {
+            function on_SweepPhaseChanged(): void { sweepCanvas.requestPaint(); }
+            function on_SweepColorChanged(): void { sweepCanvas.requestPaint(); }
+            target: root
         }
     }
 
@@ -163,5 +225,49 @@ StyledRect {
             if (root.terminalPid > 0)
                 AgentService.focusTerminal(root.terminalPid);
         }
+    }
+
+    /// Draws a rotating dashed stroke along the pill border.
+    /// Two passes: wide low-opacity halo + narrow high-opacity core = glow effect.
+    function _drawSweep(ctx: var, w: real, h: real): void {
+        ctx.clearRect(0, 0, w, h);
+        if (w <= 0 || h <= 0) return;
+
+        const bw = root.border.width;
+        const inset = bw / 2;
+        const ew = w - bw;      // effective width inside border
+        const eh = h - bw;      // effective height inside border
+        const er = eh / 2;      // pill end-cap radius
+
+        const perimeter = 2 * (ew - eh) + Math.PI * eh;
+        const segLen = perimeter * 0.18;
+        const offset = root._sweepPhase * perimeter;
+
+        function pillPath() {
+            ctx.beginPath();
+            ctx.moveTo(inset + er, inset);
+            ctx.lineTo(inset + ew - er, inset);
+            ctx.arc(inset + ew - er, inset + er, er, -Math.PI / 2, Math.PI / 2);
+            ctx.lineTo(inset + er, inset + eh);
+            ctx.arc(inset + er, inset + er, er, Math.PI / 2, 3 * Math.PI / 2);
+            ctx.closePath();
+        }
+
+        const c = root._sweepColor;
+        ctx.setLineDash([segLen, perimeter - segLen]);
+        ctx.lineDashOffset = -offset;
+        ctx.lineCap = "round";
+
+        // Pass 1: soft halo
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = Qt.rgba(c.r, c.g, c.b, 0.18);
+        pillPath();
+        ctx.stroke();
+
+        // Pass 2: bright core
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = Qt.rgba(c.r, c.g, c.b, 0.75);
+        pillPath();
+        ctx.stroke();
     }
 }
