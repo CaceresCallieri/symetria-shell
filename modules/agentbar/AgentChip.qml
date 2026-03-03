@@ -20,15 +20,17 @@ Row {
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
         if (root.activityState === "needs_permission") return Colours.palette.m3error;
-        if (root.activityState === "working" || root.activityState === "thinking")
+        if (root.activityState === "working" || root.activityState === "thinking"
+            || root.activityState === "starting")
             return Colours.palette.m3primary;
         return root.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant;
     }
 
     readonly property int _fontWeight: (root.active || root.activityState === "working"
-        || root.activityState === "thinking") ? Font.DemiBold : Font.Normal
+        || root.activityState === "thinking" || root.activityState === "starting") ? Font.DemiBold : Font.Normal
 
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
+        || root.activityState === "starting"
 
     // ── Icon mapping ─────────────────────────────────────────────────
     readonly property string _iconText: _activityIcon(root.activityState, root.activityTool)
@@ -36,8 +38,7 @@ Row {
     function _activityIcon(state: string, tool: string): string {
         switch (state) {
             case "needs_permission": return "lock";
-            case "starting":         return "play_arrow";
-            default:                 return ""; // working/thinking handled by ClaudeSparkle
+            default:                 return ""; // working/thinking/starting handled by ClaudeSparkle
         }
     }
 
@@ -54,7 +55,9 @@ Row {
         visible: root.isBusy
         width: visible ? implicitWidth : 0
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
-        mode: root.activityState === "thinking" ? "thinking" : "working"
+        mode: root.activityState === "thinking" ? "thinking"
+            : root.activityState === "starting" ? "starting"
+            : "working"
     }
 
     // ── Activity state icon (non-busy states only) ──────────────────

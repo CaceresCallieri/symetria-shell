@@ -5,17 +5,18 @@ import qs.components.effects
 import qs.config
 import QtQuick
 
-/// Claude sparkle: dual-mode sprite-sheet animation.
-/// - "working": 8-frame starburst sprite sheet, 810ms cycle (same as claude.ai streaming).
-/// - "thinking": 9-frame dot-to-starburst breathing sprite sheet, 909ms cycle (same as claude.ai thinking).
-/// Both modes use identical frame-cycling mechanics for consistent hand-drawn feel.
+/// Claude sparkle: tri-mode sprite-sheet animation.
+/// - "working": 8-frame starburst rotation, 810ms cycle (same as claude.ai streaming).
+/// - "thinking": 9-frame dot-to-starburst breathing, 909ms cycle (same as claude.ai thinking).
+/// - "starting": 15-frame eye-opening + double-blink, 1515ms one-shot then holds open.
+/// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
 Item {
     id: root
 
     required property color color
     property bool running: true
-    property string mode: "working" // "thinking" | "working"
+    property string mode: "working" // "thinking" | "working" | "starting"
 
     implicitWidth: _size
     implicitHeight: _size
@@ -27,15 +28,23 @@ Item {
 
     property int _currentFrame: 0
 
-    readonly property int _frameCount: root.mode === "thinking" ? 9 : 8
+    readonly property int _frameCount: root.mode === "thinking" ? 9
+        : root.mode === "starting" ? 15
+        : 8
+
+    readonly property string _spriteAsset: root.mode === "thinking"
+        ? "claude-sparkle-thinking-sprite"
+        : root.mode === "starting" ? "claude-sparkle-starting-sprite"
+        : "claude-sparkle-sprite"
+
     onModeChanged: {
         root._currentFrame = 0
-        console.assert(root.mode === "working" || root.mode === "thinking",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working" or "thinking"`)
+        console.assert(root.mode === "working" || root.mode === "thinking" || root.mode === "starting",
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", or "starting"`)
     }
 
     Image {
-        source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/${root.mode === "thinking" ? "claude-sparkle-thinking-sprite" : "claude-sparkle-sprite"}.svg`)
+        source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/${root._spriteAsset}.svg`)
         sourceSize.width: root._size
         sourceSize.height: root._size * root._frameCount
         width: root._size
@@ -49,12 +58,21 @@ Item {
         }
     }
 
-    // Single Timer drives both modes — same 101ms tick, same hand-drawn feel
+    // Single Timer drives all three modes — same 101ms tick, same hand-drawn feel
     Timer {
         running: root.running && root.visible
         interval: 101
         repeat: true
-        onTriggered: root._currentFrame = (root._currentFrame + 1) % root._frameCount
+        onTriggered: {
+            const next = root._currentFrame + 1
+            if (root.mode === "starting") {
+                // One-shot: clamp at last frame (fully open starburst)
+                root._currentFrame = Math.min(next, root._frameCount - 1)
+            } else {
+                // Working/thinking loop indefinitely
+                root._currentFrame = next % root._frameCount
+            }
+        }
         onRunningChanged: if (!running) root._currentFrame = 0
     }
 }
