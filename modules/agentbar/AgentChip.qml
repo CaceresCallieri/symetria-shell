@@ -20,14 +20,11 @@ Row {
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
         if (root.activityState === "needs_permission") return Colours.palette.m3error;
-        if (root.activityState === "working" || root.activityState === "thinking"
-            || root.activityState === "starting")
-            return Colours.palette.m3primary;
+        if (root.isBusy) return Colours.palette.m3primary;
         return root.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant;
     }
 
-    readonly property int _fontWeight: (root.active || root.activityState === "working"
-        || root.activityState === "thinking" || root.activityState === "starting") ? Font.DemiBold : Font.Normal
+    readonly property int _fontWeight: (root.active || root.isBusy) ? Font.DemiBold : Font.Normal
 
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
         || root.activityState === "starting"

@@ -8,7 +8,7 @@ import QtQuick
 /// Claude sparkle: tri-mode sprite-sheet animation.
 /// - "working": 8-frame starburst rotation, 810ms cycle (same as claude.ai streaming).
 /// - "thinking": 9-frame dot-to-starburst breathing, 909ms cycle (same as claude.ai thinking).
-/// - "starting": 15-frame eye-opening + double-blink, 1515ms one-shot then holds open.
+/// - "starting": 15-frame seed-to-full emergence + breathing pulse, 1515ms one-shot then holds open.
 /// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
 Item {
@@ -27,6 +27,7 @@ Item {
     clip: true
 
     property int _currentFrame: 0
+    property bool _startingComplete: false
 
     readonly property int _frameCount: root.mode === "thinking" ? 9
         : root.mode === "starting" ? 15
@@ -39,6 +40,7 @@ Item {
 
     onModeChanged: {
         root._currentFrame = 0
+        root._startingComplete = false
         console.assert(root.mode === "working" || root.mode === "thinking" || root.mode === "starting",
             `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", or "starting"`)
     }
@@ -60,19 +62,23 @@ Item {
 
     // Single Timer drives all three modes — same 101ms tick, same hand-drawn feel
     Timer {
-        running: root.running && root.visible
+        running: root.running && root.visible && !root._startingComplete
         interval: 101
         repeat: true
         onTriggered: {
             const next = root._currentFrame + 1
             if (root.mode === "starting") {
-                // One-shot: clamp at last frame (fully open starburst)
-                root._currentFrame = Math.min(next, root._frameCount - 1)
+                if (next >= root._frameCount) {
+                    root._currentFrame = root._frameCount - 1
+                    root._startingComplete = true
+                } else {
+                    root._currentFrame = next
+                }
             } else {
                 // Working/thinking loop indefinitely
                 root._currentFrame = next % root._frameCount
             }
         }
-        onRunningChanged: if (!running) root._currentFrame = 0
+        onRunningChanged: if (!running && !root._startingComplete) root._currentFrame = 0
     }
 }

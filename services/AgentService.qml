@@ -284,12 +284,6 @@ Singleton {
         }
     }
 
-    /// True if agent is actively processing (thinking or working).
-    function isAgentBusy(agent: var): bool {
-        const s = agent?.activity_state ?? "";
-        return s === "thinking" || s === "working";
-    }
-
     /// Find the currently active agent for a terminal PID. Returns the agent that is
     /// currently active (via representativeAgent) among those matching the PID, or null.
     function activeAgentForTerminal(terminalPid: int): var {

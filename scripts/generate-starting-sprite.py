@@ -2,8 +2,8 @@
 """Generate the eye-opening starting sprite sheet for ClaudeSparkle.
 
 Reads the working sparkle sprite, extracts one frame (frame 0), and generates
-a 15-frame sprite sheet using SVG <use> with scale transforms that create an
-eye-opening + double-blink animation.
+a 15-frame sprite sheet using SVG <use> with scale transforms that create a
+seed-to-full emergence + breathing pulse animation.
 
 The approach: each frame shows the same starburst shape scaled differently
 around the frame center. Vertical squishing creates a "closed eye" sliver;
