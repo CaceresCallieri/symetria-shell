@@ -14,6 +14,7 @@ Row {
     required property string activityState
     required property string activityTool
     required property bool isSttTarget
+    required property bool inPlanMode
 
     property bool _isClosing: false
     property bool _blinkClosing: false // true during the stopping phase of a clear-blink
@@ -89,8 +90,8 @@ Row {
         speedFactor: (root._sttEmerging || root.activityState === "clearing") ? 0.6 : 1.0
         mode: root.isSttTarget ? (root._sttEmerging ? "starting" : "stt-morph")
             : root._isClosing || root._blinkClosing ? "stopping"
-            : root.isBusy ? (root.activityState === "thinking" ? "thinking"
-                : root.activityState === "starting" || root.activityState === "clearing" ? "starting"
+            : root.isBusy ? (root.activityState === "starting" || root.activityState === "clearing" ? "starting"
+                : root.inPlanMode ? "thinking"
                 : "working")
             : "stopping" // Idle: show dormant dot (last frame of stopping sprite)
         // Skip to dormant dot on creation if agent is already idle

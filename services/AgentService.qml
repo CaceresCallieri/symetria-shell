@@ -274,9 +274,10 @@ Singleton {
     function activityText(agent: var): string {
         const state = agent?.activity_state ?? "";
         const tool = agent?.activity_tool ?? "";
+        const planMode = agent?.in_plan_mode ?? false;
         switch (state) {
-            case "working": return tool || "Working...";
-            case "thinking": return "Thinking...";
+            case "working": return tool || (planMode ? "Planning..." : "Working...");
+            case "thinking": return planMode ? "Planning..." : "Thinking...";
             case "idle": return "Idle";
             case "needs_permission": return "Needs approval";
             case "starting": return "Starting...";

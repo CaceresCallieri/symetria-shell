@@ -55,7 +55,7 @@ class AgentBridge:
         self._clients: dict[int, dict[int, dict]] = {}
         # {nvim_pid: terminal_pid} — cached terminal PID per Neovim instance
         self._terminal_pids: dict[int, int] = {}
-        # {agent_id: {"state": str, "tool": str, "ts": float}} — activity state from hook scripts
+        # {agent_id: {"state": str, "tool": str, "ts": float, "in_plan_mode": bool}} — activity state from hook scripts
         self._activities: dict[str, dict] = {}
 
     @staticmethod
@@ -111,6 +111,7 @@ class AgentBridge:
                     "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
                     "activity_state": activity.get("state", ""),
                     "activity_tool": activity.get("tool", ""),
+                    "in_plan_mode": activity.get("in_plan_mode", False),
                 })
 
         # Sort: by project, then by spawned_at within project
@@ -142,7 +143,16 @@ class AgentBridge:
             if state in ("offline", "idle"):
                 self._activities.pop(agent_id, None)
             else:
-                self._activities[agent_id] = {"state": state, "tool": msg.get("tool", ""), "ts": time.monotonic()}
+                existing = self._activities.get(agent_id, {})
+                new_activity = {
+                    "state": state,
+                    "tool": msg.get("tool", ""),
+                    "ts": time.monotonic(),
+                    # Hook reads permission_mode on every event, so in_plan_mode is
+                    # always present. Preserve from existing as fallback for safety.
+                    "in_plan_mode": msg.get("in_plan_mode", existing.get("in_plan_mode", False)),
+                }
+                self._activities[agent_id] = new_activity
             log.debug("handle_message: activity agent_id=%s state=%s tool=%s",
                        agent_id, state, msg.get("tool", ""))
             self._emit()

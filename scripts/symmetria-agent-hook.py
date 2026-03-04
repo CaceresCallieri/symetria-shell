@@ -162,6 +162,12 @@ def main():
     if not state and hook_name != "Notification":
         return
 
+    # Detect plan mode from permission_mode field (present in all hook events).
+    # This is reliable regardless of how plan mode was entered (Shift+Tab, /plan,
+    # --permission-mode plan, or AI-initiated EnterPlanMode tool).
+    # EnterPlanMode/ExitPlanMode tools do NOT reliably fire PreToolUse hooks.
+    plan_mode = event.get("permission_mode", "") == "plan"
+
     # Resolve tool display name for tool-bearing events
     tool = ""
     if hook_name == "PreToolUse":
@@ -178,6 +184,7 @@ def main():
             "agent_id": agent_id,
             "state": state,
             "tool": tool,
+            "in_plan_mode": plan_mode,
         })
     notif = _build_notification(hook_name, event, agent_id)
 

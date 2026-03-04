@@ -201,6 +201,7 @@ StyledRect {
                 active: modelData.active ?? false
                 activityState: modelData.activity_state ?? ""
                 activityTool: modelData.activity_tool ?? ""
+                inPlanMode: modelData.in_plan_mode ?? false
                 isSttTarget: {
                     if (AgentService.sttTargetTerminalPid <= 0) return false;
                     if ((modelData.terminal_pid ?? 0) !== AgentService.sttTargetTerminalPid) return false;
