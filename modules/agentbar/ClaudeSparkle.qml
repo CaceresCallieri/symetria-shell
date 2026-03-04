@@ -103,7 +103,7 @@ Item {
             }
         }
         // Reset to first frame on pause so re-shows start cleanly.
-        // Side effect: if agentbar hides mid-animation, it replays from the start.
+        // Side effect: if agentbar hides mid-animation (including stt-wave loop), it replays from frame 0 on next show.
         onRunningChanged: if (!running && !root._oneShotComplete) root._currentFrame = 0
     }
 }

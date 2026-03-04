@@ -58,7 +58,8 @@ function round1(v) {
  */
 function barToPath(cx, h) {
     const r = BAR_RADIUS;
-    h = Math.max(h, BAR_WIDTH + 0.1); // Prevent degenerate capsule
+    // minH values (15,18,22) all exceed BAR_WIDTH (12) — guard retained for future-proofing
+    h = Math.max(h, BAR_WIDTH + 0.1);
     const top = round1(50 - h / 2);
     const bottom = round1(50 + h / 2);
     const topR = round1(top + r);
@@ -89,7 +90,11 @@ function travelingRipple(barIndex, frame) {
  * outer bars follow with π delay. Creates a symmetric "breathing" ripple.
  */
 function centerPulse(barIndex, frame) {
-    const t = TWO_PI * frame / NUM_FRAMES;
+    // Phase offset aligns wave frame 0 with stt-morph final bar heights
+    // (morph ends at h=[35,55,80,55,35]). Center bar: (80-22)/(90-22)=0.853
+    // → sin⁻¹(2×0.853−1)=sin⁻¹(0.706)≈π/4
+    const PHASE_OFFSET = Math.PI / 4;
+    const t = TWO_PI * frame / NUM_FRAMES + PHASE_OFFSET;
     const distFromCenter = Math.abs(barIndex - 2); // 2,1,0,1,2
     const phase = distFromCenter * (Math.PI / 2); // 90° per step outward
     const bar = BARS[barIndex];
@@ -110,7 +115,8 @@ function syncopated(barIndex, frame) {
     const bar = BARS[barIndex];
     const primary = 0.65 * Math.sin(t - phase1);
     const secondary = 0.35 * Math.sin(2 * t - phase2);
-    // Combined amplitude bounded by [-1, 1] since |0.65| + |0.35| = 1.0
+    // Triangle inequality upper bound: |0.65| + |0.35| = 1.0. Actual peak ≈0.985 for these phases.
+    // Clamp is a defensive guard.
     const wave = Math.max(0, Math.min(1, 0.5 + 0.5 * (primary + secondary)));
     return bar.minH + (bar.maxH - bar.minH) * wave;
 }

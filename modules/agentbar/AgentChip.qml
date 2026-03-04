@@ -118,6 +118,7 @@ Row {
             // STT morph: morph completes → transition to looping stt-wave
             } else if (root.isSttTarget && !root._sttWaving) {
                 root._sttWaving = true
+            // Safe: stt-wave is looping (not one-shot) so animationComplete never fires during wave.
             // Blink: starting completes during "clearing" → transition to stopping
             } else if (root.activityState === "clearing" && !root._blinkClosing) {
                 root._blinkClosing = true
