@@ -15,7 +15,9 @@ Row {
     required property string activityTool
     required property bool isSttTarget
 
-    spacing: (root.isBusy || root._iconText !== "" || root.isSttTarget) ? 2 : 0
+    property bool _isClosing: false
+
+    spacing: 2
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
@@ -28,6 +30,14 @@ Row {
 
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
         || root.activityState === "starting"
+
+    onIsBusyChanged: {
+        if (root.isBusy) {
+            root._isClosing = false
+        } else if (root.activityState !== "needs_permission") {
+            root._isClosing = true
+        }
+    }
 
     // ── Icon mapping ─────────────────────────────────────────────────
     readonly property string _iconText: _activityIcon(root.activityState, root.activityTool)
@@ -47,14 +57,22 @@ Row {
         font.pointSize: Appearance.font.size.small
     }
 
-    // ── Claude sparkle (replaces icon when busy) ─────────────────────
+    // ── Claude sparkle (always visible — dormant dot when idle, animates when busy) ──
     ClaudeSparkle {
-        visible: root.isBusy
-        width: visible ? implicitWidth : 0
+        id: sparkle
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
-        mode: root.activityState === "thinking" ? "thinking"
-            : root.activityState === "starting" ? "starting"
-            : "working"
+        mode: root._isClosing ? "stopping"
+            : root.isBusy ? (root.activityState === "thinking" ? "thinking"
+                : root.activityState === "starting" ? "starting"
+                : "working")
+            : "stopping" // Idle: show dormant dot (last frame of stopping sprite)
+        // Skip to dormant dot on creation if agent is already idle
+        Component.onCompleted: {
+            if (!root.isBusy && !root._isClosing) {
+                sparkle._currentFrame = sparkle._frameCount - 1
+                sparkle._oneShotComplete = true
+            }
+        }
     }
 
     // ── Activity state icon (non-busy states only) ──────────────────
