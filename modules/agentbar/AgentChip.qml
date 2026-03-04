@@ -42,10 +42,14 @@ Row {
     }
 
     onActivityStateChanged: {
-        // Reset blink phase when state changes away from clearing
-        // (e.g., user submits a prompt → "thinking" while blink is still playing)
-        if (root.activityState !== "clearing")
+        if (root.activityState !== "clearing") {
+            // Reset blink phase when state changes away from clearing
+            // (e.g., user submits a prompt → "thinking" while blink is still playing)
             root._blinkClosing = false
+        } else if (root._blinkClosing) {
+            // Rapid-fire /clear: restart the blink by resetting the stopping phase.
+            root._blinkClosing = false
+        }
     }
 
     // ── Icon mapping ─────────────────────────────────────────────────
@@ -70,6 +74,8 @@ Row {
     ClaudeSparkle {
         id: sparkle
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
+        // 0.6× applies to both blink phases — activityState stays "clearing" through
+        // starting AND stopping. Total blink: ~545ms + ~1094ms ≈ 1640ms.
         speedFactor: root.activityState === "clearing" ? 0.6 : 1.0
         mode: root._isClosing || root._blinkClosing ? "stopping"
             : root.isBusy ? (root.activityState === "thinking" ? "thinking"

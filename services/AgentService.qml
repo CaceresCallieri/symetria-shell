@@ -280,6 +280,7 @@ Singleton {
             case "idle": return "Idle";
             case "needs_permission": return "Needs approval";
             case "starting": return "Starting...";
+            case "clearing": return "Clearing...";
             default: return "";
         }
     }

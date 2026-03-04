@@ -35,8 +35,7 @@ Item {
     property bool _oneShotComplete: false
     readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping"
 
-    readonly property int _frameCount: root.mode === "thinking" ? 9
-        : root.mode === "starting" ? 9
+    readonly property int _frameCount: root.mode === "thinking" || root.mode === "starting" ? 9
         : root.mode === "stopping" ? 12
         : 8
 
@@ -95,6 +94,8 @@ Item {
                 root._currentFrame = next % root._frameCount
             }
         }
+        // Reset to first frame on pause so re-shows start cleanly.
+        // Side effect: if agentbar hides mid-animation, it replays from the start.
         onRunningChanged: if (!running && !root._oneShotComplete) root._currentFrame = 0
     }
 }
