@@ -86,9 +86,7 @@ Row {
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
         // 0.6× applies to both blink phases — activityState stays "clearing" through
         // starting AND stopping. Total blink: ~545ms + ~1094ms ≈ 1640ms.
-        speedFactor: root._sttEmerging ? 0.6
-            : root.activityState === "clearing" ? 0.6
-            : 1.0
+        speedFactor: (root._sttEmerging || root.activityState === "clearing") ? 0.6 : 1.0
         mode: root.isSttTarget ? (root._sttEmerging ? "starting" : "stt-morph")
             : root._isClosing || root._blinkClosing ? "stopping"
             : root.isBusy ? (root.activityState === "thinking" ? "thinking"
@@ -101,11 +99,12 @@ Row {
         }
         onAnimationComplete: {
             // STT emerge: starting completes → transition to stt-morph
-            if (root.isSttTarget && root._sttEmerging)
+            if (root.isSttTarget && root._sttEmerging) {
                 root._sttEmerging = false
             // Blink: starting completes during "clearing" → transition to stopping
-            if (root.activityState === "clearing" && !root._blinkClosing)
+            } else if (root.activityState === "clearing" && !root._blinkClosing) {
                 root._blinkClosing = true
+            }
         }
     }
 
