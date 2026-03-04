@@ -35,6 +35,7 @@ Row {
         if (root.isBusy) {
             root._isClosing = false
         } else if (root.activityState !== "needs_permission") {
+            // Only collapse when going idle — needs_permission shows lock icon instead
             root._isClosing = true
         }
     }
@@ -68,10 +69,7 @@ Row {
             : "stopping" // Idle: show dormant dot (last frame of stopping sprite)
         // Skip to dormant dot on creation if agent is already idle
         Component.onCompleted: {
-            if (!root.isBusy && !root._isClosing) {
-                sparkle._currentFrame = sparkle._frameCount - 1
-                sparkle._oneShotComplete = true
-            }
+            if (!root.isBusy && !root._isClosing) sparkle.skipToEnd()
         }
     }
 

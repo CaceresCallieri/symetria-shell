@@ -23,12 +23,14 @@ FRAME_SIZE = 100
 CENTER = FRAME_SIZE / 2  # 50
 
 # (xScale, yScale) for each of 12 frames.
-# At 101ms/frame, total duration = 1212ms (~1.2s).
+# At 152ms/frame (slower tick than working/thinking for a more deliberate feel),
+# total duration = 1824ms (~1.8s).
 #
 # Design: brief settle then clean collapse to dormant dot.
-#   Frames 0-1  (202ms): Hold at full (settling moment)
-#   Frames 2-9  (808ms): Gradual collapse (reverse of starting frames 0-7)
-#   Frames 10-11 (202ms): Hold at tiny dot (dormant)
+#   Frames 0-1  (304ms): Hold at full (settling moment)
+#   Frames 2-9  (1216ms): Gradual collapse — mirrors starting frames 7-2,
+#               then settles to a visible dormant dot (larger than starting seed)
+#   Frames 10-11 (304ms): Hold dormant dot
 FRAMES = [
     (1.00, 1.00),  #  0: Full starburst
     (1.00, 1.00),  #  1: Hold (brief settle)

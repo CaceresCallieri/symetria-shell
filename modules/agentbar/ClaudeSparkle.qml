@@ -9,7 +9,7 @@ import QtQuick
 /// - "working": 8-frame starburst rotation, 810ms cycle (same as claude.ai streaming).
 /// - "thinking": 9-frame dot-to-starburst breathing, 909ms cycle (same as claude.ai thinking).
 /// - "starting": 15-frame seed-to-full emergence + breathing pulse, 1515ms one-shot then holds open.
-/// - "stopping": 12-frame full-to-dot collapse, 1212ms one-shot then holds at dormant dot.
+/// - "stopping": 12-frame full-to-dot collapse, 1824ms one-shot then holds at dormant dot.
 /// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
 Item {
@@ -50,6 +50,12 @@ Item {
             `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", or "stopping"`)
     }
 
+    /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
+    function skipToEnd() {
+        root._currentFrame = root._frameCount - 1
+        root._oneShotComplete = true
+    }
+
     Image {
         source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/${root._spriteAsset}.svg`)
         sourceSize.width: root._size
@@ -68,7 +74,7 @@ Item {
     // Single Timer drives all four modes — same 101ms tick, same hand-drawn feel
     Timer {
         running: root.running && root.visible && !root._oneShotComplete
-        interval: root.mode === "stopping" ? 152 : 101
+        interval: root.mode === "stopping" ? 152 : 101 // slower tick — collapse feels more deliberate
         repeat: true
         onTriggered: {
             const next = root._currentFrame + 1
