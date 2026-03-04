@@ -183,6 +183,7 @@ StyledRect {
 
         // Project name label
         StyledText {
+            Layout.alignment: Qt.AlignVCenter
             text: root.project
             color: Colours.palette.m3primary
             font.weight: Font.Bold
@@ -196,6 +197,8 @@ StyledRect {
             AgentChip {
                 required property var modelData
                 required property int index
+
+                Layout.alignment: Qt.AlignVCenter
 
                 instanceNum: index + 1
                 active: modelData.active ?? false
