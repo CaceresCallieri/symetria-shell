@@ -21,6 +21,7 @@ Row {
     property bool _sttEmerging: false // true during the starting phase before stt-morph
 
     spacing: 2
+    verticalItemAlignment: Qt.AlignVCenter
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
@@ -88,7 +89,6 @@ Row {
 
     // ── Instance number ──────────────────────────────────────────────
     StyledText {
-        anchors.verticalCenter: parent.verticalCenter
         text: root.instanceNum
         color: root._activityColor
         font.weight: root._fontWeight
@@ -98,7 +98,6 @@ Row {
     // ── Claude sparkle (always visible — dormant dot when idle, animates when busy) ──
     ClaudeSparkle {
         id: sparkle
-        anchors.verticalCenter: parent.verticalCenter
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
         // 0.6× applies to both blink phases — activityState stays "clearing" through
         // starting AND stopping. Total blink: ~545ms + ~1094ms ≈ 1640ms.
@@ -121,7 +120,6 @@ Row {
 
     // ── Activity state icon (non-busy states only) ──────────────────
     MaterialIcon {
-        anchors.verticalCenter: parent.verticalCenter
         visible: !root.isBusy && root._iconText !== ""
         width: visible ? implicitWidth : 0
         text: root._iconText
