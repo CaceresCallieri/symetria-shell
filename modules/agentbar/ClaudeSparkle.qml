@@ -8,7 +8,7 @@ import QtQuick
 /// Claude sparkle: quad-mode sprite-sheet animation.
 /// - "working": 8-frame starburst rotation, 810ms cycle (same as claude.ai streaming).
 /// - "thinking": 9-frame dot-to-starburst breathing, 909ms cycle (same as claude.ai thinking).
-/// - "starting": 15-frame seed-to-full emergence + breathing pulse, 1515ms one-shot then holds open.
+/// - "starting": 9-frame seed-to-full emergence, 909ms one-shot then holds open.
 /// - "stopping": 12-frame full-to-dot collapse, 1824ms one-shot then holds at dormant dot.
 /// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
@@ -18,6 +18,10 @@ Item {
     required property color color
     property bool running: true
     property string mode: "working" // "thinking" | "working" | "starting" | "stopping"
+    property real speedFactor: 1.0 // Multiplier for frame interval (< 1 = faster)
+
+    /// Emitted when a one-shot animation (starting/stopping) reaches its final frame.
+    signal animationComplete()
 
     implicitWidth: _size
     implicitHeight: _size
@@ -32,7 +36,7 @@ Item {
     readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping"
 
     readonly property int _frameCount: root.mode === "thinking" ? 9
-        : root.mode === "starting" ? 15
+        : root.mode === "starting" ? 9
         : root.mode === "stopping" ? 12
         : 8
 
@@ -74,7 +78,7 @@ Item {
     // Single Timer drives all four modes — same 101ms tick, same hand-drawn feel
     Timer {
         running: root.running && root.visible && !root._oneShotComplete
-        interval: root.mode === "stopping" ? 152 : 101 // slower tick — collapse feels more deliberate
+        interval: Math.round((root.mode === "stopping" ? 152 : 101) * root.speedFactor)
         repeat: true
         onTriggered: {
             const next = root._currentFrame + 1
@@ -82,6 +86,7 @@ Item {
                 if (next >= root._frameCount) {
                     root._currentFrame = root._frameCount - 1
                     root._oneShotComplete = true
+                    root.animationComplete()
                 } else {
                     root._currentFrame = next
                 }

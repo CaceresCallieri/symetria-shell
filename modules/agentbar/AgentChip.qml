@@ -16,6 +16,7 @@ Row {
     required property bool isSttTarget
 
     property bool _isClosing: false
+    property bool _blinkClosing: false // true during the stopping phase of a clear-blink
 
     spacing: 2
 
@@ -29,7 +30,7 @@ Row {
     readonly property int _fontWeight: (root.active || root.isBusy) ? Font.DemiBold : Font.Normal
 
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
-        || root.activityState === "starting"
+        || root.activityState === "starting" || root.activityState === "clearing"
 
     onIsBusyChanged: {
         if (root.isBusy) {
@@ -38,6 +39,13 @@ Row {
             // Only collapse when going idle — needs_permission shows lock icon instead
             root._isClosing = true
         }
+    }
+
+    onActivityStateChanged: {
+        // Reset blink phase when state changes away from clearing
+        // (e.g., user submits a prompt → "thinking" while blink is still playing)
+        if (root.activityState !== "clearing")
+            root._blinkClosing = false
     }
 
     // ── Icon mapping ─────────────────────────────────────────────────
@@ -62,14 +70,20 @@ Row {
     ClaudeSparkle {
         id: sparkle
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
-        mode: root._isClosing ? "stopping"
+        speedFactor: root.activityState === "clearing" ? 0.6 : 1.0
+        mode: root._isClosing || root._blinkClosing ? "stopping"
             : root.isBusy ? (root.activityState === "thinking" ? "thinking"
-                : root.activityState === "starting" ? "starting"
+                : root.activityState === "starting" || root.activityState === "clearing" ? "starting"
                 : "working")
             : "stopping" // Idle: show dormant dot (last frame of stopping sprite)
         // Skip to dormant dot on creation if agent is already idle
         Component.onCompleted: {
             if (!root.isBusy && !root._isClosing) sparkle.skipToEnd()
+        }
+        // Blink: when starting animation completes during "clearing", auto-transition to stopping
+        onAnimationComplete: {
+            if (root.activityState === "clearing" && !root._blinkClosing)
+                root._blinkClosing = true
         }
     }
 

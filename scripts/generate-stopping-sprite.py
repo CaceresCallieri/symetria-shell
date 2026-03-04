@@ -22,29 +22,34 @@ OUTPUT_SPRITE = ASSETS_DIR / "claude-sparkle-stopping-sprite.svg"
 FRAME_SIZE = 100
 CENTER = FRAME_SIZE / 2  # 50
 
-# (xScale, yScale) for each of 12 frames.
-# At 152ms/frame (slower tick than working/thinking for a more deliberate feel),
-# total duration = 1824ms (~1.8s).
-#
-# Design: brief settle then clean collapse to dormant dot.
-#   Frames 0-1  (304ms): Hold at full (settling moment)
-#   Frames 2-9  (1216ms): Gradual collapse — mirrors starting frames 7-2,
-#               then settles to a visible dormant dot (larger than starting seed)
-#   Frames 10-11 (304ms): Hold dormant dot
-FRAMES = [
-    (1.00, 1.00),  #  0: Full starburst
-    (1.00, 1.00),  #  1: Hold (brief settle)
-    (0.92, 0.90),  #  2: Begin collapse
-    (0.83, 0.79),  #  3: Shrinking
-    (0.72, 0.66),  #  4: Past halfway
-    (0.60, 0.53),  #  5: Halfway
-    (0.48, 0.40),  #  6: Smaller
-    (0.36, 0.28),  #  7: Getting small
-    (0.30, 0.24),  #  8: Nearly there
-    (0.25, 0.20),  #  9: Dormant dot
-    (0.25, 0.20),  # 10: Hold dormant dot
-    (0.25, 0.20),  # 11: Hold dormant dot
-]
+# Collapse parameters
+NUM_COLLAPSE_FRAMES = 10  # Eased collapse from full to dormant
+NUM_HOLD_FRAMES = 2       # Hold dormant dot at end
+START_SCALE = (1.0, 1.0)   # Full starburst
+END_SCALE = (0.25, 0.20)   # Dormant dot
+
+
+def ease_in_out_cubic(t: float) -> float:
+    """Cubic ease-in-out: slow start, fast middle, slow end."""
+    if t < 0.5:
+        return 4 * t * t * t
+    return 1 - (-2 * t + 2) ** 3 / 2
+
+
+# Design: eased collapse from full starburst to dormant dot.
+# Cubic ease-in-out makes the starburst linger at full, accelerate through
+# mid-collapse, then gently settle into the dormant dot.
+# Total: 10 + 2 = 12 frames (unchanged from previous).
+FRAMES = []
+for _i in range(NUM_COLLAPSE_FRAMES):
+    t = _i / (NUM_COLLAPSE_FRAMES - 1)
+    e = ease_in_out_cubic(t)
+    sx = START_SCALE[0] + (END_SCALE[0] - START_SCALE[0]) * e
+    sy = START_SCALE[1] + (END_SCALE[1] - START_SCALE[1]) * e
+    FRAMES.append((round(sx, 3), round(sy, 3)))
+# Hold dormant dot (ensures visibility even at fast playback)
+for _ in range(NUM_HOLD_FRAMES):
+    FRAMES.append(END_SCALE)
 
 
 def extract_frame0_path(svg_content: str) -> str:

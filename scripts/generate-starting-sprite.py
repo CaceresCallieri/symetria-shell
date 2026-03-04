@@ -2,8 +2,8 @@
 """Generate the eye-opening starting sprite sheet for ClaudeSparkle.
 
 Reads the working sparkle sprite, extracts one frame (frame 0), and generates
-a 15-frame sprite sheet using SVG <use> with scale transforms that create a
-seed-to-full emergence + breathing pulse animation.
+a 9-frame sprite sheet using SVG <use> with scale transforms that create a
+seed-to-full emergence animation.
 
 The approach: each frame shows the same starburst shape scaled differently
 around the frame center. Vertical squishing creates a "closed eye" sliver;
@@ -23,29 +23,29 @@ OUTPUT_SPRITE = ASSETS_DIR / "claude-sparkle-starting-sprite.svg"
 FRAME_SIZE = 100
 CENTER = FRAME_SIZE / 2  # 50
 
-# (xScale, yScale) for each of 15 frames.
-# At 101ms/frame, total duration = 1515ms (~1.5s).
-#
-# Design: gentle emergence then subtle breathing.
-#   Frames 0-8  (909ms): Slow emergence — seed to full starburst
-#   Frames 9-14 (606ms): Subtle breathing pulse (full → 92% → full)
-FRAMES = [
-    (0.15, 0.10),  # 0:  Tiny seed
-    (0.25, 0.18),  # 1:  Growing
-    (0.36, 0.28),  # 2:  Opening
-    (0.48, 0.40),  # 3:  More open
-    (0.60, 0.53),  # 4:  Halfway
-    (0.72, 0.66),  # 5:  Past halfway
-    (0.83, 0.79),  # 6:  Nearly there
-    (0.92, 0.90),  # 7:  Almost full
-    (1.00, 1.00),  # 8:  Full
-    (0.97, 0.96),  # 9:  Breathe out (slight shrink)
-    (0.94, 0.92),  # 10: Breathe out (bottom)
-    (0.97, 0.96),  # 11: Breathe in
-    (1.00, 1.00),  # 12: Full
-    (1.00, 1.00),  # 13: Hold
-    (1.00, 1.00),  # 14: Final hold
-]
+# Emergence parameters
+NUM_FRAMES = 9
+START_SCALE = (0.15, 0.10)  # Tiny seed
+END_SCALE = (1.0, 1.0)      # Full starburst
+
+
+def ease_in_out_cubic(t: float) -> float:
+    """Cubic ease-in-out: slow start, fast middle, slow end."""
+    if t < 0.5:
+        return 4 * t * t * t
+    return 1 - (-2 * t + 2) ** 3 / 2
+
+
+# Design: eased emergence from seed to full starburst.
+# Cubic ease-in-out makes the seed linger, accelerate through mid-growth,
+# then gently settle into full scale.
+FRAMES = []
+for _i in range(NUM_FRAMES):
+    t = _i / (NUM_FRAMES - 1)
+    e = ease_in_out_cubic(t)
+    sx = START_SCALE[0] + (END_SCALE[0] - START_SCALE[0]) * e
+    sy = START_SCALE[1] + (END_SCALE[1] - START_SCALE[1]) * e
+    FRAMES.append((round(sx, 3), round(sy, 3)))
 
 
 def extract_frame0_path(svg_content: str) -> str:
@@ -68,9 +68,9 @@ def extract_frame0_path(svg_content: str) -> str:
 
 
 def generate_sprite(base_path_d: str) -> str:
-    """Generate the 15-frame starting sprite SVG.
+    """Generate the starting sprite SVG.
 
-    Uses <defs> + <use> with transform to avoid duplicating the path data 15 times.
+    Uses <defs> + <use> with transform to avoid duplicating the path data.
     Each frame scales the base starburst around the center of its 100×100 slot.
 
     Transform chain (SVG reads right-to-left):

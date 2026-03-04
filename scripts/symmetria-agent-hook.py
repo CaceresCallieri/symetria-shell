@@ -152,6 +152,11 @@ def main():
 
     state = EVENT_STATE_MAP.get(hook_name, "")
 
+    # Clear-sourced SessionStart → "clearing" state for blink animation (start → stop).
+    # Normal SessionStart (startup/resume) keeps "starting" (eye-opening + hold).
+    if hook_name == "SessionStart" and event.get("source", "") == "clear":
+        state = "clearing"
+
     # Notification hook events have no activity state — they're notification-only.
     # All other events must have a mapped state to proceed.
     if not state and hook_name != "Notification":
