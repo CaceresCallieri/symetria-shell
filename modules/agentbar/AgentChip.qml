@@ -17,6 +17,7 @@ Row {
 
     property bool _isClosing: false
     property bool _blinkClosing: false // true during the stopping phase of a clear-blink
+    property bool _sttEmerging: false // true during the starting phase before stt-morph
 
     spacing: 2
 
@@ -38,6 +39,15 @@ Row {
         } else if (root.activityState !== "needs_permission") {
             // Only collapse when going idle — needs_permission shows lock icon instead
             root._isClosing = true
+        }
+    }
+
+    onIsSttTargetChanged: {
+        if (root.isSttTarget && !root.isBusy) {
+            // Agent was idle (dormant dot) — emerge first, then morph
+            root._sttEmerging = true
+        } else {
+            root._sttEmerging = false
         }
     }
 
@@ -76,8 +86,11 @@ Row {
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
         // 0.6× applies to both blink phases — activityState stays "clearing" through
         // starting AND stopping. Total blink: ~545ms + ~1094ms ≈ 1640ms.
-        speedFactor: root.activityState === "clearing" ? 0.6 : 1.0
-        mode: root._isClosing || root._blinkClosing ? "stopping"
+        speedFactor: root._sttEmerging ? 0.6
+            : root.activityState === "clearing" ? 0.6
+            : 1.0
+        mode: root.isSttTarget ? (root._sttEmerging ? "starting" : "stt-morph")
+            : root._isClosing || root._blinkClosing ? "stopping"
             : root.isBusy ? (root.activityState === "thinking" ? "thinking"
                 : root.activityState === "starting" || root.activityState === "clearing" ? "starting"
                 : "working")
@@ -86,8 +99,11 @@ Row {
         Component.onCompleted: {
             if (!root.isBusy && !root._isClosing) sparkle.skipToEnd()
         }
-        // Blink: when starting animation completes during "clearing", auto-transition to stopping
         onAnimationComplete: {
+            // STT emerge: starting completes → transition to stt-morph
+            if (root.isSttTarget && root._sttEmerging)
+                root._sttEmerging = false
+            // Blink: starting completes during "clearing" → transition to stopping
             if (root.activityState === "clearing" && !root._blinkClosing)
                 root._blinkClosing = true
         }
@@ -103,23 +119,4 @@ Row {
         fill: root.activityState === "needs_permission" ? 1 : 0
     }
 
-    // ── STT target badge (sound wave icon) ────────────────────────────
-    MaterialIcon {
-        visible: root.isSttTarget
-        width: visible ? implicitWidth : 0
-        text: "graphic_eq"
-        color: root._activityColor
-        font.pointSize: Appearance.font.size.small
-        opacity: _sttPulse
-
-        property real _sttPulse: 1.0
-
-        SequentialAnimation on _sttPulse {
-            running: root.isSttTarget && !root.isBusy  // sparkle handles busy state
-            loops: Animation.Infinite
-            onRunningChanged: if (!running) _sttPulse = 1.0
-            NumberAnimation { from: 1.0; to: 0.4; duration: 600; easing.type: Easing.InOutSine }
-            NumberAnimation { from: 0.4; to: 1.0; duration: 600; easing.type: Easing.InOutSine }
-        }
-    }
 }
