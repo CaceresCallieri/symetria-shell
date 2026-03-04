@@ -19,9 +19,9 @@ Row {
     property bool _isClosing: false
     property bool _blinkClosing: false // true during the stopping phase of a clear-blink
     property bool _sttEmerging: false // true during the starting phase before stt-morph
+    property bool _sttWaving: false // true after stt-morph completes → looping wave
 
     spacing: 2
-    verticalItemAlignment: Qt.AlignVCenter
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
@@ -33,8 +33,11 @@ Row {
     readonly property int _fontWeight: (root.active || root.isBusy) ? Font.DemiBold : Font.Normal
 
     readonly property string _sparkleMode: {
-        if (root.isSttTarget)
-            return root._sttEmerging ? "starting" : "stt-morph";
+        if (root.isSttTarget) {
+            if (root._sttEmerging) return "starting";
+            if (root._sttWaving) return "stt-wave";
+            return "stt-morph";
+        }
         if (root._isClosing || root._blinkClosing)
             return "stopping";
         if (!root.isBusy)
@@ -63,6 +66,7 @@ Row {
             root._sttEmerging = true
         } else {
             root._sttEmerging = false
+            root._sttWaving = false
         }
     }
 
@@ -111,6 +115,9 @@ Row {
             // STT emerge: starting completes → transition to stt-morph
             if (root.isSttTarget && root._sttEmerging) {
                 root._sttEmerging = false
+            // STT morph: morph completes → transition to looping stt-wave
+            } else if (root.isSttTarget && !root._sttWaving) {
+                root._sttWaving = true
             // Blink: starting completes during "clearing" → transition to stopping
             } else if (root.activityState === "clearing" && !root._blinkClosing) {
                 root._blinkClosing = true

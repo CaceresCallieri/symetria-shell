@@ -11,6 +11,7 @@ import QtQuick
 /// - "starting": 9-frame seed-to-full emergence, 909ms one-shot then holds open.
 /// - "stopping": 12-frame full-to-dot collapse, 1824ms one-shot then holds at dormant dot.
 /// - "stt-morph": 12-frame sparkle-to-soundwave morph, one-shot then holds at bars.
+/// - "stt-wave": 12-frame looping center-pulse wave (bars ripple outward from center).
 /// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
 Item {
@@ -18,7 +19,7 @@ Item {
 
     required property color color
     property bool running: true
-    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph"
+    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave"
     property real speedFactor: 1.0 // Multiplier for frame interval (< 1 = faster)
 
     /// Emitted when a one-shot animation (starting/stopping) reaches its final frame.
@@ -35,9 +36,10 @@ Item {
     property int _currentFrame: 0
     property bool _oneShotComplete: false
     readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping" || root.mode === "stt-morph"
+        // stt-wave intentionally omitted — it loops like working/thinking
 
     readonly property int _frameCount: root.mode === "thinking" || root.mode === "starting" ? 9
-        : root.mode === "stopping" || root.mode === "stt-morph" ? 12
+        : root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "stt-wave" ? 12
         : 8
 
     readonly property string _spriteAsset: root.mode === "thinking"
@@ -45,6 +47,7 @@ Item {
         : root.mode === "starting" ? "claude-sparkle-starting-sprite"
         : root.mode === "stopping" ? "claude-sparkle-stopping-sprite"
         : root.mode === "stt-morph" ? "claude-sparkle-stt-morph-sprite"
+        : root.mode === "stt-wave" ? "claude-sparkle-stt-wave-2-sprite"
         : "claude-sparkle-sprite"
 
     onModeChanged: {
@@ -52,8 +55,8 @@ Item {
         root._oneShotComplete = false
         console.assert(root.mode === "working" || root.mode === "thinking"
             || root.mode === "starting" || root.mode === "stopping"
-            || root.mode === "stt-morph",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", or "stt-morph"`)
+            || root.mode === "stt-morph" || root.mode === "stt-wave",
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", or "stt-wave"`)
     }
 
     /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
@@ -80,7 +83,9 @@ Item {
     // Single Timer drives all four modes — same 101ms tick, same hand-drawn feel
     Timer {
         running: root.running && root.visible && !root._oneShotComplete
-        interval: Math.round((root.mode === "stopping" ? 152 : root.mode === "stt-morph" ? 80 : 101) * root.speedFactor)
+        interval: Math.round((root.mode === "stopping" ? 152
+            : root.mode === "stt-morph" || root.mode === "stt-wave" ? 80
+            : 101) * root.speedFactor)
         repeat: true
         onTriggered: {
             const next = root._currentFrame + 1
