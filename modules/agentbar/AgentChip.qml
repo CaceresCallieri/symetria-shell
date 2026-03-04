@@ -31,6 +31,19 @@ Row {
 
     readonly property int _fontWeight: (root.active || root.isBusy) ? Font.DemiBold : Font.Normal
 
+    readonly property string _sparkleMode: {
+        if (root.isSttTarget)
+            return root._sttEmerging ? "starting" : "stt-morph";
+        if (root._isClosing || root._blinkClosing)
+            return "stopping";
+        if (!root.isBusy)
+            return "stopping"; // Idle: show dormant dot (last frame of stopping sprite)
+        // Busy path
+        if (root.activityState === "starting" || root.activityState === "clearing")
+            return "starting";
+        return root.inPlanMode ? "thinking" : "working";
+    }
+
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
         || root.activityState === "starting" || root.activityState === "clearing"
 
@@ -88,12 +101,7 @@ Row {
         // 0.6× applies to both blink phases — activityState stays "clearing" through
         // starting AND stopping. Total blink: ~545ms + ~1094ms ≈ 1640ms.
         speedFactor: (root._sttEmerging || root.activityState === "clearing") ? 0.6 : 1.0
-        mode: root.isSttTarget ? (root._sttEmerging ? "starting" : "stt-morph")
-            : root._isClosing || root._blinkClosing ? "stopping"
-            : root.isBusy ? (root.activityState === "starting" || root.activityState === "clearing" ? "starting"
-                : root.inPlanMode ? "thinking"
-                : "working")
-            : "stopping" // Idle: show dormant dot (last frame of stopping sprite)
+        mode: root._sparkleMode
         // Skip to dormant dot on creation if agent is already idle
         Component.onCompleted: {
             if (!root.isBusy && !root._isClosing) sparkle.skipToEnd()

@@ -48,8 +48,6 @@ TOOL_DISPLAY_NAMES = {
     "UrlFetch": "Fetching",
     "WebSearch": "Searching",
     "NotebookEdit": "Editing",
-    "EnterPlanMode": "Planning",
-    "ExitPlanMode": "Planning",
     "AskUserQuestion": "Asking",
     "TodoWrite": "Organizing",
     "TaskCreate": "Organizing",

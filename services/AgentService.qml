@@ -276,6 +276,7 @@ Singleton {
         const tool = agent?.activity_tool ?? "";
         const planMode = agent?.in_plan_mode ?? false;
         switch (state) {
+            // Specific tool name is more informative than "Planning..." even in plan mode
             case "working": return tool || (planMode ? "Planning..." : "Working...");
             case "thinking": return planMode ? "Planning..." : "Thinking...";
             case "idle": return "Idle";
