@@ -15,7 +15,7 @@ Singleton {
     // UNIFIED BACKGROUND TINT - Change this ONE value to customize all backgrounds
     // ═══════════════════════════════════════════════════════════════════════════
     readonly property color panelBackgroundTint: "#000000"
-    readonly property real panelBackgroundAlpha: 0.5
+    readonly property real panelBackgroundAlpha: 1.0
 
     // Derived properties - these automatically update when panelBackgroundTint changes
     // Legacy: Use for isolated components where overlap is impossible
