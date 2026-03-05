@@ -26,6 +26,10 @@ Singleton {
     readonly property var projects: _projects
     readonly property int agentCount: _agents.length
 
+    /// Session-only visibility toggle (not persisted to shell.json).
+    /// When true, the agent bar is hidden regardless of agent count.
+    property bool userHidden: false
+
     /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
     /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
     readonly property var sortedProjects: _sortProjectsByWorkspace(_projects, _agents, _workspaceMap)
@@ -422,7 +426,20 @@ Singleton {
                 agents: root.agentCount,
                 projects: root.sortedProjects,
                 bridgeRunning: root.bridgeRunning,
+                userHidden: root.userHidden,
             });
+        }
+
+        function toggle(): void {
+            root.userHidden = !root.userHidden;
+        }
+
+        function show(): void {
+            root.userHidden = false;
+        }
+
+        function hide(): void {
+            root.userHidden = true;
         }
     }
 }

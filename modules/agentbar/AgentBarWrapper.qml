@@ -23,8 +23,9 @@ Item {
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches BarWrapper behavior — prevents content from being momentarily obscured)
     readonly property int exclusiveZone: shouldBeVisible ? contentHeight : Config.border.thickness
-    readonly property bool shouldBeVisible: Config.agentbar.enabled && AgentService.agentCount > 0
+    readonly property bool shouldBeVisible: Config.agentbar.enabled && AgentService.agentCount > 0 && !AgentService.userHidden
 
+    clip: true
     visible: height > Config.border.thickness
     implicitHeight: Config.border.thickness
 
@@ -66,7 +67,7 @@ Item {
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.top: parent.top
 
         active: root.visible
 
