@@ -134,6 +134,7 @@ JsonObject {
         property int batteryWidth: 250
         property int networkWidth: 320
         property int weatherWidth: 250
-        property int updatesWidth: 200
+        property int updatesWidth: 200  // Also used by Ram popout
+        property int calendarWidth: 300
     }
 }

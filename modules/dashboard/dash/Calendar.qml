@@ -35,7 +35,9 @@ CustomMouseArea {
     ColumnLayout {
         id: inner
 
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.margins: Appearance.padding.large
         spacing: Appearance.spacing.small
 

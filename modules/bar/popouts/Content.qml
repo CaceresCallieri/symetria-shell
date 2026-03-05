@@ -121,6 +121,11 @@ Item {
         }
 
         Popout {
+            name: "calendar"
+            sourceComponent: Calendar {}
+        }
+
+        Popout {
             name: "updates"
             sourceComponent: Updates {}
         }

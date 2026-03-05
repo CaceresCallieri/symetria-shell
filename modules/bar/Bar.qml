@@ -210,12 +210,14 @@ Item {
             }
         }
 
-        // TimePill: weather popout only (clock/date have no popout content yet)
+        // TimePill: weather, clock, and date popouts
         if (id === "timePill" && Config.bar.popouts.timePill) {
             const container = item?.iconContainer;
             if (detectChildPopout(container, x, (child) => {
                 const name = child?.name;
-                return name === "weather" ? "weather" : null;
+                if (name === "weather") return "weather";
+                if (name === "date" || name === "clock") return "calendar";
+                return null;
             }))
                 return;
         }
