@@ -17,7 +17,7 @@ Row {
     required property bool inPlanMode
 
     property bool _isClosing: false
-    property bool _blinkClosing: false // true during the stopping phase of a clear-blink
+    property bool _blinkClosing: false // true from the stopping phase of a clear-blink until activityState leaves "clearing"
     property bool _sttEmerging: false // true during the starting phase before stt-morph
     property bool _sttWaving: false // true after stt-morph completes → looping wave
 
@@ -64,12 +64,9 @@ Row {
         if (root.isSttTarget && !root.isBusy) {
             // Agent was idle (dormant dot) — emerge first, then morph
             root._sttEmerging = true
-        } else if (root.isSttTarget && root.isBusy) {
-            // Agent is busy (already animating) — jump directly to stt-morph
-            // via _sparkleMode binding (no emerge needed from active starburst)
-            root._sttEmerging = false
-            root._sttWaving = false
         } else {
+            // Either busy (jump directly to stt-morph — no emerge needed
+            // from active starburst) or un-targeted — clear both flags.
             root._sttEmerging = false
             root._sttWaving = false
         }
@@ -80,10 +77,11 @@ Row {
             // Reset blink phase when state changes away from clearing
             // (e.g., user submits a prompt → "thinking" while blink is still playing)
             root._blinkClosing = false
-        } else if (root._blinkClosing) {
-            // Rapid-fire /clear: restart the blink by resetting the stopping phase.
-            root._blinkClosing = false
         }
+        // When a new "clearing" arrives while _blinkClosing is true, the
+        // dormant dot is already showing — no restart needed. If a fresh
+        // blink is desired, the bridge emits a non-clearing state first,
+        // which resets _blinkClosing via the branch above.
     }
 
     // ── Icon mapping ─────────────────────────────────────────────────
@@ -108,8 +106,9 @@ Row {
     ClaudeSparkle {
         id: sparkle
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
-        // 0.6× applies to both blink phases — activityState stays "clearing" through
-        // starting AND stopping. Total blink: ~545ms + ~1094ms ≈ 1640ms.
+        // 0.6× for STT emerge and both clear-blink phases (activityState stays
+        // "clearing" through starting AND stopping). stt-morph/stt-wave run at 1.0.
+        // Total clear-blink: ~545ms + ~1094ms ≈ 1640ms at 0.6×.
         speedFactor: (root._sttEmerging || root.activityState === "clearing") ? 0.6 : 1.0
         mode: root._sparkleMode
         // Skip to dormant dot on creation if agent is already idle
