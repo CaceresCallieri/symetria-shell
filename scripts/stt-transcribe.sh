@@ -35,6 +35,10 @@ stt_log "transcribe" "started | file=$AUDIO_FILE lang=$LANGUAGE model=$MODEL"
 RESP_BODY=$(mktemp)
 trap 'rm -f "$RESP_BODY"' EXIT
 
+# Verbatim prompt prevents the LLM-based models (gpt-4o-transcribe) from
+# summarizing or paraphrasing speech instead of transcribing it literally.
+VERBATIM_PROMPT="Transcribe the following audio verbatim. Do NOT omit, summarize, paraphrase, or clean up anything. Include all words, filler words, repetitions, and false starts exactly as spoken. Output the complete, literal, word-for-word transcript."
+
 HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
     --max-time 110 \
@@ -44,6 +48,8 @@ HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     -F "model=$MODEL" \
     -F "response_format=text" \
     -F "language=$LANGUAGE" \
+    -F "prompt=$VERBATIM_PROMPT" \
+    -F "temperature=0" \
     2>/dev/null) || {
         echo "ERROR:0:Network error (curl failed)" >&2
         exit 2
