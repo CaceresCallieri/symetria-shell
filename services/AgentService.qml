@@ -26,9 +26,13 @@ Singleton {
     readonly property var projects: _projects
     readonly property int agentCount: _agents.length
 
+    // Private mutable backing for userHidden
+    property bool _userHidden: false
+
     /// Session-only visibility toggle (not persisted to shell.json).
     /// When true, the agent bar is hidden regardless of agent count.
-    property bool userHidden: false
+    /// Mutated only via IpcHandler functions toggle/show/hide.
+    readonly property bool userHidden: _userHidden
 
     /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
     /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
@@ -431,15 +435,16 @@ Singleton {
         }
 
         function toggle(): void {
-            root.userHidden = !root.userHidden;
+            if (root.agentCount === 0) return;
+            root._userHidden = !root._userHidden;
         }
 
         function show(): void {
-            root.userHidden = false;
+            root._userHidden = false;
         }
 
         function hide(): void {
-            root.userHidden = true;
+            root._userHidden = true;
         }
     }
 }
