@@ -140,9 +140,9 @@ Singleton {
     readonly property string _tempDir: `${_runtimeDir}/symmetria-stt`
 
     // Script paths (resolved relative to project root)
-    readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace("file://", "")
-    readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
-    readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
+    readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace(/^file:\/\//, "")
+    readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace(/^file:\/\//, "")
+    readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace(/^file:\/\//, "")
 
     // Delivery mode: "clipboard" (default), "inject", "submit", or "ask" (runtime radio toggle)
     readonly property string _deliveryMode: {
@@ -978,6 +978,7 @@ Singleton {
 
     Component.onDestruction: {
         _stopAllTimers();
+        if (_sessionId !== "") _cleanupTempFiles();
         if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
         if (transcribeProcess.running) transcribeProcess.signal(9);

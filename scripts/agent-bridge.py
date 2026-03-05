@@ -254,8 +254,9 @@ class AgentBridge:
             if nvim_pid in self._clients:
                 known_bufs = self._clients[nvim_pid]
                 if buf not in known_bufs:
-                    log.warning("  focus: buf=%s not in known instances for pid=%s (known: %s)",
+                    log.warning("  focus: buf=%s not in known instances for pid=%s (known: %s) — ignoring",
                                 buf, nvim_pid, list(known_bufs.keys()))
+                    return  # Don't unfocus all agents for an unknown buf
                 for b, inst in known_bufs.items():
                     inst["active"] = (b == buf)
                 log.debug("  focus: buf=%s from pid %s", buf, nvim_pid)
@@ -453,9 +454,12 @@ def _kill_stale_bridges() -> None:
             if pid != my_pid:
                 log.info("killing stale bridge.py pid=%d", pid)
                 try:
+                    os.kill(pid, signal.SIGTERM)
+                    # Brief grace period for clean shutdown before forcing
+                    time.sleep(0.5)
                     os.kill(pid, signal.SIGKILL)
                 except ProcessLookupError:
-                    pass
+                    pass  # Already exited (SIGTERM was enough)
     except Exception as e:
         log.debug("_kill_stale_bridges: %s", e)
 

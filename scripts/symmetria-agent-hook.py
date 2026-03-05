@@ -205,5 +205,15 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        pass  # Never fail — always exit 0
+    except Exception as e:
+        # Log to debug file before swallowing — silent failures make debugging impossible
+        try:
+            import os as _os
+            log_dir = _os.environ.get("XDG_STATE_HOME", _os.path.expanduser("~/.local/state"))
+            log_path = _os.path.join(log_dir, "symmetria", "debug.log")
+            _os.makedirs(_os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a") as f:
+                from datetime import datetime
+                f.write(f"{datetime.now().strftime('%H:%M:%S.%f')[:12]} [py:hook] error: {e}\n")
+        except Exception:
+            pass  # Truly cannot log — give up silently

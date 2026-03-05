@@ -68,7 +68,7 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
 
-        active: root.shouldBeVisible || root.visible
+        active: root.visible
 
         sourceComponent: AgentBarContent {
             height: root.contentHeight

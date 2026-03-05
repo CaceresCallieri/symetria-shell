@@ -28,14 +28,8 @@ StyledRect {
         root.agents.some(a => (a.activity_state ?? "") === "needs_permission")
 
     // True when any agent in this group is the STT injection target
-    readonly property bool hasSttTarget: {
-        if (AgentService.sttTargetTerminalPid <= 0) return false;
-        return root.agents.some(a => {
-            if ((a.terminal_pid ?? 0) !== AgentService.sttTargetTerminalPid) return false;
-            if (AgentService.sttTargetBufId === -1) return a.active ?? false;
-            return (a.buf ?? -1) === AgentService.sttTargetBufId;
-        });
-    }
+    readonly property bool hasSttTarget:
+        AgentService.sttTargetTerminalPid > 0 && root.agents.some(a => AgentService.isAgentSttTarget(a))
 
     // --- Sweep animation state ---
     property real _sweepPhase: 0.0  // 0.0–1.0, one full revolution
@@ -205,13 +199,7 @@ StyledRect {
                 activityState: modelData.activity_state ?? ""
                 activityTool: modelData.activity_tool ?? ""
                 inPlanMode: modelData.in_plan_mode ?? false
-                isSttTarget: {
-                    if (AgentService.sttTargetTerminalPid <= 0) return false;
-                    if ((modelData.terminal_pid ?? 0) !== AgentService.sttTargetTerminalPid) return false;
-                    // -1 = agent had no buf at start-time; highlight the active (representative) agent
-                    if (AgentService.sttTargetBufId === -1) return modelData.active ?? false;
-                    return (modelData.buf ?? -1) === AgentService.sttTargetBufId;
-                }
+                isSttTarget: AgentService.isAgentSttTarget(modelData)
             }
         }
 

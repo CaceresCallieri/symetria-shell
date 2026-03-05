@@ -273,48 +273,10 @@ if [ "$PASTE_CODE" -ne 0 ]; then
     exit 0
 fi
 
-# ── Auto-submit: guarded Enter ───────────────────────────────────────────────
-# NOTE: On the sendshortcut path, SUBMIT is always cleared by the downgrade
-# logic above (submit is only safe via RPC). This block is intentional dead
-# code under current logic but serves as a safety net if the downgrade guard
-# is ever bypassed or a new code path is added above it.
-
-if [ "$SUBMIT" = "submit" ]; then
-    # 250ms: allow application to process pasted text before verifying + submitting
-    echo "[STT:INJ08] submit mode — sleeping 250ms for app to process paste..." >&2
-    sleep 0.25
-
-    # Re-verify window still exists before sending Enter
-    if ! hyprctl clients -j 2>/dev/null | grep -qF "\"address\": \"$ADDRESS\""; then
-        echo "[STT:INJ08] target window closed during paste delay — skipping Enter" >&2
-        notify_failure "STT Submit Skipped" "Target window closed after paste. Text was pasted but Enter was not sent."
-        emit_result "paste" "true"
-        exit 0
-    fi
-
-    # Re-verify clipboard is still intact (not overwritten by something else)
-    if ! verify_clipboard "INJ09"; then
-        echo "[STT:INJ09] clipboard changed between paste and Enter — skipping Enter" >&2
-        notify_failure "STT Submit Skipped" "Clipboard was overwritten after paste. Enter was not sent to avoid submitting wrong content."
-        emit_result "paste" "true"
-        exit 0
-    fi
-
-    echo "[STT:INJ10] sending Enter: hyprctl dispatch sendshortcut , Return, address:$ADDRESS" >&2
-    ENTER_RESULT=$(hyprctl dispatch sendshortcut ", Return, address:$ADDRESS" 2>&1)
-    ENTER_CODE=$?
-    echo "[STT:INJ10] Enter result | exit=$ENTER_CODE | output=$ENTER_RESULT" >&2
-
-    if [ "$ENTER_CODE" -ne 0 ]; then
-        notify_failure "STT Submit Failed" "Paste succeeded but Enter key failed (exit $ENTER_CODE). Text was pasted but not submitted."
-        emit_result "paste" "true"
-    else
-        emit_result "paste" "true"
-    fi
-else
-    echo "[STT:INJ08] submit not requested — done (clipboard+paste only)" >&2
-    emit_result "paste" "true"
-fi
+# Auto-submit is only supported via the Neovim RPC path (above). On the
+# sendshortcut path, SUBMIT is always cleared by the downgrade logic.
+echo "[STT:INJ08] paste complete — done (submit only via RPC)" >&2
+emit_result "paste" "true"
 
 stt_log "inject" "finished"
 echo "[STT:INJ11] stt-inject.sh finished" >&2

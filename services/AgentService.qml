@@ -217,6 +217,15 @@ Singleton {
         _sttTargetBufId = -1;
     }
 
+    /// Check if a single agent matches the current STT injection target.
+    /// Used by ProjectGroup.hasSttTarget and AgentChip.isSttTarget to avoid duplication.
+    function isAgentSttTarget(agent: var): bool {
+        if (sttTargetTerminalPid <= 0) return false;
+        if ((agent.terminal_pid ?? 0) !== sttTargetTerminalPid) return false;
+        if (sttTargetBufId === -1) return agent.active ?? false;
+        return (agent.buf ?? -1) === sttTargetBufId;
+    }
+
     // ── Desktop notifications ────────────────────────────────────────
     // Notification messages arrive from the bridge pre-enriched with project
     // and terminal_pid. We add workspace info from _workspaceMap and spawn
@@ -229,12 +238,13 @@ Singleton {
         const terminalPid = notif.terminal_pid ?? 0;
         const ws = _workspaceMap[terminalPid] ?? null;
 
-        // Format workspace display
+        // Format workspace display (uses ws.name directly — O(1) dict lookup
+        // vs workspaceIconForWsId's O(N) linear search through Hypr.workspaces)
         let wsDisplay = "";
         if (ws) {
             wsDisplay = ws.name.startsWith("special:")
-                ? `[${ws.name.slice(8)}]`  // strip "special:" prefix
-                : `[WS ${workspaceIconForWsId(ws.id)}]`;
+                ? `[${ws.name.slice(8)}]`
+                : `[WS ${ws.name}]`;
         }
 
         // Build title: "Agent [project] [WS III] - Ready"
@@ -251,7 +261,7 @@ Singleton {
     }
 
     function _sendNotification(title: string, message: string, urgency: string): void {
-        notifyProcess.command = [
+        Quickshell.execDetached([
             "notify-send",
             "--app-name=Claude Code",
             `--urgency=${urgency}`,
@@ -259,33 +269,11 @@ Singleton {
             "--expire-time=15000",
             title,
             message,
-        ];
-        notifyProcess.running = true;
+        ]);
     }
 
-    // One-shot notify-send — command set imperatively in _sendNotification
-    Process {
-        id: notifyProcess
-    }
-
-    // ── Activity helpers (used by: future tooltip in ProjectGroup, agent dashboard) ──
-
-    /// Returns human-readable activity text for an agent.
-    function activityText(agent: var): string {
-        const state = agent?.activity_state ?? "";
-        const tool = agent?.activity_tool ?? "";
-        const planMode = agent?.in_plan_mode ?? false;
-        switch (state) {
-            // Specific tool name is more informative than "Planning..." even in plan mode
-            case "working": return tool || (planMode ? "Planning..." : "Working...");
-            case "thinking": return planMode ? "Planning..." : "Thinking...";
-            case "idle": return "Idle";
-            case "needs_permission": return "Needs approval";
-            case "starting": return "Starting...";
-            case "clearing": return "Clearing...";
-            default: return "";
-        }
-    }
+    // TODO: Add activityText(agent) for future tooltip in ProjectGroup / agent dashboard.
+    // Would map activity_state + activity_tool to human-readable strings.
 
     /// Find the currently active agent for a terminal PID. Returns the agent that is
     /// currently active (via representativeAgent) among those matching the PID, or null.

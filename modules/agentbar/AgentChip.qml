@@ -64,6 +64,11 @@ Row {
         if (root.isSttTarget && !root.isBusy) {
             // Agent was idle (dormant dot) — emerge first, then morph
             root._sttEmerging = true
+        } else if (root.isSttTarget && root.isBusy) {
+            // Agent is busy (already animating) — jump directly to stt-morph
+            // via _sparkleMode binding (no emerge needed from active starburst)
+            root._sttEmerging = false
+            root._sttWaving = false
         } else {
             root._sttEmerging = false
             root._sttWaving = false
@@ -82,9 +87,9 @@ Row {
     }
 
     // ── Icon mapping ─────────────────────────────────────────────────
-    readonly property string _iconText: _activityIcon(root.activityState, root.activityTool)
+    readonly property string _iconText: _activityIcon(root.activityState)
 
-    function _activityIcon(state: string, tool: string): string {
+    function _activityIcon(state: string): string {
         switch (state) {
             case "needs_permission": return "lock";
             default:                 return ""; // working/thinking/starting handled by ClaudeSparkle
@@ -122,6 +127,12 @@ Row {
             // Blink: starting completes during "clearing" → transition to stopping
             } else if (root.activityState === "clearing" && !root._blinkClosing) {
                 root._blinkClosing = true
+            // Stopping animation finished — chip is now at dormant dot.
+            // Reset _isClosing so Repeater re-instantiation sees clean state.
+            } else if (root._isClosing) {
+                root._isClosing = false
+            } else if (root._blinkClosing) {
+                root._blinkClosing = false
             }
         }
     }
