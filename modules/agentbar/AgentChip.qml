@@ -131,9 +131,13 @@ Row {
             // Reset _isClosing so Repeater re-instantiation sees clean state.
             } else if (root._isClosing) {
                 root._isClosing = false
-            } else if (root._blinkClosing) {
-                root._blinkClosing = false
             }
+            // Note: _blinkClosing is NOT reset here. If the stopping phase of a
+            // clear-blink finishes while activityState is still "clearing", resetting
+            // _blinkClosing would cause _sparkleMode to fall through to "starting"
+            // again, looping the blink indefinitely. Instead, _blinkClosing stays
+            // true (keeping mode at "stopping" / dormant dot) until activityState
+            // changes away from "clearing" — handled by onActivityStateChanged.
         }
     }
 
