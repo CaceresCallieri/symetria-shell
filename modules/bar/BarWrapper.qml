@@ -11,7 +11,7 @@ Item {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
-    required property BarPopouts.Wrapper popouts
+    property var popouts: null
     required property bool disabled
 
     readonly property int padding: Math.max(Appearance.padding.smaller, Config.border.thickness)

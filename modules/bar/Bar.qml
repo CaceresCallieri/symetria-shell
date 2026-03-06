@@ -14,7 +14,7 @@ Item {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
-    required property BarPopouts.Wrapper popouts
+    property var popouts: null
     readonly property int hPadding: Config.bar.sizes.edgePadding
     // External margin between glassmorphism pill components and adjacent bar entries
     readonly property int pillExternalMargin: Appearance.spacing.small
@@ -107,6 +107,7 @@ Item {
         const popoutName = nameResolver(child);
         if (!popoutName) return false;
 
+        if (!popouts) return false;
         popouts.currentName = popoutName;
         popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
         popouts.hasCurrent = true;
@@ -171,6 +172,8 @@ Item {
     }
 
     function checkPopout(x: real): void {
+        if (!popouts) return;
+
         const target = findBarEntryAt(x);
 
         if (target?.entry?.entryId !== "tray")

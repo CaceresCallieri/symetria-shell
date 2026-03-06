@@ -55,6 +55,12 @@ Singleton {
     property int _restartCount: 0
     readonly property int _maxRestartDelay: 30000
 
+    // State-update throttling: leading edge fires immediately, then 100ms cooldown.
+    // During cooldown, only the latest update is buffered (intermediate states are
+    // skipped since the next emission always contains the full consolidated state).
+    property var _pendingUpdate: null
+    property bool _throttleActive: false
+
     // Resolve script path relative to this QML file
     // Qt.resolvedUrl returns "file:///abs/path" on Linux; strip "file://" to get "/abs/path"
     readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace(/^file:\/\//, "")
@@ -341,6 +347,20 @@ Singleton {
             bridgeProcess.running = false;
     }
 
+    /// Apply a parsed bridge state update to agent/project properties.
+    function _applyBridgeUpdate(parsed: var): void {
+        const prevCount = root._agents.length;
+        root._agents = parsed.agents ?? [];
+        root._projects = parsed.projects ?? [];
+        // Start the backoff reset timer once (not restart!) — it fires after 10s
+        // of the bridge being alive, regardless of data flow. Using .restart()
+        // would push the timer out on every RECV, and since activity updates
+        // arrive every 3-5s, the timer would never fire.
+        if (!backoffResetTimer.running)
+            backoffResetTimer.start();
+        console.log(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
+    }
+
     function _startBridge(): void {
         if (bridgeProcess.running) {
             console.log("[AgentService] _startBridge: already running, skipping");
@@ -362,22 +382,24 @@ Singleton {
                 try {
                     const parsed = JSON.parse(text);
 
-                    // Notification messages are pass-through (no agent state change)
+                    // Notification messages bypass throttle — always immediate
                     if (parsed.type === "notification") {
                         root._handleNotification(parsed);
                         return;
                     }
 
-                    const prevCount = root._agents.length;
-                    root._agents = parsed.agents ?? [];
-                    root._projects = parsed.projects ?? [];
-                    // Debounced backoff reset: only clear _restartCount after the
-                    // bridge has been running stably for 10s. This prevents a
-                    // crash-on-init loop from defeating exponential backoff (a
-                    // bridge that emits one line then crashes would reset the
-                    // counter immediately without this guard).
-                    backoffResetTimer.restart();
-                    console.log(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
+                    // Leading-edge + buffer throttle: first update applies
+                    // immediately, subsequent updates within the 100ms cooldown
+                    // are buffered (only latest kept — full state, not diff).
+                    if (!root._throttleActive) {
+                        // Leading edge — apply immediately + start cooldown
+                        root._applyBridgeUpdate(parsed);
+                        root._throttleActive = true;
+                        bridgeThrottle.restart();
+                    } else {
+                        // During cooldown — buffer latest (discard intermediate)
+                        root._pendingUpdate = parsed;
+                    }
                 } catch (e) {
                     console.warn("[AgentService] Failed to parse bridge output:", text);
                 }
@@ -386,9 +408,12 @@ Singleton {
 
         onExited: (code, status) => {
             console.log(`[AgentService] BRIDGE EXITED: code=${code}, status=${status}, had ${root._agents.length} agents`);
-            // Clear state on exit
+            // Clear state on exit (including throttle state)
             root._agents = [];
             root._projects = [];
+            root._pendingUpdate = null;
+            root._throttleActive = false;
+            bridgeThrottle.stop();
             backoffResetTimer.stop();
 
             if (!Config.agentbar.enabled) {
@@ -409,6 +434,25 @@ Singleton {
     Timer {
         id: restartTimer
         onTriggered: root._startBridge()
+    }
+
+    // Trailing edge of state-update throttle: apply buffered update if any,
+    // otherwise clear the cooldown so the next update gets leading-edge treatment.
+    Timer {
+        id: bridgeThrottle
+        interval: 100
+
+        onTriggered: {
+            if (root._pendingUpdate !== null) {
+                const update = root._pendingUpdate;
+                root._pendingUpdate = null;
+                root._applyBridgeUpdate(update);
+                // Re-arm cooldown in case more updates arrive during apply
+                bridgeThrottle.restart();
+            } else {
+                root._throttleActive = false;
+            }
+        }
     }
 
     // Only reset backoff after the bridge has been running stably for 10 seconds.

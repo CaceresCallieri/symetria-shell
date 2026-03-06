@@ -8,9 +8,9 @@ CustomMouseArea {
     id: root
 
     required property ShellScreen screen
-    required property BarPopouts.Wrapper popouts
+    property var popouts: null
     required property PersistentProperties visibilities
-    required property Panels panels
+    property var panels: null
     required property Item bar
     required property Item agentBar
 
@@ -72,6 +72,8 @@ CustomMouseArea {
     onPressed: event => dragStart = Qt.point(event.x, event.y)
     onContainsMouseChanged: {
         if (!containsMouse) {
+            if (!panels) return;
+
             // Only hide if not activated by shortcut
             if (!osdShortcutActive) {
                 visibilities.osd = false;
@@ -84,8 +86,8 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) {
-                popouts.hasCurrent = false;
+            if (!(popouts?.currentName ?? "").startsWith("traymenu") || (popouts?.current?.depth ?? 0) <= 1) {
+                if (popouts) popouts.hasCurrent = false;
                 bar.closeTray();
             }
 
@@ -95,7 +97,9 @@ CustomMouseArea {
     }
 
     onPositionChanged: event => {
-        if (popouts.isDetached)
+        if (!panels) return;
+
+        if (popouts?.isDetached)
             return;
 
         const x = event.x;
@@ -218,7 +222,7 @@ CustomMouseArea {
         // Show popouts on hover
         if (y < bar.implicitHeight) {
             bar.checkPopout(x);
-        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !inTopPanel(panels.popouts, x, y)) {
+        } else if (popouts && (!(popouts.currentName ?? "").startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !inTopPanel(panels.popouts, x, y)) {
             popouts.hasCurrent = false;
             bar.closeTray();
         }
@@ -229,6 +233,8 @@ CustomMouseArea {
         target: root.visibilities
 
         function onLauncherChanged() {
+            if (!root.panels) return;
+
             // If launcher is hidden, clear shortcut flags for dashboard and OSD
             if (!root.visibilities.launcher) {
                 root.dashboardShortcutActive = false;
@@ -251,6 +257,8 @@ CustomMouseArea {
         }
 
         function onDashboardChanged() {
+            if (!root.panels) return;
+
             if (root.visibilities.dashboard) {
                 // Dashboard became visible, immediately check if this should be shortcut mode
                 const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY)
@@ -265,6 +273,8 @@ CustomMouseArea {
         }
 
         function onOsdChanged() {
+            if (!root.panels) return;
+
             if (root.visibilities.osd) {
                 // OSD became visible, immediately check if this should be shortcut mode
                 const inOsdArea = root.inRightPanel(root.panels.osd, root.mouseX, root.mouseY);
@@ -278,6 +288,8 @@ CustomMouseArea {
         }
 
         function onUtilitiesChanged() {
+            if (!root.panels) return;
+
             if (root.visibilities.utilities) {
                 // Utilities became visible, immediately check if this should be shortcut mode
                 const inUtilitiesArea = root.inBottomPanel(root.panels.utilities, root.mouseX, root.mouseY)
