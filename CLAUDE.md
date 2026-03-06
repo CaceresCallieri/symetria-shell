@@ -44,8 +44,17 @@ git merge feature/my-feature
 
 ## Build Commands
 
+### QML / SVG / Asset Changes Only
+No compilation needed — just clear the QML cache and restart:
 ```bash
-# Configure (development mode - keeps QML in local config dir)
+rm -rf ~/.cache/quickshell/qmlcache
+symmetria shell -d
+```
+
+### C++ Plugin Changes (plugin/src/)
+Full build pipeline required when modifying C++ code:
+```bash
+# Configure (only needed once or after CMakeLists changes)
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=$HOME/.config/quickshell/symmetria
 
 # Build
@@ -56,6 +65,9 @@ sudo cmake --install build
 
 # Fix ownership after install
 sudo chown -R $USER:$USER ~/.config/quickshell/symmetria
+
+# Clear QML cache (always needed after any change)
+rm -rf ~/.cache/quickshell/qmlcache
 ```
 
 ## Running the Shell
