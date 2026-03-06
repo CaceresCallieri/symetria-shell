@@ -525,19 +525,19 @@ Item {
 
                     StyledText {
                         visible: root.languageLabel !== ""
+                        width: visible ? implicitWidth : 0
                         text: root.languageLabel
                         font.pointSize: Appearance.font.size.small
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
-                        anchors.verticalCenter: parent.verticalCenter
                     }
 
                     StyledText {
                         visible: root.languageLabel !== ""
+                        width: visible ? implicitWidth : 0
                         text: "·"
                         font.pointSize: Appearance.font.size.small
                         color: Colours.palette.m3outline
-                        anchors.verticalCenter: parent.verticalCenter
                     }
 
                     StyledText {
@@ -545,7 +545,6 @@ Item {
                         font.pointSize: Appearance.font.size.small
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
-                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
             }
