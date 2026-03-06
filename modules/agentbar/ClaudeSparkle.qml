@@ -68,6 +68,12 @@ Item {
         root._oneShotComplete = true
     }
 
+    /// Restart the current animation from frame 0 (useful for looping one-shot previews).
+    function restart() {
+        root._currentFrame = 0
+        root._oneShotComplete = false
+    }
+
     Image {
         source: Qt.resolvedUrl(`${Quickshell.shellDir}/assets/${root._spriteAsset}.svg`)
         sourceSize.width: root._size

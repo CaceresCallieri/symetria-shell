@@ -23,7 +23,8 @@ Item {
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches BarWrapper behavior — prevents content from being momentarily obscured)
     readonly property int exclusiveZone: shouldBeVisible ? contentHeight : Config.border.thickness
-    readonly property bool shouldBeVisible: Config.agentbar.enabled && AgentService.agentCount > 0 && !AgentService.userHidden
+    readonly property bool shouldBeVisible: (Config.agentbar.enabled && AgentService.agentCount > 0 && !AgentService.userHidden)
+        || preview.previewActive
 
     clip: true
     visible: height > Config.border.thickness
@@ -74,5 +75,13 @@ Item {
         sourceComponent: AgentBarContent {
             height: root.contentHeight
         }
+    }
+
+    // Right-aligned sprite preview (controlled by /test-sprite skill)
+    SpritePreview {
+        id: preview
+        anchors.right: parent.right
+        anchors.rightMargin: Appearance.padding.large
+        anchors.verticalCenter: parent.verticalCenter
     }
 }

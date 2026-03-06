@@ -393,6 +393,7 @@ Item {
         StatusIcons {}
     }
 
+
     Component {
         id: powerComp
         Power {
