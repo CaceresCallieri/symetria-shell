@@ -44,6 +44,18 @@ Variants {
         StyledWindow {
             id: win
 
+            readonly property bool _shouldGrabFocus:
+                (visibilities.launcher && Config.launcher.enabled)
+                || (visibilities.session && Config.session.enabled)
+                || (visibilities.sidebar && Config.sidebar.enabled)
+                || (visibilities.clipboard && Config.clipboard.enabled)
+                || (visibilities.askpass && Config.askpass.enabled)
+                || (visibilities.calculator && Config.calculator.enabled)
+                || (visibilities.packages && Config.packages.enabled)
+                || (visibilities.keychords && Config.keychords.enabled)
+                || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled)
+                || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+
             readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
             readonly property int dragMaskPadding: {
                 if (focusGrab.active || panels.popouts.isDetached)
@@ -109,7 +121,7 @@ Variants {
             HyprlandFocusGrab {
                 id: focusGrab
 
-                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (visibilities.keychords && Config.keychords.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                active: win._shouldGrabFocus
                 windows: [win]
                 onCleared: {
                     visibilities.launcher = false;
@@ -190,7 +202,6 @@ Variants {
 
                 Panels {
                     id: panels
-
                     screen: scope.modelData
                     visibilities: visibilities
                     bar: bar
@@ -226,6 +237,7 @@ Variants {
                 anchors.fill: parent
                 visibilities: visibilities
             }
+
         }
     }
 }
