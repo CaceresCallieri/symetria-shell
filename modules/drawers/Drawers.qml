@@ -44,9 +44,18 @@ Variants {
         StyledWindow {
             id: win
 
-            readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
+            // Deferred loading flag: false during Quickshell's reload walk,
+            // true once the event loop starts. Panels are created post-reload
+            // to avoid the super-linear binding cascade that dominates startup.
+            property bool _ready: false
+            // Convenience accessor for the deferred Panels instance (null until _ready)
+            readonly property var _panels: panelsLoader.item ?? null
+
+            readonly property bool hasFullscreen: win._ready && (Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false)
             readonly property int dragMaskPadding: {
-                if (focusGrab.active || panels.popouts.isDetached)
+                if (!win._ready)
+                    return 0;
+                if (focusGrab.active || win._panels?.popouts?.isDetached)
                     return 0;
 
                 const mon = Hypr.monitorFor(screen);
@@ -93,7 +102,7 @@ Variants {
             Variants {
                 id: regions
 
-                model: panels.children
+                model: win._panels?.children ?? []
 
                 Region {
                     required property Item modelData
@@ -109,7 +118,7 @@ Variants {
             HyprlandFocusGrab {
                 id: focusGrab
 
-                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (visibilities.keychords && Config.keychords.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                active: win._ready && ((visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (visibilities.keychords && Config.keychords.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || ((win._panels?.popouts?.currentName ?? "").startsWith("traymenu") && win._panels?.popouts?.current?.depth > 1))
                 windows: [win]
                 onCleared: {
                     visibilities.launcher = false;
@@ -122,7 +131,8 @@ Variants {
                     visibilities.keychords = false;
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
-                    panels.popouts.hasCurrent = false;
+                    if (win._panels)
+                        win._panels.popouts.hasCurrent = false;
                     bar.closeTray();
                 }
             }
@@ -152,10 +162,17 @@ Variants {
                     agentBar: agentBar
                 }
 
-                Backgrounds {
-                    panels: panels
-                    bar: bar
-                    agentBar: agentBar
+                // Backgrounds deferred until Panels exists — both load in the
+                // same binding cascade so no visual gap is possible.
+                Loader {
+                    active: win._panels !== null
+                    anchors.fill: parent
+
+                    sourceComponent: Backgrounds {
+                        panels: win._panels
+                        bar: bar
+                        agentBar: agentBar
+                    }
                 }
             }
 
@@ -182,19 +199,28 @@ Variants {
 
             Interactions {
                 screen: scope.modelData
-                popouts: panels.popouts
+                popouts: win._panels?.popouts ?? null
                 visibilities: visibilities
-                panels: panels
+                panels: win._panels
                 bar: bar
                 agentBar: agentBar
 
-                Panels {
-                    id: panels
+                // Panels deferred until post-reload to reduce startup binding cascade.
+                // During Quickshell's EngineGeneration::onReload() tree walk, this Loader
+                // has no children — the 14 panel Wrappers and their sub-trees are absent,
+                // avoiding the super-linear cascade (8.8s → target <2s).
+                Loader {
+                    id: panelsLoader
 
-                    screen: scope.modelData
-                    visibilities: visibilities
-                    bar: bar
-                    agentBar: agentBar
+                    active: win._ready
+                    anchors.fill: parent
+
+                    sourceComponent: Panels {
+                        screen: scope.modelData
+                        visibilities: visibilities
+                        bar: bar
+                        agentBar: agentBar
+                    }
                 }
 
                 BarWrapper {
@@ -206,7 +232,7 @@ Variants {
 
                     screen: scope.modelData
                     visibilities: visibilities
-                    popouts: panels.popouts
+                    popouts: win._panels?.popouts ?? null
 
                     disabled: scope.barDisabled
 
@@ -225,6 +251,15 @@ Variants {
             KeyChordsModule.Overlay {
                 anchors.fill: parent
                 visibilities: visibilities
+            }
+
+            // Post-reload activation: fires on the first event loop tick after
+            // Quickshell's EngineGeneration::onReload() completes, creating
+            // all deferred content (Panels, Backgrounds) outside the reload walk.
+            Timer {
+                interval: 0
+                running: true
+                onTriggered: win._ready = true
             }
         }
     }

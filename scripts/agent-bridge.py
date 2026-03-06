@@ -58,6 +58,11 @@ class AgentBridge:
         # {agent_id: {"state": str, "tool": str, "ts": float, "in_plan_mode": bool}} — activity state from hook scripts
         self._activities: dict[str, dict] = {}
 
+        # Emit coalescing: leading-edge + trailing-edge with 50ms cooldown.
+        # Prevents stdout floods during startup reconnect bursts (30+ events → 2 emissions).
+        self._emit_handle: asyncio.TimerHandle | None = None
+        self._emit_dirty: bool = False
+
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
         """Walk /proc upward from nvim_pid to find the terminal emulator PID.
@@ -127,6 +132,30 @@ class AgentBridge:
         sys.stdout.write(line + "\n")
         sys.stdout.flush()
 
+    def _schedule_emit(self) -> None:
+        """Coalesced emit: leading edge fires immediately, then 50ms cooldown.
+
+        During the cooldown, additional calls just set _emit_dirty. When the
+        cooldown expires, if dirty, one final trailing-edge emit fires.
+        Result: N events in a 50ms burst → exactly 2 stdout emissions.
+        """
+        if self._emit_handle is None:
+            # Leading edge — emit immediately + start cooldown
+            self._emit()
+            self._emit_dirty = False
+            loop = asyncio.get_running_loop()
+            self._emit_handle = loop.call_later(0.05, self._end_coalesce)
+        else:
+            # During cooldown — mark dirty for trailing edge
+            self._emit_dirty = True
+
+    def _end_coalesce(self) -> None:
+        """Trailing edge of coalescing window: emit once if dirty, then clear."""
+        self._emit_handle = None
+        if self._emit_dirty:
+            self._emit_dirty = False
+            self._emit()
+
     def handle_message(self, msg: dict) -> None:
         """Process a single JSON message from an orchestrator or hook client."""
         msg_type = msg.get("type")
@@ -155,7 +184,7 @@ class AgentBridge:
                 self._activities[agent_id] = new_activity
             log.debug("handle_message: activity agent_id=%s state=%s tool=%s",
                        agent_id, state, msg.get("tool", ""))
-            self._emit()
+            self._schedule_emit()
             return
 
         # Notification messages are pass-through: enrich with project/terminal_pid
@@ -213,7 +242,7 @@ class AgentBridge:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
             log.debug("  sync: %d instances from pid %s (terminal_pid=%d)",
                        len(instances), nvim_pid, self._terminal_pids.get(nvim_pid, 0))
-            self._emit()
+            self._schedule_emit()
 
         elif msg_type == "added":
             inst = msg.get("instance", {})
@@ -221,7 +250,7 @@ class AgentBridge:
             if buf is not None:
                 self._clients.setdefault(nvim_pid, {})[buf] = inst
                 log.debug("  added: buf=%s from pid %s", buf, nvim_pid)
-                self._emit()
+                self._schedule_emit()
             else:
                 log.warning("  added: missing buf from pid %s", nvim_pid)
 
@@ -231,7 +260,7 @@ class AgentBridge:
                 del self._clients[nvim_pid][buf]
                 self._activities.pop(f"{nvim_pid}_{buf}", None)
                 log.debug("  removed: buf=%s from pid %s", buf, nvim_pid)
-                self._emit()
+                self._schedule_emit()
             else:
                 log.warning("  removed: unknown buf=%s for pid=%s (known: %s)",
                             buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
@@ -244,7 +273,7 @@ class AgentBridge:
                     if key in msg:
                         self._clients[nvim_pid][buf][key] = msg[key]
                 log.debug("  updated: buf=%s from pid %s", buf, nvim_pid)
-                self._emit()
+                self._schedule_emit()
             else:
                 log.warning("  updated: unknown buf=%s for pid=%s (known: %s)",
                             buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
@@ -260,7 +289,7 @@ class AgentBridge:
                 for b, inst in known_bufs.items():
                     inst["active"] = (b == buf)
                 log.debug("  focus: buf=%s from pid %s", buf, nvim_pid)
-                self._emit()
+                self._schedule_emit()
             else:
                 log.warning("  focus: unknown pid=%s (not registered)", nvim_pid)
 
@@ -272,7 +301,7 @@ class AgentBridge:
                 del self._clients[nvim_pid]
                 self._terminal_pids.pop(nvim_pid, None)
                 log.debug("  goodbye: removed client %s (remaining: %d)", nvim_pid, len(self._clients))
-                self._emit()
+                self._schedule_emit()
         else:
             log.warning("  unknown message type: %s", msg_type)
 
@@ -287,7 +316,7 @@ class AgentBridge:
                 self._activities.pop(f"{nvim_pid}_{buf}", None)
             del self._clients[nvim_pid]
             self._terminal_pids.pop(nvim_pid, None)
-            self._emit()
+            self._schedule_emit()
         else:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
 
@@ -326,7 +355,7 @@ class AgentBridge:
                 log.info("reap_stale_activities: %s orphaned+stale (was %s), clearing",
                          aid, self._activities[aid].get("state"))
                 self._activities.pop(aid, None)
-            self._emit()
+            self._schedule_emit()
 
 
 bridge = AgentBridge()
@@ -440,8 +469,19 @@ def cleanup_socket():
         pass
 
 
-def _kill_stale_bridges() -> None:
-    """Kill any other agent-bridge.py processes from previous Symmetria sessions."""
+def _signal_stale_bridges() -> None:
+    """Send SIGTERM to any other agent-bridge.py processes from previous sessions.
+
+    Uses SIGTERM only (no SIGKILL follow-up) to avoid fratricide crash loops
+    when old and new shell sessions overlap during restart. The old bridge will
+    either shut down gracefully via its SIGTERM handler, or become orphaned
+    when we take over the socket path (harmless — it just sits idle until its
+    parent qs process exits).
+
+    Previous approach used SIGTERM + 0.5s sleep + SIGKILL, which caused a
+    crash loop: both sessions' bridges would kill each other repeatedly,
+    accumulating exponential backoff delays (16+ crashes, 30s+ restarts).
+    """
     my_pid = os.getpid()
     try:
         import subprocess
@@ -452,23 +492,21 @@ def _kill_stale_bridges() -> None:
         for line in result.stdout.strip().splitlines():
             pid = int(line.strip())
             if pid != my_pid:
-                log.info("killing stale bridge.py pid=%d", pid)
+                log.info("signaling stale bridge.py pid=%d (SIGTERM)", pid)
                 try:
                     os.kill(pid, signal.SIGTERM)
-                    # Brief grace period for clean shutdown before forcing
-                    time.sleep(0.5)
-                    os.kill(pid, signal.SIGKILL)
                 except ProcessLookupError:
-                    pass  # Already exited (SIGTERM was enough)
+                    pass  # Already exited
     except Exception as e:
-        log.debug("_kill_stale_bridges: %s", e)
+        log.debug("_signal_stale_bridges: %s", e)
 
 
 async def main():
     global _our_socket_inode
 
-    # Kill orphaned bridge.py processes from previous sessions
-    _kill_stale_bridges()
+    # Signal orphaned bridge.py processes from previous sessions (SIGTERM only —
+    # no SIGKILL to avoid fratricide crash loops during shell restart)
+    _signal_stale_bridges()
 
     # Clean up stale socket
     log.info("STARTING: cleaning stale socket at %s", SOCKET_PATH)
