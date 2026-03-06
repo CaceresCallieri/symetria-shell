@@ -20,19 +20,24 @@ Row {
     property bool _blinkClosing: false // true from the stopping phase of a clear-blink until activityState leaves "clearing"
     property bool _sttEmerging: false // true during the starting phase before stt-morph
     property bool _sttWaving: false // true after stt-morph completes → looping wave
+    property bool _keyEmerging: false // true during dot → starburst emerge before key morph
+    property bool _keyMorphActive: false // true while key-morph sprite is playing or held at key shape
 
     spacing: 2
 
     // ── Activity-aware color (shared by number and icon) ──────────────
     readonly property color _activityColor: {
-        if (root.activityState === "needs_permission") return Colours.palette.m3error;
-        if (root.isBusy) return Colours.palette.m3primary;
+        if (root.isBusy || root._keyMorphActive || root._keyEmerging) return Colours.palette.m3primary;
         return root.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant;
     }
 
     readonly property int _fontWeight: (root.active || root.isBusy) ? Font.DemiBold : Font.Normal
 
     readonly property string _sparkleMode: {
+        // Key permission morph takes visual priority
+        if (root._keyMorphActive) return "key-morph";
+        if (root._keyEmerging) return "starting";
+        // STT wave/morph
         if (root.isSttTarget) {
             if (root._sttEmerging) return "starting";
             if (root._sttWaving) return "stt-wave";
@@ -54,8 +59,10 @@ Row {
     onIsBusyChanged: {
         if (root.isBusy) {
             root._isClosing = false
-        } else if (root.activityState !== "needs_permission") {
-            // Only collapse when going idle — needs_permission shows lock icon instead
+        } else if (root.activityState === "needs_permission") {
+            // Busy → needs_permission: starburst is already showing, morph directly to key
+            root._keyMorphActive = true
+        } else {
             root._isClosing = true
         }
     }
@@ -78,19 +85,14 @@ Row {
             // (e.g., user submits a prompt → "thinking" while blink is still playing)
             root._blinkClosing = false
         }
-        // When a new "clearing" arrives while _blinkClosing is true, the
-        // dormant dot is already showing — no restart needed. If a fresh
-        // blink is desired, the bridge emits a non-clearing state first,
-        // which resets _blinkClosing via the branch above.
-    }
-
-    // ── Icon mapping ─────────────────────────────────────────────────
-    readonly property string _iconText: _activityIcon(root.activityState)
-
-    function _activityIcon(state: string): string {
-        switch (state) {
-            case "needs_permission": return "lock";
-            default:                 return ""; // working/thinking/starting handled by ClaudeSparkle
+        // Key morph: entering needs_permission from idle (dormant dot)
+        if (root.activityState === "needs_permission" && !root.isBusy && !root._keyMorphActive) {
+            root._keyEmerging = true
+        }
+        // Key morph: leaving needs_permission — reset key flags
+        if (root.activityState !== "needs_permission") {
+            root._keyMorphActive = false
+            root._keyEmerging = false
         }
     }
 
@@ -106,18 +108,30 @@ Row {
     ClaudeSparkle {
         id: sparkle
         color: "#d97757" // Claude brand orange — intentionally fixed, not themed
-        // 0.6× for STT emerge and both clear-blink phases (activityState stays
-        // "clearing" through starting AND stopping). stt-morph/stt-wave run at 1.0.
+        // 0.6× for STT/key emerge and both clear-blink phases (activityState stays
+        // "clearing" through starting AND stopping). stt-morph/stt-wave/key-morph run at 1.0.
         // Total clear-blink: ~545ms + ~1094ms ≈ 1640ms at 0.6×.
-        speedFactor: (root._sttEmerging || root.activityState === "clearing") ? 0.6 : 1.0
+        speedFactor: (root._sttEmerging || root._keyEmerging || root.activityState === "clearing") ? 0.6 : 1.0
         mode: root._sparkleMode
-        // Skip to dormant dot on creation if agent is already idle
+        // Handle initial state on creation (no animation — skip to final frame)
         Component.onCompleted: {
-            if (!root.isBusy && !root._isClosing) sparkle.skipToEnd()
+            if (root.activityState === "needs_permission" && !root.isBusy) {
+                // Already in needs_permission — show key shape directly
+                root._keyEmerging = false
+                root._keyMorphActive = true
+                sparkle.skipToEnd()
+            } else if (!root.isBusy && !root._isClosing) {
+                sparkle.skipToEnd()
+            }
         }
         onAnimationComplete: {
+            // Key emerge: starting completes → transition to key-morph
+            if (root._keyEmerging) {
+                root._keyEmerging = false
+                root._keyMorphActive = true
+            // Key-morph completion: one-shot holds at key shape, no handler needed.
             // STT emerge: starting completes → transition to stt-morph
-            if (root.isSttTarget && root._sttEmerging) {
+            } else if (root.isSttTarget && root._sttEmerging) {
                 root._sttEmerging = false
             // STT morph: morph completes → transition to looping stt-wave
             } else if (root.isSttTarget && !root._sttWaving) {
@@ -138,16 +152,6 @@ Row {
             // true (keeping mode at "stopping" / dormant dot) until activityState
             // changes away from "clearing" — handled by onActivityStateChanged.
         }
-    }
-
-    // ── Activity state icon (non-busy states only) ──────────────────
-    MaterialIcon {
-        visible: !root.isBusy && root._iconText !== ""
-        width: visible ? implicitWidth : 0
-        text: root._iconText
-        color: root._activityColor
-        font.pointSize: Appearance.font.size.small
-        fill: root.activityState === "needs_permission" ? 1 : 0
     }
 
 }
