@@ -514,17 +514,39 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
 
-            // Language badge (EN/ES) shown above audio bars during active states
+            // Language badge + elapsed timer on a single line above audio bars
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.languageLabel !== "" && (root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing")
+                show: root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing"
 
-                StyledText {
-                    text: root.languageLabel
-                    font.pointSize: Appearance.font.size.small
-                    font.family: Appearance.font.family.mono
-                    color: Colours.palette.m3outline
+                Row {
+                    spacing: Appearance.spacing.smaller
                     opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
+
+                    StyledText {
+                        visible: root.languageLabel !== ""
+                        text: root.languageLabel
+                        font.pointSize: Appearance.font.size.small
+                        font.family: Appearance.font.family.mono
+                        color: Colours.palette.m3outline
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    StyledText {
+                        visible: root.languageLabel !== ""
+                        text: "·"
+                        font.pointSize: Appearance.font.size.small
+                        color: Colours.palette.m3outline
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    StyledText {
+                        text: root.formatElapsedTime(root.serviceElapsedSeconds)
+                        font.pointSize: Appearance.font.size.small
+                        font.family: Appearance.font.family.mono
+                        color: Colours.palette.m3outline
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
             }
 
@@ -632,21 +654,6 @@ Item {
                             opacity: waveOpacity
                         }
                     }
-                }
-            }
-
-            // Elapsed time display (centered below audio bars, visible during recording/paused/processing)
-            FadeTransition {
-                Layout.alignment: Qt.AlignHCenter
-
-                show: root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing"
-
-                StyledText {
-                    text: root.formatElapsedTime(root.serviceElapsedSeconds)
-                    font.pointSize: Appearance.font.size.small
-                    font.family: Appearance.font.family.mono
-                    color: Colours.palette.m3outline
-                    opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
                 }
             }
 
