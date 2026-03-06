@@ -8,6 +8,8 @@ Symmetria Shell is a Quickshell-based desktop shell for Hyprland. It provides a 
 
 **Do NOT use Chrome DevTools MCP tools** (take_screenshot, take_snapshot, click, etc.) in this project. This is a native Wayland desktop shell, not a web application. For screenshots, use `grim` via the Bash tool instead.
 
+**Do NOT restart or kill the running shell process.** The user is typically running Symmetria as their active desktop shell while developing. Starting a second instance or killing the running one causes conflicts, crashes, and broken UI state. After making QML/asset changes, simply clear the cache (`rm -rf ~/.cache/quickshell/qmlcache`) and inform the user that a restart is needed — **let the user restart manually**.
+
 **Upstream:** https://github.com/caelestia-dots/shell
 
 ## Branch Structure
