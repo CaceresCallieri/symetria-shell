@@ -55,9 +55,11 @@ Item {
         target: dialog
     }
 
-    // Transparent click catcher — dismiss when clicking outside the dialog
-    // Only enabled when the dialog is showing; otherwise this full-window
-    // MouseArea would block all click events in the drawers window.
+    // Transparent click catcher — dismiss when clicking outside the dialog.
+    // Only enabled when the dialog is showing to avoid blocking click events.
+    // Note: enabled: false does NOT prevent cursor shadowing — that is handled
+    // by the parent Item's visible: dialogScale > 0 gate, which removes this
+    // entire subtree from Qt Quick's cursor hit-testing when idle.
     MouseArea {
         anchors.fill: parent
         enabled: root.shouldShow

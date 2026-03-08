@@ -252,3 +252,39 @@ This is NOT a platform-level Quickshell/Qt/Wayland bug. Cursor shapes DO work on
 - Does `layer.enabled: true` on a sibling Item affect Qt Quick's cursor resolution for other siblings? This would be a Qt Quick bug
 - Does a disabled but visible MouseArea in a higher z-order sibling block cursor resolution for lower siblings?
 - Is `color: "transparent"` on the WlrLayershell significant? The first minimal test used `color: "#2d2d2d"`
+
+---
+
+## Pass 4
+
+**Timestamp**: 2026-03-08
+**Status**: resolved
+
+### Findings
+
+**Binary search results** (user-tested each variant):
+
+| Test | Config | Cursor Works? | Conclusion |
+|------|--------|---------------|------------|
+| A: Remove overlay (Layer 4) | Layers 1+2+3 only | **Yes** | **Overlay is the culprit** |
+| B: Remove layer.enabled (Layer 2) | Layers 1+3+4 | No | layer.enabled is not the issue |
+| C: Opaque window color | All 4 layers, color: "#2d2d2d" | No | Transparency is not the issue |
+
+**Root cause confirmed**: The overlay Item (`modules/keychords/Overlay.qml`) used `dialogScale: shouldShow ? 1.0 : 0.01`, making `visible: dialogScale > 0` always true. Its full-window dismiss `MouseArea` (with `enabled: false`) sat at the highest z-order in `Drawers.qml:236`. Qt Quick's cursor hit-testing considers visible MouseAreas regardless of `enabled` state — the overlay's default ArrowCursor was found first, shadowing all `cursorShape` settings below.
+
+### Fix Applied
+
+Changed `dialogScale` idle value from `0.01` to `0.0` in `modules/keychords/Overlay.qml:30`:
+- When idle: `dialogScale = 0.0` → `visible: 0.0 > 0` → `false` → overlay removed from cursor hit-testing
+- Close animation: scale passes through positive values → `visible: true` during animation → `visible: false` at completion
+- Added explanatory comment documenting the constraint
+
+Also added `hoverEnabled: true` and `cursorShape: Qt.PointingHandCursor` to three bar components with inline MouseAreas: `TrayItem.qml`, `Workspace.qml`, `SpecialWorkspaces.qml`.
+
+### Eliminated
+- **Hypothesis #7 (layer.enabled + MultiEffect)**: ELIMINATED — Test B removed Layer 2 but cursor still broken
+- **Hypothesis #8 (transparent window color)**: ELIMINATED — Test C used opaque color but cursor still broken
+- **Hypothesis #9 (overlay Item with disabled MouseArea)**: CONFIRMED — Test A removed the overlay and cursor worked
+
+### Resolved
+All pointer cursors now appear correctly on buttons, tray items, workspace indicators, and special workspace items. The `Easing.OutBack` overshoot below 0 on close animation is safe because `visible: dialogScale > 0` removes the item from rendering before sub-zero frames occur.

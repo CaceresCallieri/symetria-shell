@@ -26,7 +26,7 @@ property real dialogScale: shouldShow ? 1.0 : 0.01  // visible: 0.01 > 0 → tru
 property real dialogScale: shouldShow ? 1.0 : 0.0    // visible: 0.0 > 0 → false (when idle)
 ```
 
-When `shouldShow` is false, `dialogScale` animates to `0.0`, making `visible: dialogScale > 0` evaluate to `false`. The overlay and its MouseArea are removed from cursor hit-testing. The close animation still works because `dialogScale` passes through positive values on its way to `0.0`, keeping the item visible during the animation. The `Easing.OutBack` overshoot below 0 is imperceptible at near-zero scale.
+When `shouldShow` is false, `dialogScale` animates to `0.0`, making `visible: dialogScale > 0` evaluate to `false`. The overlay and its MouseArea are removed from cursor hit-testing. The close animation still works because `dialogScale` passes through positive values on its way to `0.0`, keeping the item visible during the animation. The moment `dialogScale` crosses zero, `visible` becomes `false` and Qt Quick removes the entire subtree before any sub-zero frames are rendered, so the `Easing.OutBack` overshoot into negative values is never seen.
 
 ## Key Findings
 
