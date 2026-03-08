@@ -46,45 +46,8 @@ Column {
             Layout.alignment: Qt.AlignVCenter
             spacing: Appearance.spacing.smaller
 
-            Row {
-                spacing: 2
-
-                MaterialIcon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "arrow_drop_up"
-                    font.pointSize: Appearance.font.size.small
-                    color: Colours.palette.m3onSurface
-                    opacity: 0.5
-                }
-
-                StyledText {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Weather.tempMax
-                    font.pointSize: Appearance.font.size.small
-                    font.family: Appearance.font.family.mono
-                    opacity: 0.5
-                }
-            }
-
-            Row {
-                spacing: 2
-
-                MaterialIcon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "arrow_drop_down"
-                    font.pointSize: Appearance.font.size.small
-                    color: Colours.palette.m3onSurface
-                    opacity: 0.5
-                }
-
-                StyledText {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Weather.tempMin
-                    font.pointSize: Appearance.font.size.small
-                    font.family: Appearance.font.family.mono
-                    opacity: 0.5
-                }
-            }
+            TempBound { icon: "arrow_drop_up"; value: Weather.tempMax }
+            TempBound { icon: "arrow_drop_down"; value: Weather.tempMin }
         }
     }
 
@@ -199,6 +162,28 @@ Column {
             text: parent.value
             font.family: Appearance.font.family.mono
             font.weight: 500
+        }
+    }
+
+    component TempBound: Row {
+        required property string icon
+        required property string value
+
+        // Tight spacing — icon glyphs have internal whitespace
+        spacing: 2
+
+        MaterialIcon {
+            text: parent.icon
+            font.pointSize: Appearance.font.size.small
+            color: Colours.palette.m3onSurface
+            opacity: 0.5
+        }
+
+        StyledText {
+            text: parent.value
+            font.pointSize: Appearance.font.size.small
+            font.family: Appearance.font.family.mono
+            opacity: 0.5
         }
     }
 }
