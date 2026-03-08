@@ -26,8 +26,16 @@ Item {
 
     visible: dialogScale > 0
 
-    // Animated properties driven by shouldShow state
-    property real dialogScale: shouldShow ? 1.0 : 0.01
+    // Animated properties driven by shouldShow state.
+    // IMPORTANT: The idle value MUST be 0.0, not 0.01 or any positive number.
+    // When dialogScale > 0, this Item is visible: true, which means its
+    // full-window dismiss MouseArea participates in Qt Quick's cursor
+    // hit-testing — even with enabled: false. Being the highest z-order
+    // sibling in Drawers.qml, its default ArrowCursor shadows every
+    // cursorShape below (buttons, tray items, etc.), preventing pointer
+    // cursors from ever reaching the Wayland cursor-shape-v1 protocol.
+    // See: docs/cursor-shape-layer-shell.md
+    property real dialogScale: shouldShow ? 1.0 : 0.0
     property real dialogOpacity: shouldShow ? 1.0 : 0.0
 
     Behavior on dialogScale {
