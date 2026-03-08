@@ -190,7 +190,6 @@ StyledRect {
 
             AgentChip {
                 required property var modelData
-                required property int index
 
                 Layout.alignment: Qt.AlignVCenter
 
