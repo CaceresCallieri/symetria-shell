@@ -8,7 +8,7 @@ Symmetria Shell is a Quickshell-based desktop shell for Hyprland. It provides a 
 
 **Do NOT use Chrome DevTools MCP tools** (take_screenshot, take_snapshot, click, etc.) in this project. This is a native Wayland desktop shell, not a web application. For screenshots, use `grim` via the Bash tool instead.
 
-**Do NOT restart or kill the running shell process.** The user is typically running Symmetria as their active desktop shell while developing. Starting a second instance or killing the running one causes conflicts, crashes, and broken UI state. After making QML/asset changes, simply clear the cache (`rm -rf ~/.cache/quickshell/qmlcache`) and inform the user that a restart is needed — **let the user restart manually**.
+**Do NOT start, restart, or kill the shell process.** The user is typically running Symmetria as their active desktop shell while developing. **NEVER run `qs -c symmetria`, `symmetria shell`, or any command that launches the shell** — not even for diagnostics like `WAYLAND_DEBUG=1 qs -c symmetria`. Starting a second instance causes conflicts, crashes, and broken UI state. After making QML/asset changes, simply clear the cache (`rm -rf ~/.cache/quickshell/qmlcache`) and inform the user that a restart is needed — **let the user restart manually**. For diagnostics that require special environment variables, tell the user the exact command to run.
 
 **Upstream:** https://github.com/caelestia-dots/shell
 
@@ -412,6 +412,9 @@ Result: bar area is INSIDE mainRect → XOR REMOVES it from the input region →
 
 **Full-window MouseAreas in the drawers window:**
 Any `MouseArea { anchors.fill: parent }` placed as a sibling of `Interactions` in the StyledWindow will sit above it in z-order and intercept ALL click events. Such MouseAreas MUST be guarded with `enabled: <condition>` to prevent blocking the entire bar's click interactivity. Reference: `modules/keychords/Overlay.qml` guards its dismiss-on-click MouseArea with `enabled: root.shouldShow`.
+
+**⚠️ Cursor shadowing by visible disabled MouseAreas (CRITICAL):**
+`enabled: false` on a MouseArea prevents event delivery but does NOT prevent it from participating in Qt Quick's cursor hit-testing. A `visible: true` MouseArea at the highest z-order will shadow ALL `cursorShape` settings on items below it — the cursor stays as the default arrow everywhere. This is why overlay components that use scale-driven visibility (`visible: scale > 0`) MUST animate to exactly `0.0` when idle, not `0.01` or any positive value. Full-window MouseAreas in overlays need **both** `enabled` and `visible` guards. See: `docs/cursor-shape-layer-shell.md`.
 
 ### C++ Plugin Modules
 Located in `plugin/src/Symmetria/`:
