@@ -23,6 +23,8 @@ Singleton {
     readonly property real windSpeed: cc?.windSpeed ?? 0
     readonly property string sunrise: cc ? Qt.formatDateTime(new Date(cc.sunrise), Config.services.useTwelveHourClock ? "h:mm A" : "h:mm") : "--:--"
     readonly property string sunset: cc ? Qt.formatDateTime(new Date(cc.sunset), Config.services.useTwelveHourClock ? "h:mm A" : "h:mm") : "--:--"
+    readonly property string tempMax: forecast.length > 0 ? (Config.services.useFahrenheit ? `${forecast[0].maxTempF}°` : `${forecast[0].maxTempC}°`) : ""
+    readonly property string tempMin: forecast.length > 0 ? (Config.services.useFahrenheit ? `${forecast[0].minTempF}°` : `${forecast[0].minTempC}°`) : ""
 
     readonly property var cachedCities: new Map()
 

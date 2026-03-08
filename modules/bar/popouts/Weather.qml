@@ -25,7 +25,7 @@ Column {
 
         Column {
             Layout.fillWidth: true
-            spacing: Appearance.spacing.smaller
+            spacing: 0
 
             StyledText {
                 text: Weather.temp
@@ -37,6 +37,53 @@ Column {
                 text: Weather.city ? `${Weather.description} in ${Weather.city}` : Weather.description
                 font.pointSize: Appearance.font.size.small
                 opacity: 0.8
+            }
+        }
+
+        // Today's min/max range (right-aligned, subdued)
+        Column {
+            visible: Weather.forecast.length > 0
+            Layout.alignment: Qt.AlignVCenter
+            spacing: Appearance.spacing.smaller
+
+            Row {
+                spacing: 2
+
+                MaterialIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "arrow_drop_up"
+                    font.pointSize: Appearance.font.size.small
+                    color: Colours.palette.m3onSurface
+                    opacity: 0.5
+                }
+
+                StyledText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Weather.tempMax
+                    font.pointSize: Appearance.font.size.small
+                    font.family: Appearance.font.family.mono
+                    opacity: 0.5
+                }
+            }
+
+            Row {
+                spacing: 2
+
+                MaterialIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "arrow_drop_down"
+                    font.pointSize: Appearance.font.size.small
+                    color: Colours.palette.m3onSurface
+                    opacity: 0.5
+                }
+
+                StyledText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: Weather.tempMin
+                    font.pointSize: Appearance.font.size.small
+                    font.family: Appearance.font.family.mono
+                    opacity: 0.5
+                }
             }
         }
     }
