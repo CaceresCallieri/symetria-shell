@@ -194,7 +194,6 @@ StyledRect {
 
                 Layout.alignment: Qt.AlignVCenter
 
-                instanceNum: index + 1
                 active: modelData.active ?? false
                 activityState: modelData.activity_state ?? ""
                 activityTool: modelData.activity_tool ?? ""

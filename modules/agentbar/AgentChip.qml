@@ -5,11 +5,10 @@ import qs.services
 import qs.config
 import QtQuick
 
-/// Individual agent display: instance number + sparkle animation (busy) or activity icon.
-Row {
+/// Individual agent display: sparkle animation (busy) or activity icon.
+Item {
     id: root
 
-    required property int instanceNum
     required property bool active
     required property string activityState
     required property string activityTool
@@ -23,15 +22,8 @@ Row {
     property bool _keyEmerging: false // true during dot → starburst emerge before key morph
     property bool _keyMorphActive: false // true while key-morph sprite is playing or held at key shape
 
-    spacing: 2
-
-    // ── Activity-aware color (shared by number and icon) ──────────────
-    readonly property color _activityColor: {
-        if (root.isBusy || root._keyMorphActive || root._keyEmerging) return Colours.palette.m3primary;
-        return root.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant;
-    }
-
-    readonly property int _fontWeight: (root.active || root.isBusy) ? Font.DemiBold : Font.Normal
+    implicitWidth: sparkle.implicitWidth
+    implicitHeight: sparkle.implicitHeight
 
     readonly property string _sparkleMode: {
         // Key permission morph takes visual priority
@@ -94,14 +86,6 @@ Row {
             root._keyMorphActive = false
             root._keyEmerging = false
         }
-    }
-
-    // ── Instance number ──────────────────────────────────────────────
-    StyledText {
-        text: root.instanceNum
-        color: root._activityColor
-        font.weight: root._fontWeight
-        font.pointSize: Appearance.font.size.small
     }
 
     // ── Claude sparkle (always visible — dormant dot when idle, animates when busy) ──
