@@ -58,8 +58,9 @@ Item {
 
     // All text entries from current search/filter — backing data for the ListModel
     readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage)
-    // Whether more text entries can be loaded (set imperatively by append/reset)
-    property bool _hasMoreText: false
+    // Whether more text entries can be loaded
+    readonly property bool _hasMoreText: _textModel.count < allTextEntries.length
+    readonly property int _pageSize: Config.clipboard.maxDisplayed
 
     // Progressive ListModel: only holds the currently visible slice.
     // append() adds entries without disturbing existing delegates or scroll position.
@@ -124,12 +125,11 @@ Item {
         const end = Math.min(start + count, allTextEntries.length);
         for (let i = start; i < end; i++)
             _textModel.append({ idx: i });
-        _hasMoreText = _textModel.count < allTextEntries.length;
     }
 
     function _loadMoreText(): void {
         if (!_hasMoreText) return;
-        _appendTextEntries(20);
+        _appendTextEntries(_pageSize);
     }
 
     // Debounce timer for search input
@@ -373,7 +373,8 @@ Item {
             onAccepted: {
                 const textList = textPane.item;
                 if (!textList) return;
-                const entry = root.allTextEntries[textList.currentIndex];
+                const idx = _textModel.get(textList.currentIndex)?.idx;
+                const entry = idx !== undefined ? root.allTextEntries[idx] : undefined;
                 if (entry) {
                     Clipboard.restore(entry.id);
                     root.visibilities.clipboard = false;
@@ -390,8 +391,11 @@ Item {
             Keys.onDownPressed: {
                 const textList = textPane.item;
                 if (!textList) return;
-                if (textList.currentIndex < _textModel.count - 1)
+                if (textList.currentIndex < _textModel.count - 1) {
                     textList.currentIndex++;
+                } else if (root._hasMoreText) {
+                    root._loadMoreText();
+                }
             }
 
             Keys.onEscapePressed: root.visibilities.clipboard = false
