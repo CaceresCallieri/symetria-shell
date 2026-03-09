@@ -28,6 +28,9 @@ Item {
     readonly property int tabText: 0
     readonly property int tabImages: 1
 
+    // Natural height of search bar (constant — used for Images tab content expansion)
+    readonly property real _searchBarNaturalHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+
     // Double-click confirmation state for clear all
     property bool confirmClear: false
 
@@ -189,8 +192,17 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        // Use fixed height (1/2 of max) for consistent sizing between tabs
-        implicitHeight: root.maxHeight / 2
+        // Height expands on Images tab to reclaim collapsed search bar space
+        implicitHeight: root.state.currentTab === root.tabImages
+            ? root.maxHeight / 2 + root._searchBarNaturalHeight
+            : root.maxHeight / 2
+
+        Behavior on implicitHeight {
+            Anim {
+                duration: Appearance.anim.durations.large
+                easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+            }
+        }
 
         Flickable {
             id: view
@@ -267,10 +279,12 @@ Item {
         }
     }
 
-    // Search bar at bottom (like launcher)
+    // Search bar at bottom (like launcher) — collapses on Images tab
     StyledRect {
         id: searchWrapper
 
+        clip: true
+        visible: implicitHeight > 0
         color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
         radius: Appearance.rounding.full
 
@@ -281,7 +295,16 @@ Item {
         anchors.leftMargin: root.padding
         anchors.rightMargin: root.padding
 
-        implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+        implicitHeight: root.state.currentTab === root.tabText
+            ? Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+            : 0
+
+        Behavior on implicitHeight {
+            Anim {
+                duration: Appearance.anim.durations.large
+                easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+            }
+        }
 
         MaterialIcon {
             id: searchIcon
@@ -370,32 +393,6 @@ Item {
             }
         }
 
-        // Invisible focus receiver for images tab keyboard navigation
-        Item {
-            id: imageNavFocus
-
-            visible: root.state.currentTab === root.tabImages
-            focus: visible
-            anchors.fill: parent
-
-            Keys.onUpPressed: root._imageNavUp()
-            Keys.onDownPressed: root._imageNavDown()
-            Keys.onLeftPressed: root._imageNavLeft()
-            Keys.onRightPressed: root._imageNavRight()
-
-            Keys.onReturnPressed: root._imageNavConfirm()
-
-            Keys.onEscapePressed: root.visibilities.clipboard = false
-
-            Keys.onPressed: event => {
-                // Tab key cycles between tabs
-                if (event.key === Qt.Key_Tab) {
-                    root.state.currentTab = (root.state.currentTab + 1) % 2;
-                    event.accepted = true;
-                }
-            }
-        }
-
         // Clear search / Clear all button (text tab only)
         MaterialIcon {
             id: clearIcon
@@ -459,6 +456,35 @@ Item {
                         confirmTimer.restart();
                     }
                 }
+            }
+        }
+    }
+
+    // Invisible focus receiver for images tab keyboard navigation.
+    // Lives outside searchWrapper (which collapses on Images tab) so it
+    // remains visible and focusable for keyboard nav on the Images tab.
+    Item {
+        id: imageNavFocus
+
+        width: 0
+        height: 0
+        visible: root.state.currentTab === root.tabImages
+        focus: visible
+
+        Keys.onUpPressed: root._imageNavUp()
+        Keys.onDownPressed: root._imageNavDown()
+        Keys.onLeftPressed: root._imageNavLeft()
+        Keys.onRightPressed: root._imageNavRight()
+
+        Keys.onReturnPressed: root._imageNavConfirm()
+
+        Keys.onEscapePressed: root.visibilities.clipboard = false
+
+        Keys.onPressed: event => {
+            // Tab key cycles between tabs
+            if (event.key === Qt.Key_Tab) {
+                root.state.currentTab = (root.state.currentTab + 1) % 2;
+                event.accepted = true;
             }
         }
     }
