@@ -56,9 +56,17 @@ Item {
         }).find(debouncedSearchText).map(r => r.item);
     }
 
-    readonly property var textEntries: allFilteredEntries
-        .filter(e => !e.isImage)
-        .slice(0, Config.clipboard.maxDisplayed)
+    // All text entries from current search/filter — backing data for the ListModel
+    readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage)
+    // Whether more text entries can be loaded (set imperatively by append/reset)
+    property bool _hasMoreText: false
+
+    // Progressive ListModel: only holds the currently visible slice.
+    // append() adds entries without disturbing existing delegates or scroll position.
+    ListModel { id: _textModel }
+
+    // Sync model when backing data changes (search, new clipboard entries)
+    onAllTextEntriesChanged: _resetTextEntries()
     // Images use a ListModel from Clipboard — append() adds delegates
     // incrementally without destroying existing ones (progressive loading).
     readonly property var imageEntries: Clipboard.decodedImageEntries
@@ -106,6 +114,24 @@ Item {
         }
     }
 
+    function _resetTextEntries(): void {
+        _textModel.clear();
+        _appendTextEntries(Config.clipboard.maxDisplayed);
+    }
+
+    function _appendTextEntries(count): void {
+        const start = _textModel.count;
+        const end = Math.min(start + count, allTextEntries.length);
+        for (let i = start; i < end; i++)
+            _textModel.append({ idx: i });
+        _hasMoreText = _textModel.count < allTextEntries.length;
+    }
+
+    function _loadMoreText(): void {
+        if (!_hasMoreText) return;
+        _appendTextEntries(20);
+    }
+
     // Debounce timer for search input
     Timer {
         id: searchDebounce
@@ -126,7 +152,8 @@ Item {
                 root._refCounted = true;
                 Clipboard.refCount++;
             }
-            // Reset list indices on open
+            // Reset model to initial batch and list indices on open
+            root._resetTextEntries();
             if (textPane.item)
                 textPane.item.currentIndex = 0;
             if (imagePane.item)
@@ -259,7 +286,10 @@ Item {
                     id: textPane
                     index: 0
                     sourceComponent: TextList {
-                        entries: root.textEntries
+                        entries: _textModel
+                        allEntries: root.allTextEntries
+                        hasMore: root._hasMoreText
+                        loadMore: () => root._loadMoreText()
                         visibilities: root.visibilities
                         searchQuery: root.debouncedSearchText
                         maxHeight: contentWrapper.implicitHeight
@@ -343,7 +373,7 @@ Item {
             onAccepted: {
                 const textList = textPane.item;
                 if (!textList) return;
-                const entry = root.textEntries[textList.currentIndex];
+                const entry = root.allTextEntries[textList.currentIndex];
                 if (entry) {
                     Clipboard.restore(entry.id);
                     root.visibilities.clipboard = false;
@@ -360,7 +390,7 @@ Item {
             Keys.onDownPressed: {
                 const textList = textPane.item;
                 if (!textList) return;
-                if (textList.currentIndex < root.textEntries.length - 1)
+                if (textList.currentIndex < _textModel.count - 1)
                     textList.currentIndex++;
             }
 
@@ -511,7 +541,10 @@ Item {
     component TextList: Item {
         id: textListRoot
 
-        required property var entries
+        required property var entries        // ListModel for progressive loading
+        required property var allEntries     // Full JS array for entry lookup
+        required property bool hasMore
+        required property var loadMore       // () => void
         required property PersistentProperties visibilities
         required property string searchQuery
         required property real maxHeight
@@ -520,12 +553,12 @@ Item {
         property alias currentIndex: textList.currentIndex
 
         implicitWidth: Config.clipboard.sizes.itemWidth
-        implicitHeight: textListRoot.entries.length > 0 ? textList.height + Appearance.spacing.normal : emptyText.implicitHeight
+        implicitHeight: textListRoot.entries.count > 0 ? textList.height + Appearance.spacing.normal : emptyText.implicitHeight
 
         StyledListView {
             id: textList
 
-            visible: textListRoot.entries.length > 0
+            visible: textListRoot.entries.count > 0
             model: textListRoot.entries
             width: Config.clipboard.sizes.itemWidth
             height: Math.min(contentHeight, textListRoot.maxHeight)
@@ -534,6 +567,33 @@ Item {
             topMargin: Appearance.spacing.normal
             orientation: Qt.Vertical
             reuseItems: true
+
+            // Infinite scroll: load more entries when approaching bottom
+            onContentYChanged: _checkLoadMore()
+            onContentHeightChanged: _checkLoadMore()
+
+            function _checkLoadMore(): void {
+                if (!textListRoot.hasMore) return;
+                const threshold = 100;
+                if (contentY + height >= contentHeight - threshold)
+                    textListRoot.loadMore();
+            }
+
+            footer: Item {
+                width: textList.width
+                height: textListRoot.hasMore ? spinner.implicitHeight + Appearance.padding.large * 2 : 0
+                visible: textListRoot.hasMore
+
+                CircularIndicator {
+                    id: spinner
+                    anchors.centerIn: parent
+                    implicitSize: Appearance.font.size.large * 2
+                    strokeWidth: Appearance.padding.small * 0.5
+                    fgColour: Colours.palette.m3onSurfaceVariant
+                    bgColour: "transparent"
+                    running: parent.visible
+                }
+            }
 
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
@@ -558,10 +618,10 @@ Item {
             }
 
             delegate: ClipboardItem {
-                required property var modelData
+                required property int idx
                 required property int index
 
-                entry: modelData
+                entry: textListRoot.allEntries[idx]
                 visibilities: textListRoot.visibilities
                 searchQuery: textListRoot.searchQuery
             }
@@ -607,7 +667,7 @@ Item {
         Row {
             id: emptyText
 
-            visible: textListRoot.entries.length === 0
+            visible: textListRoot.entries.count === 0
             readonly property bool isSearchEmpty: textListRoot.searchQuery !== ""
 
             opacity: visible ? 1 : 0
