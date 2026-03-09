@@ -90,6 +90,7 @@ Item {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             smooth: true
+            cache: true
 
             layer.enabled: true
             layer.effect: OpacityMask {

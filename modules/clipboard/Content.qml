@@ -60,10 +60,9 @@ Item {
     }
 
     readonly property var textEntries: filterByType(false, Config.clipboard.maxDisplayed)
-    // Images bypass search filtering - they have no searchable text content
-    readonly property var imageEntries: Clipboard.entries
-        .filter(e => e.isImage)
-        .slice(0, Config.clipboard.maxImagesDisplayed)
+    // Images use a ListModel from Clipboard — append() adds delegates
+    // incrementally without destroying existing ones (progressive loading).
+    readonly property var imageEntries: Clipboard.decodedImageEntries
 
     // Calculate estimated list height for text entries (images use grid)
     function calculateListHeight(): real {
@@ -302,7 +301,7 @@ Item {
                 } else {
                     const imageGrid = imagePane.item;
                     if (!imageGrid) return;
-                    const entry = root.imageEntries[imageGrid.currentIndex];
+                    const entry = root.imageEntries.get(imageGrid.currentIndex)?.entry;
                     if (entry) {
                         Clipboard.restore(entry.id);
                         root.visibilities.clipboard = false;
@@ -318,7 +317,7 @@ Item {
                         textList.currentIndex--;
                 } else {
                     const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    if (!imageGrid || root.imageEntries.count === 0) return;
                     const cols = imageGrid.columnCount;
                     if (imageGrid.currentIndex >= cols)
                         imageGrid.currentIndex -= cols;
@@ -333,10 +332,10 @@ Item {
                         textList.currentIndex++;
                 } else {
                     const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    if (!imageGrid || root.imageEntries.count === 0) return;
                     const cols = imageGrid.columnCount;
                     const newIndex = imageGrid.currentIndex + cols;
-                    if (newIndex < root.imageEntries.length)
+                    if (newIndex < root.imageEntries.count)
                         imageGrid.currentIndex = newIndex;
                 }
             }
@@ -344,7 +343,7 @@ Item {
             Keys.onLeftPressed: {
                 if (root.state.currentTab === root.tabImages) {
                     const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    if (!imageGrid || root.imageEntries.count === 0) return;
                     if (imageGrid.currentIndex > 0)
                         imageGrid.currentIndex--;
                 }
@@ -353,9 +352,9 @@ Item {
             Keys.onRightPressed: {
                 if (root.state.currentTab === root.tabImages) {
                     const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
+                    if (!imageGrid || root.imageEntries.count === 0) return;
                     const newIndex = imageGrid.currentIndex + 1;
-                    if (newIndex < root.imageEntries.length)
+                    if (newIndex < root.imageEntries.count)
                         imageGrid.currentIndex = newIndex;
                 }
             }
@@ -381,7 +380,7 @@ Item {
 
             Keys.onUpPressed: {
                 const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
+                if (!imageGrid || root.imageEntries.count === 0) return;
                 const cols = imageGrid.columnCount;
                 if (imageGrid.currentIndex >= cols)
                     imageGrid.currentIndex -= cols;
@@ -389,32 +388,32 @@ Item {
 
             Keys.onDownPressed: {
                 const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
+                if (!imageGrid || root.imageEntries.count === 0) return;
                 const cols = imageGrid.columnCount;
                 const newIndex = imageGrid.currentIndex + cols;
-                if (newIndex < root.imageEntries.length)
+                if (newIndex < root.imageEntries.count)
                     imageGrid.currentIndex = newIndex;
             }
 
             Keys.onLeftPressed: {
                 const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
+                if (!imageGrid || root.imageEntries.count === 0) return;
                 if (imageGrid.currentIndex > 0)
                     imageGrid.currentIndex--;
             }
 
             Keys.onRightPressed: {
                 const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
+                if (!imageGrid || root.imageEntries.count === 0) return;
                 const newIndex = imageGrid.currentIndex + 1;
-                if (newIndex < root.imageEntries.length)
+                if (newIndex < root.imageEntries.count)
                     imageGrid.currentIndex = newIndex;
             }
 
             Keys.onReturnPressed: {
                 const imageGrid = imagePane.item;
                 if (!imageGrid) return;
-                const entry = root.imageEntries[imageGrid.currentIndex];
+                const entry = root.imageEntries.get(imageGrid.currentIndex)?.entry;
                 if (entry) {
                     Clipboard.restore(entry.id);
                     root.visibilities.clipboard = false;

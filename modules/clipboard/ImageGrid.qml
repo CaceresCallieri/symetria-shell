@@ -25,12 +25,12 @@ Item {
     readonly property int cellWidth: Math.floor(itemWidth / columnCount)
 
     implicitWidth: itemWidth
-    implicitHeight: root.entries.length > 0 ? grid.height : empty.implicitHeight
+    implicitHeight: root.entries.count > 0 ? grid.height : empty.implicitHeight
 
     GridView {
         id: grid
 
-        visible: root.entries.length > 0
+        visible: root.entries.count > 0
         width: root.itemWidth
         height: Math.min(contentHeight, root.maxHeight)
         clip: true
@@ -65,7 +65,7 @@ Item {
 
         // Wrapper Item fills the cell; ImageGridItem anchors within it
         delegate: Item {
-            required property var modelData
+            required property var entry
             required property int index
 
             width: grid.cellWidth
@@ -79,7 +79,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
 
-                entry: parent.modelData
+                entry: parent.entry
                 visibilities: root.visibilities
             }
         }
@@ -115,7 +115,7 @@ Item {
     Row {
         id: empty
 
-        visible: root.entries.length === 0
+        visible: root.entries.count === 0
         readonly property bool isSearchEmpty: root.searchQuery !== ""
 
         opacity: visible ? 1 : 0
