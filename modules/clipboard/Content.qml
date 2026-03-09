@@ -28,7 +28,9 @@ Item {
     readonly property int tabText: 0
     readonly property int tabImages: 1
 
-    // Natural height of search bar (constant — used for Images tab content expansion)
+    // Natural height of search bar — effectively constant since font sizes
+    // don't change at runtime. Used to expand contentWrapper on Images tab
+    // by exactly the amount searchWrapper loses, preserving total height.
     readonly property real _searchBarNaturalHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
 
     // Double-click confirmation state for clear all
@@ -161,7 +163,11 @@ Item {
     }
 
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
+    // padding * 3 = below-tabs gap + searchWrapper.topMargin + bottom margin
     implicitHeight: tabs.implicitHeight + tabs.anchors.topMargin + contentWrapper.implicitHeight + searchWrapper.implicitHeight + padding * 3
+    // Note: on Images tab, searchWrapper collapses to 0 but its anchors.topMargin
+    // (root.padding) remains, creating slightly more bottom padding. This is
+    // intentional — changing it would break the constant-sum animation invariant.
 
     // Tabs at top
     Tabs {
@@ -335,51 +341,27 @@ Item {
             onTextChanged: searchDebounce.restart()
 
             onAccepted: {
-                if (root.state.currentTab === root.tabText) {
-                    const textList = textPane.item;
-                    if (!textList) return;
-                    const entry = root.textEntries[textList.currentIndex];
-                    if (entry) {
-                        Clipboard.restore(entry.id);
-                        root.visibilities.clipboard = false;
-                    }
-                } else {
-                    root._imageNavConfirm();
+                const textList = textPane.item;
+                if (!textList) return;
+                const entry = root.textEntries[textList.currentIndex];
+                if (entry) {
+                    Clipboard.restore(entry.id);
+                    root.visibilities.clipboard = false;
                 }
             }
 
             Keys.onUpPressed: {
-                if (root.state.currentTab === root.tabText) {
-                    const textList = textPane.item;
-                    if (!textList) return;
-                    if (textList.currentIndex > 0)
-                        textList.currentIndex--;
-                } else {
-                    root._imageNavUp();
-                }
+                const textList = textPane.item;
+                if (!textList) return;
+                if (textList.currentIndex > 0)
+                    textList.currentIndex--;
             }
 
             Keys.onDownPressed: {
-                if (root.state.currentTab === root.tabText) {
-                    const textList = textPane.item;
-                    if (!textList) return;
-                    if (textList.currentIndex < root.textEntries.length - 1)
-                        textList.currentIndex++;
-                } else {
-                    root._imageNavDown();
-                }
-            }
-
-            Keys.onLeftPressed: {
-                if (root.state.currentTab === root.tabImages) {
-                    root._imageNavLeft();
-                }
-            }
-
-            Keys.onRightPressed: {
-                if (root.state.currentTab === root.tabImages) {
-                    root._imageNavRight();
-                }
+                const textList = textPane.item;
+                if (!textList) return;
+                if (textList.currentIndex < root.textEntries.length - 1)
+                    textList.currentIndex++;
             }
 
             Keys.onEscapePressed: root.visibilities.clipboard = false
@@ -469,7 +451,6 @@ Item {
         width: 0
         height: 0
         visible: root.state.currentTab === root.tabImages
-        focus: visible
 
         Keys.onUpPressed: root._imageNavUp()
         Keys.onDownPressed: root._imageNavDown()
