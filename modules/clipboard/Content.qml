@@ -35,9 +35,8 @@ Item {
     property string debouncedSearchText: ""
 
     // Get all entries (search-filtered if searching, otherwise all loaded entries)
-    // Comma operator forces QML binding to depend on entries.length
     readonly property var allFilteredEntries: {
-        Clipboard.entries.length;  // Dependency tracking
+        Clipboard.entries.length;  // Force reactive dependency on list changes
         if (!debouncedSearchText) return Clipboard.entries;
 
         // Direct FZF/Fuzzysort search on clipboard entries
@@ -52,31 +51,54 @@ Item {
         }).find(debouncedSearchText).map(r => r.item);
     }
 
-    // Helper: filter entries by type and apply display limit
-    function filterByType(isImage: bool, limit: int): list<var> {
-        return root.allFilteredEntries
-            .filter(e => e.isImage === isImage)
-            .slice(0, limit);
-    }
-
-    readonly property var textEntries: filterByType(false, Config.clipboard.maxDisplayed)
+    readonly property var textEntries: allFilteredEntries
+        .filter(e => !e.isImage)
+        .slice(0, Config.clipboard.maxDisplayed)
     // Images use a ListModel from Clipboard — append() adds delegates
     // incrementally without destroying existing ones (progressive loading).
     readonly property var imageEntries: Clipboard.decodedImageEntries
 
-    // Calculate estimated list height for text entries (images use grid)
-    function calculateListHeight(): real {
-        const entries = root.textEntries;
-        const maxItems = Math.min(Config.clipboard.maxDisplayed, entries.length);
-        const itemHeight = Config.clipboard.sizes.itemHeight;
-        const spacing = Appearance.spacing.small;
+    // Shared image navigation helpers (used by both search and imageNavFocus key handlers)
+    function _imageNavUp(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        const cols = imageGrid.columnCount;
+        if (imageGrid.currentIndex >= cols)
+            imageGrid.currentIndex -= cols;
+    }
 
-        let totalHeight = 0;
-        for (let i = 0; i < maxItems; i++) {
-            totalHeight += itemHeight;
-            if (i < maxItems - 1) totalHeight += spacing;
+    function _imageNavDown(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        const cols = imageGrid.columnCount;
+        const newIndex = imageGrid.currentIndex + cols;
+        if (newIndex < root.imageEntries.count)
+            imageGrid.currentIndex = newIndex;
+    }
+
+    function _imageNavLeft(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        if (imageGrid.currentIndex > 0)
+            imageGrid.currentIndex--;
+    }
+
+    function _imageNavRight(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        const newIndex = imageGrid.currentIndex + 1;
+        if (newIndex < root.imageEntries.count)
+            imageGrid.currentIndex = newIndex;
+    }
+
+    function _imageNavConfirm(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid) return;
+        const entry = root.imageEntries.get(imageGrid.currentIndex)?.entry;
+        if (entry) {
+            Clipboard.restore(entry.id);
+            root.visibilities.clipboard = false;
         }
-        return totalHeight;
     }
 
     // Debounce timer for search input
@@ -299,13 +321,7 @@ Item {
                         root.visibilities.clipboard = false;
                     }
                 } else {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid) return;
-                    const entry = root.imageEntries.get(imageGrid.currentIndex)?.entry;
-                    if (entry) {
-                        Clipboard.restore(entry.id);
-                        root.visibilities.clipboard = false;
-                    }
+                    root._imageNavConfirm();
                 }
             }
 
@@ -316,11 +332,7 @@ Item {
                     if (textList.currentIndex > 0)
                         textList.currentIndex--;
                 } else {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.count === 0) return;
-                    const cols = imageGrid.columnCount;
-                    if (imageGrid.currentIndex >= cols)
-                        imageGrid.currentIndex -= cols;
+                    root._imageNavUp();
                 }
             }
 
@@ -331,31 +343,19 @@ Item {
                     if (textList.currentIndex < root.textEntries.length - 1)
                         textList.currentIndex++;
                 } else {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.count === 0) return;
-                    const cols = imageGrid.columnCount;
-                    const newIndex = imageGrid.currentIndex + cols;
-                    if (newIndex < root.imageEntries.count)
-                        imageGrid.currentIndex = newIndex;
+                    root._imageNavDown();
                 }
             }
 
             Keys.onLeftPressed: {
                 if (root.state.currentTab === root.tabImages) {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.count === 0) return;
-                    if (imageGrid.currentIndex > 0)
-                        imageGrid.currentIndex--;
+                    root._imageNavLeft();
                 }
             }
 
             Keys.onRightPressed: {
                 if (root.state.currentTab === root.tabImages) {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.count === 0) return;
-                    const newIndex = imageGrid.currentIndex + 1;
-                    if (newIndex < root.imageEntries.count)
-                        imageGrid.currentIndex = newIndex;
+                    root._imageNavRight();
                 }
             }
 
@@ -378,47 +378,12 @@ Item {
             focus: visible
             anchors.fill: parent
 
-            Keys.onUpPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.count === 0) return;
-                const cols = imageGrid.columnCount;
-                if (imageGrid.currentIndex >= cols)
-                    imageGrid.currentIndex -= cols;
-            }
+            Keys.onUpPressed: root._imageNavUp()
+            Keys.onDownPressed: root._imageNavDown()
+            Keys.onLeftPressed: root._imageNavLeft()
+            Keys.onRightPressed: root._imageNavRight()
 
-            Keys.onDownPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.count === 0) return;
-                const cols = imageGrid.columnCount;
-                const newIndex = imageGrid.currentIndex + cols;
-                if (newIndex < root.imageEntries.count)
-                    imageGrid.currentIndex = newIndex;
-            }
-
-            Keys.onLeftPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.count === 0) return;
-                if (imageGrid.currentIndex > 0)
-                    imageGrid.currentIndex--;
-            }
-
-            Keys.onRightPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.count === 0) return;
-                const newIndex = imageGrid.currentIndex + 1;
-                if (newIndex < root.imageEntries.count)
-                    imageGrid.currentIndex = newIndex;
-            }
-
-            Keys.onReturnPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid) return;
-                const entry = root.imageEntries.get(imageGrid.currentIndex)?.entry;
-                if (entry) {
-                    Clipboard.restore(entry.id);
-                    root.visibilities.clipboard = false;
-                }
-            }
+            Keys.onReturnPressed: root._imageNavConfirm()
 
             Keys.onEscapePressed: root.visibilities.clipboard = false
 

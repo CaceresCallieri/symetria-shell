@@ -45,6 +45,7 @@ Singleton {
             }
             // Abort any pending decode queue from a previous refresh
             _decodeQueue = [];
+            _refreshGeneration++;
 
             console.debug(`[Clipboard] refresh: active=${_activeDecodes}`);
             cacheCleanupProcess.running = true;
@@ -70,8 +71,11 @@ Singleton {
 
     // --- Sequential decode queue to avoid thundering herd on cliphist's bolt DB ---
     // With 152 images, spawning all at once causes concurrent reads that corrupt output.
+    // 6 balances startup speed vs bolt DB I/O; safe since we only decode ~12-18 images
+    // (maxImagesDisplayed + backfills for truncated entries), not the full 150+ pool.
     readonly property int _maxConcurrentDecodes: 6
     property int _activeDecodes: 0
+    property int _refreshGeneration: 0
     property var _decodeQueue: []
     // Reserve pool: remaining images not yet queued, used to backfill when
     // truncated images are skipped (so the grid fills to maxImagesDisplayed).
@@ -122,7 +126,8 @@ Singleton {
         const outputPath = `${Paths.clipboardcache}/${entry.id}.png`;
         const process = decodeComponent.createObject(root, {
             entryId: entry.id,
-            outputPath: outputPath
+            outputPath: outputPath,
+            generation: root._refreshGeneration
         });
         _activeDecodes++;
         process.running = true;
@@ -280,6 +285,7 @@ Singleton {
             property string entryId
             property string outputPath
             property string decodedSize: ""
+            property int generation: 0
 
             // Script handles: cliphist decode → PIL validate/resize → atomic rename
             // Outputs file size to stdout on success, exits 2 for truncated images.
@@ -290,6 +296,11 @@ Singleton {
             }
 
             onExited: (exitCode, exitStatus) => {
+                root._activeDecodes--;
+                if (generation !== root._refreshGeneration) {
+                    destroy();
+                    return;
+                }
                 if (exitCode === 0) {
                     const entry = root.entries.find(e => e.id === entryId);
                     if (entry) {
@@ -311,7 +322,6 @@ Singleton {
                     console.warn(`[Clipboard] decode ${entryId}: FAILED exit=${exitCode}`);
                     root._backfillFromPool();
                 }
-                root._activeDecodes--;
                 root._processDecodeQueue();
                 root._flushIfComplete();
                 destroy();
@@ -335,7 +345,7 @@ Singleton {
 
         onExited: (exitCode, exitStatus) => {
             ProcessUtils.logExit("Clipboard", "restore", exitCode, "");
-            if (entryId !== "") {
+            if (exitCode === 0) {
                 root.refresh();
             }
         }
@@ -354,7 +364,7 @@ Singleton {
 
         onExited: (exitCode, exitStatus) => {
             ProcessUtils.logExit("Clipboard", "delete", exitCode, "");
-            if (entryId !== "") {
+            if (exitCode === 0) {
                 root.refresh();
             }
         }

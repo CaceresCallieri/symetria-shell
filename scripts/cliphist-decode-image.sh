@@ -13,6 +13,11 @@
 
 set -euo pipefail
 
+if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 <entry_id> <output_path>" >&2
+    exit 1
+fi
+
 ENTRY_ID="$1"
 OUTPUT_PATH="$2"
 DIR=$(dirname "$OUTPUT_PATH")
