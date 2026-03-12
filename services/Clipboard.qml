@@ -82,9 +82,9 @@ Singleton {
     property var _imagePool: []
     property int _validDecodes: 0
 
-    // Public model for the image grid. Uses ListModel so GridView can add
-    // delegates incrementally via append() without destroying existing ones.
-    // (JS array models cause full delegate rebuild on reference change.)
+    // Public model for the image grid. Pre-populated with slots in correct
+    // order at parse time; delegates bind to entry.imagePath and auto-update
+    // when decodes complete. No model mutations during decoding (order-safe).
     property alias decodedImageEntries: decodedImageModel
     ListModel { id: decodedImageModel }
 
@@ -96,19 +96,34 @@ Singleton {
     function _processDecodeQueue(): void {
         while (_activeDecodes < _maxConcurrentDecodes && _decodeQueue.length > 0) {
             const entry = _decodeQueue.shift();
-            // Entry might have been destroyed by a newer refresh
             if (!entry || entry.imagePath !== "") continue;
             _startDecode(entry);
         }
     }
 
-    // Called when a decode is skipped (truncated). Pulls the next image from
-    // the reserve pool to try to fill the grid to maxImagesDisplayed.
-    function _backfillFromPool(): void {
-        if (_validDecodes >= Config.clipboard.maxImagesDisplayed) return;
+    // Find model index by entryId. Uses the explicit "entryId" role stored
+    // alongside the entry object (ListModel.get() may not preserve QML refs).
+    function _findModelIndex(entryId: string): int {
+        for (let i = 0; i < decodedImageModel.count; i++) {
+            if (decodedImageModel.get(i).entryId === entryId)
+                return i;
+        }
+        return -1;
+    }
+
+    // Called when a decode is skipped (truncated) or fails. Removes the
+    // entry's slot from the model and tries to backfill from the reserve pool.
+    function _handleSkippedDecode(entryId: string): void {
+        const modelIdx = _findModelIndex(entryId);
+        if (modelIdx >= 0)
+            decodedImageModel.remove(modelIdx);
+
+        // Pull next valid entry from the reserve pool and append at end
+        // (pool entries are always older, so tail position is correct).
         while (_imagePool.length > 0) {
             const next = _imagePool.shift();
             if (next && next.isImage && next.imagePath === "" && !next.skipped) {
+                decodedImageModel.append({"entry": next, "entryId": next.id});
                 _enqueueDecode(next);
                 _processDecodeQueue();
                 return;
@@ -116,7 +131,6 @@ Singleton {
         }
     }
 
-    // Log when all decodes are done (model is updated progressively via append).
     function _flushIfComplete(): void {
         if (_activeDecodes > 0 || _decodeQueue.length > 0) return;
         console.debug(`[Clipboard] all decodes complete: ${decodedImageModel.count} images ready`);
@@ -234,18 +248,26 @@ Singleton {
                     root.entries = newEntries;
                     root.hasData = true;
 
-                    // Decode the first maxImagesDisplayed images; keep the rest in a
-                    // reserve pool so truncated entries can be backfilled automatically.
+                    // Pre-populate the image model with slots in newest-first order.
+                    // Delegates bind to entry.imagePath and show loading placeholders
+                    // until decodes set imagePath (no model mutations during decoding).
                     const allImages = newEntries.filter(e => e.isImage);
                     const maxDisplay = Config.clipboard.maxImagesDisplayed;
                     const imagesToDecode = allImages.slice(0, maxDisplay);
                     console.debug(`[Clipboard] ${newEntries.length} entries parsed, ${allImages.length} images total, decoding first ${imagesToDecode.length} (max concurrent: ${root._maxConcurrentDecodes})`);
 
-                    // Clear stale state from a previous refresh
                     root._decodeQueue = [];
                     root._imagePool = allImages.slice(maxDisplay);
                     root._validDecodes = 0;
 
+                    // Pre-populate model — order is locked here, before any I/O.
+                    // Store entryId as a plain string role for reliable lookup
+                    // (ListModel.get() may not preserve QML object references).
+                    for (const entry of imagesToDecode) {
+                        decodedImageModel.append({"entry": entry, "entryId": entry.id});
+                    }
+
+                    // Start concurrent decodes (completions just set imagePath)
                     Qt.callLater(() => {
                         for (const entry of imagesToDecode) {
                             root._enqueueDecode(entry);
@@ -302,25 +324,22 @@ Singleton {
                     return;
                 }
                 if (exitCode === 0) {
+                    // Just set imagePath — the delegate is already bound to it
+                    // and will switch from loading placeholder to thumbnail.
                     const entry = root.entries.find(e => e.id === entryId);
                     if (entry) {
                         entry.imagePath = outputPath;
                         root._validDecodes++;
-                        // Append to ListModel immediately — GridView creates one
-                        // new delegate without destroying existing ones.
-                        decodedImageModel.append({"entry": entry});
                         console.debug(`[Clipboard] decode ${entryId}: OK size=${decodedSize}B (${root._validDecodes} valid)`);
-                    } else {
-                        console.debug(`[Clipboard] decode ${entryId}: entry gone (stale), size=${decodedSize}B`);
                     }
                 } else if (exitCode === 2) {
                     const skippedEntry = root.entries.find(e => e.id === entryId);
                     if (skippedEntry) skippedEntry.skipped = true;
                     console.debug(`[Clipboard] decode ${entryId}: skipped (truncated)`);
-                    root._backfillFromPool();
+                    root._handleSkippedDecode(entryId);
                 } else {
                     console.warn(`[Clipboard] decode ${entryId}: FAILED exit=${exitCode}`);
-                    root._backfillFromPool();
+                    root._handleSkippedDecode(entryId);
                 }
                 root._processDecodeQueue();
                 root._flushIfComplete();
