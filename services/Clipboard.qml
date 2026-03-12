@@ -37,12 +37,6 @@ Singleton {
             // files that are about to be deleted by cache cleanup.
             decodedImageModel.clear();
 
-            // Clear image paths on entries (for consistency)
-            for (const entry of entries) {
-                if (entry.isImage && entry.imagePath !== "") {
-                    entry.imagePath = "";
-                }
-            }
             // Abort any pending decode queue from a previous refresh
             _decodeQueue = [];
             _refreshGeneration++;
@@ -80,7 +74,6 @@ Singleton {
     // Reserve pool: remaining images not yet queued, used to backfill when
     // truncated images are skipped (so the grid fills to maxImagesDisplayed).
     property var _imagePool: []
-    property int _validDecodes: 0
 
     // Public model for the image grid. Pre-populated with slots in correct
     // order at parse time; delegates bind to entry.imagePath and auto-update
@@ -95,14 +88,11 @@ Singleton {
 
     function _processDecodeQueue(): void {
         while (_activeDecodes < _maxConcurrentDecodes && _decodeQueue.length > 0) {
-            const entry = _decodeQueue.shift();
-            if (!entry || entry.imagePath !== "") continue;
-            _startDecode(entry);
+            _startDecode(_decodeQueue.shift());
         }
     }
 
-    // Find model index by entryId. Uses the explicit "entryId" role stored
-    // alongside the entry object (ListModel.get() may not preserve QML refs).
+    // Linear scan is fine: model is bounded by maxImagesDisplayed (default 12).
     function _findModelIndex(entryId: string): int {
         for (let i = 0; i < decodedImageModel.count; i++) {
             if (decodedImageModel.get(i).entryId === entryId)
@@ -122,18 +112,12 @@ Singleton {
         // (pool entries are always older, so tail position is correct).
         while (_imagePool.length > 0) {
             const next = _imagePool.shift();
-            if (next && next.isImage && next.imagePath === "" && !next.skipped) {
+            if (next && next.isImage && next.imagePath === "") {
                 decodedImageModel.append({"entry": next, "entryId": next.id});
                 _enqueueDecode(next);
-                _processDecodeQueue();
                 return;
             }
         }
-    }
-
-    function _flushIfComplete(): void {
-        if (_activeDecodes > 0 || _decodeQueue.length > 0) return;
-        console.debug(`[Clipboard] all decodes complete: ${decodedImageModel.count} images ready`);
     }
 
     function _startDecode(entry: ClipboardEntry): void {
@@ -258,7 +242,6 @@ Singleton {
 
                     root._decodeQueue = [];
                     root._imagePool = allImages.slice(maxDisplay);
-                    root._validDecodes = 0;
 
                     // Pre-populate model — order is locked here, before any I/O.
                     // Store entryId as a plain string role for reliable lookup
@@ -268,12 +251,10 @@ Singleton {
                     }
 
                     // Start concurrent decodes (completions just set imagePath)
-                    Qt.callLater(() => {
-                        for (const entry of imagesToDecode) {
-                            root._enqueueDecode(entry);
-                        }
-                        root._processDecodeQueue();
-                    });
+                    for (const entry of imagesToDecode) {
+                        root._enqueueDecode(entry);
+                    }
+                    root._processDecodeQueue();
 
                 } catch (e) {
                     // Clean up any partially created new entries on failure
@@ -318,6 +299,8 @@ Singleton {
             }
 
             onExited: (exitCode, exitStatus) => {
+                // Counter is cross-generation: stale decodes still decrement it,
+                // which may temporarily throttle the new generation's queue pump.
                 root._activeDecodes--;
                 if (generation !== root._refreshGeneration) {
                     destroy();
@@ -329,8 +312,7 @@ Singleton {
                     const entry = root.entries.find(e => e.id === entryId);
                     if (entry) {
                         entry.imagePath = outputPath;
-                        root._validDecodes++;
-                        console.debug(`[Clipboard] decode ${entryId}: OK size=${decodedSize}B (${root._validDecodes} valid)`);
+                        console.debug(`[Clipboard] decode ${entryId}: OK size=${decodedSize}B`);
                     }
                 } else if (exitCode === 2) {
                     const skippedEntry = root.entries.find(e => e.id === entryId);
@@ -342,7 +324,6 @@ Singleton {
                     root._handleSkippedDecode(entryId);
                 }
                 root._processDecodeQueue();
-                root._flushIfComplete();
                 destroy();
             }
 
