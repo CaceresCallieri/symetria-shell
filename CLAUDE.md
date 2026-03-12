@@ -531,14 +531,16 @@ SttService → spawns pw-record → WAV file
 | Ask (radio) | `"ask"` | Shows radio toggle in drawer; user picks delivery per-recording |
 
 **Window Injection Flow (Modes B & C):**
-1. User presses STT keybind → `start()` calls `_captureTargetWindow()` (saves Hyprland address + class + PID) and `_resolveAgentTarget()` (resolves Neovim socket + buf via `activeAgentForTerminal`)
-2. Recording → stop → transcription completes → `wl-copy` writes text to clipboard
-3. `clipboardProcess.onExited` chains `stt-inject.sh` with the start-time captured address
-4. Script verifies window exists, detects terminal vs GUI, sends `Ctrl+V` or `Ctrl+Shift+V` via `hyprctl dispatch sendshortcut address:0x...`
-5. In submit mode: after a 150ms delay, sends `Return` to the same address to auto-submit
+1. User presses STT keybind → `start()` calls `_captureTargetWindow()` (saves Hyprland address + class + PID) and `_resolveAgentTarget()` (resolves Neovim socket + buf via `activeAgentForTerminal`). Both the window and agent target are locked here and never re-resolved.
+2. Recording happens; target is immutable regardless of focus changes
+3. User presses stop → `stop()` submits with the start-time target
+4. Transcription completes → `wl-copy` writes text to clipboard
+5. `clipboardProcess.onExited` chains `stt-inject.sh` with the captured address and agent target
+6. Script verifies window exists, detects terminal vs GUI, sends paste via Neovim RPC or `sendshortcut`
+7. In submit mode: RPC path sends Enter atomically; sendshortcut path downgrades to inject-only
 
 **Key design decisions:**
-- **Target locked at start-time** — the injection target (window address, Neovim socket, agent buf) is captured once when `start()` runs and carried immutably through the entire async pipeline. Never re-resolve via `activeAgentForTerminal()` at delivery time (see "Identity-Unstable Lookups" below)
+- **Everything locked at start-time** — the terminal window (address, PID) and agent target (socket, buf) are both captured at `start()` and never re-resolved. The user sees the highlighted icon during recording and delivery always matches that visual. The target is carried immutably through the entire pipeline (recording → transcription → clipboard → injection). Never re-resolve at stop-time or delivery time — `_refreshAgentTarget()` exists but is not called.
 - **No focus change** — `sendshortcut` with address targeting pastes without stealing focus
 - **Best-effort** — injection failure is non-fatal (clipboard always has the text)
 - **Terminal detection** — Ghostty, Alacritty, Kitty, Foot, WezTerm, Warp, Konsole, etc. use `Ctrl+Shift+V`; all others use `Ctrl+V`
@@ -546,16 +548,19 @@ SttService → spawns pw-record → WAV file
 - **50ms clipboard propagation delay** — ensures `wl-copy` data reaches the Wayland compositor before `sendshortcut`
 - **Auto-submit delay** — 150ms between paste and Enter allows the application to process clipboard content
 - **Universal Enter** — `Return` key without modifiers works in both terminals and GUI apps
+- **Explicit target_buf in stt_inject** — when the QML side passes a specific `target_buf`, the orchestrator MUST find it or fail with `target_buf_invalid`. Silent fallback to `last_active_buf` was causing wrong-agent delivery.
 
 **⚠️ Identity-Unstable Lookups in Async Pipelines (CRITICAL)**
 
 `AgentService.activeAgentForTerminal(pid)` resolves identity through *current state* — it calls `representativeAgent()` which returns `agents.find(a => a.active) ?? agents[0]`. When multiple agents share a terminal PID (same Neovim instance), calling this function at different times returns different agents depending on which one is currently focused.
 
-**Rule:** Capture the agent target (socket, buf) **once at intent time** (e.g., `start()`) and carry that snapshot through the entire async pipeline. Never "refresh" by re-calling `activeAgentForTerminal()` at delivery time — the user may have switched agents during the pipeline, and re-resolution silently redirects to the wrong agent.
+**Rule:** The agent target is resolved exactly once at `start()` and carried immutably through the entire pipeline. Never re-resolve at stop-time (visual/delivery mismatch) or delivery time (in `clipboardProcess.onExited` or `injectProcess`).
 
-**This has caused bugs twice:**
+**Historical bugs (now fixed):**
 1. `clipboardProcess.onExited` had a "refresh" block that re-resolved the agent → fixed by removing it
 2. `on_ActiveDeliveryChoiceChanged` re-resolved via `activeAgentForTerminal()` → fixed by using `_targetNvimActiveBuf` directly
+3. Stop-time `_refreshAgentTarget()` could change the delivery target after the user saw the start-time icon during recording → removed from `stop()` to ensure visual always matches delivery
+4. Silent `last_active_buf` fallback in orchestrator's `stt_inject()` delivered to wrong agent when explicit `target_buf` was invalid → now returns `target_buf_invalid` error instead
 
 **Ask Mode (Radio Toggle):**
 

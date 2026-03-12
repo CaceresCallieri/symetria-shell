@@ -250,7 +250,7 @@ class AgentBridge:
             buf = inst.get("buf")
             if buf is not None:
                 self._clients.setdefault(nvim_pid, {})[buf] = inst
-                log.debug("  added: buf=%s from pid %s", buf, nvim_pid)
+                log.debug("  added: buf=%s active=%s from pid %s", buf, inst.get("active"), nvim_pid)
                 self._schedule_emit()
             else:
                 log.warning("  added: missing buf from pid %s", nvim_pid)

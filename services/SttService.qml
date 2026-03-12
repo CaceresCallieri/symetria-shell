@@ -256,12 +256,16 @@ Singleton {
         if (_state !== "recording" && _state !== "paused") return;
         Logger.log("qml", "stt", "stop | segments=" + _segmentFiles.length + " delivery=" + _deliveryMode);
         actionTriggered("stop");
-        // Target was fixed at start() — no re-capture needed.
-        // The user may have switched windows during recording, but injection
-        // goes to the terminal that was active when recording started.
+
+        // Agent target is locked at start-time — the user sees the highlighted
+        // icon throughout recording and expects delivery to match.  Do NOT
+        // re-resolve here; _refreshAgentTarget() exists but is reserved for
+        // future use (e.g., explicit retarget command).
+
         console.log("[STT:D02] stop() | target:", _targetWindowAddress,
             "| class:", _targetWindowClass,
-            "| nvimSocket:", _targetNvimSocket);
+            "| nvimSocket:", _targetNvimSocket,
+            "| buf:", _targetNvimActiveBuf);
 
         if (_state === "paused") {
             console.log("[STT:D03] paused path → direct _submitForTranscription()");
@@ -381,9 +385,33 @@ Singleton {
         _errorRaw = "";
     }
 
+    /// Re-resolve which agent is active within the already-captured terminal.
+    /// Called at stop-time so the target reflects the user's focus at the moment
+    /// they decide to submit, not at the moment they started recording.
+    /// The window (address, class, PID) stays locked from start-time — only the
+    /// agent buf and socket are refreshed from the current bridge state.
+    function _refreshAgentTarget(): void {
+        if (_deliveryMode === "clipboard" || _targetWindowPid <= 0) return;
+        if (!AgentService.bridgeRunning) return;
+
+        const agent = AgentService.activeAgentForTerminal(_targetWindowPid);
+        if (!agent) return;  // No agent in terminal — keep start-time values
+
+        const prevBuf = _targetNvimActiveBuf;
+        _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
+        _targetNvimActiveBuf = agent.buf ?? -1;
+
+        if (prevBuf !== _targetNvimActiveBuf) {
+            Logger.log("qml", "stt", "agent-retarget | prev=" + prevBuf + " new=" + _targetNvimActiveBuf + " active=" + (agent.active ?? "?"));
+            // Update red border highlight to the new agent
+            const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
+            if (effectiveMode !== "clipboard") {
+                AgentService.setSttTarget(_targetWindowPid, _targetNvimActiveBuf);
+            }
+        }
+    }
+
     /// Capture the currently active window for inject delivery.
-    /// Called at both start() and stop() — start() captures an eager fallback,
-    /// stop() overwrites with a fresher value if a toplevel is available.
     /// In ask mode, we capture regardless of _activeDeliveryChoice because
     /// the user may switch to inject/submit before delivery completes.
     function _captureTargetWindow(): void {
@@ -427,7 +455,7 @@ Singleton {
 
         _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
         _targetNvimActiveBuf = agent.buf ?? -1;
-        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket + " active=" + (agent.active ?? "?"));
+        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket);
 
         // Set highlight based on effective delivery mode
         const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
