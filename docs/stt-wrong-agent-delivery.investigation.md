@@ -38,6 +38,8 @@
 
 ### Code Paths
 
+> **Note:** The stop-time `_refreshAgentTarget()` call described in rows 2-3 was reverted in Pass 2.
+
 | File | Lines | Role |
 |------|-------|------|
 | `services/SttService.qml` | 197-252 | `start()` — captures window + resolves agent at start-time |
@@ -206,7 +208,7 @@ end
 
 - [x] Implement the fix in `~/projects/orchestrator.nvim/lua/orchestrator/instances.lua:register_spawned()` — add `last_active_buf` update + `notify_focus()` after registration
 - [x] Reorder in `register_spawned()`: update `last_active_buf` BEFORE `notify_spawn()` so `build_instance_data()` gets correct `active` flag in the `added` message
-- [x] Remove diagnostic logging from `SttService.qml`, `AgentService.qml`, and `agent-bridge.py`
+- [x] Remove `[STT:DIAG]` / `[AgentService:DIAG]` temporary investigation dumps from `SttService.qml`, `AgentService.qml`, and `agent-bridge.py` (permanent `[STT:D##]` trace logs retained)
 - [ ] Test: spawn two agents in same Neovim → verify both get correct `active` flag immediately
 - [ ] Test: STT on agent #2 → verify correct icon + correct delivery
 - [ ] Test single-agent regression

@@ -113,7 +113,7 @@ Singleton {
     property var _segmentFiles: []
     property string _currentAudioFile: ""  // Combined file for transcription/retry
 
-    // Target window for inject delivery (captured at submit time)
+    // Target window for inject delivery (captured at start-time)
     property string _targetWindowAddress: ""
     property string _targetWindowClass: ""
     property int _targetWindowPid: -1
@@ -385,11 +385,13 @@ Singleton {
         _errorRaw = "";
     }
 
-    /// Re-resolve which agent is active within the already-captured terminal.
-    /// Called at stop-time so the target reflects the user's focus at the moment
-    /// they decide to submit, not at the moment they started recording.
-    /// The window (address, class, PID) stays locked from start-time — only the
-    /// agent buf and socket are refreshed from the current bridge state.
+    /// Reserved (not currently called): re-resolves the active agent within the
+    /// already-captured terminal.  Agent target is fully locked at start-time —
+    /// this function is retained for a potential future "retarget" IPC command.
+    ///
+    /// Do NOT call from stop(): doing so causes a visual/delivery mismatch where
+    /// the user sees the start-time icon highlighted but delivery goes elsewhere.
+    /// See CLAUDE.md STT → Historical bugs #3.
     function _refreshAgentTarget(): void {
         if (_deliveryMode === "clipboard" || _targetWindowPid <= 0) return;
         if (!AgentService.bridgeRunning) return;
@@ -877,7 +879,7 @@ Singleton {
                 const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
                 Logger.log("qml", "stt", "inject-start | target=" + root._targetWindowAddress);
-                // Pass expected text, pre-determined Neovim socket + buffer (captured at stop-time)
+                // Pass expected text, pre-determined Neovim socket + buffer (captured at start-time)
                 injectProcess.capturedSessionId = root._sessionId;
                 injectProcess.environment = ({
                     STT_EXPECTED_TEXT: root._transcribedText,
