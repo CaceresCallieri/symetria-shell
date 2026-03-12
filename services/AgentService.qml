@@ -270,7 +270,7 @@ Singleton {
         const message = notif.message ?? "";
         const urgency = notif.urgency ?? "normal";
 
-        console.log(`[AgentService] NOTIFY: "${title}" — ${message} (${urgency})`);
+        console.debug(`[AgentService] NOTIFY: "${title}" — ${message} (${urgency})`);
         _sendNotification(title, message, urgency);
     }
 
@@ -337,7 +337,7 @@ Singleton {
     }
 
     Component.onCompleted: {
-        console.log("[AgentService] INIT: agentbar.enabled =", Config.agentbar.enabled);
+        console.debug("[AgentService] INIT: agentbar.enabled =", Config.agentbar.enabled);
         if (Config.agentbar.enabled)
             _startBridge();
     }
@@ -358,15 +358,15 @@ Singleton {
         // arrive every 3-5s, the timer would never fire.
         if (!backoffResetTimer.running)
             backoffResetTimer.start();
-        console.log(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
+        console.debug(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
     }
 
     function _startBridge(): void {
         if (bridgeProcess.running) {
-            console.log("[AgentService] _startBridge: already running, skipping");
+            console.debug("[AgentService] _startBridge: already running, skipping");
             return;
         }
-        console.log("[AgentService] _startBridge: launching", _bridgeScript);
+        console.debug("[AgentService] _startBridge: launching", _bridgeScript);
         bridgeProcess.command = ["python3", _bridgeScript];
         bridgeProcess.running = true;
     }
@@ -407,7 +407,7 @@ Singleton {
         }
 
         onExited: (code, status) => {
-            console.log(`[AgentService] BRIDGE EXITED: code=${code}, status=${status}, had ${root._agents.length} agents`);
+            console.debug(`[AgentService] BRIDGE EXITED: code=${code}, status=${status}, had ${root._agents.length} agents`);
             // Clear state on exit (including throttle state)
             root._agents = [];
             root._projects = [];
@@ -417,7 +417,7 @@ Singleton {
             backoffResetTimer.stop();
 
             if (!Config.agentbar.enabled) {
-                console.log("[AgentService] agentbar disabled, not restarting");
+                console.debug("[AgentService] agentbar disabled, not restarting");
                 return;
             }
 
@@ -462,7 +462,7 @@ Singleton {
         interval: 10000
         onTriggered: {
             root._restartCount = 0;
-            console.log("[AgentService] Bridge stable for 10s, backoff reset");
+            console.debug("[AgentService] Bridge stable for 10s, backoff reset");
         }
     }
 
