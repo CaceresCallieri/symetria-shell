@@ -17,6 +17,7 @@ Item {
 
     property bool _isClosing: false
     property bool _blinkClosing: false // true from the stopping phase of a clear-blink until activityState leaves "clearing"
+    property bool _startClosing: false // true from the stopping phase of a start-blink until activityState leaves "starting"
     property bool _sttEmerging: false // true during the starting phase before stt-morph
     property bool _sttWaving: false // true after stt-morph completes → looping wave
     property bool _keyEmerging: false // true during dot → starburst emerge before key morph
@@ -35,7 +36,7 @@ Item {
             if (root._sttWaving) return "stt-wave";
             return "stt-morph";
         }
-        if (root._isClosing || root._blinkClosing)
+        if (root._isClosing || root._blinkClosing || root._startClosing)
             return "stopping";
         if (!root.isBusy)
             return "stopping"; // Idle: show dormant dot (last frame of stopping sprite)
@@ -77,6 +78,9 @@ Item {
             // (e.g., user submits a prompt → "thinking" while blink is still playing)
             root._blinkClosing = false
         }
+        if (root.activityState !== "starting") {
+            root._startClosing = false
+        }
         // Key morph: entering needs_permission from idle (dormant dot)
         if (root.activityState === "needs_permission" && !root.isBusy && !root._keyMorphActive) {
             root._keyEmerging = true
@@ -95,7 +99,7 @@ Item {
         // 0.6× for STT/key emerge and both clear-blink phases (activityState stays
         // "clearing" through starting AND stopping). stt-morph/stt-wave/key-morph run at 1.0.
         // Total clear-blink: ~545ms + ~1094ms ≈ 1640ms at 0.6×.
-        speedFactor: (root._sttEmerging || root._keyEmerging || root.activityState === "clearing") ? 0.6 : 1.0
+        speedFactor: (root._sttEmerging || root._keyEmerging || root.activityState === "clearing" || root._startClosing) ? 0.6 : 1.0
         mode: root._sparkleMode
         // Handle initial state on creation (no animation — skip to final frame)
         Component.onCompleted: {
@@ -121,6 +125,9 @@ Item {
             } else if (root.isSttTarget && !root._sttWaving) {
                 root._sttWaving = true
             // Safe: stt-wave is looping (not one-shot) so animationComplete never fires during wave.
+            // Start-blink: starting completes during "starting" → transition to stopping
+            } else if (root.activityState === "starting" && !root._startClosing) {
+                root._startClosing = true
             // Blink: starting completes during "clearing" → transition to stopping
             } else if (root.activityState === "clearing" && !root._blinkClosing) {
                 root._blinkClosing = true
