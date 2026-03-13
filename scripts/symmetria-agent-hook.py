@@ -3,11 +3,11 @@
 
 Invoked by Claude Code's hooks system (async: true) on every lifecycle event.
 Reads SYMMETRIA_AGENT_ID from the environment (set by orchestrator.nvim) and
-sends activity state to the bridge's Unix socket.
+sends an activity-state message to the bridge's Unix socket.
 
-For attention-requiring events (Stop, PermissionRequest), a second "notification"
-message is sent on the same socket connection. The bridge enriches it with
-project/workspace info and AgentService spawns notify-send.
+For events requiring user attention (Stop, PermissionRequest), a second
+"notification" message is sent in the same write batch. The bridge enriches
+it with project/workspace info; AgentService spawns notify-send.
 
 Exit code is always 0 — hook failures must never block Claude Code.
 """
@@ -140,30 +140,23 @@ def main():
         tool_name = event.get("tool_name", "")
         tool = TOOL_DISPLAY_NAMES.get(tool_name, tool_name)
     elif hook_name == "SubagentStart":
-        tool = "Delegating"
+        tool = "Delegating"  # no tool_name in payload; label directly
 
     # Build messages before opening socket
-    activity_msg = None
-    if state:
-        activity_msg = json.dumps({
-            "type": "activity",
-            "agent_id": agent_id,
-            "state": state,
-            "tool": tool,
-            "in_plan_mode": plan_mode,
-        })
+    activity_msg = json.dumps({
+        "type": "activity",
+        "agent_id": agent_id,
+        "state": state,
+        "tool": tool,
+        "in_plan_mode": plan_mode,
+    })
     notif = _build_notification(hook_name, event, agent_id)
-
-    # Only connect if there is something to send
-    if not activity_msg and not notif:
-        return
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.settimeout(1.0)
     sock.connect(SOCKET_PATH)
 
-    if activity_msg:
-        sock.sendall((activity_msg + "\n").encode())
+    sock.sendall((activity_msg + "\n").encode())
     if notif:
         sock.sendall((json.dumps(notif) + "\n").encode())
 
@@ -176,10 +169,9 @@ if __name__ == "__main__":
     except Exception as e:
         # Log to debug file before swallowing — silent failures make debugging impossible
         try:
-            import os as _os
-            log_dir = _os.environ.get("XDG_STATE_HOME", _os.path.expanduser("~/.local/state"))
-            log_path = _os.path.join(log_dir, "symmetria", "debug.log")
-            _os.makedirs(_os.path.dirname(log_path), exist_ok=True)
+            log_dir = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
+            log_path = os.path.join(log_dir, "symmetria", "debug.log")
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
             with open(log_path, "a") as f:
                 from datetime import datetime
                 f.write(f"{datetime.now().strftime('%H:%M:%S.%f')[:12]} [py:hook] error: {e}\n")
