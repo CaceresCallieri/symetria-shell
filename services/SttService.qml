@@ -264,7 +264,7 @@ Singleton {
 
     function _mostRecentErrorJob(): SttJob {
         for (const job of _jobs) {
-            if (job._state === "error") return job;
+            if (job._state === "error" && job.errorSource !== "config") return job;
         }
         return null;
     }
@@ -313,7 +313,7 @@ Singleton {
         const queues = _deliveryQueues;
         if (!queues[key]) queues[key] = [];
         queues[key].push(job);
-        _deliveryQueues = queues;
+        _deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
         _tryDeliverNext(key);
     }
 
@@ -334,7 +334,7 @@ Singleton {
         const queue = queues[key];
         if (queue && queue.length > 0 && queue[0] === job) {
             queue.shift();
-            _deliveryQueues = queues;
+            _deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
             _tryDeliverNext(key);  // pump next
         }
     }
@@ -530,9 +530,8 @@ Singleton {
             if (_state !== "paused") return;
             _segmentCounter++;
             _startRecording();
-            // Set state before _recordingStartTime so on_StateChanged fires
-            // while _recordingStartTime is still 0, unifying the init path
-            // with start(). on_StateChanged sets _recordingStartTime = Date.now().
+            // Assign _state last so on_StateChanged fires with _recordingStartTime
+            // still 0, matching the start() path. The handler initializes it.
             _state = "recording";
         }
 
@@ -560,8 +559,10 @@ Singleton {
             if (queue) {
                 const idx = queue.indexOf(job);
                 if (idx >= 0) {
+                    const wasDelivering = _state === "delivering";
                     queue.splice(idx, 1);
-                    root._deliveryQueues = queues;
+                    root._deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
+                    if (wasDelivering) root._tryDeliverNext(key);
                 }
             }
 
@@ -765,6 +766,7 @@ Singleton {
         }
 
         function _stopAllTimers(): void {
+            elapsedTimer.stop();
             successTimer.stop();
             processingTimeoutTimer.stop();
             _removalTimer.stop();
@@ -792,6 +794,8 @@ Singleton {
                     _currentElapsed = _accumulatedSeconds;
                 }
             } else if (_state === "processing") {
+                // Defensive: should already be 0 via recordProcess.onExited,
+                // but guard against any future code path that forgets.
                 _recordingStartTime = 0;
             }
 
