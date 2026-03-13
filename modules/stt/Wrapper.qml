@@ -9,6 +9,7 @@ import QtQuick
 /// Animation wrapper for STT drawer.
 ///
 /// Handles slide-down animation from top of screen, similar to Askpass.
+/// Displays multiple job cards via Row + Repeater when pipeline chaining is active.
 /// Content is anchored to bottom so it reveals top-down as height grows.
 Item {
     id: root
@@ -22,7 +23,7 @@ Item {
 
     visible: height > 0
     implicitHeight: 0
-    implicitWidth: content.implicitWidth
+    implicitWidth: jobsRow.implicitWidth
 
     onShouldBeActiveChanged: {
         if (shouldBeActive) {
@@ -51,7 +52,7 @@ Item {
             easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
         }
         ScriptAction {
-            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
+            script: root.implicitHeight = Qt.binding(() => jobsRow.implicitHeight)
         }
     }
 
@@ -88,8 +89,7 @@ Item {
         /// If the drawer is already active, skip the timer and finalize immediately.
         function startPreload(): void {
             if (!root.shouldBeActive) {
-                content.visible = false;
-                content.active = true;
+                jobsRow.visible = false;
                 start();
             } else {
                 finalize();
@@ -97,11 +97,10 @@ Item {
         }
 
         /// Finalize layout after pre-load: capture content height, restore
-        /// the active binding, and re-sync the show animation if needed.
+        /// visibility, and re-sync the show animation if needed.
         function finalize(): void {
-            root.contentHeight = content.implicitHeight;
-            content.active = Qt.binding(() => root.shouldBeActive || root.visible);
-            content.visible = true;
+            root.contentHeight = jobsRow.implicitHeight;
+            jobsRow.visible = true;
             if (showAnim.running) {
                 showAnim.stop();
                 showAnim.start();
@@ -111,36 +110,45 @@ Item {
         onTriggered: finalize()
     }
 
-    Loader {
-        id: content
+    Row {
+        id: jobsRow
 
         // For top-sliding drawer: anchor content to BOTTOM of wrapper
         // so it reveals from top-down as wrapper height grows
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
+        spacing: Appearance.spacing.normal
 
         visible: false
-        active: false
         Component.onCompleted: timer.startPreload()
 
-        sourceComponent: Content {
-            screen: root.screen
-            visibilities: root.visibilities
-            serviceState: SttService.state
-            serviceAudioLevel: SttService.audioLevel
-            serviceElapsedSeconds: SttService.elapsedSeconds
-            serviceLanguage: SttService.language
-            serviceErrorDetail: SttService.errorDetail
-            serviceErrorHint: SttService.errorHint
-            serviceErrorRaw: SttService.errorRaw
-            serviceErrorSource: SttService.errorSource
-            serviceIsAskMode: SttService.isAskMode
-            serviceDeliveryChoice: SttService.activeDeliveryChoice
-            serviceInjectionPath: SttService.injectionPath
-            serviceInjectionDowngraded: SttService.injectionDowngraded
-            serviceInjectionSubmitted: SttService.injectionSubmitted
+        Repeater {
+            model: ScriptModel {
+                values: SttService.jobs
+            }
 
-            Component.onCompleted: root.contentHeight = implicitHeight
+            Item {
+                id: jobDelegate
+
+                required property SttService.SttJob modelData
+                required property int index
+
+                // Animated removal: width shrinks to 0, content fades
+                implicitWidth: modelData.closing ? 0 : jobContent.implicitWidth
+                implicitHeight: jobContent.implicitHeight
+                clip: true
+                opacity: modelData.closing ? 0 : 1
+
+                Behavior on implicitWidth { Anim {} }
+                Behavior on opacity { Anim {} }
+
+                Content {
+                    id: jobContent
+                    screen: root.screen
+                    visibilities: root.visibilities
+                    job: jobDelegate.modelData
+                }
+            }
         }
     }
 }

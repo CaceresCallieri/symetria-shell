@@ -9,7 +9,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-/// Content UI for SttService speech-to-text drawer.
+/// Content UI for a single SttJob in the speech-to-text drawer.
 ///
 /// Displays state-based UI:
 /// - recording: Animated audio level bars + elapsed time
@@ -22,19 +22,27 @@ Item {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
-    required property string serviceState
-    required property real serviceAudioLevel
-    required property real serviceElapsedSeconds
-    required property string serviceLanguage
-    required property string serviceErrorDetail
-    required property string serviceErrorHint
-    required property string serviceErrorRaw
-    required property string serviceErrorSource
-    required property bool serviceIsAskMode
-    required property string serviceDeliveryChoice
-    required property string serviceInjectionPath
-    required property bool serviceInjectionDowngraded
-    required property bool serviceInjectionSubmitted
+    required property SttService.SttJob job
+
+    // Aliases so all existing internal references keep working without rename.
+    // "transcribed" and "delivering" display as "processing" to the user.
+    readonly property string serviceState: {
+        const s = job.state;
+        if (s === "transcribed" || s === "delivering") return "processing";
+        return s;
+    }
+    readonly property real serviceAudioLevel: job.audioLevel
+    readonly property real serviceElapsedSeconds: job.elapsedSeconds
+    readonly property string serviceLanguage: job.language
+    readonly property string serviceErrorDetail: job.errorDetail
+    readonly property string serviceErrorHint: job.errorHint
+    readonly property string serviceErrorRaw: job.errorRaw
+    readonly property string serviceErrorSource: job.errorSource
+    readonly property bool serviceIsAskMode: SttService.isAskMode
+    readonly property string serviceDeliveryChoice: job.activeDeliveryChoice
+    readonly property string serviceInjectionPath: job.injectionPath
+    readonly property bool serviceInjectionDowngraded: job.injectionDowngraded
+    readonly property bool serviceInjectionSubmitted: job.injectionSubmitted
 
     readonly property int padding: Appearance.padding.large
     readonly property int rounding: Appearance.rounding.large
@@ -312,15 +320,15 @@ Item {
                     visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
                     icon: "refresh"
                     iconColor: Colours.palette.m3primary
-                    onClicked: SttService.retry()
+                    onClicked: root.job.retry()
                 }
 
-                // Cancel: discard audio, close drawer
+                // Cancel: discard audio, remove job card
                 ControlButton {
                     id: errorCancelBtn
                     icon: "close"
                     iconColor: Colours.palette.m3error
-                    onClicked: SttService.cancel()
+                    onClicked: root.job.cancel()
                 }
 
                 // Copy raw error to clipboard
@@ -333,11 +341,13 @@ Item {
 
             // Signal handler for error-state buttons (retryBtn, errorCancelBtn).
             // These IDs only exist inside errorComponent's scope, so this
-            // Connections block must live here — the outer block at line ~566
+            // Connections block must live here — the outer block below
             // handles recording/paused-state buttons instead.
             Connections {
                 target: SttService
-                function onActionTriggered(action: string): void {
+                function onActionTriggered(sessionId: string, action: string): void {
+                    if (sessionId !== "" && sessionId !== root.job.sessionId) return;
+                    if (root.serviceState !== "error") return;
                     if (action === "retry") retryBtn.triggerPress();
                     else if (action === "cancel") errorCancelBtn.triggerPress();
                 }
@@ -455,7 +465,7 @@ Item {
             radius: Appearance.rounding.full
             color: optionBtn.selected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
             function onClicked(): void {
-                SttService.setDeliveryChoice(optionBtn.mode);
+                root.job.setDeliveryChoice(optionBtn.mode);
                 optionBtn.clicked();
             }
         }
@@ -669,9 +679,11 @@ Item {
                         id: pauseBtn
                         icon: root.serviceState === "paused" ? "play_arrow" : "pause"
                         iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-                        onClicked: SttService.pause()
+                        onClicked: root.job.recording ? root.job.pause() : root.job.resume()
                     }
 
+                    // Restart is service-level (cancel current + start new job),
+                    // not per-job, so it calls the orchestrator directly.
                     ControlButton {
                         id: restartBtn
                         icon: "restart_alt"
@@ -682,14 +694,14 @@ Item {
                         id: cancelBtn
                         icon: "close"
                         iconColor: Colours.palette.m3error
-                        onClicked: SttService.cancel()
+                        onClicked: root.job.cancel()
                     }
 
                     ControlButton {
                         id: submitBtn
                         icon: "check"
                         iconColor: Colours.palette.m3confirm
-                        onClicked: SttService.stop()
+                        onClicked: root.job.stop()
                     }
                 }
             }
@@ -737,7 +749,8 @@ Item {
             // errorComponent above.
             Connections {
                 target: SttService
-                function onActionTriggered(action: string): void {
+                function onActionTriggered(sessionId: string, action: string): void {
+                    if (sessionId !== "" && sessionId !== root.job.sessionId) return;
                     switch (action) {
                         case "pause":
                         case "resume":
