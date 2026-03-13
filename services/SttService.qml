@@ -806,6 +806,12 @@ Singleton {
             }
 
             if (_state === "success") {
+                // Clear agent dashboard STT wave animation if this job still owns the target
+                if (_targetWindowPid > 0 &&
+                    AgentService.sttTargetTerminalPid === _targetWindowPid &&
+                    AgentService.sttTargetBufId === _targetNvimActiveBuf) {
+                    AgentService.clearSttTarget();
+                }
                 successTimer.start();
             } else {
                 successTimer.stop();
