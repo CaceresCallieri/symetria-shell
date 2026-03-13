@@ -24,6 +24,12 @@ Item {
     required property PersistentProperties visibilities
     required property SttService.SttJob job
 
+    /// When false, container height changes are instant (no animation).
+    /// Wrapper sets this to true after its clip-reveal animation completes,
+    /// so that subsequent state transitions (recording→processing→success)
+    /// animate height smoothly.
+    property bool enableHeightTransition: false
+
     // Aliases so all existing internal references keep working without rename.
     // "transcribed" and "delivering" display as "processing" to the user.
     readonly property string serviceState: {
@@ -510,8 +516,11 @@ Item {
         implicitHeight: content.implicitHeight + Appearance.padding.large * 2
 
         // Smooth height transitions when child elements appear/disappear
-        // (e.g., timer hiding when transitioning from processing → success)
+        // (e.g., timer hiding when transitioning from processing → success).
+        // Disabled on initial creation so Wrapper's clip animation is the
+        // sole reveal — see enableHeightTransition.
         Behavior on implicitHeight {
+            enabled: root.enableHeightTransition
             Anim {}
         }
 
@@ -535,7 +544,6 @@ Item {
 
                     StyledText {
                         visible: root.languageLabel !== ""
-                        width: visible ? implicitWidth : 0
                         text: root.languageLabel
                         font.pointSize: Appearance.font.size.small
                         font.family: Appearance.font.family.mono
@@ -544,7 +552,6 @@ Item {
 
                     StyledText {
                         visible: root.languageLabel !== ""
-                        width: visible ? implicitWidth : 0
                         text: "·"
                         font.pointSize: Appearance.font.size.small
                         color: Colours.palette.m3outline
@@ -656,7 +663,7 @@ Item {
                             // 3. Therefore we calculate y manually for vertical centering
                             width: 5
                             height: smoothedHeight
-                            y: (parent.height - height) / 2
+                            y: parent ? (parent.height - height) / 2 : 0
 
                             radius: 2.5
                             color: root.serviceState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)

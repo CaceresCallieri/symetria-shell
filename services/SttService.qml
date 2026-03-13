@@ -38,6 +38,7 @@ Singleton {
     /// Whether the delivery mode radio toggle should be shown (from config)
     readonly property bool isAskMode: _deliveryMode === "ask"
 
+
     /// Emitted when an action is successfully dispatched.
     /// Used by Content.qml to animate the corresponding control button.
     /// sessionId scopes the action to the correct job card in multi-job scenarios.
@@ -152,6 +153,7 @@ Singleton {
             const errorJob = _createJob("");
             errorJob._setErrorState("config", "API key not configured",
                 "Set OPENAI_API_KEY env var or stt.apiKey in shell.json");
+            _jobs = [errorJob, ..._jobs];
             return;
         }
 
@@ -165,6 +167,10 @@ Singleton {
 
         _activeRecording = job;
         job._state = "recording";
+
+        // Add to _jobs AFTER state is "recording" so Repeater delegates
+        // see FadeTransitions as visible from the first frame.
+        _jobs = [job, ..._jobs];
 
         // Ensure temp dir exists, then start recording
         if (_tempDirReady) {
@@ -285,12 +291,13 @@ Singleton {
         job.finished.connect(() => _onJobFinished(job));
         job.readyForDelivery.connect(() => _enqueueForDelivery(job));
 
-        _jobs = [job, ..._jobs];  // prepend (newest first)
+        // Caller must add to _jobs AFTER setting job state, so that
+        // Repeater delegates see the correct state at creation time.
         return job;
     }
 
     function _removeJob(job: SttJob): void {
-        job.closing = true;  // triggers fade animation in UI
+        job.closing = true;  // triggers slide-up animation in delegate
         job._removalTimer.start();  // per-job timer, avoids overwrite race
     }
 
@@ -850,7 +857,7 @@ Singleton {
 
         // Animated removal delay — per-job to avoid overwrite races
         readonly property Timer _removalTimer: Timer {
-            interval: 350  // matches Wrapper Behavior on implicitWidth animation
+            interval: Appearance.anim.durations.normal + 50  // outlast delegate hide animation
             onTriggered: root._finalizeRemoval(job)
         }
 
