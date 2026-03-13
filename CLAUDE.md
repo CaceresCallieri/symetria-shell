@@ -97,6 +97,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Cursor shadowing** — A `visible: true` MouseArea at highest z-order shadows ALL `cursorShape` settings below it, even when `enabled: false`. Overlay MouseAreas need both `enabled` and `visible` guards. → `docs/qml-pitfalls.md`
 
+**Layout sizes in onCompleted** — `Component.onCompleted`, `Qt.callLater()`, and `Timer { interval: 0 }` all fire BEFORE ColumnLayout computes `implicitHeight` (polish phase). Use `onImplicitHeightChanged` for reliable post-polish values. Also: set model item state BEFORE adding to arrays (Repeater creates delegates synchronously). → `docs/qml-pitfalls.md`
+
 **STT target locking** — Window and agent targets are captured once at `start()` and never re-resolved. Re-resolving at stop-time or delivery-time causes wrong-agent delivery because `activeAgentForTerminal()` is identity-unstable. → `docs/stt-design-decisions.md`
 
 ## Deep Dives
@@ -114,6 +116,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **STT:**
 - [`stt-design-decisions.md`](docs/stt-design-decisions.md) — Pipeline design rationale and historical bugs
+- [`stt-drawer-animation.md`](docs/stt-drawer-animation.md) — Show animation stutter: root cause, fix, and QML polish lifecycle
 - [`PRD-stt-system.md`](docs/PRD-stt-system.md) — Original product requirements
 - [`stt-future-work.md`](docs/stt-future-work.md) — Planned improvements
 

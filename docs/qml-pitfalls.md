@@ -156,3 +156,23 @@ Any `MouseArea { anchors.fill: parent }` placed as a sibling of `Interactions` i
 ## Rendering at Small Sizes in Layer-Shell
 
 Both QML `Shape` and `Image` with `layer.enabled: true` (FBO/shader pipeline) can fail to render at small sizes (e.g., 14×22px) in Quickshell's Wayland layer-shell context. `Canvas` (CPU-side QPainter) is a reliable alternative.
+
+## Component.onCompleted Fires Before Layout Polish
+
+`Component.onCompleted` fires during **event processing** (phase 1 of the rendering pipeline), BEFORE `ColumnLayout` and other layouts compute `implicitHeight`/`implicitWidth` in the **polish phase** (phase 2). Reading layout-dependent sizes in `onCompleted` returns stale or partial values.
+
+**Also unreliable for layout sizes:** `Qt.callLater()` and `Timer { interval: 0 }` — both fire during event processing, before polish.
+
+**The reliable hook:** `onImplicitHeightChanged` / `onImplicitWidthChanged` — fires after polish updates the property.
+
+```
+QML Rendering Pipeline (per frame):
+[1] Event processing  ← onCompleted, Qt.callLater(), Timer(0ms)
+[2] Polish            ← Layouts compute implicitHeight/implicitWidth
+[3] Sync              ← transfer to scene graph
+[4] Render            ← draw frame
+```
+
+**Related pitfall — model item state timing:** Setting `_array = [newItem, ..._array]` triggers a Repeater to create delegates synchronously. If the item's state isn't fully configured before the array assignment, delegates see stale state. Always set item properties BEFORE adding to model arrays.
+
+→ Full investigation: [`stt-drawer-animation.md`](stt-drawer-animation.md)
