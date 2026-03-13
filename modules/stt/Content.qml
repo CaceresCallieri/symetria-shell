@@ -222,7 +222,8 @@ Item {
         }
     })
 
-    // Current state config - falls back to idle for unknown states
+    // "idle" is unreachable in normal operation (jobs are added after
+    // state is set), but serves as a safe fallback for unknown states.
     readonly property var stateConfig: stateMap[root.serviceState] ?? stateMap["idle"]
 
     // Language badge: maps ISO 639-1 codes to uppercase display labels
@@ -233,20 +234,6 @@ Item {
     readonly property string languageLabel: {
         if (root.serviceLanguage === "") return "";
         return languageDisplayNames[root.serviceLanguage] ?? root.serviceLanguage.toUpperCase();
-    }
-
-    // State indicator components - dispatched by the Loader in the content layout.
-    // Shared icon component for paused and success (same structure, different icon/color).
-    // When transitioning between these two states, Loader reuses the instance and
-    // bindings update reactively — no destruction/recreation flicker.
-    Component {
-        id: stateIconComponent
-
-        MaterialIcon {
-            text: root.stateConfig.icon
-            color: root.stateConfig.iconColor
-            font.pointSize: Appearance.font.size.extraLarge
-        }
     }
 
     // Success state: checkmark icon + delivery method subtitle

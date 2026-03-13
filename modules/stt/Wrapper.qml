@@ -82,7 +82,9 @@ Item {
                         const h = jobContent.implicitHeight;
                         if (h <= 0) return;
 
+                        // Only grow — shrinking mid-reveal would look jarring.
                         if (h > jobDelegate.contentHeight) {
+                            // Stop resets from-value to current position before restart.
                             if (showAnim.running) showAnim.stop();
                             jobDelegate.contentHeight = h;
                         }
@@ -138,6 +140,7 @@ Item {
                         target: jobDelegate
                         property: "implicitHeight"
                         to: 0
+                        duration: Appearance.anim.durations.normal  // shorter than show — hides should feel snappy
                         easing.bezierCurve: Appearance.anim.curves.emphasized
                     }
                 }

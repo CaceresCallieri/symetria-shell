@@ -573,9 +573,8 @@ Singleton {
                 }
             }
 
-            // Remove from jobs list
-            root._jobs = root._jobs.filter(j => j !== job);
-            job.destroy();
+            // Remove from jobs list (via _removeJob so hide animation plays)
+            root._removeJob(job);
         }
 
         /// Retry failed transcription with the same audio file.
@@ -857,7 +856,8 @@ Singleton {
 
         // Animated removal delay — per-job to avoid overwrite races
         readonly property Timer _removalTimer: Timer {
-            interval: Appearance.anim.durations.normal + 50  // outlast delegate hide animation
+            // Must outlast the delegate hideAnim in Wrapper.qml (Anim {} = durations.normal)
+            interval: Appearance.anim.durations.normal + 50
             onTriggered: root._finalizeRemoval(job)
         }
 
