@@ -5,10 +5,9 @@ Invoked by Claude Code's hooks system (async: true) on every lifecycle event.
 Reads SYMMETRIA_AGENT_ID from the environment (set by orchestrator.nvim) and
 sends activity state to the bridge's Unix socket.
 
-For attention-requiring events (Stop, PermissionRequest, Notification subtypes),
-a second "notification" message is sent on the same socket
-connection. The bridge enriches it with project/workspace info and AgentService
-spawns notify-send.
+For attention-requiring events (Stop, PermissionRequest), a second "notification"
+message is sent on the same socket connection. The bridge enriches it with
+project/workspace info and AgentService spawns notify-send.
 
 Exit code is always 0 — hook failures must never block Claude Code.
 """
@@ -71,13 +70,6 @@ NOTIFICATION_EVENTS = {
     },
 }
 
-# Notification subtypes (for the "Notification" hook event).
-NOTIFICATION_SUBTYPES = {
-    "permission_prompt": {"title_suffix": "Permission Needed", "urgency": "critical"},
-    "elicitation_dialog": {"title_suffix": "Question", "urgency": "normal"},
-    "idle_prompt": {"title_suffix": "Waiting", "urgency": "normal"},
-}
-
 
 def _build_notification(hook_name: str, event: dict, agent_id: str) -> dict | None:
     """Build a notification message if the event warrants user attention."""
@@ -108,29 +100,6 @@ def _build_notification(hook_name: str, event: dict, agent_id: str) -> dict | No
             "urgency": info["urgency"],
         }
 
-    # Notification event subtypes
-    if hook_name == "Notification":
-        notification_type = event.get("notification_type", "")
-        if notification_type not in NOTIFICATION_SUBTYPES:
-            return None  # e.g., auth_success — not notification-worthy
-
-        info = NOTIFICATION_SUBTYPES[notification_type]
-        raw_message = event.get("message", "")
-        fallback = {
-            "permission_prompt": "Needs your permission to proceed.",
-            "elicitation_dialog": "Has a question for you.",
-            "idle_prompt": "Waiting for your input.",
-        }
-
-        return {
-            "type": "notification",
-            "agent_id": agent_id,
-            "event": hook_name,
-            "title_suffix": info["title_suffix"],
-            "message": raw_message or fallback.get(notification_type, ""),
-            "urgency": info["urgency"],
-        }
-
     return None
 
 
@@ -155,9 +124,8 @@ def main():
     if hook_name == "SessionStart" and event.get("source", "") == "clear":
         state = "clearing"
 
-    # Notification hook events have no activity state — they're notification-only.
-    # All other events must have a mapped state to proceed.
-    if not state and hook_name != "Notification":
+    # All events must have a mapped state to proceed.
+    if not state:
         return
 
     # Detect plan mode from permission_mode field (present in all hook events).
