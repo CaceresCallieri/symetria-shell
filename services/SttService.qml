@@ -553,7 +553,7 @@ Singleton {
             if (concatProcess.running) concatProcess.signal(9);
 
             _cleanupTempFiles();
-            AgentService.clearSttTarget();
+            _clearSttTargetIfOwned();
 
             // Clear activeRecording if this job is the active one
             if (root._activeRecording === job)
@@ -639,6 +639,15 @@ Singleton {
                     "| class:", _targetWindowClass, "| pid:", _targetWindowPid);
             } else {
                 console.warn("[STT:D04] _captureTargetWindow() — NO activeToplevel!");
+            }
+        }
+
+        /// Clear the AgentService STT target highlight if this job is the current owner.
+        function _clearSttTargetIfOwned(): void {
+            if (_targetWindowPid > 0 &&
+                AgentService.sttTargetTerminalPid === _targetWindowPid &&
+                AgentService.sttTargetBufId === _targetNvimActiveBuf) {
+                AgentService.clearSttTarget();
             }
         }
 
@@ -805,13 +814,11 @@ Singleton {
                 _recordingStartTime = 0;
             }
 
+            if (_state === "success" || _state === "error") {
+                _clearSttTargetIfOwned();
+            }
+
             if (_state === "success") {
-                // Clear agent dashboard STT wave animation if this job still owns the target
-                if (_targetWindowPid > 0 &&
-                    AgentService.sttTargetTerminalPid === _targetWindowPid &&
-                    AgentService.sttTargetBufId === _targetNvimActiveBuf) {
-                    AgentService.clearSttTarget();
-                }
                 successTimer.start();
             } else {
                 successTimer.stop();
