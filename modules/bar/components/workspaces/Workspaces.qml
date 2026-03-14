@@ -14,11 +14,11 @@ Item {
     required property ShellScreen screen
 
     readonly property bool onSpecial: (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor)?.lastIpcObject.specialWorkspace.name !== ""
-    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.monitorFor(screen).activeWorkspace?.id ?? 1) : Hypr.activeWsId
+    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.monitorFor(screen)?.activeWorkspace?.id ?? 1) : Hypr.activeWsId
 
     // Monitor focus detection for indicator dots (hidden with single monitor)
     readonly property bool multiMonitor: Quickshell.screens.length > 1
-    readonly property bool isMonitorFocused: multiMonitor && Hypr.monitorFor(screen).focused
+    readonly property bool isMonitorFocused: multiMonitor && (Hypr.monitorFor(screen)?.focused ?? false)
 
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
         acc[curr.id] = curr.lastIpcObject.windows > 0;
@@ -77,6 +77,7 @@ Item {
         anchors.right: pill.left
         anchors.rightMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize
         radius: root.dotSize / 2
@@ -167,7 +168,6 @@ Item {
                 }
             }
 
-
             Behavior on scale {
                 Anim {}
             }
@@ -209,6 +209,7 @@ Item {
         anchors.left: pill.right
         anchors.leftMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize
         radius: root.dotSize / 2
