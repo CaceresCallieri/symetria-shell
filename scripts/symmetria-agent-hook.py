@@ -48,6 +48,7 @@ TOOL_DISPLAY_NAMES = {
     "WebSearch": "Searching",
     "NotebookEdit": "Editing",
     "AskUserQuestion": "Asking",
+    "ExitPlanMode": "Planning",
     "TodoWrite": "Organizing",
     "TaskCreate": "Organizing",
     "TaskUpdate": "Organizing",
@@ -136,7 +137,7 @@ def main():
 
     # Resolve tool display name for tool-bearing events
     tool = ""
-    if hook_name == "PreToolUse":
+    if hook_name in ("PreToolUse", "PermissionRequest"):
         tool_name = event.get("tool_name", "")
         tool = TOOL_DISPLAY_NAMES.get(tool_name, tool_name)
     elif hook_name == "SubagentStart":

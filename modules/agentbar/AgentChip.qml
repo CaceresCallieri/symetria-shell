@@ -27,7 +27,11 @@ Item {
     implicitHeight: sparkle.implicitHeight
 
     readonly property string _sparkleMode: {
-        // Key permission morph takes visual priority
+        // Ask/plan morphs override key — they're needs_permission variants
+        // with distinct icons (? and plan list) instead of the generic key
+        if (root.activityTool === "Asking") return "ask-morph";
+        if (root.activityTool === "Planning") return "plan-morph";
+        // Key permission morph (generic tool approval)
         if (root._keyMorphActive) return "key-morph";
         if (root._keyEmerging) return "starting";
         // STT wave/morph
@@ -43,7 +47,7 @@ Item {
         // Busy path
         if (root.activityState === "starting" || root.activityState === "clearing")
             return "starting";
-        return root.inPlanMode ? "thinking" : "working";
+        return "working";
     }
 
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
@@ -53,8 +57,11 @@ Item {
         if (root.isBusy) {
             root._isClosing = false
         } else if (root.activityState === "needs_permission") {
-            // Busy → needs_permission: starburst is already showing, morph directly to key
-            root._keyMorphActive = true
+            // Key-morph only for generic permissions — ask/plan morphs handle
+            // their own needs_permission variants via _sparkleMode binding
+            if (root.activityTool !== "Asking" && root.activityTool !== "Planning") {
+                root._keyMorphActive = true
+            }
         } else {
             root._isClosing = true
         }
@@ -82,8 +89,11 @@ Item {
             root._startClosing = false
         }
         // Key morph: entering needs_permission from idle (dormant dot)
+        // Only for generic permissions — ask/plan morphs don't need the emerge
         if (root.activityState === "needs_permission" && !root.isBusy && !root._keyMorphActive) {
-            root._keyEmerging = true
+            if (root.activityTool !== "Asking" && root.activityTool !== "Planning") {
+                root._keyEmerging = true
+            }
         }
         // Key morph: leaving needs_permission — reset key flags
         if (root.activityState !== "needs_permission") {
@@ -103,7 +113,12 @@ Item {
         mode: root._sparkleMode
         // Handle initial state on creation (no animation — skip to final frame)
         Component.onCompleted: {
-            if (root.activityState === "needs_permission" && !root.isBusy) {
+            if (root.activityTool === "Asking" || root.activityTool === "Planning") {
+                // Already asking or plan presented — show icon directly
+                root._keyEmerging = false
+                root._keyMorphActive = false
+                sparkle.skipToEnd()
+            } else if (root.activityState === "needs_permission" && !root.isBusy) {
                 // Already in needs_permission — show key shape directly
                 root._keyEmerging = false
                 root._keyMorphActive = true
