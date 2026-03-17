@@ -20,7 +20,7 @@ Item {
 
     required property color color
     property bool running: true
-    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "key-morph"
+    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "key-morph" | "ask-morph" | "plan-morph" | "asking" | "planning"
     property real speedFactor: 1.0 // Multiplier for frame interval (< 1 = faster)
 
     /// Emitted when a one-shot animation (starting/stopping) reaches its final frame.
@@ -36,15 +36,20 @@ Item {
 
     property int _currentFrame: 0
     property bool _oneShotComplete: false
-    readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "key-morph"
+    readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
         // stt-wave intentionally omitted — it loops like working/thinking
 
-    readonly property int _frameCount: root.mode === "thinking" || root.mode === "starting" ? 9
-        : root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "key-morph" ? 12
+    readonly property int _frameCount: root.mode === "asking" || root.mode === "planning" ? 1
+        : root.mode === "thinking" || root.mode === "starting" ? 9
+        : root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 12
         : 8
 
-    readonly property string _spriteAsset: root.mode === "thinking"
-        ? "claude-sparkle-thinking-sprite"
+    readonly property string _spriteAsset: root.mode === "asking"
+        ? "ask-question-icon"
+        : root.mode === "planning" ? "plan-list-icon"
+        : root.mode === "ask-morph" ? "claude-sparkle-ask-morph-sprite"
+        : root.mode === "plan-morph" ? "claude-sparkle-plan-morph-sprite"
+        : root.mode === "thinking" ? "claude-sparkle-thinking-sprite"
         : root.mode === "starting" ? "claude-sparkle-starting-sprite"
         : root.mode === "stopping" ? "claude-sparkle-stopping-sprite"
         : root.mode === "stt-morph" ? "claude-sparkle-stt-morph-sprite"
@@ -58,8 +63,9 @@ Item {
         console.assert(root.mode === "working" || root.mode === "thinking"
             || root.mode === "starting" || root.mode === "stopping"
             || root.mode === "stt-morph" || root.mode === "stt-wave"
-            || root.mode === "key-morph",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", or "key-morph"`)
+            || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
+            || root.mode === "asking" || root.mode === "planning",
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "key-morph", "asking", or "planning"`)
     }
 
     /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
@@ -93,7 +99,7 @@ Item {
     Timer {
         running: root.running && root.visible && !root._oneShotComplete
         interval: Math.round((root.mode === "stopping" ? 152
-            : root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "key-morph" ? 80
+            : root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 80
             : 101) * root.speedFactor)
         repeat: true
         onTriggered: {
