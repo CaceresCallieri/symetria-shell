@@ -177,8 +177,8 @@ class AgentBridge:
                     "state": state,
                     "tool": msg.get("tool", ""),
                     "ts": time.monotonic(),
-                    # Hook reads permission_mode on every event, so in_plan_mode is
-                    # always present. Preserve from existing as fallback for safety.
+                    # Hook reads permission_mode on every event, so in_plan_mode
+                    # is always current — no accumulation needed.
                     "in_plan_mode": msg.get("in_plan_mode", False),
                 }
                 self._activities[agent_id] = new_activity

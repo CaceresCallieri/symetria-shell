@@ -13,7 +13,6 @@ Item {
     required property string activityState
     required property string activityTool
     required property bool isSttTarget
-    required property bool inPlanMode
 
     property bool _isClosing: false
     property bool _blinkClosing: false // true from the stopping phase of a clear-blink until activityState leaves "clearing"
@@ -22,6 +21,9 @@ Item {
     property bool _sttWaving: false // true after stt-morph completes → looping wave
     property bool _keyEmerging: false // true during dot → starburst emerge before key morph
     property bool _keyMorphActive: false // true while key-morph sprite is playing or held at key shape
+
+    // Ask/plan morphs have dedicated icons — suppress the generic key-morph path
+    readonly property bool _isSpecialPermission: root.activityTool === "Asking" || root.activityTool === "Planning"
 
     implicitWidth: sparkle.implicitWidth
     implicitHeight: sparkle.implicitHeight
@@ -59,7 +61,7 @@ Item {
         } else if (root.activityState === "needs_permission") {
             // Key-morph only for generic permissions — ask/plan morphs handle
             // their own needs_permission variants via _sparkleMode binding
-            if (root.activityTool !== "Asking" && root.activityTool !== "Planning") {
+            if (!root._isSpecialPermission) {
                 root._keyMorphActive = true
             }
         } else {
@@ -91,7 +93,7 @@ Item {
         // Key morph: entering needs_permission from idle (dormant dot)
         // Only for generic permissions — ask/plan morphs don't need the emerge
         if (root.activityState === "needs_permission" && !root.isBusy && !root._keyMorphActive) {
-            if (root.activityTool !== "Asking" && root.activityTool !== "Planning") {
+            if (!root._isSpecialPermission) {
                 root._keyEmerging = true
             }
         }

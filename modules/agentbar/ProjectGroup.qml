@@ -196,7 +196,6 @@ StyledRect {
                 active: modelData.active ?? false
                 activityState: modelData.activity_state ?? ""
                 activityTool: modelData.activity_tool ?? ""
-                inPlanMode: modelData.in_plan_mode ?? false
                 isSttTarget: AgentService.isAgentSttTarget(modelData)
             }
         }
