@@ -188,7 +188,9 @@ Singleton {
             },
             popouts: {
                 tray: bar.popouts.tray,
-                statusIcons: bar.popouts.statusIcons
+                statusIcons: bar.popouts.statusIcons,
+                timePill: bar.popouts.timePill,
+                systemPill: bar.popouts.systemPill
             },
             workspaces: {
                 shown: bar.workspaces.shown,
@@ -199,11 +201,11 @@ Singleton {
                 showWindowsOnSpecialWorkspaces: bar.workspaces.showWindowsOnSpecialWorkspaces,
                 activeTrail: bar.workspaces.activeTrail,
                 perMonitorWorkspaces: bar.workspaces.perMonitorWorkspaces,
-                label: bar.workspaces.label,
-                occupiedLabel: bar.workspaces.occupiedLabel,
-                activeLabel: bar.workspaces.activeLabel,
-                capitalisation: bar.workspaces.capitalisation,
-                specialWorkspaceIcons: bar.workspaces.specialWorkspaceIcons
+                specialWorkspaceIcons: bar.workspaces.specialWorkspaceIcons,
+                useActualAppIcons: bar.workspaces.useActualAppIcons,
+                terminalAppDetection: bar.workspaces.terminalAppDetection,
+                appIconsClickToFocus: bar.workspaces.appIconsClickToFocus,
+                namedWorkspaceIcons: bar.workspaces.namedWorkspaceIcons
             },
             tray: {
                 background: bar.tray.background,
@@ -228,6 +230,16 @@ Singleton {
                 trayMenuWidth: bar.sizes.trayMenuWidth,
                 batteryWidth: bar.sizes.batteryWidth,
                 networkWidth: bar.sizes.networkWidth
+            },
+            timePill: {
+                showClock: bar.timePill.showClock,
+                showDate: bar.timePill.showDate,
+                showWeather: bar.timePill.showWeather
+            },
+            systemPill: {
+                showCpu: bar.systemPill.showCpu,
+                showRam: bar.systemPill.showRam,
+                showUpdates: bar.systemPill.showUpdates
             }
         };
     }

@@ -279,6 +279,7 @@ Item {
 
                                 StyledText {
                                     Layout.fillWidth: true
+                                    opacity: root.workspacesShowOnlyOccupied ? 0.5 : 1.0
                                     text: qsTr("Shown")
                                 }
 
@@ -381,6 +382,7 @@ Item {
 
                                 StyledText {
                                     Layout.fillWidth: true
+                                    opacity: root.workspacesShowOnlyOccupied ? 0.5 : 1.0
                                     text: qsTr("Occupied background")
                                 }
 
