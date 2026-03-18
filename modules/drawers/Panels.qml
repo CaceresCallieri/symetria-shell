@@ -169,7 +169,7 @@ Item {
         screen: root.screen
 
         x: {
-            if (_detachedFull)
+            if (popouts._detachedFull)
                 return 0;
 
             const off = currentCenter - Config.border.thickness - nonAnimWidth / 2;

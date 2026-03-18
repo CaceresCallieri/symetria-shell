@@ -37,6 +37,7 @@ Item {
     // Briefly true during open/close transitions to prevent Behaviors from
     // animating stale → new values during the binding switchover.
     property bool _suppressAnim: false
+    property int _suppressGeneration: 0
     // Stays true during the close fade-out so the Wrapper keeps its full size
     // until the DetachedComp animation finishes.
     property bool _closingFromDetached: false
@@ -44,8 +45,9 @@ Item {
     function detach(mode: string): void {
         _closingTimer.stop();
         _closingFromDetached = false;
+        _suppressGeneration++;
+        const gen = _suppressGeneration;
         _suppressAnim = true;
-        animLength = Appearance.anim.durations.large;
         if (mode === "winfo") {
             detachedMode = mode;
         } else {
@@ -53,23 +55,25 @@ Item {
             queuedMode = mode;
         }
         focus = true;
-        Qt.callLater(() => { _suppressAnim = false; });
+        Qt.callLater(() => { if (_suppressGeneration === gen) _suppressAnim = false; });
     }
 
     function close(): void {
         const wasDetached = isDetached;
         if (wasDetached) {
             _closingFromDetached = true;
+            _suppressGeneration++;
+            const gen = _suppressGeneration;
             _suppressAnim = true;
             _closingTimer.start();
         }
         hasCurrent = false;
-        animCurve = Appearance.anim.curves.emphasizedAccel;
         animLength = Appearance.anim.durations.normal;
         detachedMode = "";
+        queuedMode = "";
         animCurve = Appearance.anim.curves.emphasized;
         if (wasDetached) {
-            Qt.callLater(() => { _suppressAnim = false; });
+            Qt.callLater(() => { if (_suppressGeneration === gen) _suppressAnim = false; });
         }
     }
 
@@ -78,15 +82,17 @@ Item {
     Timer {
         id: _closingTimer
 
-        interval: Appearance.anim.durations.normal
+        interval: Appearance.anim.durations.small
         onTriggered: {
+            root._suppressGeneration++;
+            const gen = root._suppressGeneration;
             root._suppressAnim = true;
             root._closingFromDetached = false;
-            Qt.callLater(() => { root._suppressAnim = false; });
+            Qt.callLater(() => { if (root._suppressGeneration === gen) root._suppressAnim = false; });
         }
     }
 
-    visible: width > 0 && height > 0
+    visible: _detachedFull || (width > 0 && height > 0)
     // Bar popouts need clipping for the height-reveal animation.
     // Detached panels fill the parent, so clipping would hide content
     // that overflows the Wrapper during async loading.
@@ -180,6 +186,9 @@ Item {
 
     // --- Behaviors: only active for bar-popout mode ---
 
+    // Note: unlike y/implicitWidth/implicitHeight, the x Behavior intentionally
+    // omits the `implicitHeight > 0` guard — the slide-to-icon animation on
+    // first hover-open is part of the upstream design.
     Behavior on x {
         enabled: !root._detachedFull && !root._suppressAnim
 
