@@ -16,7 +16,7 @@ Item {
     required property ShellScreen screen
 
     readonly property real nonAnimWidth: children.find(c => c.shouldBeActive)?.implicitWidth ?? content.implicitWidth
-    readonly property real nonAnimHeight: y > 0 || hasCurrent ? children.find(c => c.shouldBeActive)?.implicitHeight ?? content.implicitHeight : 0
+    readonly property real nonAnimHeight: y > 0 || hasCurrent || isDetached ? children.find(c => c.shouldBeActive)?.implicitHeight ?? content.implicitHeight : 0
     readonly property Item current: content.item?.current ?? null
 
     property string currentName
@@ -30,7 +30,21 @@ Item {
     property int animLength: Appearance.anim.durations.normal
     property list<real> animCurve: Appearance.anim.curves.emphasized
 
+    // When true, the Wrapper fills its parent and disables all Behaviors so
+    // detached panels (ControlCenter, WindowInfo) can center + scale/fade
+    // without interference from the bar-popout size/position animation system.
+    readonly property bool _detachedFull: isDetached || _closingFromDetached
+    // Briefly true during open/close transitions to prevent Behaviors from
+    // animating stale → new values during the binding switchover.
+    property bool _suppressAnim: false
+    // Stays true during the close fade-out so the Wrapper keeps its full size
+    // until the DetachedComp animation finishes.
+    property bool _closingFromDetached: false
+
     function detach(mode: string): void {
+        _closingTimer.stop();
+        _closingFromDetached = false;
+        _suppressAnim = true;
         animLength = Appearance.anim.durations.large;
         if (mode === "winfo") {
             detachedMode = mode;
@@ -39,21 +53,49 @@ Item {
             queuedMode = mode;
         }
         focus = true;
+        Qt.callLater(() => { _suppressAnim = false; });
     }
 
     function close(): void {
+        const wasDetached = isDetached;
+        if (wasDetached) {
+            _closingFromDetached = true;
+            _suppressAnim = true;
+            _closingTimer.start();
+        }
         hasCurrent = false;
         animCurve = Appearance.anim.curves.emphasizedAccel;
         animLength = Appearance.anim.durations.normal;
         detachedMode = "";
         animCurve = Appearance.anim.curves.emphasized;
+        if (wasDetached) {
+            Qt.callLater(() => { _suppressAnim = false; });
+        }
+    }
+
+    // Cleans up _closingFromDetached after the DetachedComp's fade-out
+    // animation has finished, then snaps the Wrapper back to zero size.
+    Timer {
+        id: _closingTimer
+
+        interval: Appearance.anim.durations.normal
+        onTriggered: {
+            root._suppressAnim = true;
+            root._closingFromDetached = false;
+            Qt.callLater(() => { root._suppressAnim = false; });
+        }
     }
 
     visible: width > 0 && height > 0
-    clip: true
+    // Bar popouts need clipping for the height-reveal animation.
+    // Detached panels fill the parent, so clipping would hide content
+    // that overflows the Wrapper during async loading.
+    clip: !_detachedFull
 
-    implicitWidth: nonAnimWidth
-    implicitHeight: nonAnimHeight
+    // When detached, fill the parent so centered content positions correctly.
+    // When in bar-popout mode, size to content for the reveal animation.
+    implicitWidth: _detachedFull ? (parent?.width ?? nonAnimWidth) : nonAnimWidth
+    implicitHeight: _detachedFull ? (parent?.height ?? nonAnimHeight) : nonAnimHeight
 
     focus: hasCurrent
     Keys.onEscapePressed: {
@@ -67,7 +109,7 @@ Item {
         }
         close();
     }
-    
+
     Keys.onPressed: event => {
         // Don't intercept keys when password popout is active - let it handle them
         if (currentName === "wirelesspassword") {
@@ -88,7 +130,7 @@ Item {
         property: "WlrLayershell.keyboardFocus"
         value: WlrKeyboardFocus.OnDemand
     }
-    
+
     Binding {
         when: root.hasCurrent && root.currentName === "wirelesspassword"
 
@@ -110,7 +152,7 @@ Item {
         }
     }
 
-    Comp {
+    DetachedComp {
         shouldBeActive: root.detachedMode === "winfo"
         asynchronous: true
         anchors.centerIn: parent
@@ -121,7 +163,7 @@ Item {
         }
     }
 
-    Comp {
+    DetachedComp {
         shouldBeActive: root.detachedMode === "any"
         asynchronous: true
         anchors.centerIn: parent
@@ -136,7 +178,11 @@ Item {
         }
     }
 
+    // --- Behaviors: only active for bar-popout mode ---
+
     Behavior on x {
+        enabled: !root._detachedFull && !root._suppressAnim
+
         Anim {
             duration: root.animLength
             easing.bezierCurve: root.animCurve
@@ -144,7 +190,7 @@ Item {
     }
 
     Behavior on y {
-        enabled: root.implicitHeight > 0
+        enabled: root.implicitHeight > 0 && !root._detachedFull && !root._suppressAnim
 
         Anim {
             duration: root.animLength
@@ -153,7 +199,7 @@ Item {
     }
 
     Behavior on implicitWidth {
-        enabled: root.implicitHeight > 0
+        enabled: root.implicitHeight > 0 && !root._detachedFull && !root._suppressAnim
 
         Anim {
             duration: root.animLength
@@ -162,11 +208,15 @@ Item {
     }
 
     Behavior on implicitHeight {
+        enabled: !root._detachedFull && !root._suppressAnim
+
         Anim {
             duration: root.animLength
             easing.bezierCurve: root.animCurve
         }
     }
+
+    // --- Bar-popout loader: opacity-only transitions ---
 
     component Comp: Loader {
         id: comp
@@ -208,6 +258,79 @@ Item {
                 SequentialAnimation {
                     Anim {
                         property: "opacity"
+                    }
+                    PropertyAction {
+                        property: "active"
+                    }
+                }
+            }
+        ]
+    }
+
+    // --- Detached-panel loader: scale + opacity collapse animation ---
+    // Mirrors the keychords overlay pattern (Overlay.qml) — the content
+    // scales from 0.9→1.0 with a subtle OutBack bounce on open and
+    // collapses back with InBack easing on close.
+
+    component DetachedComp: Loader {
+        id: dcomp
+
+        property bool shouldBeActive
+
+        asynchronous: true
+        active: false
+        opacity: 0
+        scale: 0.9
+        transformOrigin: Item.Center
+
+        states: State {
+            name: "active"
+            when: dcomp.shouldBeActive
+
+            PropertyChanges {
+                dcomp.opacity: 1
+                dcomp.active: true
+                dcomp.scale: 1
+            }
+        }
+
+        transitions: [
+            Transition {
+                from: ""
+                to: "active"
+
+                SequentialAnimation {
+                    PropertyAction {
+                        property: "active"
+                    }
+                    ParallelAnimation {
+                        Anim {
+                            property: "opacity"
+                        }
+                        NumberAnimation {
+                            property: "scale"
+                            duration: Appearance.anim.durations.normal
+                            easing.type: Easing.OutBack
+                            easing.overshoot: 1.5
+                        }
+                    }
+                }
+            },
+            Transition {
+                from: "active"
+                to: ""
+
+                SequentialAnimation {
+                    ParallelAnimation {
+                        Anim {
+                            property: "opacity"
+                            duration: Appearance.anim.durations.small
+                        }
+                        NumberAnimation {
+                            property: "scale"
+                            duration: Appearance.anim.durations.small
+                            easing.type: Easing.InBack
+                        }
                     }
                     PropertyAction {
                         property: "active"
