@@ -192,6 +192,7 @@ Singleton {
             },
             workspaces: {
                 shown: bar.workspaces.shown,
+                showOnlyOccupied: bar.workspaces.showOnlyOccupied,
                 activeIndicator: bar.workspaces.activeIndicator,
                 occupiedBg: bar.workspaces.occupiedBg,
                 showWindows: bar.workspaces.showWindows,

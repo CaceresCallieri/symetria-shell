@@ -121,6 +121,7 @@
     },
     "workspaces": {
       "shown": 10,
+      "showOnlyOccupied": true,
       "activeIndicator": true,
       "occupiedBg": false,
       "showWindows": true,

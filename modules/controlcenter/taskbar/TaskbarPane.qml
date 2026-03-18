@@ -34,6 +34,7 @@ Item {
     property bool trayCompact: Config.bar.tray.compact ?? false
     property bool trayRecolour: Config.bar.tray.recolour ?? false
     property int workspacesShown: Config.bar.workspaces.shown ?? 5
+    property bool workspacesShowOnlyOccupied: Config.bar.workspaces.showOnlyOccupied ?? false
     property bool workspacesActiveIndicator: Config.bar.workspaces.activeIndicator ?? true
     property bool workspacesOccupiedBg: Config.bar.workspaces.occupiedBg ?? false
     property bool workspacesShowWindows: Config.bar.workspaces.showWindows ?? false
@@ -75,6 +76,7 @@ Item {
         Config.bar.tray.compact = root.trayCompact;
         Config.bar.tray.recolour = root.trayRecolour;
         Config.bar.workspaces.shown = root.workspacesShown;
+        Config.bar.workspaces.showOnlyOccupied = root.workspacesShowOnlyOccupied;
         Config.bar.workspaces.activeIndicator = root.workspacesActiveIndicator;
         Config.bar.workspaces.occupiedBg = root.workspacesOccupiedBg;
         Config.bar.workspaces.showWindows = root.workspacesShowWindows;
@@ -281,11 +283,45 @@ Item {
                                 }
 
                                 CustomSpinBox {
+                                    enabled: !root.workspacesShowOnlyOccupied
                                     min: 1
                                     max: 20
                                     value: root.workspacesShown
                                     onValueModified: value => {
                                         root.workspacesShown = value;
+                                        root.saveConfig();
+                                    }
+                                }
+                            }
+                        }
+
+                        StyledRect {
+                            Layout.fillWidth: true
+                            implicitHeight: workspacesShowOnlyOccupiedRow.implicitHeight + Appearance.padding.large * 2
+                            radius: Appearance.rounding.normal
+                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+
+                            Behavior on implicitHeight {
+                                Anim {}
+                            }
+
+                            RowLayout {
+                                id: workspacesShowOnlyOccupiedRow
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.margins: Appearance.padding.large
+                                spacing: Appearance.spacing.normal
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Show only occupied")
+                                }
+
+                                StyledSwitch {
+                                    checked: root.workspacesShowOnlyOccupied
+                                    onToggled: {
+                                        root.workspacesShowOnlyOccupied = checked;
                                         root.saveConfig();
                                     }
                                 }
@@ -349,6 +385,7 @@ Item {
                                 }
 
                                 StyledSwitch {
+                                    enabled: !root.workspacesShowOnlyOccupied
                                     checked: root.workspacesOccupiedBg
                                     onToggled: {
                                         root.workspacesOccupiedBg = checked;
