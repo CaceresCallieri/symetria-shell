@@ -30,6 +30,7 @@ Singleton {
     property bool showPreview
     property string scheme
     property string flavour
+    property var _paletteKeys: []
     readonly property bool light: showPreview ? previewLight : currentLight
     property bool currentLight
     property bool previewLight
@@ -161,11 +162,16 @@ Singleton {
             previewLight = scheme.mode === "light";
         }
 
+        const keys = [];
         for (const [name, colour] of Object.entries(scheme.colours)) {
             const propName = name.startsWith("term") ? name : `m3${name}`;
-            if (colours.hasOwnProperty(propName))
+            if (colours.hasOwnProperty(propName)) {
                 colours[propName] = `#${colour}`;
+                keys.push(propName);
+            }
         }
+        if (!isPreview)
+            root._paletteKeys = keys;
     }
 
     function setMode(mode: string): void {
@@ -177,6 +183,74 @@ Singleton {
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root.load(text(), false)
+    }
+
+    IpcHandler {
+        target: "theme"
+
+        function getTheme(): string {
+            const p = {};
+            for (const key of root._paletteKeys)
+                p[key] = String(root.palette[key]);
+
+            return JSON.stringify({
+                meta: {
+                    name: root.scheme,
+                    flavour: root.flavour,
+                    light: root.light,
+                },
+                palette: p,
+                appearance: {
+                    rounding: {
+                        small: Appearance.rounding.small,
+                        normal: Appearance.rounding.normal,
+                        large: Appearance.rounding.large,
+                        full: Appearance.rounding.full,
+                    },
+                    spacing: {
+                        small: Appearance.spacing.small,
+                        smaller: Appearance.spacing.smaller,
+                        normal: Appearance.spacing.normal,
+                        larger: Appearance.spacing.larger,
+                        large: Appearance.spacing.large,
+                    },
+                    padding: {
+                        small: Appearance.padding.small,
+                        smaller: Appearance.padding.smaller,
+                        normal: Appearance.padding.normal,
+                        larger: Appearance.padding.larger,
+                        large: Appearance.padding.large,
+                    },
+                    font: {
+                        family: {
+                            sans: Appearance.font.family.sans,
+                            mono: Appearance.font.family.mono,
+                            material: Appearance.font.family.material,
+                        },
+                        size: {
+                            small: Appearance.font.size.small,
+                            smaller: Appearance.font.size.smaller,
+                            normal: Appearance.font.size.normal,
+                            larger: Appearance.font.size.larger,
+                            large: Appearance.font.size.large,
+                            extraLarge: Appearance.font.size.extraLarge,
+                        },
+                    },
+                    anim: {
+                        duration: Appearance.anim.durations.normal,
+                        curves: {
+                            standard: Appearance.anim.curves.standard,
+                            standardDecel: Appearance.anim.curves.standardDecel,
+                        },
+                    },
+                    transparency: {
+                        enabled: Appearance.transparency.enabled,
+                        base: Appearance.transparency.base,
+                        layers: Appearance.transparency.layers,
+                    },
+                },
+            });
+        }
     }
 
     ImageAnalyser {
