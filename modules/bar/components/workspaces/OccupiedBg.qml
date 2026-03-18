@@ -52,7 +52,7 @@ Item {
             readonly property Workspace end: root.workspaces.itemAt(getWsIdx(modelData.end)) ?? null
 
             // Glassmorphism styling (subtle intensity for background pill)
-            readonly property var glassStyle: Colours.glassmorphism(
+            readonly property var glassStyle: Colours.pillStyle(
                 Colours.palette.m3surfaceContainerHigh,
                 Colours.glass.subtle
             )

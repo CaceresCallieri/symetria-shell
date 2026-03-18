@@ -40,15 +40,17 @@ StyledRect {
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
-    color: isCurrentProject
-        ? Colours.glassmorphism(Colours.palette.m3primary, 1.0).background
-        : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).background
+    // Pre-compute pill styles to avoid repeated function calls in bindings
+    readonly property var focusedStyle: Colours.pillStyle(Colours.palette.m3primary, 1.0)
+    readonly property var unfocusedStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.15)
+
+    color: isCurrentProject ? focusedStyle.background : unfocusedStyle.background
     radius: Appearance.rounding.full
     border.width: hasPermissionNeeded ? 2 : 1
     border.color: {
         if (hasPermissionNeeded) return Colours.palette.m3tertiary;
-        if (isCurrentProject) return Colours.glassmorphism(Colours.palette.m3primary, 1.0).border;
-        return Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, 0.15).border;
+        if (isCurrentProject) return focusedStyle.border;
+        return unfocusedStyle.border;
     }
     clip: true  // clips outer half of sweepCanvas halo stroke → inward glow effect
 

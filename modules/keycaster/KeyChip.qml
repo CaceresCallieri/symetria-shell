@@ -73,8 +73,8 @@ Item {
         id: chip
 
         readonly property var glassStyle: root.isNewest
-            ? Colours.glassmorphism(Colours.palette.m3primary, Colours.glass.strong)
-            : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+            ? Colours.pillStyle(Colours.palette.m3primary, Colours.glass.strong)
+            : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
         // Keyboard key-like proportions: more padding, subtle rounding
         implicitWidth: chipContent.implicitWidth + Appearance.padding.large * 2

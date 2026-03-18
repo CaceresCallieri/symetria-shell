@@ -120,6 +120,60 @@ Singleton {
         };
     }
 
+    // Matte pill constants — refined dark aesthetic with subtle white edge
+    readonly property QtObject matteConstants: QtObject {
+        // Dark charcoal base lightness (fully opaque)
+        readonly property real baseLightness: 0.10
+
+        // How much intensity brightens the background
+        readonly property real lightnessRange: 0.08
+
+        // How much the baseColor hue bleeds into the background
+        readonly property real colorTint: 0.12
+
+        // Border base color — pure white is chromatically neutral,
+        // works with any M3 palette and reads as a subtle light edge
+        readonly property color borderColor: "#ffffff"
+
+        // Border opacity — barely perceptible edge definition
+        // (0.12 = just enough to separate pill from background)
+        readonly property real borderOpacity: 0.12
+    }
+
+    // Matte pill helper: returns opaque dark background + subtle white border
+    //
+    // @param baseColor: M3 palette color for hue tinting (e.g., m3surfaceContainerHigh, m3primary)
+    // @param intensity: Brightness from 0 (deep black) to 1 (slightly lighter)
+    // @returns: { background: color, border: color }
+    function mattePill(baseColor: color, intensity: real): var {
+        const clampedIntensity = Math.max(0, Math.min(1, intensity));
+        const lightness = matteConstants.baseLightness + clampedIntensity * matteConstants.lightnessRange;
+        const tint = matteConstants.colorTint;
+
+        const background = Qt.hsla(
+            baseColor.hslHue,
+            baseColor.hslSaturation * tint,
+            lightness,
+            1.0
+        );
+        const border = Qt.rgba(
+            matteConstants.borderColor.r,
+            matteConstants.borderColor.g,
+            matteConstants.borderColor.b,
+            matteConstants.borderOpacity
+        );
+
+        return { background: background, border: border };
+    }
+
+    // Unified pill style accessor — delegates to glassmorphism or mattePill
+    // based on config toggle. Same signature and return type as glassmorphism().
+    function pillStyle(baseColor: color, intensity: real): var {
+        if (Appearance.pillStyle === "matte")
+            return mattePill(baseColor, intensity);
+        return glassmorphism(baseColor, intensity);
+    }
+
     // Glassmorphism intensity presets for common use cases
     //
     // Usage Guidelines - Base Color Selection:

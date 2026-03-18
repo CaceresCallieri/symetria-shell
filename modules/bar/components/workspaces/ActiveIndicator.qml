@@ -27,7 +27,7 @@ StyledRect {
     property color textColor: Colours.palette.m3onPrimary
 
     // --- Glassmorphism styling (strong intensity for active indicator) ---
-    readonly property var glassStyle: Colours.glassmorphism(indicatorColor, Colours.glass.strong)
+    readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong)
 
     // --- Mode detection ---
     readonly property bool useListView: listView !== null

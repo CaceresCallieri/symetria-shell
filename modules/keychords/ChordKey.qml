@@ -41,7 +41,7 @@ Item {
         StyledRect {
             id: keyBadge
 
-            readonly property var glassStyle: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+            readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
             Layout.preferredWidth: Config.keychords.sizes.keyWidth
             Layout.preferredHeight: Config.keychords.sizes.keyWidth
