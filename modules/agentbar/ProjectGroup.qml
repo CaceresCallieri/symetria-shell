@@ -7,7 +7,7 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-/// Per-project pill: glassmorphism container with project name and agent chips.
+/// Per-project pill: styled container with project name and agent chips.
 StyledRect {
     id: root
 
@@ -40,7 +40,7 @@ StyledRect {
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
-    // Pre-compute pill styles to avoid repeated function calls in bindings
+    // Pre-computed pill styles — not reactive to pillStyle config hot-reload (requires shell restart)
     readonly property var focusedStyle: Colours.pillStyle(Colours.palette.m3primary, 1.0)
     readonly property var unfocusedStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.15)
 

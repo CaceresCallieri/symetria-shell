@@ -35,7 +35,7 @@ readonly property bool isMonitorFocused: Hypr.monitorFor(screen).focused
 
 ### QML Binding Issue with Glassmorphism Colors
 
-**Problem:** When using ternary operators or conditional bindings with `Colours.glassmorphism()`, the color property doesn't update when `isMonitorFocused` changes.
+**Problem:** When using ternary operators or conditional bindings with `Colours.pillStyle()`, the color property doesn't update when `isMonitorFocused` changes.
 
 **Observed Behavior:**
 - `isMonitorFocused` changes correctly (debug logs confirm)
@@ -52,15 +52,15 @@ readonly property bool isMonitorFocused: Hypr.monitorFor(screen).focused
 
 2. **Pre-computed readonly properties:**
    ```qml
-   readonly property var glassStyleFocused: Colours.glassmorphism(...)
-   readonly property var glassStyleUnfocused: Colours.glassmorphism(...)
+   readonly property var glassStyleFocused: Colours.pillStyle(...)
+   readonly property var glassStyleUnfocused: Colours.pillStyle(...)
    color: isMonitorFocused ? glassStyleFocused.background : glassStyleUnfocused.background
    ```
    Result: `readonly property var` evaluated once, doesn't re-evaluate
 
 3. **Function calls in binding:**
    ```qml
-   function getFocusedBackground(): color { return Colours.glassmorphism(...).background }
+   function getFocusedBackground(): color { return Colours.pillStyle(...).background }
    color: { const _ = Colours.palette.m3surfaceContainerHigh; return isMonitorFocused ? getFocusedBackground() : getUnfocusedBackground() }
    ```
    Result: Still doesn't update
@@ -74,11 +74,11 @@ readonly property bool isMonitorFocused: Hypr.monitorFor(screen).focused
        restoreMode: Binding.RestoreBindingOrValue
    }
    ```
-   Result: Still doesn't work for glassmorphism-derived colors
+   Result: Still doesn't work for pillStyle-derived colors
 
 **Why Border Color Works But Background Doesn't:**
 - Border color uses direct palette color (`Colours.palette.m3primary`) - works fine
-- Background color uses `Colours.glassmorphism(...).background` - doesn't react
+- Background color uses `Colours.pillStyle(...).background` - doesn't react
 
 ### Suspected Root Cause
 
@@ -119,7 +119,7 @@ Behavior on border.color {
 ## Future Implementation Ideas
 
 ### 1. Use Direct Colors Instead of Glassmorphism
-Instead of calling `Colours.glassmorphism()`, compute the colors manually or use direct palette colors:
+Instead of calling `Colours.pillStyle()`, compute the colors manually or use direct palette colors:
 
 ```qml
 readonly property color focusedBgColor: Qt.alpha(Colours.palette.m3surfaceContainerHigh, 0.9)

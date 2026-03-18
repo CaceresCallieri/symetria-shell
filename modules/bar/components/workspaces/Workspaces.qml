@@ -58,7 +58,7 @@ Item {
 
     property real blur: onSpecial ? 1 : 0
 
-    // Glassmorphism styling (matching other bar pills like Tray, TimePill, SystemPill)
+    // Pill styling (matching other bar pills like Tray, TimePill, SystemPill)
     readonly property var glassStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
         Colours.glass.subtle

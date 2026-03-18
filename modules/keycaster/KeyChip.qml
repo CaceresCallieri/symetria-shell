@@ -7,7 +7,7 @@ import QtQuick
 
 /// Individual key chip for Keycaster display.
 ///
-/// Displays a single key or key combination with glassmorphism styling.
+/// Displays a single key or key combination with pill styling.
 /// Newest key is highlighted (m3primary, strong glass), older keys fade out.
 /// For mouse button events, renders a graphical MouseClickIcon instead of text.
 Item {

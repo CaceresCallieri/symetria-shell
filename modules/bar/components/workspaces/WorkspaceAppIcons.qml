@@ -163,7 +163,7 @@ Row {
                 Rectangle {
                     id: container
 
-                    // Glassmorphism styling (subtle intensity for background element)
+                    // Pill styling (subtle intensity for background element)
                     readonly property var glassStyle: Colours.pillStyle(
                         Colours.palette.m3surfaceContainerHigh,
                         Colours.glass.subtle

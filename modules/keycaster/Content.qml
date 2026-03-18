@@ -37,7 +37,7 @@ Item {
         // height/2.5 to preserve a similar visual curvature to client windows.
         readonly property real hyprRounding: Hypr.options["decoration:rounding"] ?? Appearance.rounding.full
         radius: Math.min(hyprRounding, implicitHeight / 2.5)
-        // Pill style background for standalone floating appearance
+        // Pill style background — not reactive to pillStyle config hot-reload (requires shell restart)
         readonly property var pillColors: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
         color: pillColors.background
         border.color: pillColors.border

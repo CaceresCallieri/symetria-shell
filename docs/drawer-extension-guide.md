@@ -36,7 +36,7 @@ Both components include adaptive `roundingY` to prevent rendering artifacts when
 
 ## Bar Pill Pattern
 
-Bar components are grouped into glassmorphism "pill" containers. See `modules/bar/components/PillContainer.qml` for the base component (well-documented inline).
+Bar components are grouped into pill-styled containers (glass or matte, configurable via `appearance.pillStyle`). See `modules/bar/components/PillContainer.qml` for the base component (well-documented inline).
 
 ### Current Pills
 

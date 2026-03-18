@@ -26,7 +26,7 @@ StyledRect {
     property color indicatorColor: Colours.palette.m3primary
     property color textColor: Colours.palette.m3onPrimary
 
-    // --- Glassmorphism styling (strong intensity for active indicator) ---
+    // --- Pill styling (strong intensity for active indicator) ---
     readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong)
 
     // --- Mode detection ---

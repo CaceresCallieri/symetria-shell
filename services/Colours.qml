@@ -128,7 +128,7 @@ Singleton {
         // How much intensity brightens the background
         readonly property real lightnessRange: 0.08
 
-        // How much the baseColor hue bleeds into the background
+        // Saturation fraction of baseColor applied to background (0 = pure grey, higher = more palette tinting)
         readonly property real colorTint: 0.12
 
         // Border base color — pure white is chromatically neutral,
@@ -149,6 +149,7 @@ Singleton {
         const clampedIntensity = Math.max(0, Math.min(1, intensity));
         const lightness = matteConstants.baseLightness + clampedIntensity * matteConstants.lightnessRange;
         const tint = matteConstants.colorTint;
+        // Note: achromatic base colors (saturation ≈ 0) produce pure grey — tint only visible with chromatic bases
 
         const background = Qt.hsla(
             baseColor.hslHue,
@@ -156,12 +157,7 @@ Singleton {
             lightness,
             1.0
         );
-        const border = Qt.rgba(
-            matteConstants.borderColor.r,
-            matteConstants.borderColor.g,
-            matteConstants.borderColor.b,
-            matteConstants.borderOpacity
-        );
+        const border = Qt.alpha(matteConstants.borderColor, matteConstants.borderOpacity);
 
         return { background: background, border: border };
     }
@@ -171,6 +167,7 @@ Singleton {
     function pillStyle(baseColor: color, intensity: real): var {
         if (Appearance.pillStyle === "matte")
             return mattePill(baseColor, intensity);
+        // Default / "glass": use glassmorphism as fallback for any non-"matte" value
         return glassmorphism(baseColor, intensity);
     }
 
