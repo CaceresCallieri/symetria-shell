@@ -15,7 +15,6 @@ CustomMouseArea {
     required property Item agentBar
 
     property point dragStart
-    property bool dashboardShortcutActive
     property bool osdShortcutActive
     property bool utilitiesShortcutActive
 
@@ -52,14 +51,6 @@ CustomMouseArea {
         return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
-    function inBottomLeftPanel(panel: Item, x: real, y: real): bool {
-        const panelBottomEdge = root.height - agentBar.implicitHeight;
-        return y < panelBottomEdge
-            && y > panelBottomEdge - panel.height - Config.border.rounding
-            && x < Config.border.thickness + panel.x + panel.width + Config.border.rounding
-            && withinPanelWidth(panel, x, y);
-    }
-
     function onWheel(event: WheelEvent): void {
         if (event.y < bar.implicitHeight) {
             bar.handleWheel(event.x, event.angleDelta);
@@ -77,9 +68,6 @@ CustomMouseArea {
                 visibilities.osd = false;
                 root.panels.osd.hovered = false;
             }
-
-            if (!dashboardShortcutActive)
-                visibilities.dashboard = false;
 
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
@@ -229,38 +217,16 @@ CustomMouseArea {
         target: root.visibilities
 
         function onLauncherChanged() {
-            // If launcher is hidden, clear shortcut flags for dashboard and OSD
+            // If launcher is hidden, clear shortcut flags and hide hover-controlled panels
             if (!root.visibilities.launcher) {
-                root.dashboardShortcutActive = false;
                 root.osdShortcutActive = false;
                 root.utilitiesShortcutActive = false;
 
-                // Also hide dashboard and OSD if they're not being hovered
-                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY)
-                    || root.inAgentBarForPanel(root.panels.dashboard, root.mouseX, root.mouseY);
                 const inOsdArea = root.inRightPanel(root.panels.osd, root.mouseX, root.mouseY);
-
-                if (!inDashboardArea) {
-                    root.visibilities.dashboard = false;
-                }
                 if (!inOsdArea) {
                     root.visibilities.osd = false;
                     root.panels.osd.hovered = false;
                 }
-            }
-        }
-
-        function onDashboardChanged() {
-            if (root.visibilities.dashboard) {
-                // Dashboard became visible, immediately check if this should be shortcut mode
-                const inDashboardArea = root.inBottomLeftPanel(root.panels.dashboard, root.mouseX, root.mouseY)
-                    || root.inAgentBarForPanel(root.panels.dashboard, root.mouseX, root.mouseY);
-                if (!inDashboardArea) {
-                    root.dashboardShortcutActive = true;
-                }
-            } else {
-                // Dashboard hidden, clear shortcut flag
-                root.dashboardShortcutActive = false;
             }
         }
 

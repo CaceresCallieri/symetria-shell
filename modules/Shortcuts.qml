@@ -82,24 +82,22 @@ Scope {
 
     CustomShortcut {
         name: "showall"
-        description: "Toggle launcher, dashboard and osd"
+        description: "Toggle launcher, osd and utilities"
         onPressed: {
             if (root.hasFullscreen)
                 return;
             const v = Visibilities.getForActive();
-            v.launcher = v.dashboard = v.osd = v.utilities = !(v.launcher || v.dashboard || v.osd || v.utilities);
+            v.launcher = v.osd = v.utilities = !(v.launcher || v.osd || v.utilities);
         }
     }
 
-    CustomShortcut {
-        // DISABLED: Dashboard is disabled and slated for removal.
-        // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
-        name: "dashboard"
-        description: "Toggle dashboard (DISABLED)"
-        onPressed: {
-            // Dashboard disabled — do nothing
-        }
-    }
+    // DISABLED: Dashboard is disabled and slated for removal.
+    // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
+    // CustomShortcut {
+    //     name: "dashboard"
+    //     description: "Toggle dashboard"
+    //     onPressed: { ... }
+    // }
 
     CustomShortcut {
         name: "session"
@@ -152,7 +150,7 @@ Scope {
 
         function toggle(drawer: string): void {
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard", "calculator", "packages", "keychords"].includes(drawer))
+                if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages", "keychords"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard
