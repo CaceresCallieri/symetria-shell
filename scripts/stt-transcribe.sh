@@ -37,7 +37,9 @@ trap 'rm -f "$RESP_BODY"' EXIT
 
 # Verbatim prompt prevents the LLM-based models (gpt-4o-transcribe) from
 # summarizing or paraphrasing speech instead of transcribing it literally.
-VERBATIM_PROMPT="Transcribe the following audio verbatim. Do NOT omit, summarize, paraphrase, or clean up anything. Include all words, filler words, repetitions, and false starts exactly as spoken. Output the complete, literal, word-for-word transcript."
+VERBATIM_PROMPT="Transcribe the following audio verbatim. Do NOT omit, summarize, paraphrase, or clean up anything. Include all words, filler words, repetitions, and false starts exactly as spoken. Output the complete, literal, word-for-word transcript.
+
+When the transcription is long or covers multiple topics, organize it into paragraphs separated by blank lines. Break paragraphs at natural topic shifts or idea transitions. Do NOT add headings, bullet points, or any formatting other than paragraph breaks. Short, single-topic transcriptions should remain as a single paragraph."
 
 HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
