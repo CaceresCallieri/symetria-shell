@@ -28,11 +28,11 @@ class FileSystemEntry : public QObject {
     Q_PROPERTY(bool isDir READ isDir CONSTANT)
     Q_PROPERTY(bool isImage READ isImage CONSTANT)
     Q_PROPERTY(bool isVideo READ isVideo CONSTANT)
+    Q_PROPERTY(bool isSymlink READ isSymlink CONSTANT)
+    Q_PROPERTY(bool isExecutable READ isExecutable CONSTANT)
     Q_PROPERTY(QDateTime modifiedDate READ modifiedDate CONSTANT)
     Q_PROPERTY(QString permissions READ permissions CONSTANT)
-    Q_PROPERTY(bool isSymlink READ isSymlink CONSTANT)
     Q_PROPERTY(QString symlinkTarget READ symlinkTarget CONSTANT)
-    Q_PROPERTY(bool isExecutable READ isExecutable CONSTANT)
     Q_PROPERTY(QString owner READ owner CONSTANT)
     Q_PROPERTY(QString mimeType READ mimeType CONSTANT)
 
@@ -49,11 +49,11 @@ public:
     [[nodiscard]] bool isDir() const;
     [[nodiscard]] bool isImage() const;
     [[nodiscard]] bool isVideo() const;
+    [[nodiscard]] bool isSymlink() const;
+    [[nodiscard]] bool isExecutable() const;
     [[nodiscard]] QDateTime modifiedDate() const;
     [[nodiscard]] QString permissions() const;
-    [[nodiscard]] bool isSymlink() const;
     [[nodiscard]] QString symlinkTarget() const;
-    [[nodiscard]] bool isExecutable() const;
     [[nodiscard]] QString owner() const;
     [[nodiscard]] QString mimeType() const;
 
@@ -76,6 +76,9 @@ private:
 
     mutable QString m_mimeType;
     mutable bool m_mimeTypeInitialised;
+
+    const QString m_permissions; // Pre-computed Unix-style permission string (e.g. drwxr-xr-x)
+    const QString m_owner;       // Pre-computed at construction; owner() is a blocking syscall
 };
 
 class FileSystemModel : public QAbstractListModel {

@@ -6,6 +6,9 @@
 
 namespace symmetria::models {
 
+// Forward declaration — defined after isVideo() to keep related accessors together.
+static QString buildPermissions(const QFileInfo& info);
+
 FileSystemEntry::FileSystemEntry(const QString& path, const QString& relativePath, QObject* parent)
     : QObject(parent)
     , m_fileInfo(path)
@@ -13,7 +16,9 @@ FileSystemEntry::FileSystemEntry(const QString& path, const QString& relativePat
     , m_relativePath(relativePath)
     , m_isImageInitialised(false)
     , m_isVideoInitialised(false)
-    , m_mimeTypeInitialised(false) {}
+    , m_mimeTypeInitialised(false)
+    , m_permissions(buildPermissions(m_fileInfo))
+    , m_owner(m_fileInfo.owner()) {}
 
 QString FileSystemEntry::path() const {
     return m_path;
@@ -68,11 +73,15 @@ QDateTime FileSystemEntry::modifiedDate() const {
     return m_fileInfo.lastModified();
 }
 
-QString FileSystemEntry::permissions() const {
-    const auto p = m_fileInfo.permissions();
+// Static helper — keeps the constructor initialiser list clean and ensures
+// m_permissions is built exactly once per entry lifetime.
+static QString buildPermissions(const QFileInfo& info) {
+    const auto p = info.permissions();
     QString s;
     s.reserve(10);
-    s += m_fileInfo.isDir() ? 'd' : (m_fileInfo.isSymLink() ? 'l' : '-');
+    // isSymLink() must be checked before isDir() because a symlink to a directory
+    // satisfies both; the first character should reflect the entry type, not the target.
+    s += info.isSymLink() ? 'l' : (info.isDir() ? 'd' : '-');
     s += (p & QFileDevice::ReadOwner)  ? 'r' : '-';
     s += (p & QFileDevice::WriteOwner) ? 'w' : '-';
     s += (p & QFileDevice::ExeOwner)   ? 'x' : '-';
@@ -85,7 +94,14 @@ QString FileSystemEntry::permissions() const {
     return s;
 }
 
+QString FileSystemEntry::permissions() const {
+    return m_permissions;
+}
+
 bool FileSystemEntry::isSymlink() const {
+    // Safe as CONSTANT: FileSystemEntry is always destroyed and recreated via
+    // applyChanges() on any filesystem add/remove event, so stale values cannot
+    // accumulate across entry lifetimes.
     return m_fileInfo.isSymLink();
 }
 
@@ -98,7 +114,9 @@ bool FileSystemEntry::isExecutable() const {
 }
 
 QString FileSystemEntry::owner() const {
-    return m_fileInfo.owner();
+    // m_owner is pre-computed in the constructor; owner() is a blocking syscall
+    // (getpwuid) on Linux and must not be called on the UI thread at render time.
+    return m_owner;
 }
 
 QString FileSystemEntry::mimeType() const {
