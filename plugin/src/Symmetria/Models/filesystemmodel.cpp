@@ -64,6 +64,43 @@ bool FileSystemEntry::isVideo() const {
     return m_isVideo;
 }
 
+QDateTime FileSystemEntry::modifiedDate() const {
+    return m_fileInfo.lastModified();
+}
+
+QString FileSystemEntry::permissions() const {
+    const auto p = m_fileInfo.permissions();
+    QString s;
+    s.reserve(10);
+    s += m_fileInfo.isDir() ? 'd' : (m_fileInfo.isSymLink() ? 'l' : '-');
+    s += (p & QFileDevice::ReadOwner)  ? 'r' : '-';
+    s += (p & QFileDevice::WriteOwner) ? 'w' : '-';
+    s += (p & QFileDevice::ExeOwner)   ? 'x' : '-';
+    s += (p & QFileDevice::ReadGroup)  ? 'r' : '-';
+    s += (p & QFileDevice::WriteGroup) ? 'w' : '-';
+    s += (p & QFileDevice::ExeGroup)   ? 'x' : '-';
+    s += (p & QFileDevice::ReadOther)  ? 'r' : '-';
+    s += (p & QFileDevice::WriteOther) ? 'w' : '-';
+    s += (p & QFileDevice::ExeOther)   ? 'x' : '-';
+    return s;
+}
+
+bool FileSystemEntry::isSymlink() const {
+    return m_fileInfo.isSymLink();
+}
+
+QString FileSystemEntry::symlinkTarget() const {
+    return m_fileInfo.symLinkTarget();
+}
+
+bool FileSystemEntry::isExecutable() const {
+    return m_fileInfo.isExecutable();
+}
+
+QString FileSystemEntry::owner() const {
+    return m_fileInfo.owner();
+}
+
 QString FileSystemEntry::mimeType() const {
     if (!m_mimeTypeInitialised) {
         static const QMimeDatabase db;
