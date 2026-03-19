@@ -139,8 +139,10 @@ DeviceList {
             width: ListView.view ? ListView.view.width : undefined
             implicitHeight: deviceInner.implicitHeight + Appearance.padding.normal * 2
 
-            color: root.activeItem === modelData ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
-            border.color: root.activeItem === modelData ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+            color: root.activeItem === modelData ? activePill.background : "transparent"
+            border.color: root.activeItem === modelData ? activePill.border : "transparent"
             border.width: root.activeItem === modelData ? 1 : 0
             radius: Appearance.rounding.normal
 

@@ -19,6 +19,10 @@ Item {
 
     required property Session session
 
+    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
+    readonly property var settingsPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+    readonly property var borderPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
     property bool clockShowIcon: Config.bar.clock.showIcon ?? true
     property bool persistent: Config.bar.persistent ?? true
     property bool showOnHover: Config.bar.showOnHover ?? true
@@ -115,7 +119,7 @@ Item {
         anchors.rightMargin: Appearance.padding.normal
 
         radius: taskbarBorder.innerRadius
-        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
+        color: root.contentPill.background
 
         Loader {
             id: taskbarLoader
@@ -132,7 +136,7 @@ Item {
 
     InnerBorder {
         id: taskbarBorder
-        borderColor: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        borderColor: root.borderPill.border
         leftThickness: 0
         rightThickness: Appearance.padding.normal
     }
@@ -264,8 +268,8 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShownRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
                             border.width: 1
 
                             Behavior on implicitHeight {
@@ -303,8 +307,8 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShowOnlyOccupiedRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
                             border.width: 1
 
                             Behavior on implicitHeight {
@@ -338,8 +342,8 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesActiveIndicatorRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
                             border.width: 1
 
                             Behavior on implicitHeight {
@@ -373,8 +377,8 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesOccupiedBgRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
                             border.width: 1
 
                             Behavior on implicitHeight {
@@ -410,8 +414,8 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShowWindowsRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
                             border.width: 1
 
                             Behavior on implicitHeight {
@@ -445,8 +449,8 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesPerMonitorRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
                             border.width: 1
 
                             Behavior on implicitHeight {

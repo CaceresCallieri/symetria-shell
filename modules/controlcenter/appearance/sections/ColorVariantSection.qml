@@ -28,10 +28,12 @@ CollapsibleSection {
 
                 Layout.fillWidth: true
 
-                color: modelData.variant === Schemes.currentVariant ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+                color: modelData.variant === Schemes.currentVariant ? activePill.background : "transparent"
                 radius: Appearance.rounding.normal
                 border.width: modelData.variant === Schemes.currentVariant ? 1 : 0
-                border.color: modelData.variant === Schemes.currentVariant ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+                border.color: modelData.variant === Schemes.currentVariant ? activePill.border : "transparent"
 
                 StateLayer {
                     function onClicked(): void {

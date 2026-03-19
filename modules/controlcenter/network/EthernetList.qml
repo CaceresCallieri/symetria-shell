@@ -64,8 +64,10 @@ DeviceList {
             width: ListView.view ? ListView.view.width : undefined
             implicitHeight: rowLayout.implicitHeight + Appearance.padding.normal * 2
 
-            color: ethernetItem.isActive ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
-            border.color: ethernetItem.isActive ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+            color: ethernetItem.isActive ? activePill.background : "transparent"
+            border.color: ethernetItem.isActive ? activePill.border : "transparent"
             border.width: ethernetItem.isActive ? 1 : 0
             radius: Appearance.rounding.normal
 

@@ -211,7 +211,9 @@ Item {
                 StyledRect {
                     anchors.fill: parent
                     radius: Appearance.rounding.normal
-                    color: passwordContainer.activeFocus ? Qt.lighter(Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background, 1.05) : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                    readonly property var inputPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+
+                    color: passwordContainer.activeFocus ? Qt.lighter(inputPill.background, 1.05) : inputPill.background
                     border.width: passwordContainer.activeFocus || connectButton.hasError ? 4 : (root.visible ? 1 : 0)
                     border.color: {
                         if (connectButton.hasError) {

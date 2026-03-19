@@ -30,11 +30,12 @@ CollapsibleSection {
 
                 readonly property string schemeKey: `${modelData.name} ${modelData.flavour}`
                 readonly property bool isCurrent: schemeKey === Schemes.currentScheme
+                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
 
-                color: isCurrent ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+                color: isCurrent ? activePill.background : "transparent"
                 radius: Appearance.rounding.normal
                 border.width: isCurrent ? 1 : 0
-                border.color: isCurrent ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+                border.color: isCurrent ? activePill.border : "transparent"
 
                 StateLayer {
                     function onClicked(): void {

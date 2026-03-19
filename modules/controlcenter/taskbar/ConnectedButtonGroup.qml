@@ -14,11 +14,13 @@ StyledRect {
     property var rootItem: null // The root item that contains the properties we want to bind to
     property string title: "" // Optional title text
 
+    readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
     radius: Appearance.rounding.normal
-    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
-    border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+    color: pill.background
+    border.color: pill.border
     border.width: 1
     clip: true
 

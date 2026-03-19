@@ -72,9 +72,11 @@ StyledFlickable {
                             Layout.fillWidth: true
                             implicitHeight: deviceStatus.implicitHeight + Appearance.padding.large * 2
 
+                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+                            color: pill.background
+                            border.color: pill.border
                             border.width: 1
 
                             ColumnLayout {
@@ -133,9 +135,11 @@ StyledFlickable {
                             Layout.fillWidth: true
                             implicitHeight: deviceProps.implicitHeight + Appearance.padding.large * 2
 
+                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+                            color: pill.background
+                            border.color: pill.border
                             border.width: 1
 
                             ColumnLayout {
@@ -344,9 +348,11 @@ StyledFlickable {
                             Layout.fillWidth: true
                             implicitHeight: deviceInfo.implicitHeight + Appearance.padding.large * 2
 
+                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
                             radius: Appearance.rounding.normal
-                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+                            color: pill.background
+                            border.color: pill.border
                             border.width: 1
 
                             ColumnLayout {

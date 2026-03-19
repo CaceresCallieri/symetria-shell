@@ -16,6 +16,8 @@ ColumnLayout {
 
     required property Session session
 
+    readonly property var cardPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
     spacing: Appearance.spacing.normal
 
     SettingsHeader {
@@ -40,8 +42,8 @@ ColumnLayout {
         implicitHeight: adapterStatus.implicitHeight + Appearance.padding.large * 2
 
         radius: Appearance.rounding.normal
-        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-        border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        color: root.cardPill.background
+        border.color: root.cardPill.border
         border.width: 1
 
         ColumnLayout {
@@ -103,8 +105,8 @@ ColumnLayout {
         implicitHeight: adapterSettings.implicitHeight + Appearance.padding.large * 2
 
         radius: Appearance.rounding.normal
-        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-        border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        color: root.cardPill.background
+        border.color: root.cardPill.border
         border.width: 1
 
         ColumnLayout {
@@ -468,8 +470,8 @@ ColumnLayout {
         implicitHeight: adapterInfo.implicitHeight + Appearance.padding.large * 2
 
         radius: Appearance.rounding.normal
-        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-        border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        color: root.cardPill.background
+        border.color: root.cardPill.border
         border.width: 1
 
         ColumnLayout {

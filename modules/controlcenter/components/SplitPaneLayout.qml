@@ -14,6 +14,7 @@ RowLayout {
     spacing: 0
 
     readonly property var dividerPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
 
     property Component leftContent: null
     property Component rightContent: null
@@ -42,7 +43,7 @@ RowLayout {
             anchors.rightMargin: Appearance.padding.normal / 2
 
             radius: leftBorder.innerRadius
-            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
+            color: root.contentPill.background
 
             Loader {
                 id: leftLoader
@@ -87,7 +88,7 @@ RowLayout {
             anchors.rightMargin: Appearance.padding.normal / 2
 
             radius: rightBorder.innerRadius
-            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
+            color: root.contentPill.background
 
             Loader {
                 id: rightLoader
