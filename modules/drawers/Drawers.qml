@@ -220,7 +220,7 @@ Variants {
 
                     disabled: scope.barDisabled
 
-                    Component.onCompleted: Visibilities.bars.set(scope.modelData, this)
+                    Component.onCompleted: { Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
                 }
 
                 AgentBarModule.AgentBarWrapper {

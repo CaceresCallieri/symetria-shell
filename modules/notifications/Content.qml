@@ -11,10 +11,6 @@ Item {
 
     readonly property int padding: Appearance.padding.large
 
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.right: parent.right
-
     implicitWidth: Config.notifs.sizes.width + padding * 2
     implicitHeight: {
         const count = list.count;

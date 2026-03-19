@@ -41,18 +41,24 @@ Scope {
             // Always bound to contentRegion so geometry changes re-evaluate the mask.
             mask: contentRegion
 
+            // True when popup notifications exist — drives mask and visibility.
+            readonly property bool hasContent: content.implicitHeight > 0
+
             Region {
                 id: contentRegion
-                x: notifContent.visible ? notifContent.x : 0
-                y: notifContent.visible ? notifContent.y : 0
-                width: notifContent.visible ? notifContent.width : 0
-                height: notifContent.visible ? notifContent.height : 0
+                x: win.hasContent ? notifContent.x : 0
+                y: win.hasContent ? notifContent.y : 0
+                width: win.hasContent ? notifContent.width : 0
+                height: win.hasContent ? notifContent.height : 0
             }
 
             // Bar reference for positioning below the bar.
-            // Captured once at startup — bar objects are stable after creation.
-            property Item barRef: null
-            Component.onCompleted: barRef = Visibilities.bars.get(modelData) ?? null
+            // Reactive via barsVersion — resolves correctly even when bars register
+            // after this overlay (onCompleted order is not guaranteed across Variants).
+            readonly property Item barRef: {
+                void Visibilities.barsVersion;
+                return Visibilities.bars.get(modelData) ?? null;
+            }
             readonly property real barHeight: barRef?.implicitHeight ?? Config.border.thickness
 
             // Notifications content — top-right aligned, below bar
@@ -66,7 +72,7 @@ Scope {
 
                 width: content.implicitWidth
                 height: content.implicitHeight
-                visible: content.implicitHeight > 0
+                visible: win.hasContent
 
                 // Background with shadow and transparency.
                 // Two-layer approach matches OsdOverlay / Drawers.qml: outer layer applies
