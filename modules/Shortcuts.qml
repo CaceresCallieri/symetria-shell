@@ -87,7 +87,11 @@ Scope {
             if (root.hasFullscreen)
                 return;
             const v = Visibilities.getForActive();
-            v.launcher = v.osd = v.utilities = !(v.launcher || v.osd || v.utilities);
+            const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
+            const anyShowing = v.launcher || v.utilities || (overlay?.isShowing ?? false);
+            const show = !anyShowing;
+            v.launcher = v.utilities = show;
+            if (show) overlay?.show(); else overlay?.hide();
         }
     }
 
@@ -149,6 +153,14 @@ Scope {
         target: "drawers"
 
         function toggle(drawer: string): void {
+            // OSD is no longer a drawer — route to overlay
+            if (drawer === "osd") {
+                const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
+                if (overlay) overlay.toggle();
+                else console.warn("[IPC] OSD overlay not available");
+                return;
+            }
+
             if (list().split("\n").includes(drawer)) {
                 if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages", "keychords"].includes(drawer))
                     return;

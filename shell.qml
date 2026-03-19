@@ -7,6 +7,7 @@ import "modules"
 import "modules/drawers"
 import "modules/background"
 import "modules/areapicker"
+import "modules/osd" as OsdModule
 import "modules/lock"
 import "modules/askpass"
 import "modules/stt"
@@ -26,6 +27,7 @@ ShellRoot {
     Background {}
     Drawers {}
     AreaPicker {}
+    OsdModule.OsdOverlay {}
     Askpass {}
     Stt {}
     Keycaster {}

@@ -1,5 +1,5 @@
+import qs.components
 import qs.config
-import qs.modules.osd as Osd
 import qs.modules.notifications as Notifications
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
@@ -44,12 +44,21 @@ Item {
     anchors.topMargin: bar.implicitHeight
     anchors.bottomMargin: agentBar.implicitHeight
 
-    Osd.Wrapper {
+    // Invisible placeholder — OSD now lives in its own overlay window (OsdOverlay.qml).
+    // This Item preserves the position reference for Interactions.qml's hover zone
+    // calculation (inRightPanel uses x, y, height to define the trigger area).
+    Item {
         id: osd
 
-        clip: session.width > 0 || sidebar.width > 0
-        screen: root.screen
-        visibilities: root.visibilities
+        implicitWidth: 0
+        implicitHeight: {
+            let h = Config.osd.sizes.sliderHeight;
+            if (Config.osd.enableMicrophone)
+                h += Config.osd.sizes.sliderHeight + Appearance.spacing.normal;
+            if (Config.osd.enableBrightness)
+                h += Config.osd.sizes.sliderHeight + Appearance.spacing.normal;
+            return h + Appearance.padding.large * 2;
+        }
 
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right

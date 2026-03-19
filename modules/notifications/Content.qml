@@ -28,12 +28,6 @@ Item {
             height += list.itemAtIndex(i)?.nonAnimHeight ?? 0;
 
         if (visibilities && panels) {
-            if (visibilities.osd) {
-                const h = panels.osd.y - Config.border.rounding * 2 - padding * 2;
-                if (height > h)
-                    height = h;
-            }
-
             if (visibilities.session) {
                 const h = panels.session.y - Config.border.rounding * 2 - padding * 2;
                 if (height > h)

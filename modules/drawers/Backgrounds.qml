@@ -1,6 +1,5 @@
 import qs.services
 import qs.config
-import qs.modules.osd as Osd
 import qs.modules.notifications as Notifications
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
@@ -42,13 +41,6 @@ Item {
 
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-
-        Osd.Background {
-            wrapper: root.panels.osd
-
-            startX: shape.width - root.panels.session.width - root.panels.sidebar.width
-            startY: (shape.height - wrapper.height) / 2 - rounding
-        }
 
         Notifications.Background {
             wrapper: root.panels.notifications

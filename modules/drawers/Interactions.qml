@@ -1,5 +1,6 @@
 import qs.components.controls
 import qs.config
+import qs.services
 import qs.modules.bar.popouts as BarPopouts
 import Quickshell
 import QtQuick
@@ -15,7 +16,6 @@ CustomMouseArea {
     required property Item agentBar
 
     property point dragStart
-    property bool osdShortcutActive
     property bool utilitiesShortcutActive
 
     function withinPanelHeight(panel: Item, x: real, y: real): bool {
@@ -63,12 +63,6 @@ CustomMouseArea {
     onPressed: event => dragStart = Qt.point(event.x, event.y)
     onContainsMouseChanged: {
         if (!containsMouse) {
-            // Only hide if not activated by shortcut
-            if (!osdShortcutActive) {
-                visibilities.osd = false;
-                root.panels.osd.hovered = false;
-            }
-
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
@@ -104,18 +98,9 @@ CustomMouseArea {
         }
 
         if (panels.sidebar.width === 0) {
-            // Show osd on hover
-            const showOsd = inRightPanel(panels.osd, x, y);
-
-            // Always update visibility based on hover if not in shortcut mode
-            if (!osdShortcutActive) {
-                visibilities.osd = showOsd;
-                root.panels.osd.hovered = showOsd;
-            } else if (showOsd) {
-                // If hovering over OSD area while in shortcut mode, transition to hover control
-                osdShortcutActive = false;
-                root.panels.osd.hovered = true;
-            }
+            // Show OSD overlay on right-edge hover
+            if (inRightPanel(panels.osd, x, y))
+                Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
 
             const showSidebar = pressed && dragStart.x > Config.border.thickness + panels.sidebar.x;
 
@@ -135,18 +120,10 @@ CustomMouseArea {
             }
         } else {
             const outOfSidebar = x < width - panels.sidebar.width;
-            // Show osd on hover
-            const showOsd = outOfSidebar && inRightPanel(panels.osd, x, y);
 
-            // Always update visibility based on hover if not in shortcut mode
-            if (!osdShortcutActive) {
-                visibilities.osd = showOsd;
-                root.panels.osd.hovered = showOsd;
-            } else if (showOsd) {
-                // If hovering over OSD area while in shortcut mode, transition to hover control
-                osdShortcutActive = false;
-                root.panels.osd.hovered = true;
-            }
+            // Show OSD overlay on right-edge hover (outside sidebar)
+            if (outOfSidebar && inRightPanel(panels.osd, x, y))
+                Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
 
             // Show/hide session on drag
             if (pressed && outOfSidebar && inRightPanel(panels.session, dragStart.x, dragStart.y) && withinPanelHeight(panels.session, x, y)) {
@@ -217,29 +194,9 @@ CustomMouseArea {
         target: root.visibilities
 
         function onLauncherChanged() {
-            // If launcher is hidden, clear shortcut flags and hide hover-controlled panels
+            // If launcher is hidden, clear shortcut flags
             if (!root.visibilities.launcher) {
-                root.osdShortcutActive = false;
                 root.utilitiesShortcutActive = false;
-
-                const inOsdArea = root.inRightPanel(root.panels.osd, root.mouseX, root.mouseY);
-                if (!inOsdArea) {
-                    root.visibilities.osd = false;
-                    root.panels.osd.hovered = false;
-                }
-            }
-        }
-
-        function onOsdChanged() {
-            if (root.visibilities.osd) {
-                // OSD became visible, immediately check if this should be shortcut mode
-                const inOsdArea = root.inRightPanel(root.panels.osd, root.mouseX, root.mouseY);
-                if (!inOsdArea) {
-                    root.osdShortcutActive = true;
-                }
-            } else {
-                // OSD hidden, clear shortcut flag
-                root.osdShortcutActive = false;
             }
         }
 
