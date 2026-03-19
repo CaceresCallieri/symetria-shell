@@ -8,6 +8,7 @@ import "modules/drawers"
 import "modules/background"
 import "modules/areapicker"
 import "modules/osd" as OsdModule
+import "modules/notifications" as NotifsModule
 import "modules/lock"
 import "modules/askpass"
 import "modules/stt"
@@ -28,6 +29,7 @@ ShellRoot {
     Drawers {}
     AreaPicker {}
     OsdModule.OsdOverlay {}
+    NotifsModule.NotificationsOverlay {}
     Askpass {}
     Stt {}
     Keycaster {}

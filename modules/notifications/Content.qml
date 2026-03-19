@@ -9,8 +9,6 @@ import QtQuick
 Item {
     id: root
 
-    required property PersistentProperties visibilities
-    required property Item panels
     readonly property int padding: Appearance.padding.large
 
     anchors.top: parent.top
@@ -26,14 +24,6 @@ Item {
         let height = (count - 1) * Appearance.spacing.smaller;
         for (let i = 0; i < count; i++)
             height += list.itemAtIndex(i)?.nonAnimHeight ?? 0;
-
-        if (visibilities && panels) {
-            if (visibilities.session) {
-                const h = panels.session.y - Config.border.rounding * 2 - padding * 2;
-                if (height > h)
-                    height = h;
-            }
-        }
 
         return Math.min((QsWindow.window?.screen?.height ?? 0) - Config.border.thickness * 2, height + padding * 2);
     }

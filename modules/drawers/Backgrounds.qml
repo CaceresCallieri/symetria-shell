@@ -1,6 +1,5 @@
 import qs.services
 import qs.config
-import qs.modules.notifications as Notifications
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.dashboard as Dashboard
@@ -41,14 +40,6 @@ Item {
 
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-
-        Notifications.Background {
-            wrapper: root.panels.notifications
-            sidebar: sidebar
-
-            startX: shape.width - rounding  // Start at TR corner's inner edge for union arc
-            startY: 0
-        }
 
         Session.Background {
             wrapper: root.panels.session
@@ -137,7 +128,7 @@ Item {
             panels: root.panels
 
             startX: shape.width
-            startY: root.panels.notifications.height
+            startY: 0
         }
     }
 }

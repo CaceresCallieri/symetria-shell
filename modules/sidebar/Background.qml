@@ -12,9 +12,6 @@ ShapePath {
 
     readonly property real rounding: Config.border.rounding
 
-    readonly property real notifsWidthDiff: panels.notifications.width - wrapper.width
-    readonly property real notifsRoundingX: panels.notifications.height > 0 && notifsWidthDiff < rounding * 2 ? notifsWidthDiff / 2 : rounding
-
     readonly property real utilsWidthDiff: panels.utilities.width - wrapper.width
     readonly property real utilsRoundingX: utilsWidthDiff < rounding * 2 ? utilsWidthDiff / 2 : rounding
 
@@ -22,13 +19,13 @@ ShapePath {
     fillColor: Colours.generalBackgroundOpaque
 
     PathLine {
-        relativeX: -root.wrapper.width - root.notifsRoundingX
+        relativeX: -root.wrapper.width - root.rounding
         relativeY: 0
     }
     PathArc {
-        relativeX: root.notifsRoundingX
+        relativeX: root.rounding
         relativeY: root.rounding
-        radiusX: root.notifsRoundingX
+        radiusX: root.rounding
         radiusY: root.rounding
     }
     PathLine {

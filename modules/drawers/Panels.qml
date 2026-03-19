@@ -1,6 +1,5 @@
 import qs.components
 import qs.config
-import qs.modules.notifications as Notifications
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.dashboard as Dashboard
@@ -25,7 +24,6 @@ Item {
     required property Item agentBar
 
     readonly property alias osd: osd
-    readonly property alias notifications: notifications
     readonly property alias session: session
     readonly property alias launcher: launcher
     readonly property alias dashboard: dashboard
@@ -63,16 +61,6 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
         anchors.rightMargin: session.width + sidebar.width
-    }
-
-    Notifications.Wrapper {
-        id: notifications
-
-        visibilities: root.visibilities
-        panels: root
-
-        anchors.top: parent.top
-        anchors.right: parent.right
     }
 
     Session.Wrapper {
@@ -218,7 +206,7 @@ Item {
         visibilities: root.visibilities
         panels: root
 
-        anchors.top: notifications.bottom
+        anchors.top: parent.top
         anchors.bottom: utilities.top
         anchors.right: parent.right
     }
