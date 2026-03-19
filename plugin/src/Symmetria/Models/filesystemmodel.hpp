@@ -26,6 +26,7 @@ class FileSystemEntry : public QObject {
     Q_PROPERTY(qint64 size READ size CONSTANT)
     Q_PROPERTY(bool isDir READ isDir CONSTANT)
     Q_PROPERTY(bool isImage READ isImage CONSTANT)
+    Q_PROPERTY(bool isVideo READ isVideo CONSTANT)
     Q_PROPERTY(QString mimeType READ mimeType CONSTANT)
 
 public:
@@ -40,6 +41,7 @@ public:
     [[nodiscard]] qint64 size() const;
     [[nodiscard]] bool isDir() const;
     [[nodiscard]] bool isImage() const;
+    [[nodiscard]] bool isVideo() const;
     [[nodiscard]] QString mimeType() const;
 
     void updateRelativePath(const QDir& dir);
@@ -55,6 +57,9 @@ private:
 
     mutable bool m_isImage;
     mutable bool m_isImageInitialised;
+
+    mutable bool m_isVideo;
+    mutable bool m_isVideoInitialised;
 
     mutable QString m_mimeType;
     mutable bool m_mimeTypeInitialised;
