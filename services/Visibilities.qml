@@ -11,9 +11,6 @@ Singleton {
     // Include this in bindings that use screens.get() to force re-evaluation.
     property int screensVersion: 0
 
-    // Reactive counter for osdOverlays map changes.
-    property int osdVersion: 0
-
     function load(screen: ShellScreen, visibilities: var): void {
         screens.set(Hypr.monitorFor(screen), visibilities);
         screensVersion++;  // Trigger reactive updates

@@ -44,10 +44,10 @@ Scope {
 
             Region {
                 id: contentRegion
-                x: osdContent.visible ? osdContent.x : 0
-                y: osdContent.visible ? osdContent.y : 0
-                width: osdContent.visible ? osdContent.width : 0
-                height: osdContent.visible ? osdContent.height : 0
+                x: win.showing ? osdContent.x : 0
+                y: win.showing ? osdContent.y : 0
+                width: win.showing ? osdContent.width : 0
+                height: win.showing ? osdContent.height : 0
             }
 
             // Per-screen visibilities from Drawers' PersistentProperties.
@@ -81,8 +81,6 @@ Scope {
                 else show();
             }
 
-            readonly property bool isShowing: showing
-
             Component.onCompleted: {
                 volume = Audio.volume;
                 muted = Audio.muted;
@@ -91,12 +89,10 @@ Scope {
                 brightness = monitor?.brightness ?? 0;
 
                 Visibilities.osdOverlays.set(Hypr.monitorFor(modelData), win);
-                Visibilities.osdVersion++;
             }
 
             Component.onDestruction: {
                 Visibilities.osdOverlays.delete(Hypr.monitorFor(modelData));
-                Visibilities.osdVersion++;
             }
 
             Connections {
@@ -153,6 +149,7 @@ Scope {
                 width: content.implicitWidth
                 height: content.implicitHeight
 
+                // opacity drives the Behavior animation; visible gates layout costs and the input Region mask
                 opacity: win.showing ? 1 : 0
                 visible: opacity > 0
 
@@ -218,26 +215,18 @@ Scope {
     IpcHandler {
         target: "osd"
 
-        function toggle(): void {
+        function _focusedOverlay(): var {
             const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
-            if (overlay) overlay.toggle();
-            else console.warn("[OSD] No overlay for focused monitor");
+            if (!overlay) console.warn("[OSD] No overlay for focused monitor");
+            return overlay ?? null;
         }
 
-        function show(): void {
-            const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
-            if (overlay) overlay.show();
-            else console.warn("[OSD] No overlay for focused monitor");
-        }
-
-        function hide(): void {
-            const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
-            if (overlay) overlay.hide();
-            else console.warn("[OSD] No overlay for focused monitor");
-        }
+        function toggle(): void { _focusedOverlay()?.toggle(); }
+        function show(): void { _focusedOverlay()?.show(); }
+        function hide(): void { _focusedOverlay()?.hide(); }
 
         function isVisible(): bool {
-            return Visibilities.osdOverlays.get(Hypr.focusedMonitor)?.isShowing ?? false;
+            return Visibilities.osdOverlays.get(Hypr.focusedMonitor)?.showing ?? false;
         }
     }
 }

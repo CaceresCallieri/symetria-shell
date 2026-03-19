@@ -82,13 +82,13 @@ Scope {
 
     CustomShortcut {
         name: "showall"
-        description: "Toggle launcher, osd and utilities"
+        description: "Toggle launcher, OSD overlay, and utilities"
         onPressed: {
             if (root.hasFullscreen)
                 return;
             const v = Visibilities.getForActive();
             const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
-            const anyShowing = v.launcher || v.utilities || (overlay?.isShowing ?? false);
+            const anyShowing = v.launcher || v.utilities || (overlay?.showing ?? false);
             const show = !anyShowing;
             v.launcher = v.utilities = show;
             if (show) overlay?.show(); else overlay?.hide();
