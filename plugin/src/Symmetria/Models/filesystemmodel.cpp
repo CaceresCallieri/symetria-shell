@@ -66,7 +66,7 @@ bool FileSystemEntry::isVideo() const {
 
 QString FileSystemEntry::mimeType() const {
     if (!m_mimeTypeInitialised) {
-        const QMimeDatabase db;
+        static const QMimeDatabase db;
         m_mimeType = db.mimeTypeForFile(m_path).name();
         m_mimeTypeInitialised = true;
     }
