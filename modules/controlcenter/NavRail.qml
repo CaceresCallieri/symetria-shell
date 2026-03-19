@@ -135,6 +135,7 @@ Item {
         required property string icon
         required property string label
         readonly property bool active: root.session.active === label
+        readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.veryStrong)
 
         implicitWidth: background.implicitWidth
         implicitHeight: background.implicitHeight + smallLabel.implicitHeight + smallLabel.anchors.topMargin
@@ -169,13 +170,15 @@ Item {
             id: background
 
             radius: Appearance.rounding.full
-            color: Qt.alpha(Colours.palette.m3secondaryContainer, item.active ? 1 : 0)
+            color: item.active ? item.activePill.background : "transparent"
+            border.color: item.active ? item.activePill.border : "transparent"
+            border.width: item.active ? 1 : 0
 
             implicitWidth: icon.implicitWidth + icon.anchors.leftMargin * 2
             implicitHeight: icon.implicitHeight + Appearance.padding.small
 
             StateLayer {
-                color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                color: Colours.palette.m3onSurface
 
                 function onClicked(): void {
                     // Prevent tab switching during initial opening animation to avoid blank pages
@@ -194,7 +197,7 @@ Item {
                 anchors.leftMargin: Appearance.padding.large
 
                 text: item.icon
-                color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                color: Colours.palette.m3onSurface
                 font.pointSize: Appearance.font.size.large
                 fill: item.active ? 1 : 0
 
@@ -212,7 +215,7 @@ Item {
 
                 opacity: 0
                 text: item.label
-                color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                color: Colours.palette.m3onSurface
                 font.capitalization: Font.Capitalize
             }
 

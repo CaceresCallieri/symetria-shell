@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.components.effects
+import qs.services
 import qs.config
 import Quickshell.Widgets
 import QtQuick
@@ -11,6 +12,8 @@ RowLayout {
     id: root
 
     spacing: 0
+
+    readonly property var dividerPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     property Component leftContent: null
     property Component rightContent: null
@@ -39,7 +42,7 @@ RowLayout {
             anchors.rightMargin: Appearance.padding.normal / 2
 
             radius: leftBorder.innerRadius
-            color: "transparent"
+            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
 
             Loader {
                 id: leftLoader
@@ -63,6 +66,7 @@ RowLayout {
         InnerBorder {
             id: leftBorder
 
+            borderColor: root.dividerPill.border
             leftThickness: 0
             rightThickness: Appearance.padding.normal / 2
         }
@@ -83,7 +87,7 @@ RowLayout {
             anchors.rightMargin: Appearance.padding.normal / 2
 
             radius: rightBorder.innerRadius
-            color: "transparent"
+            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
 
             Loader {
                 id: rightLoader
@@ -105,6 +109,7 @@ RowLayout {
         InnerBorder {
             id: rightBorder
 
+            borderColor: root.dividerPill.border
             leftThickness: Appearance.padding.normal / 2
         }
     }

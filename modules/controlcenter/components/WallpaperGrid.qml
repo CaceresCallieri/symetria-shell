@@ -61,7 +61,7 @@ GridView {
                 anchors.rightMargin: itemMargin
                 anchors.topMargin: itemMargin
                 anchors.bottomMargin: itemMargin
-                color: Colours.tPalette.m3surfaceContainer
+                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                 radius: itemRadius
                 antialiasing: true
                 layer.enabled: true

@@ -206,7 +206,9 @@ Item {
                 Layout.topMargin: Appearance.spacing.normal
                 Layout.bottomMargin: Appearance.spacing.small
 
-                color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background
+                border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border
+                border.width: 1
                 radius: Appearance.rounding.full
 
                 implicitHeight: Math.max(searchIcon.implicitHeight, searchField.implicitHeight, clearIcon.implicitHeight)
@@ -313,7 +315,9 @@ Item {
 
                         readonly property bool isSelected: root.selectedApp === modelData
 
-                        color: isSelected ? Colours.layer(Colours.palette.m3surfaceContainer, 2) : "transparent"
+                        color: isSelected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+                        border.color: isSelected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+                        border.width: isSelected ? 1 : 0
                         radius: Appearance.rounding.normal
 
                         opacity: 0

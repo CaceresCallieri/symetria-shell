@@ -105,7 +105,9 @@ DeviceList {
 
             width: ListView.view ? ListView.view.width : undefined
 
-            color: Qt.alpha(Colours.tPalette.m3surfaceContainer, root.activeItem === modelData ? Colours.tPalette.m3surfaceContainer.a : 0)
+            color: root.activeItem === modelData ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+            border.color: root.activeItem === modelData ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+            border.width: root.activeItem === modelData ? 1 : 0
             radius: Appearance.rounding.normal
 
             StateLayer {
@@ -132,7 +134,7 @@ DeviceList {
                     implicitHeight: icon.implicitHeight + Appearance.padding.normal * 2
 
                     radius: Appearance.rounding.normal
-                    color: modelData.active ? Colours.palette.m3primaryContainer : Colours.tPalette.m3surfaceContainerHigh
+                    color: modelData.active ? Colours.palette.m3primaryContainer : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
                     MaterialIcon {
                         id: icon

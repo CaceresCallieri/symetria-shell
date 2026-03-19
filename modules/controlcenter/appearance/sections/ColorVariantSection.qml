@@ -28,10 +28,10 @@ CollapsibleSection {
 
                 Layout.fillWidth: true
 
-                color: Qt.alpha(Colours.tPalette.m3surfaceContainer, modelData.variant === Schemes.currentVariant ? Colours.tPalette.m3surfaceContainer.a : 0)
+                color: modelData.variant === Schemes.currentVariant ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
                 radius: Appearance.rounding.normal
                 border.width: modelData.variant === Schemes.currentVariant ? 1 : 0
-                border.color: Colours.palette.m3primary
+                border.color: modelData.variant === Schemes.currentVariant ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
 
                 StateLayer {
                     function onClicked(): void {

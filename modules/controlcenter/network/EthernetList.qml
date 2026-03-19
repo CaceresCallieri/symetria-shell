@@ -64,7 +64,9 @@ DeviceList {
             width: ListView.view ? ListView.view.width : undefined
             implicitHeight: rowLayout.implicitHeight + Appearance.padding.normal * 2
 
-            color: Qt.alpha(Colours.tPalette.m3surfaceContainer, ethernetItem.isActive ? Colours.tPalette.m3surfaceContainer.a : 0)
+            color: ethernetItem.isActive ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+            border.color: ethernetItem.isActive ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+            border.width: ethernetItem.isActive ? 1 : 0
             radius: Appearance.rounding.normal
 
             StateLayer {
@@ -88,7 +90,7 @@ DeviceList {
                     implicitHeight: icon.implicitHeight + Appearance.padding.normal * 2
 
                     radius: Appearance.rounding.normal
-                    color: modelData.connected ? Colours.palette.m3primaryContainer : Colours.tPalette.m3surfaceContainerHigh
+                    color: modelData.connected ? Colours.palette.m3primaryContainer : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
                     StyledRect {
                         anchors.fill: parent

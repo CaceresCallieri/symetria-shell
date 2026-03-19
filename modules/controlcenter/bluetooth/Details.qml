@@ -73,7 +73,9 @@ StyledFlickable {
                             implicitHeight: deviceStatus.implicitHeight + Appearance.padding.large * 2
 
                             radius: Appearance.rounding.normal
-                            color: Colours.tPalette.m3surfaceContainer
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+                            border.width: 1
 
                             ColumnLayout {
                                 id: deviceStatus
@@ -132,7 +134,9 @@ StyledFlickable {
                             implicitHeight: deviceProps.implicitHeight + Appearance.padding.large * 2
 
                             radius: Appearance.rounding.normal
-                            color: Colours.tPalette.m3surfaceContainer
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+                            border.width: 1
 
                             ColumnLayout {
                                 id: deviceProps
@@ -341,7 +345,9 @@ StyledFlickable {
                             implicitHeight: deviceInfo.implicitHeight + Appearance.padding.large * 2
 
                             radius: Appearance.rounding.normal
-                            color: Colours.tPalette.m3surfaceContainer
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+                            border.width: 1
 
                             ColumnLayout {
                                 id: deviceInfo

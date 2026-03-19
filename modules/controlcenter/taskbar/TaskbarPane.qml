@@ -115,7 +115,7 @@ Item {
         anchors.rightMargin: Appearance.padding.normal
 
         radius: taskbarBorder.innerRadius
-        color: "transparent"
+        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
 
         Loader {
             id: taskbarLoader
@@ -132,6 +132,7 @@ Item {
 
     InnerBorder {
         id: taskbarBorder
+        borderColor: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
         leftThickness: 0
         rightThickness: Appearance.padding.normal
     }
@@ -263,7 +264,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShownRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -300,7 +303,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShowOnlyOccupiedRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -333,7 +338,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesActiveIndicatorRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -366,7 +373,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesOccupiedBgRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -401,7 +410,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShowWindowsRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -434,7 +445,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesPerMonitorRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+                            border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}

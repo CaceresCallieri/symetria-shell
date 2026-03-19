@@ -13,9 +13,10 @@ StyledRect {
     property alias topThickness: maskInner.anchors.topMargin
     property alias rightThickness: maskInner.anchors.rightMargin
     property alias bottomThickness: maskInner.anchors.bottomMargin
+    property color borderColor: Colours.tPalette.m3surfaceContainer
 
     anchors.fill: parent
-    color: Colours.tPalette.m3surfaceContainer
+    color: borderColor
 
     layer.enabled: true
     layer.effect: MultiEffect {

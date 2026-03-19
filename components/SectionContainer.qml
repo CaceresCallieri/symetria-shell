@@ -15,10 +15,12 @@ StyledRect {
     Layout.fillWidth: true
     implicitHeight: contentColumn.implicitHeight + Appearance.padding.large * 2
 
+    readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+
     radius: Appearance.rounding.normal
-    color: Colours.transparency.enabled 
-           ? Colours.layer(Colours.palette.m3surfaceContainer, 2)
-           : Colours.palette.m3surfaceContainerHigh
+    color: pill.background
+    border.color: pill.border
+    border.width: 1
 
     ColumnLayout {
         id: contentColumn

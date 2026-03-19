@@ -92,7 +92,9 @@ Item {
 
                                 Layout.fillWidth: true
 
-                                color: Audio.sink?.id === modelData.id ? Colours.layer(Colours.palette.m3surfaceContainer, 2) : "transparent"
+                                color: Audio.sink?.id === modelData.id ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+                                border.color: Audio.sink?.id === modelData.id ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+                                border.width: Audio.sink?.id === modelData.id ? 1 : 0
                                 radius: Appearance.rounding.normal
 
                                 StateLayer {
@@ -170,7 +172,9 @@ Item {
 
                                 Layout.fillWidth: true
 
-                                color: Audio.source?.id === modelData.id ? Colours.layer(Colours.palette.m3surfaceContainer, 2) : "transparent"
+                                color: Audio.source?.id === modelData.id ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).background : "transparent"
+                                border.color: Audio.source?.id === modelData.id ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong).border : "transparent"
+                                border.width: Audio.source?.id === modelData.id ? 1 : 0
                                 radius: Appearance.rounding.normal
 
                                 StateLayer {

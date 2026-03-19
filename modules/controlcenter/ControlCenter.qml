@@ -53,12 +53,16 @@ Item {
         }
 
         StyledRect {
+            readonly property var navPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
             Layout.fillHeight: true
 
             topLeftRadius: root.rounding
             bottomLeftRadius: root.rounding
             implicitWidth: navRail.implicitWidth
-            color: Colours.tPalette.m3surfaceContainer
+            color: navPill.background
+            border.color: navPill.border
+            border.width: 1
 
             CustomMouseArea {
                 anchors.fill: parent

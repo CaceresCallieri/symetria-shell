@@ -17,7 +17,9 @@ StyledRect {
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
     radius: Appearance.rounding.normal
-    color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background
+    border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).border
+    border.width: 1
     clip: true
 
     Behavior on implicitHeight {
@@ -76,7 +78,7 @@ StyledRect {
                     radius: stateLayer.pressed ? Appearance.rounding.small / 2 : internalChecked ? Appearance.rounding.small : Appearance.rounding.normal
 
                     // Match utilities Toggles inactive color
-                    inactiveColour: Colours.layer(Colours.palette.m3surfaceContainerHighest, 2)
+                    inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                     
                     // Adjust width similar to utilities toggles
                     Layout.preferredWidth: implicitWidth + (stateLayer.pressed ? Appearance.padding.large : internalChecked ? Appearance.padding.smaller : 0)

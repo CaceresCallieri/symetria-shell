@@ -21,7 +21,7 @@ ClippingRectangle {
 
     readonly property bool initialOpeningComplete: layout.initialOpeningComplete
 
-    color: "transparent"
+    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1).background
     clip: true
     focus: false
     activeFocusOnTab: false

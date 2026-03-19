@@ -39,7 +39,9 @@ ColumnLayout {
         implicitHeight: ethernetInfo.implicitHeight + Appearance.padding.large * 2
 
         radius: Appearance.rounding.normal
-        color: Colours.tPalette.m3surfaceContainer
+        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+        border.color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        border.width: 1
 
         ColumnLayout {
             id: ethernetInfo
