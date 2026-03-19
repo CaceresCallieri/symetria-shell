@@ -121,6 +121,9 @@ Item {
         }
     }
 
+    // DISABLED: Dashboard panel is disabled and slated for removal.
+    // Some sub-features (weather/forecast) may be extracted and reimplemented elsewhere.
+    // The component is kept instantiated but gated by Config.dashboard.enabled (set to false).
     Dashboard.Wrapper {
         id: dashboard
 

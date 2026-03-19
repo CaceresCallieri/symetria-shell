@@ -173,7 +173,7 @@
     "rounding": 25
   },
   "dashboard": {
-    "enabled": true,
+    "enabled": false,
     "showOnHover": true,
     "mediaUpdateInterval": 500,
     "dragThreshold": 50,

@@ -184,25 +184,25 @@ CustomMouseArea {
                 visibilities.launcher = false;
         }
 
-        // Show dashboard on hover (bottom-left panel)
-        const showDashboard = Config.dashboard.showOnHover && (inBottomLeftPanel(panels.dashboard, x, y) || inAgentBarForPanel(panels.dashboard, x, y));
-
-        // Always update visibility based on hover if not in shortcut mode
-        if (!dashboardShortcutActive) {
-            visibilities.dashboard = showDashboard;
-        } else if (showDashboard) {
-            // If hovering over dashboard area while in shortcut mode, transition to hover control
-            dashboardShortcutActive = false;
-        }
-
-        // Show/hide dashboard on drag (for touchscreen devices)
-        // Note: drag direction is inverted for bottom panels (drag up to show, down to hide)
-        if (pressed && inBottomLeftPanel(panels.dashboard, dragStart.x, dragStart.y) && withinPanelWidth(panels.dashboard, x, y)) {
-            if (dragY < -Config.dashboard.dragThreshold)
-                visibilities.dashboard = true;
-            else if (dragY > Config.dashboard.dragThreshold)
-                visibilities.dashboard = false;
-        }
+        // DISABLED: Dashboard panel (bottom-left hover zone)
+        // The dashboard module is disabled and slated for removal.
+        // Some sub-features (weather/forecast) may be extracted and reimplemented elsewhere.
+        // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
+        //
+        // const showDashboard = Config.dashboard.showOnHover && (inBottomLeftPanel(panels.dashboard, x, y) || inAgentBarForPanel(panels.dashboard, x, y));
+        //
+        // if (!dashboardShortcutActive) {
+        //     visibilities.dashboard = showDashboard;
+        // } else if (showDashboard) {
+        //     dashboardShortcutActive = false;
+        // }
+        //
+        // if (pressed && inBottomLeftPanel(panels.dashboard, dragStart.x, dragStart.y) && withinPanelWidth(panels.dashboard, x, y)) {
+        //     if (dragY < -Config.dashboard.dragThreshold)
+        //         visibilities.dashboard = true;
+        //     else if (dragY > Config.dashboard.dragThreshold)
+        //         visibilities.dashboard = false;
+        // }
 
         // Show utilities on hover
         const showUtilities = inBottomPanel(panels.utilities, x, y) || inAgentBarForPanel(panels.utilities, x, y);

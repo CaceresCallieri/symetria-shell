@@ -1,6 +1,8 @@
 import Quickshell.Io
 
 JsonObject {
+    // DISABLED: Dashboard is disabled and slated for removal.
+    // Set to false in shell.json. Some sub-features (weather/forecast) may be reimplemented.
     property bool enabled: true
     property bool showOnHover: true
     property int mediaUpdateInterval: 500

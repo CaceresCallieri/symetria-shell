@@ -92,13 +92,12 @@ Scope {
     }
 
     CustomShortcut {
+        // DISABLED: Dashboard is disabled and slated for removal.
+        // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
         name: "dashboard"
-        description: "Toggle dashboard"
+        description: "Toggle dashboard (DISABLED)"
         onPressed: {
-            if (root.hasFullscreen)
-                return;
-            const visibilities = Visibilities.getForActive();
-            visibilities.dashboard = !visibilities.dashboard;
+            // Dashboard disabled — do nothing
         }
     }
 
