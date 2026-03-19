@@ -14,9 +14,13 @@ PreviewImageHelper::PreviewImageHelper(QObject* parent)
     : QObject(parent) {}
 
 PreviewImageHelper::~PreviewImageHelper() {
+    // Cancel in-flight work without blocking the GUI thread.
+    // The thread pool will finish the job on its own; the watcher is parented
+    // to this object and will be collected when the parent is destroyed, but we
+    // disconnect it first to prevent the finished signal firing after destruction.
     if (m_watcher) {
+        m_watcher->disconnect();
         m_watcher->cancel();
-        m_watcher->waitForFinished();
     }
 }
 
@@ -33,11 +37,26 @@ QString PreviewImageHelper::resolvedUrl() const { return m_resolvedUrl; }
 
 bool PreviewImageHelper::loading() const { return m_loading; }
 
+// Sets m_resolvedUrl and emits resolvedUrlChanged. Also clears m_loading and
+// emits loadingChanged if it was set. Used by all synchronous return paths.
+void PreviewImageHelper::applyResolvedUrl(const QString& url) {
+    if (m_resolvedUrl != url) {
+        m_resolvedUrl = url;
+        emit resolvedUrlChanged();
+    }
+    if (m_loading) {
+        m_loading = false;
+        emit loadingChanged();
+    }
+}
+
 void PreviewImageHelper::processSource() {
-    // Cancel any in-flight async work
+    // Cancel any in-flight async work without blocking the GUI thread.
+    // Disconnect signals first so the old watcher's finished signal cannot
+    // fire against a stale this-pointer after we null out m_watcher.
     if (m_watcher) {
+        m_watcher->disconnect();
         m_watcher->cancel();
-        m_watcher->waitForFinished();
         m_watcher->deleteLater();
         m_watcher = nullptr;
     }
@@ -57,15 +76,7 @@ void PreviewImageHelper::processSource() {
 
     // Non-PDF files — passthrough, no compositing needed
     if (!needsBackgroundCompositing(m_source)) {
-        const auto url = QStringLiteral("file://") + m_source;
-        if (m_resolvedUrl != url) {
-            m_resolvedUrl = url;
-            emit resolvedUrlChanged();
-        }
-        if (m_loading) {
-            m_loading = false;
-            emit loadingChanged();
-        }
+        applyResolvedUrl(QStringLiteral("file://") + m_source);
         return;
     }
 
@@ -77,17 +88,9 @@ void PreviewImageHelper::processSource() {
     ).toHex();
     const auto cachePath = cacheDir() + QStringLiteral("/") + cacheKey + QStringLiteral(".png");
 
-    // Cache hit — return immediately
+    // Cache hit — return immediately without spinning up a thread
     if (QFileInfo::exists(cachePath)) {
-        const auto url = QStringLiteral("file://") + cachePath;
-        if (m_resolvedUrl != url) {
-            m_resolvedUrl = url;
-            emit resolvedUrlChanged();
-        }
-        if (m_loading) {
-            m_loading = false;
-            emit loadingChanged();
-        }
+        applyResolvedUrl(QStringLiteral("file://") + cachePath);
         return;
     }
 
@@ -97,16 +100,19 @@ void PreviewImageHelper::processSource() {
         emit loadingChanged();
     }
 
-    // Capture source for lambda closure (detect stale results)
+    // Capture both the source string and the watcher pointer so the lambda
+    // is self-contained and does not touch m_watcher after it has been nulled
+    // or replaced by a subsequent processSource() call.
     const auto capturedSource = m_source;
 
     m_watcher = new QFutureWatcher<QString>(this);
-    connect(m_watcher, &QFutureWatcher<QString>::finished, this, [this, capturedSource]() {
+    connect(m_watcher, &QFutureWatcher<QString>::finished, this,
+            [this, capturedSource, watcher = m_watcher]() {
         // Stale result — source changed while we were rendering
         if (m_source != capturedSource) return;
 
-        const auto result = m_watcher->result();
-        m_watcher->deleteLater();
+        const auto result = watcher->result();
+        watcher->deleteLater();
         m_watcher = nullptr;
 
         m_loading = false;
@@ -125,8 +131,9 @@ void PreviewImageHelper::processSource() {
 }
 
 bool PreviewImageHelper::needsBackgroundCompositing(const QString& path) {
-    QImageReader reader(path);
-    return reader.canRead() && reader.format() == "pdf";
+    // Use a fast suffix check to avoid opening the file on the GUI thread.
+    // The reader-based format detection would perform synchronous I/O here.
+    return path.endsWith(QStringLiteral(".pdf"), Qt::CaseInsensitive);
 }
 
 QString PreviewImageHelper::generateCachedPreview(const QString& sourcePath, const QString& cachePath) {
@@ -144,9 +151,11 @@ QString PreviewImageHelper::generateCachedPreview(const QString& sourcePath, con
     return cachePath;
 }
 
-QString PreviewImageHelper::cacheDir() {
-    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+const QString& PreviewImageHelper::cacheDir() {
+    // Compute once per process lifetime — QStandardPaths does not change at runtime.
+    static const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
         + QStringLiteral("/preview");
+    return dir;
 }
 
 } // namespace symmetria::models

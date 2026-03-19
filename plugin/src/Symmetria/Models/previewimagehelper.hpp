@@ -1,9 +1,6 @@
 #pragma once
 
-#include <qcryptographichash.h>
-#include <qfileinfo.h>
 #include <qfuturewatcher.h>
-#include <qimagereader.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
 
@@ -34,9 +31,10 @@ signals:
 
 private:
     void processSource();
+    void applyResolvedUrl(const QString& url);
     static bool needsBackgroundCompositing(const QString& path);
     static QString generateCachedPreview(const QString& sourcePath, const QString& cachePath);
-    static QString cacheDir();
+    static const QString& cacheDir();
 
     QString m_source;
     QString m_resolvedUrl;
