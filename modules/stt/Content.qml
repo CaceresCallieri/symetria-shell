@@ -308,7 +308,7 @@ Item {
                 spacing: Appearance.spacing.normal
 
                 // Retry: re-submit audio (available for API errors where audio file exists)
-                ControlButton {
+                PillButton {
                     id: retryBtn
                     visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
                     icon: "refresh"
@@ -317,7 +317,7 @@ Item {
                 }
 
                 // Cancel: discard audio, remove job card
-                ControlButton {
+                PillButton {
                     id: errorCancelBtn
                     icon: "close"
                     iconColor: Colours.palette.m3error
@@ -325,7 +325,7 @@ Item {
                 }
 
                 // Copy raw error to clipboard
-                ControlButton {
+                PillButton {
                     visible: root.serviceErrorRaw !== ""
                     icon: "content_copy"
                     onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
@@ -348,145 +348,6 @@ Item {
         }
     }
 
-    /// Control button with press feedback animation.
-    /// Call triggerPress() to programmatically trigger the scale squeeze
-    /// (used by Connections block for keybind-triggered feedback).
-    component ControlButton: Item {
-        id: controlBtn
-
-        required property string icon
-        property color iconColor: Colours.palette.m3onSurfaceVariant
-
-        signal clicked()
-
-        function triggerPress(): void {
-            pressAnim.restart();
-        }
-
-        SequentialAnimation {
-            id: pressAnim
-
-            NumberAnimation {
-                target: controlBtn
-                property: "scale"
-                to: 0.85
-                duration: 80
-                easing.type: Easing.OutQuad
-            }
-
-            NumberAnimation {
-                target: controlBtn
-                property: "scale"
-                to: 1.0
-                duration: 150
-                easing.type: Easing.OutBack
-            }
-        }
-
-        implicitWidth: controlIcon.implicitWidth + Appearance.padding.normal * 2
-        implicitHeight: controlIcon.implicitHeight + Appearance.padding.smaller * 2
-
-        StyledRect {
-            anchors.fill: parent
-            radius: Appearance.rounding.full
-            color: Colours.palette.m3surfaceContainerHigh
-        }
-
-        StateLayer {
-            radius: Appearance.rounding.full
-            color: controlBtn.iconColor
-            function onClicked(): void { controlBtn.clicked(); }
-        }
-
-        MaterialIcon {
-            id: controlIcon
-            anchors.centerIn: parent
-            text: controlBtn.icon
-            color: controlBtn.iconColor
-            font.pointSize: Appearance.font.size.normal
-        }
-    }
-
-    /// Radio-style delivery option chip for "ask" mode.
-    /// Displays a selectable pill with icon + label. Visual feedback via triggerPress().
-    component DeliveryOption: Item {
-        id: optionBtn
-
-        required property string mode
-        required property string icon
-        required property string label
-        required property bool selected
-
-        signal clicked()
-
-        function triggerPress(): void {
-            optionPressAnim.restart();
-        }
-
-        SequentialAnimation {
-            id: optionPressAnim
-
-            NumberAnimation {
-                target: optionBtn
-                property: "scale"
-                to: 0.90
-                duration: 80
-                easing.type: Easing.OutQuad
-            }
-
-            NumberAnimation {
-                target: optionBtn
-                property: "scale"
-                to: 1.0
-                duration: 150
-                easing.type: Easing.OutBack
-            }
-        }
-
-        implicitWidth: optionRow.implicitWidth + Appearance.padding.normal * 2
-        implicitHeight: optionRow.implicitHeight + Appearance.padding.smaller * 2
-
-        StyledRect {
-            anchors.fill: parent
-            radius: Appearance.rounding.full
-            color: optionBtn.selected
-                ? Colours.palette.m3primaryContainer
-                : Colours.palette.m3surfaceContainerHigh
-        }
-
-        StateLayer {
-            radius: Appearance.rounding.full
-            color: optionBtn.selected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-            function onClicked(): void {
-                root.job.setDeliveryChoice(optionBtn.mode);
-                optionBtn.clicked();
-            }
-        }
-
-        Row {
-            id: optionRow
-            anchors.centerIn: parent
-            spacing: Appearance.spacing.smaller
-
-            MaterialIcon {
-                text: optionBtn.icon
-                color: optionBtn.selected
-                    ? Colours.palette.m3onPrimaryContainer
-                    : Colours.palette.m3onSurfaceVariant
-                font.pointSize: Appearance.font.size.small
-                anchors.verticalCenter: parent.verticalCenter
-            }
-
-            StyledText {
-                text: optionBtn.label
-                color: optionBtn.selected
-                    ? Colours.palette.m3onPrimaryContainer
-                    : Colours.palette.m3onSurfaceVariant
-                font.pointSize: Appearance.font.size.small
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-    }
 
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + padding
@@ -669,7 +530,7 @@ Item {
                 RowLayout {
                     spacing: Appearance.spacing.normal
 
-                    ControlButton {
+                    PillButton {
                         id: pauseBtn
                         icon: root.serviceState === "paused" ? "play_arrow" : "pause"
                         iconColor: root.serviceState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
@@ -678,20 +539,20 @@ Item {
 
                     // Restart is service-level (cancel current + start new job),
                     // not per-job, so it calls the orchestrator directly.
-                    ControlButton {
+                    PillButton {
                         id: restartBtn
                         icon: "restart_alt"
                         onClicked: SttService.restart()
                     }
 
-                    ControlButton {
+                    PillButton {
                         id: cancelBtn
                         icon: "close"
                         iconColor: Colours.palette.m3error
                         onClicked: root.job.cancel()
                     }
 
-                    ControlButton {
+                    PillButton {
                         id: submitBtn
                         icon: "check"
                         iconColor: Colours.palette.m3confirm
@@ -710,28 +571,31 @@ Item {
                 RowLayout {
                     spacing: Appearance.spacing.small
 
-                    DeliveryOption {
+                    PillButton {
                         id: saveOption
-                        mode: "clipboard"
                         icon: "content_copy"
-                        label: qsTr("Save")
+                        text: qsTr("Save")
+                        selectable: true
                         selected: root.serviceDeliveryChoice === "clipboard"
+                        onClicked: root.job.setDeliveryChoice("clipboard")
                     }
 
-                    DeliveryOption {
+                    PillButton {
                         id: injectOption
-                        mode: "inject"
                         icon: "input"
-                        label: qsTr("Inject")
+                        text: qsTr("Inject")
+                        selectable: true
                         selected: root.serviceDeliveryChoice === "inject"
+                        onClicked: root.job.setDeliveryChoice("inject")
                     }
 
-                    DeliveryOption {
+                    PillButton {
                         id: submitOption
-                        mode: "submit"
                         icon: "send"
-                        label: qsTr("Submit")
+                        text: qsTr("Submit")
+                        selectable: true
                         selected: root.serviceDeliveryChoice === "submit"
+                        onClicked: root.job.setDeliveryChoice("submit")
                     }
                 }
             }
