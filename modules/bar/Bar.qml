@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import qs.components
 import qs.services
 import qs.config
 import "popouts" as BarPopouts
@@ -289,15 +290,26 @@ Item {
     }
 
     // Center section - truly centered (workspaces)
+    // Hidden when merged mode is active (workspaces move to the bottom merged bar).
+    // _shouldBeActive drives the desired state; active stays true while opacity > 0
+    // so the Loader keeps its content alive during the fade-out animation.
     Loader {
         id: centerLoader
+
+        readonly property bool _shouldBeActive: root.centerEntry?.enabled !== false && !AgentService.mergeActive
+
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        active: root.centerEntry?.enabled !== false
+        active: _shouldBeActive || opacity > 0
+        opacity: _shouldBeActive ? 1 : 0
         visible: active
 
         sourceComponent: Workspaces {
             screen: root.screen
+        }
+
+        Behavior on opacity {
+            Anim {}
         }
     }
 

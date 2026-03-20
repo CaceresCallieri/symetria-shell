@@ -3,14 +3,15 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
+import Quickshell
 import QtQuick
 
 /// Animated bottom bar container for the agent bar, embedded in the unified
 /// Drawers surface. Mirrors BarWrapper.qml but for the bottom edge.
 ///
 /// When agents are active, expands upward from the bottom border strip to
-/// reveal AgentBarContent. When no agents are connected, collapses back to
-/// Config.border.thickness (the normal bottom border).
+/// reveal either AgentBarContent (separate mode) or MergedBarContent (merged mode).
+/// When no agents are connected, collapses back to Config.border.thickness.
 ///
 /// Key properties consumed by the drawers system:
 ///   - implicitHeight: flows into mask Region, Border, Backgrounds, Panels, Interactions
@@ -18,8 +19,15 @@ import QtQuick
 Item {
     id: root
 
+    required property ShellScreen screen
+
     readonly property int padding: Math.max(Appearance.padding.small, Config.border.thickness)
-    readonly property int contentHeight: Config.agentbar.sizes.innerHeight + padding * 2
+    // Merged mode uses the bar's taller innerWidth since it displays workspace content;
+    // separate mode uses the agentbar's compact innerHeight.
+    readonly property int innerHeight: AgentService.mergeActive
+        ? Config.bar.sizes.innerWidth
+        : Config.agentbar.sizes.innerHeight
+    readonly property int contentHeight: innerHeight + padding * 2
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches BarWrapper behavior — prevents content from being momentarily obscured)
     readonly property int exclusiveZone: shouldBeVisible ? contentHeight : Config.border.thickness
@@ -72,8 +80,23 @@ Item {
 
         active: root.shouldBeVisible || root.visible
 
-        sourceComponent: AgentBarContent {
+        sourceComponent: AgentService.mergeActive ? mergedContentComponent : separateContentComponent
+    }
+
+    Component {
+        id: separateContentComponent
+
+        AgentBarContent {
             height: root.contentHeight
+        }
+    }
+
+    Component {
+        id: mergedContentComponent
+
+        MergedBarContent {
+            height: root.contentHeight
+            screen: root.screen
         }
     }
 

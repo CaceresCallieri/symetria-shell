@@ -1,0 +1,166 @@
+pragma ComponentBehavior: Bound
+
+import qs.components
+import qs.services
+import qs.config
+import Quickshell
+import Quickshell.Hyprland
+import QtQuick
+import QtQuick.Layouts
+
+/// Merged workspace + agent bar content. Replaces AgentBarContent when merge mode is active.
+/// Single glass pill container (like the top bar workspace pill) with an ActiveIndicator
+/// highlighting the current workspace. Each workspace slot shows label + agent chips + app icons.
+Item {
+    id: root
+
+    required property ShellScreen screen
+
+    implicitHeight: Config.bar.sizes.innerWidth
+    implicitWidth: pill.implicitWidth
+
+    // Per-monitor or global active workspace ID (same logic as Workspaces.qml)
+    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces
+        ? (Hypr.monitorFor(screen)?.activeWorkspace?.id ?? 1)
+        : Hypr.activeWsId
+
+    // Occupied workspace map
+    readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
+        acc[curr.id] = curr.lastIpcObject.windows > 0;
+        return acc;
+    }, {})
+
+    // Dynamic workspace list (always dynamic mode — occupied + active + named, excluding special)
+    readonly property var displayedWorkspaces: {
+        const validWorkspaces = Hypr.workspaces.values.filter(w => !w.name.startsWith("special:"))
+        const occupiedWs = validWorkspaces.filter(w => w.lastIpcObject.windows > 0)
+        const activeId = root.activeWsId
+
+        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)
+        const namedWs = validWorkspaces.filter(w => namedWsNames.includes(w.name))
+
+        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])]
+
+        if (!ids.includes(activeId))
+            ids.push(activeId)
+
+        return ids.sort((a, b) => a - b)
+    }
+
+    // Grouped agents by workspace. Args are unused in the body — they exist solely
+    // to make QML track AgentService.agents and _workspaceMap as binding dependencies
+    // (same pattern as AgentService._sortProjectsByWorkspace).
+    readonly property var _agentGrouping: _computeAgentGrouping(AgentService.agents, AgentService._workspaceMap)
+
+    function _computeAgentGrouping(agents: var /* dependency only */, wsMap: var /* dependency only */): var {
+        return AgentService.agentsByWorkspace();
+    }
+
+    function agentsForWorkspace(wsId: int): var {
+        return _agentGrouping.byWorkspace[wsId] ?? [];
+    }
+
+    // Per-monitor workspace filtering
+    readonly property var filteredWorkspaces: {
+        if (!Config.bar.workspaces.perMonitorWorkspaces)
+            return displayedWorkspaces;
+
+        const mon = Hypr.monitorFor(root.screen);
+        if (!mon) return displayedWorkspaces;
+
+        const monWsIds = new Set();
+        for (const ws of Hypr.workspaces.values) {
+            if (ws.monitor === mon)
+                monWsIds.add(ws.id);
+        }
+        monWsIds.add(root.activeWsId);
+
+        return displayedWorkspaces.filter(id => monWsIds.has(id));
+    }
+
+    // Orphan agents (no workspace mapping)
+    readonly property var orphanAgents: _agentGrouping.orphans
+    readonly property bool hasOrphans: orphanAgents.length > 0
+
+    // Glass style for the outer container (matches top bar workspace pill)
+    readonly property var glassStyle: Colours.pillStyle(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.subtle
+    )
+
+    StyledClippingRect {
+        id: pill
+
+        anchors.centerIn: parent
+
+        implicitHeight: Config.bar.sizes.innerWidth
+        implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
+
+        color: root.glassStyle.background
+        radius: Appearance.rounding.full
+        border.width: 1
+        border.color: root.glassStyle.border
+
+        RowLayout {
+            id: layout
+
+            anchors.centerIn: parent
+            spacing: Math.floor(Appearance.spacing.small / 2)
+
+            // Workspace slots — direct Repeater so ActiveIndicator can access items via itemAt()
+            Repeater {
+                id: workspaceRepeater
+
+                model: ScriptModel {
+                    values: root.filteredWorkspaces
+                }
+
+                MergedWorkspacePill {
+                    required property int modelData
+
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: isActive ? activePadding : 0
+                    Layout.rightMargin: isActive ? activePadding : 0
+
+                    wsId: modelData
+                    activeWsId: root.activeWsId
+                    agents: root.agentsForWorkspace(modelData)
+                    occupied: root.occupied
+
+                    Behavior on Layout.leftMargin { Anim {} }
+                    Behavior on Layout.rightMargin { Anim {} }
+                }
+            }
+
+            // Orphan agents (no workspace mapping) — inline chips
+            Repeater {
+                model: root.hasOrphans ? root.orphanAgents : []
+
+                AgentChip {
+                    required property var modelData
+
+                    Layout.alignment: Qt.AlignVCenter
+
+                    active: modelData.active ?? false
+                    activityState: modelData.activity_state ?? ""
+                    activityTool: modelData.activity_tool ?? ""
+                    isSttTarget: AgentService.isAgentSttTarget(modelData)
+                }
+            }
+        }
+
+        // Active workspace indicator (sliding highlight pill behind the layout)
+        Loader {
+            anchors.verticalCenter: parent.verticalCenter
+            active: Config.bar.workspaces.activeIndicator
+            asynchronous: true
+            z: -1
+
+            sourceComponent: MergedActiveIndicator {
+                activeWsId: root.activeWsId
+                workspaces: workspaceRepeater
+                mask: layout
+            }
+        }
+    }
+}

@@ -34,6 +34,13 @@ Singleton {
     /// Mutated only via IpcHandler functions toggle/show/hide.
     readonly property bool userHidden: _userHidden
 
+    /// Whether the merged workspace+agent bar mode is active.
+    /// True when the config flag is on AND agents are visible.
+    readonly property bool mergeActive: Config.agentbar.mergeWorkspaces
+        && Config.agentbar.enabled
+        && _agents.length > 0
+        && !_userHidden
+
     /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
     /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
     readonly property var sortedProjects: _sortProjectsByWorkspace(_projects, _agents, _workspaceMap)
@@ -146,6 +153,25 @@ Singleton {
     /// active agent's workspace, or first agent's workspace.
     function workspaceForAgents(agents: var): var {
         return root.workspaceForAgent(root.representativeAgent(agents));
+    }
+
+    /// Group agents by workspace ID for the merged bar.
+    /// Returns { byWorkspace: { [wsId]: agent[] }, orphans: agent[] }
+    /// Depends on _agents and _workspaceMap so callers get reactive updates.
+    function agentsByWorkspace(): var {
+        const byWs = {};
+        const orphans = [];
+        for (const agent of root._agents) {
+            const ws = root._workspaceMap[agent.terminal_pid];
+            if (ws) {
+                const id = ws.id;
+                if (!byWs[id]) byWs[id] = [];
+                byWs[id].push(agent);
+            } else {
+                orphans.push(agent);
+            }
+        }
+        return { byWorkspace: byWs, orphans };
     }
 
     /// Resolve workspace to display icon, matching the workspace bar's chain:
@@ -475,6 +501,7 @@ Singleton {
                 projects: root.sortedProjects,
                 bridgeRunning: root.bridgeRunning,
                 userHidden: root.userHidden,
+                mergeActive: root.mergeActive,
             });
         }
 
@@ -489,6 +516,18 @@ Singleton {
 
         function hide(): void {
             root._userHidden = true;
+        }
+
+        function merge(): void {
+            Config.agentbar.mergeWorkspaces = true;
+        }
+
+        function unmerge(): void {
+            Config.agentbar.mergeWorkspaces = false;
+        }
+
+        function togglemerge(): void {
+            Config.agentbar.mergeWorkspaces = !Config.agentbar.mergeWorkspaces;
         }
     }
 }
