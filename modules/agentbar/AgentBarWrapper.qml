@@ -80,6 +80,8 @@ Item {
 
         active: root.shouldBeVisible || root.visible
 
+        // Conditionally swap components rather than using a mode property so the content is
+        // fully recreated on toggle — the two modes have different heights and layouts.
         sourceComponent: AgentService.mergeActive ? mergedContentComponent : separateContentComponent
     }
 

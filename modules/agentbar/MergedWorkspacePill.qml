@@ -64,13 +64,6 @@ Item {
         return order.map(p => ({ project: p, agents: groups[p] }));
     }
 
-    // Permission and STT states (for sweep animation on the ActiveIndicator level)
-    readonly property bool hasPermissionNeeded:
-        root.agents.some(a => (a.activity_state ?? "") === "needs_permission")
-
-    readonly property bool hasSttTarget:
-        AgentService.sttTargetTerminalPid > 0 && root.agents.some(a => AgentService.isAgentSttTarget(a))
-
     implicitHeight: content.implicitHeight
     implicitWidth: content.implicitWidth
 
@@ -150,8 +143,6 @@ Item {
         // App icons (active workspace only).
         // visible must track active so the RowLayout collapses the slot to zero width.
         Loader {
-            id: appIconsLoader
-
             Layout.alignment: Qt.AlignVCenter
             active: root.isActive && root.isOccupied && Config.bar.workspaces.showWindows
             visible: active

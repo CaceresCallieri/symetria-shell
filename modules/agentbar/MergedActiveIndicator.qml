@@ -18,7 +18,7 @@ StyledRect {
     required property Item mask
 
     property color indicatorColor: Colours.palette.m3primary
-    property color textColor: Colours.palette.m3onSurface
+    property color textColor: Colours.palette.m3onPrimary
 
     readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong)
 

@@ -302,7 +302,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         active: _shouldBeActive || opacity > 0
         opacity: _shouldBeActive ? 1 : 0
-        visible: active
+        visible: opacity > 0
 
         sourceComponent: Workspaces {
             screen: root.screen

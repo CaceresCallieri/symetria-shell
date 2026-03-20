@@ -52,7 +52,7 @@ Item {
     // (same pattern as AgentService._sortProjectsByWorkspace).
     readonly property var _agentGrouping: _computeAgentGrouping(AgentService.agents, AgentService._workspaceMap)
 
-    function _computeAgentGrouping(agents: var /* dependency only */, wsMap: var /* dependency only */): var {
+    function _computeAgentGrouping(_agentsDep: var, _wsMapDep: var): var {
         return AgentService.agentsByWorkspace();
     }
 
