@@ -74,7 +74,7 @@ StyledRect {
         const s = Math.abs(leading - trailing) + currentSize;
         // Handle activeTrail animation: extend indicator to cover previous workspace
         // (only applicable in Repeater mode - ListView mode doesn't support trail)
-        if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx !== undefined && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
+        if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
             const prevWs = workspaces?.itemAt(previousWsIdx);
             return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
         }
@@ -82,7 +82,7 @@ StyledRect {
     }
 
     // Track workspace index changes for trail animation
-    property int currentWsIdxTracked: -1  // Current workspace index being tracked
+    property int currentWsIdxTracked: -1  // Committed snapshot of currentWsIdx — captures "previous" before next update
     property int previousWsIdx: -1        // Previous workspace for trail animation
 
     onCurrentWsIdxChanged: {
