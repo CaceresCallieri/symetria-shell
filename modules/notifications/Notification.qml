@@ -31,11 +31,17 @@ StyledRect {
         ? Colours.palette.m3error
         : Colours.palette.m3surfaceContainerHigh
     readonly property var cardStyle: Colours.pillStyle(cardBaseColor, Colours.glass.medium)
+    readonly property var foregroundContainerStyle: Colours.pillStyle(cardBaseColor, Colours.glass.strong)
 
     color: cardStyle.background
     radius: Appearance.rounding.normal
     border.width: 1
     border.color: cardStyle.border
+
+    Behavior on border.color {
+        CAnim {}
+    }
+
     implicitWidth: Config.notifs.sizes.width
     implicitHeight: inner.implicitHeight
 
@@ -126,8 +132,8 @@ StyledRect {
 
                 anchors.left: parent.left
                 anchors.top: parent.top
-                width: root.hasImage ? Config.notifs.sizes.image : Math.round(Config.notifs.sizes.image * 0.75)
-                height: root.hasImage ? Config.notifs.sizes.image : Math.round(Config.notifs.sizes.image * 0.75)
+                width: Config.notifs.sizes.image
+                height: Config.notifs.sizes.image
                 visible: root.hasImage || root.hasAppIcon
 
                 sourceComponent: ClippingRectangle {
@@ -157,12 +163,10 @@ StyledRect {
                 anchors.bottom: root.hasImage ? image.bottom : undefined
 
                 sourceComponent: StyledRect {
-                    readonly property var iconPill: Colours.pillStyle(root.cardBaseColor, Colours.glass.strong)
-
                     radius: Appearance.rounding.full
-                    color: root.hasTransparentIcon ? "transparent" : iconPill.background
+                    color: root.hasTransparentIcon ? "transparent" : root.foregroundContainerStyle.background
                     border.width: root.hasTransparentIcon ? 0 : 1
-                    border.color: root.hasTransparentIcon ? "transparent" : iconPill.border
+                    border.color: root.hasTransparentIcon ? "transparent" : root.foregroundContainerStyle.border
                     implicitWidth: root.hasImage ? Config.notifs.sizes.badge : Math.round(Config.notifs.sizes.image * 0.75)
                     implicitHeight: root.hasImage ? Config.notifs.sizes.badge : Math.round(Config.notifs.sizes.image * 0.75)
 
@@ -176,7 +180,7 @@ StyledRect {
 
                         // Custom icons: 80% for padding, system icons: 60% (with colored background)
                         width: root.hasTransparentIcon ? Math.round(parent.width * 0.8) : Math.round(parent.width * 0.6)
-                        height: root.hasTransparentIcon ? Math.round(parent.height * 0.8) : Math.round(parent.width * 0.6)
+                        height: root.hasTransparentIcon ? Math.round(parent.height * 0.8) : Math.round(parent.height * 0.6)
 
                         // Use plain Image for custom file paths (preserves SVG transparency)
                         // Use ColouredIcon for system icons (uses Qt icon theme engine)
@@ -487,12 +491,11 @@ StyledRect {
         id: action
 
         required property var modelData
-        readonly property var actionStyle: Colours.pillStyle(root.cardBaseColor, Colours.glass.strong)
 
         radius: Appearance.rounding.full
-        color: actionStyle.background
+        color: root.foregroundContainerStyle.background
         border.width: 1
-        border.color: actionStyle.border
+        border.color: root.foregroundContainerStyle.border
 
         Layout.preferredWidth: actionText.width + Appearance.padding.normal * 2
         Layout.preferredHeight: actionText.height + Appearance.padding.small * 2
