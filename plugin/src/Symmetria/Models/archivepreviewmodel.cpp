@@ -131,12 +131,15 @@ static ArchiveReadResult readArchiveContents(const QString& filePath) {
     struct archive_entry* entry;
     while (archive_read_next_header(a.get(), &entry) == ARCHIVE_OK) {
         const char* pathname = archive_entry_pathname_utf8(entry);
-        if (!pathname)
-            pathname = archive_entry_pathname(entry);
-        if (!pathname)
+        const char* pathnameFallback = pathname ? nullptr : archive_entry_pathname(entry);
+        if (!pathname && !pathnameFallback)
             continue;
 
-        QString path = QString::fromUtf8(pathname);
+        // Use UTF-8 path when available; fall back to locale-encoded bytes (best-effort
+        // for Latin-1 / Shift-JIS archives — may produce replacement chars in exotic cases).
+        QString path = pathname
+            ? QString::fromUtf8(pathname)
+            : QString::fromLocal8Bit(pathnameFallback);
         // Normalize: remove trailing slashes, skip empty/dot entries
         while (path.endsWith(u'/'))
             path.chop(1);
@@ -144,7 +147,11 @@ static ArchiveReadResult readArchiveContents(const QString& filePath) {
             continue;
 
         const bool isDir = (archive_entry_filetype(entry) == AE_IFDIR);
-        const qint64 size = isDir ? 0 : archive_entry_size(entry);
+        // archive_entry_size() returns 0 when unset (e.g. ZIP with data descriptors,
+        // RAW compressed streams). Only add to totalSize when the value is known.
+        const qint64 size = (!isDir && archive_entry_size_is_set(entry))
+            ? archive_entry_size(entry)
+            : 0;
 
         result.totalEntries++;
         if (isDir)
@@ -160,15 +167,18 @@ static ArchiveReadResult readArchiveContents(const QString& filePath) {
         node->isDir = isDir;
     }
 
-    // Check for read errors (not just EOF)
-    if (archive_errno(a.get()) != 0 && result.totalEntries == 0) {
+    // Check for read errors (not just EOF).
+    // Report errors even if some entries were read — a mid-archive failure means
+    // the listing is partial. The caller sees both partial entries and an error string.
+    if (archive_errno(a.get()) != 0) {
         result.error = QString::fromUtf8(archive_error_string(a.get()));
-        return result;
     }
 
     // Flatten the tree depth-first into the flat list
     flattenTree(root, 0, result.entries, ArchivePreviewModel::MaxEntries);
-    result.truncated = result.entries.size() < (result.fileCount + result.dirCount);
+    // result.totalEntries is the raw scan count (uncapped); result.entries is capped
+    // at MaxEntries by flattenTree. The two diverge iff more entries exist than the cap.
+    result.truncated = result.entries.size() < result.totalEntries;
 
     return result;
 }
