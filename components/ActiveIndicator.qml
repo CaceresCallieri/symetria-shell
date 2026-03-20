@@ -5,6 +5,7 @@ import qs.config
 import QtQuick
 
 // Unified active workspace indicator supporting both Repeater and ListView modes.
+// Shared by both the top bar workspace pill and the merged agentbar workspace strip.
 // - Repeater mode: Used by numbered/named workspaces (searches by activeWsId)
 //   Item requirements: ws, x, indicatorSize, indicatorOffset
 // - ListView mode: Used by special workspaces (uses currentItem directly)

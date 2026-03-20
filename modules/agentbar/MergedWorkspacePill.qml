@@ -13,7 +13,7 @@ import QtQuick.Layouts
 
 /// Per-workspace slot in the merged bar: workspace label + project names + agent chips + app icons.
 /// No background — the outer MergedBarContent container provides the glass pill,
-/// and MergedActiveIndicator provides the active workspace highlight.
+/// and ActiveIndicator (shared component) provides the active workspace highlight.
 Item {
     id: root
 

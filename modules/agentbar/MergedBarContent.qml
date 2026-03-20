@@ -156,7 +156,7 @@ Item {
             asynchronous: true
             z: -1
 
-            sourceComponent: MergedActiveIndicator {
+            sourceComponent: ActiveIndicator {
                 activeWsId: root.activeWsId
                 workspaces: workspaceRepeater
                 mask: layout
