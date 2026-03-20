@@ -15,28 +15,21 @@ StyledRect {
     anchors.right: parent.right
     implicitHeight: layout.implicitHeight + Appearance.padding.smaller * 2
 
-    radius: Appearance.rounding.normal
-    color: {
+    readonly property color toastBaseColor: {
         if (root.modelData.type === Toast.Success)
-            return Colours.palette.m3successContainer;
+            return Colours.palette.m3success;
         if (root.modelData.type === Toast.Warning)
             return Colours.palette.m3secondary;
         if (root.modelData.type === Toast.Error)
-            return Colours.palette.m3errorContainer;
-        return Colours.palette.m3surface;
+            return Colours.palette.m3error;
+        return Colours.palette.m3surfaceContainerHigh;
     }
+    readonly property var toastStyle: Colours.pillStyle(toastBaseColor, Colours.glass.medium)
 
+    radius: Appearance.rounding.normal
+    color: toastStyle.background
     border.width: 1
-    border.color: {
-        let colour = Colours.palette.m3outlineVariant;
-        if (root.modelData.type === Toast.Success)
-            colour = Colours.palette.m3success;
-        if (root.modelData.type === Toast.Warning)
-            colour = Colours.palette.m3secondaryContainer;
-        if (root.modelData.type === Toast.Error)
-            colour = Colours.palette.m3error;
-        return Qt.alpha(colour, 0.3);
-    }
+    border.color: toastStyle.border
 
     Elevation {
         anchors.fill: parent
@@ -56,16 +49,12 @@ StyledRect {
         spacing: Appearance.spacing.normal
 
         StyledRect {
+            readonly property var iconStyle: Colours.pillStyle(root.toastBaseColor, Colours.glass.strong)
+
             radius: Appearance.rounding.normal
-            color: {
-                if (root.modelData.type === Toast.Success)
-                    return Colours.palette.m3success;
-                if (root.modelData.type === Toast.Warning)
-                    return Colours.palette.m3secondaryContainer;
-                if (root.modelData.type === Toast.Error)
-                    return Colours.palette.m3error;
-                return Colours.palette.m3surfaceContainerHigh;
-            }
+            color: iconStyle.background
+            border.width: 1
+            border.color: iconStyle.border
 
             implicitWidth: implicitHeight
             implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
@@ -75,15 +64,7 @@ StyledRect {
 
                 anchors.centerIn: parent
                 text: root.modelData.icon
-                color: {
-                    if (root.modelData.type === Toast.Success)
-                        return Colours.palette.m3onSuccess;
-                    if (root.modelData.type === Toast.Warning)
-                        return Colours.palette.m3onSecondaryContainer;
-                    if (root.modelData.type === Toast.Error)
-                        return Colours.palette.m3onError;
-                    return Colours.palette.m3onSurfaceVariant;
-                }
+                color: Colours.palette.m3onSurface
                 font.pointSize: Math.round(Appearance.font.size.large * 1.2)
             }
         }
@@ -97,15 +78,7 @@ StyledRect {
 
                 Layout.fillWidth: true
                 text: root.modelData.title
-                color: {
-                    if (root.modelData.type === Toast.Success)
-                        return Colours.palette.m3onSuccessContainer;
-                    if (root.modelData.type === Toast.Warning)
-                        return Colours.palette.m3onSecondary;
-                    if (root.modelData.type === Toast.Error)
-                        return Colours.palette.m3onErrorContainer;
-                    return Colours.palette.m3onSurface;
-                }
+                color: Colours.palette.m3onSurface
                 font.pointSize: Appearance.font.size.normal
                 elide: Text.ElideRight
             }
@@ -114,15 +87,7 @@ StyledRect {
                 Layout.fillWidth: true
                 textFormat: Text.StyledText
                 text: root.modelData.message
-                color: {
-                    if (root.modelData.type === Toast.Success)
-                        return Colours.palette.m3onSuccessContainer;
-                    if (root.modelData.type === Toast.Warning)
-                        return Colours.palette.m3onSecondary;
-                    if (root.modelData.type === Toast.Error)
-                        return Colours.palette.m3onErrorContainer;
-                    return Colours.palette.m3onSurface;
-                }
+                color: Colours.palette.m3onSurfaceVariant
                 opacity: 0.8
                 elide: Text.ElideRight
             }
