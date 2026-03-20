@@ -24,8 +24,6 @@ Item {
 
     // Interaction
     signal clicked()
-    readonly property bool hovered: stateLayer.containsMouse
-    property alias stateLayer: stateLayer
 
     function triggerPress(): void {
         pressAnim.restart();
@@ -35,18 +33,21 @@ Item {
 
     readonly property bool effectiveSelected: selectable && selected
     readonly property bool hasText: root.text !== ""
+    readonly property real pressSqueezeTarget: root.hasText ? 0.90 : 0.85
+    readonly property real selectedAlpha: 0.30
+    readonly property real selectedHoverAlpha: 0.45
 
     // Unselected: standard matte pill (subtle → medium on hover)
     // Selected: pillColor at visible alpha over matte base, so it actually reads as colored
     readonly property var baseStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
-        hovered ? Colours.glass.medium : Colours.glass.subtle
+        stateLayer.containsMouse ? Colours.glass.medium : Colours.glass.subtle
     )
 
     readonly property color selectedBackground: {
         const base = baseStyle.background;
         const accent = pillColor;
-        const alpha = hovered ? 0.45 : 0.30;
+        const alpha = stateLayer.containsMouse ? root.selectedHoverAlpha : root.selectedAlpha;
         // Blend accent over matte base: result = accent * alpha + base * (1 - alpha)
         return Qt.rgba(
             accent.r * alpha + base.r * (1 - alpha),
@@ -60,7 +61,7 @@ Item {
         if (effectiveSelected)
             return {
                 background: selectedBackground,
-                border: Qt.alpha(pillColor, hovered ? 0.35 : 0.25)
+                border: Qt.alpha(pillColor, stateLayer.containsMouse ? 0.35 : 0.25)
             };
         return baseStyle;
     }
@@ -80,7 +81,7 @@ Item {
         NumberAnimation {
             target: root
             property: "scale"
-            to: root.hasText ? 0.90 : 0.85
+            to: root.pressSqueezeTarget
             duration: 80
             easing.type: Easing.OutQuad
         }
@@ -97,7 +98,7 @@ Item {
     // --- Background pill ---
 
     StyledRect {
-        id: background
+        id: backgroundRect
 
         anchors.fill: parent
         radius: Appearance.rounding.full

@@ -348,7 +348,6 @@ Item {
         }
     }
 
-
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + padding
 
@@ -622,6 +621,7 @@ Item {
                                 cancelBtn.triggerPress();
                             break;
                         case "retry":
+                            // Handled by errorComponent's own Connections block
                             break;
                         case "stop":
                             submitBtn.triggerPress();
