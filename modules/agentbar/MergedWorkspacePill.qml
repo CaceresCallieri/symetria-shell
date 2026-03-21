@@ -20,14 +20,14 @@ Item {
     id: root
 
     required property int wsId
-    required property int activeWsId   // Actually visualActiveWsId from MergedBarContent
+    required property int visualActiveWsId
     required property var agents       // Array of agent objects on this workspace
     required property var occupied     // { [wsId]: bool } map
 
     // ActiveIndicator contract — matches Workspace.qml's interface
     readonly property bool isWorkspace: true
     readonly property int ws: wsId
-    readonly property bool isActive: activeWsId === ws
+    readonly property bool isActive: visualActiveWsId === ws
     readonly property int activePadding: Appearance.padding.large
     readonly property int indicatorOffset: isActive ? activePadding : 0
     readonly property int indicatorSize: implicitWidth + (isActive ? activePadding * 2 : 0)

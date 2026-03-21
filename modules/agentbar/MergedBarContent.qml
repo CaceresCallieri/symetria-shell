@@ -39,9 +39,10 @@ Item {
         return ws?.id ?? -1;
     }
 
-    // Unified active ID: prefers the special workspace when one is toggled on,
-    // so the ActiveIndicator and isActive logic work uniformly for both types.
-    readonly property int visualActiveWsId: onSpecial ? activeSpecialWsId : activeWsId
+    // Unified active ID: prefers the special workspace when one is toggled on and its
+    // workspace object already exists in Hyprland's list (guards against the IPC race
+    // where activeSpecialName is set before the workspace appears in workspaces.values).
+    readonly property int visualActiveWsId: onSpecial && activeSpecialWsId !== -1 ? activeSpecialWsId : activeWsId
 
     // Occupied workspace map
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
@@ -67,9 +68,10 @@ Item {
         if (!ids.includes(activeId))
             ids.push(activeId)
 
-        // Append special workspace IDs
+        // Append special workspace IDs (de-dup at end in case any special ws was already included)
         for (const sw of specialWs)
             ids.push(sw.id);
+        ids = [...new Set(ids)];
 
         // Build a name lookup for sort categorization
         const nameById = {};
@@ -104,7 +106,9 @@ Item {
         return _agentGrouping.byWorkspace[wsId] ?? [];
     }
 
-    // Per-monitor workspace filtering (includes special workspaces bound to this monitor)
+    // Per-monitor workspace filtering (includes special workspaces bound to this monitor).
+    // activeWsId and activeSpecialWsId are added as sentinels so the active slot is never
+    // filtered out even if Hyprland hasn't yet reflected monitor assignment.
     readonly property var filteredWorkspaces: {
         if (!Config.bar.workspaces.perMonitorWorkspaces)
             return displayedWorkspaces;
@@ -118,6 +122,8 @@ Item {
                 monWsIds.add(ws.id);
         }
         monWsIds.add(root.activeWsId);
+        if (root.onSpecial && root.activeSpecialWsId !== -1)
+            monWsIds.add(root.activeSpecialWsId);
 
         return displayedWorkspaces.filter(id => monWsIds.has(id));
     }
@@ -167,7 +173,7 @@ Item {
                     Layout.rightMargin: isActive ? activePadding : 0
 
                     wsId: modelData
-                    activeWsId: root.visualActiveWsId
+                    visualActiveWsId: root.visualActiveWsId
                     agents: root.agentsForWorkspace(modelData)
                     occupied: root.occupied
 
