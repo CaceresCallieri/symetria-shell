@@ -169,6 +169,7 @@ Item {
                     required property int modelData
 
                     Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: implicitWidth
                     Layout.leftMargin: isActive ? activePadding : 0
                     Layout.rightMargin: isActive ? activePadding : 0
 
@@ -177,6 +178,7 @@ Item {
                     agents: root.agentsForWorkspace(modelData)
                     occupied: root.occupied
 
+                    Behavior on Layout.preferredWidth { Anim {} }
                     Behavior on Layout.leftMargin { Anim {} }
                     Behavior on Layout.rightMargin { Anim {} }
                 }
