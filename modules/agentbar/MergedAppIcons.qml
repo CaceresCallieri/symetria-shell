@@ -150,10 +150,10 @@ Row {
                     border.width: 1
                     border.color: glassStyle.border
 
-                    Behavior on implicitWidth {
-                        Anim {}
-                    }
-
+                    // No Behavior on implicitWidth here — the outer Layout.preferredWidth
+                    // Behavior in MergedBarContent.qml is the canonical width animator for the
+                    // whole pill. An inner animation on the group container would double-ease
+                    // (same reason Workspace.qml uses animateWindowsWidth: false).
                     Row {
                         id: groupRow
                         anchors.centerIn: parent
