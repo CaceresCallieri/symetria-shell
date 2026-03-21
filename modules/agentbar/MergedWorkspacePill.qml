@@ -12,13 +12,15 @@ import QtQuick
 import QtQuick.Layouts
 
 /// Per-workspace slot in the merged bar: workspace label + project names + agent chips + app icons.
+/// Handles both regular and special workspaces — special workspaces use different icon resolution
+/// (getSpecialWsIcon) and click behavior (togglespecialworkspace instead of workspace switch).
 /// No background — the outer MergedBarContent container provides the glass pill,
 /// and ActiveIndicator (shared component) provides the active workspace highlight.
 Item {
     id: root
 
     required property int wsId
-    required property int activeWsId
+    required property int activeWsId   // Actually visualActiveWsId from MergedBarContent
     required property var agents       // Array of agent objects on this workspace
     required property var occupied     // { [wsId]: bool } map
 
@@ -33,17 +35,13 @@ Item {
     // Workspace state
     readonly property bool isOccupied: occupied[ws] ?? false
 
-    // Icon resolution: named workspace icon -> first letter -> roman numeral
-    // (inline, same chain as Workspace.qml — can't import cross-module)
+    // Special workspace detection
     readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
-    readonly property string rawIcon: {
-        if (root.currentWorkspace) {
-            const customIcon = Icons.getNamedWsIcon(root.currentWorkspace.name);
-            if (customIcon && customIcon !== Icons.materialIconPrefix) return customIcon;
-            if (root.ws < 0 && root.currentWorkspace.name) return root.currentWorkspace.name[0].toUpperCase();
-        }
-        return Icons.romanize(root.ws);
-    }
+    readonly property bool isSpecial: currentWorkspace?.name.startsWith("special:") ?? false
+
+    // Icon resolution: special → getSpecialWsIcon, named → getNamedWsIcon, numbered → romanize
+    // Uses AgentService.workspaceIconForWsId() which already handles all three cases.
+    readonly property string rawIcon: AgentService.workspaceIconForWsId(root.ws)
     readonly property var parsedIcon: Icons.parseIcon(rawIcon)
 
     // Color: active uses onSurface, inactive uses muted variant
@@ -142,9 +140,11 @@ Item {
 
         // App icons (active workspace only).
         // visible must track active so the RowLayout collapses the slot to zero width.
+        // Special workspaces use a separate config flag (showWindowsOnSpecialWorkspaces).
         Loader {
             Layout.alignment: Qt.AlignVCenter
-            active: root.isActive && root.isOccupied && Config.bar.workspaces.showWindows
+            active: root.isActive && root.isOccupied
+                && (root.isSpecial ? Config.bar.workspaces.showWindowsOnSpecialWorkspaces : Config.bar.workspaces.showWindows)
             visible: active
 
             sourceComponent: MergedAppIcons {
@@ -153,14 +153,19 @@ Item {
         }
     }
 
-    // Click handling: workspace label area switches workspace, rest focuses agent terminal
+    // Click handling: workspace label area switches/toggles workspace, rest focuses agent terminal.
+    // Special workspaces use togglespecialworkspace (they overlay, not replace).
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         onClicked: event => {
             const labelEnd = wsLabel.mapToItem(root, wsLabel.width, 0).x;
             if (event.x < labelEnd) {
-                if (!root.isActive) {
+                if (root.isSpecial) {
+                    // Special workspaces toggle on/off as overlays
+                    const name = root.currentWorkspace.name.slice("special:".length);
+                    Hypr.dispatch(`togglespecialworkspace ${name}`);
+                } else if (!root.isActive) {
                     if (root.ws < 0) {
                         const wsObj = Hypr.workspaces.values.find(w => w.id === root.ws);
                         if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);

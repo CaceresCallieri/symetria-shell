@@ -11,18 +11,37 @@ import QtQuick.Layouts
 /// Merged workspace + agent bar content. Replaces AgentBarContent when merge mode is active.
 /// Single glass pill container (like the top bar workspace pill) with an ActiveIndicator
 /// highlighting the current workspace. Each workspace slot shows label + agent chips + app icons.
+/// Special workspaces appear at the end of the pill and the ActiveIndicator slides to them
+/// when toggled on (they overlay the regular workspace, so visualActiveWsId tracks both).
 Item {
     id: root
 
     required property ShellScreen screen
+
+    readonly property HyprlandMonitor monitor: Hypr.monitorFor(screen)
 
     implicitHeight: Config.bar.sizes.innerWidth
     implicitWidth: pill.implicitWidth
 
     // Per-monitor or global active workspace ID (same logic as Workspaces.qml)
     readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces
-        ? (Hypr.monitorFor(screen)?.activeWorkspace?.id ?? 1)
+        ? (monitor?.activeWorkspace?.id ?? 1)
         : Hypr.activeWsId
+
+    // Special workspace overlay state — a special workspace can be active simultaneously
+    // with a regular workspace (it overlays). We track the active special workspace ID
+    // so the ActiveIndicator can slide to it when toggled on.
+    readonly property string activeSpecialName: (Config.bar.workspaces.perMonitorWorkspaces ? monitor : Hypr.focusedMonitor)?.lastIpcObject.specialWorkspace.name ?? ""
+    readonly property bool onSpecial: activeSpecialName !== ""
+    readonly property int activeSpecialWsId: {
+        if (!onSpecial) return -1;
+        const ws = Hypr.workspaces.values.find(w => w.name === activeSpecialName);
+        return ws?.id ?? -1;
+    }
+
+    // Unified active ID: prefers the special workspace when one is toggled on,
+    // so the ActiveIndicator and isActive logic work uniformly for both types.
+    readonly property int visualActiveWsId: onSpecial ? activeSpecialWsId : activeWsId
 
     // Occupied workspace map
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
@@ -30,21 +49,46 @@ Item {
         return acc;
     }, {})
 
-    // Dynamic workspace list (always dynamic mode — occupied + active + named, excluding special)
+    // Dynamic workspace list: occupied + active + named + special workspaces.
+    // Sort order: named (negative, non-special) → regular (positive) → special (at end).
     readonly property var displayedWorkspaces: {
-        const validWorkspaces = Hypr.workspaces.values.filter(w => !w.name.startsWith("special:"))
-        const occupiedWs = validWorkspaces.filter(w => w.lastIpcObject.windows > 0)
+        const allWorkspaces = Hypr.workspaces.values
+        const regularAndNamed = allWorkspaces.filter(w => !w.name.startsWith("special:"))
+        const specialWs = allWorkspaces.filter(w => w.name.startsWith("special:"))
+
+        const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0)
         const activeId = root.activeWsId
 
         const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)
-        const namedWs = validWorkspaces.filter(w => namedWsNames.includes(w.name))
+        const namedWs = regularAndNamed.filter(w => namedWsNames.includes(w.name))
 
         let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])]
 
         if (!ids.includes(activeId))
             ids.push(activeId)
 
-        return ids.sort((a, b) => a - b)
+        // Append special workspace IDs
+        for (const sw of specialWs)
+            ids.push(sw.id);
+
+        // Build a name lookup for sort categorization
+        const nameById = {};
+        for (const w of allWorkspaces)
+            nameById[w.id] = w.name;
+
+        // Sort: named (category 0) → regular (category 1) → special (category 2)
+        return ids.sort((a, b) => {
+            const catA = _wsSortCategory(a, nameById[a] ?? "");
+            const catB = _wsSortCategory(b, nameById[b] ?? "");
+            if (catA !== catB) return catA - catB;
+            return a - b;
+        });
+    }
+
+    function _wsSortCategory(wsId: int, wsName: string): int {
+        if (wsName.startsWith("special:")) return 2;
+        if (wsId < 0) return 0;
+        return 1;
     }
 
     // Grouped agents by workspace. Args are unused in the body — they exist solely
@@ -60,12 +104,12 @@ Item {
         return _agentGrouping.byWorkspace[wsId] ?? [];
     }
 
-    // Per-monitor workspace filtering
+    // Per-monitor workspace filtering (includes special workspaces bound to this monitor)
     readonly property var filteredWorkspaces: {
         if (!Config.bar.workspaces.perMonitorWorkspaces)
             return displayedWorkspaces;
 
-        const mon = Hypr.monitorFor(root.screen);
+        const mon = root.monitor;
         if (!mon) return displayedWorkspaces;
 
         const monWsIds = new Set();
@@ -123,7 +167,7 @@ Item {
                     Layout.rightMargin: isActive ? activePadding : 0
 
                     wsId: modelData
-                    activeWsId: root.activeWsId
+                    activeWsId: root.visualActiveWsId
                     agents: root.agentsForWorkspace(modelData)
                     occupied: root.occupied
 
@@ -157,7 +201,7 @@ Item {
             z: -1
 
             sourceComponent: ActiveIndicator {
-                activeWsId: root.activeWsId
+                activeWsId: root.visualActiveWsId
                 workspaces: workspaceRepeater
                 mask: layout
             }
