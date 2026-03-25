@@ -7,7 +7,7 @@ import qs.components.effects
 import qs.components.images
 import qs.services
 import qs.config
-import Symmetria.Models
+import YaziFM.Models
 import QtQuick
 
 GridView {
