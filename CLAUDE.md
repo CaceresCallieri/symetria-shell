@@ -31,11 +31,11 @@ sudo chown -R $USER:$USER ~/.config/quickshell/symmetria
 rm -rf ~/.cache/quickshell/qmlcache
 ```
 
-**External plugin dependency: `YaziFM.Models`** — The file dialog, wallpaper grid, and appearance pane import `YaziFM.Models` (FileSystemModel) from the yazi-frontend project. This plugin must be built and installed separately:
+**External plugin dependency: `Symmetria.FileManager.Models`** — The file dialog, wallpaper grid, and appearance pane import `Symmetria.FileManager.Models` (FileSystemModel) from the Symmetria File Manager project. This plugin must be built and installed separately:
 ```bash
-cd ~/projects/yazi-frontend && ./build-plugin.sh
+cd ~/projects/symmetria-file-manager && ./build-plugin.sh
 ```
-If missing, Symmetria will fail to load components that browse the filesystem. See yazi-frontend's CLAUDE.md for build details.
+If missing, Symmetria will fail to load components that browse the filesystem. See symmetria-file-manager's CLAUDE.md for build details.
 
 ## Branch Structure
 
@@ -61,7 +61,7 @@ git fetch upstream           # Update base (tracks upstream/main)
 | `components/` | Reusable QML components (controls, effects, containers) |
 | `services/` | Singleton services (Audio, Brightness, Network, Colours, etc.) |
 | `config/` | Configuration system — reads `~/.config/symmetria/shell.json` |
-| `plugin/` | C++ native plugins (Symmetria, Symmetria.Internal, Symmetria.Services) — note: Models moved to yazi-frontend |
+| `plugin/` | C++ native plugins (Symmetria, Symmetria.Internal, Symmetria.Services) — note: Models moved to Symmetria File Manager |
 | `utils/` | Utility functions and scripts |
 | `assets/` | Static assets (images, shaders, PAM configs) |
 

@@ -6,7 +6,7 @@ import "../images"
 import qs.services
 import qs.config
 import qs.utils
-import YaziFM.Models
+import Symmetria.FileManager.Models
 import Quickshell
 import QtQuick
 import QtQuick.Layouts

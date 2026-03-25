@@ -2,7 +2,7 @@ pragma Singleton
 
 import qs.config
 import qs.utils
-import YaziFM.Models
+import Symmetria.FileManager.Models
 import Quickshell
 import Quickshell.Io
 import QtQuick
