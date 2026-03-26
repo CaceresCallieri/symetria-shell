@@ -98,7 +98,7 @@ Row {
 
             root.cachedModel = combined;
         } catch (e) {
-            console.error("WorkspaceAppIcons: Failed to update clients:", e);
+            console.error("ClientAppIcons: Failed to update clients:", e);
             root.cachedModel = [];
         }
     }
@@ -151,7 +151,7 @@ Row {
             Component {
                 id: singleIcon
 
-                WorkspaceAppIcon {
+                ClientAppIcon {
                     client: modelData.clients[0]
                 }
             }
@@ -193,7 +193,7 @@ Row {
                         Repeater {
                             model: modelData.clients
 
-                            WorkspaceAppIcon {
+                            ClientAppIcon {
                                 required property var modelData
                                 client: modelData
                                 animateEntry: false

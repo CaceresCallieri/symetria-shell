@@ -11,7 +11,7 @@ import Quickshell.Widgets
 import QtQuick
 
 /// App icons for the merged bar's active workspace pill.
-/// Reimplements WorkspaceAppIcons filtering/grouping inline (can't cross-module import).
+/// Uses shared ClientAppIcon from qs.components.
 Row {
     id: root
 
@@ -85,7 +85,7 @@ Row {
 
             root.cachedModel = combined;
         } catch (e) {
-            console.error("MergedAppIcons: Failed to update clients:", e);
+            console.error("ClientAppIcons: Failed to update clients:", e);
             root.cachedModel = [];
         }
     }
@@ -128,7 +128,7 @@ Row {
             Component {
                 id: singleIcon
 
-                MergedAppIcon {
+                ClientAppIcon {
                     client: modelData.clients[0]
                 }
             }
@@ -162,7 +162,7 @@ Row {
                         Repeater {
                             model: modelData.clients
 
-                            MergedAppIcon {
+                            ClientAppIcon {
                                 required property var modelData
                                 client: modelData
                                 animateEntry: false

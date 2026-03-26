@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
 import qs.components.controls
 import qs.services
 import qs.utils
@@ -9,8 +8,8 @@ import Quickshell
 import Quickshell.Widgets
 import QtQuick
 
-// Individual app icon for workspace display
-// Shows actual app icon with click-to-focus and tooltip
+/// Shared app icon for Hyprland clients — used by both workspace bar and agentbar.
+/// Shows the actual app icon (or Material category fallback) with click-to-focus and tooltip.
 Item {
     id: root
 
@@ -57,14 +56,7 @@ Item {
             Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : ""
         )
 
-        // Visual indicator for active window
-        opacity: root.isActive ? 1.0 : 0.7
-
-        Behavior on opacity {
-            Anim {
-                duration: Appearance.anim.durations.small
-            }
-        }
+        opacity: 1.0
     }
 
     // Fallback: Material category icon (when useActualAppIcons is false)
@@ -77,7 +69,18 @@ Item {
         text: Icons.getAppCategoryIcon(root.client?.lastIpcObject?.class ?? "", "terminal")
         color: Colours.palette.m3onSurfaceVariant
 
-        opacity: root.isActive ? 1.0 : 0.7
+        opacity: 1.0
+    }
+
+    // Active indicator dot at the bottom of the icon
+    Rectangle {
+        width: 4
+        height: 4
+        radius: 2
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        color: Colours.palette.m3primary
+        opacity: root.isActive ? 1.0 : 0.0
 
         Behavior on opacity {
             Anim {
