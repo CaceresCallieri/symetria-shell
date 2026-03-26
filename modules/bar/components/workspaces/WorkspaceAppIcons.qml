@@ -98,7 +98,7 @@ Row {
 
             root.cachedModel = combined;
         } catch (e) {
-            console.error("ClientAppIcons: Failed to update clients:", e);
+            console.error("WorkspaceAppIcons: Failed to update clients:", e);
             root.cachedModel = [];
         }
     }

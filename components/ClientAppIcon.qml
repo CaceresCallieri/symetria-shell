@@ -55,8 +55,6 @@ Item {
             root.client?.lastIpcObject?.class ?? "",
             Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : ""
         )
-
-        opacity: 1.0
     }
 
     // Fallback: Material category icon (when useActualAppIcons is false)
@@ -68,8 +66,6 @@ Item {
         grade: 0
         text: Icons.getAppCategoryIcon(root.client?.lastIpcObject?.class ?? "", "terminal")
         color: Colours.palette.m3onSurfaceVariant
-
-        opacity: 1.0
     }
 
     // Active indicator dot at the bottom of the icon
