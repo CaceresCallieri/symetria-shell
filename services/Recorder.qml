@@ -8,19 +8,25 @@ import Symmetria
 Singleton {
     id: root
 
-    // Verification timing constants
+    // Timing constants
     readonly property int shutdownVerifyDelay: 500  // pkill is fast, check quickly
     readonly property int maxStopRetries: 5
+    readonly property int regionPollInterval: 1000    // Check every 1 second
+    readonly property int regionPollTimeout: 60000    // Give up after 60 seconds
+    readonly property int fullscreenVerifyDelay: 1500 // Single check after 1.5s for fullscreen
 
     readonly property alias running: props.running
     readonly property alias paused: props.paused
     readonly property alias elapsed: props.elapsed
 
-    // Max time to wait for gpu-screen-recorder to appear during region selection.
-    // User interaction with slurp can take a while, so we poll repeatedly.
-    readonly property int regionPollInterval: 1000    // Check every 1 second
-    readonly property int regionPollTimeout: 60000    // Give up after 60 seconds
-    readonly property int fullscreenVerifyDelay: 1500 // Single check after 1.5s for fullscreen
+    // Internal start-flow state
+    property bool startPending: false
+    property bool _regionMode: false
+    property int _regionPollElapsed: 0
+
+    // Internal stop-flow state
+    property bool stopPending: false
+    property int stopRetryCount: 0
 
     function start(extraArgs: list<string>): void {
         // Only start if not already running
@@ -40,8 +46,8 @@ Singleton {
         const args = Array.from(extraArgs).filter(s => s.length > 0);
         const cmd = baseCmd.concat(args);
 
-        // Detect region mode: args contain "-r" or "-sr" (combined short flags)
-        const isRegion = args.some(a => a === "-r" || a.includes("r"));
+        // Detect region mode: only "-r" and "-sr" are region flags
+        const isRegion = args.some(a => a === "-r" || a === "-sr");
 
         console.log("[Recorder] start —", isRegion ? "REGION" : "FULLSCREEN", "— execDetached:", JSON.stringify(cmd));
         Quickshell.execDetached(cmd);
@@ -58,13 +64,6 @@ Singleton {
             verifyTimer.start();
         }
     }
-
-    property bool startPending: false
-    property bool _regionMode: false
-    property int _regionPollElapsed: 0
-
-    property bool stopPending: false
-    property int stopRetryCount: 0
 
     function stop(): void {
         if (!props.running) {
@@ -143,9 +142,11 @@ Singleton {
         interval: root.regionPollInterval
         repeat: true
         onTriggered: {
-            root._regionPollElapsed += interval;
+            root._regionPollElapsed += root.regionPollInterval;
             console.log("[Recorder] regionPoll tick —", root._regionPollElapsed, "ms elapsed");
-            verifyProc.running = true;
+            // Skip this tick if the previous pidof check is still running
+            if (!verifyProc.running)
+                verifyProc.running = true;
         }
     }
 
@@ -169,8 +170,9 @@ Singleton {
                     regionPollTimer.stop();
                     root.startPending = false;
                     console.log("[Recorder] region poll TIMEOUT");
+                    Toaster.toast(qsTr("Recording failed"), qsTr("Region recording timed out"), "error", Toast.Error);
                     props.running = false;
-                } else {
+                } else if (!slurpCheckProc.running) {
                     console.log("[Recorder] regionPoll — recorder not found, checking slurp...");
                     slurpCheckProc.running = true;
                 }
