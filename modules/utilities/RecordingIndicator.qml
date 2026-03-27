@@ -16,6 +16,11 @@ Item {
     implicitWidth: circleSize
     implicitHeight: circleSize
 
+    onActiveChanged: {
+        if (!active)
+            dot.opacity = 1;
+    }
+
     Behavior on opacity {
         Anim {}
     }
@@ -80,7 +85,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         visible: root.active
-        enabled: root.active
+        enabled: root.active && !Recorder.stopPending
         cursorShape: Qt.PointingHandCursor
         onClicked: Recorder.stop()
     }

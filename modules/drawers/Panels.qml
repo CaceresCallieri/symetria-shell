@@ -205,7 +205,7 @@ Item {
 
         anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
         anchors.right: sidebar.left
-        anchors.margins: Appearance.padding.normal
+        anchors.rightMargin: Appearance.padding.normal
         anchors.bottomMargin: Appearance.padding.normal + (recordingIndicator.active ? recordingIndicator.implicitHeight + Appearance.spacing.small : 0)
 
         Behavior on anchors.bottomMargin {
