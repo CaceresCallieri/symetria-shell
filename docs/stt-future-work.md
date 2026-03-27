@@ -122,7 +122,7 @@ Strategies:
 
 Backend interface:
 ```
-input:  audio file path, language code
+input:  audio file path (language auto-detected by gpt-4o-transcribe — `lang` param was removed)
 output: transcribed text (string) or error
 ```
 

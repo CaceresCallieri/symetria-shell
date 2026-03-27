@@ -369,7 +369,7 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
 
-            // Language badge + elapsed timer on a single line above audio bars
+            // Elapsed timer above audio bars
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 show: root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing"

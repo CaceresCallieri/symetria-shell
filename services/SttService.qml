@@ -214,14 +214,14 @@ Singleton {
     }
 
     /// Restart: cancel active recording + start a new one.
+    /// No-op if there is no active recording.
     function restart(): void {
-        actionTriggered(_activeRecording?.sessionId ?? "", "restart");
+        if (!_activeRecording) return;
+        actionTriggered(_activeRecording.sessionId, "restart");
         restartDelayTimer.stop();
-        if (_activeRecording) {
-            const job = _activeRecording;
-            _activeRecording = null;
-            job.cancel();
-        }
+        const job = _activeRecording;
+        _activeRecording = null;
+        job.cancel();
         restartDelayTimer.start();
     }
 

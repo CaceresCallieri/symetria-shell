@@ -1,6 +1,7 @@
 # PRD: Symmetria Native Speech-to-Text System
 
-> **Status:** Draft
+> **Status:** Draft — superseded by implementation
+> **Note:** API signatures in sections 3-5 are outdated. Language selection was removed (auto-detect via gpt-4o-transcribe). The `start()`/`toggle()` functions no longer accept a `lang` parameter, and `stt-transcribe.sh` no longer takes a language argument. Read the source files for current signatures.
 > **Author:** Discussion between user and Claude Code
 > **Date:** 2026-02-20
 > **Related:** [RFC Discussion #24](https://github.com/CaceresCallieri/symetria-shell/discussions/24), `docs/hyprwhspr-integration.md`
