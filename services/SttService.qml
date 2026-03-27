@@ -57,9 +57,6 @@ Singleton {
     property real _lastToggleTime: 0
     readonly property int _toggleDebounceMs: 200
 
-    // Restart state
-    property string _pendingRestartLang: ""
-
     // Runtime delivery choice for "ask" mode.
     // Persists across recordings within the same shell session.
     property string _lastDeliveryChoice: "clipboard"
@@ -102,20 +99,20 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Toggle: start if idle, submit if recording, retry if most recent is error.
-    function toggle(lang: string): void {
+    function toggle(): void {
         const now = Date.now();
         if (now - _lastToggleTime < _toggleDebounceMs) {
             console.log("[STT:D19] toggle() DEBOUNCED | elapsed:", now - _lastToggleTime, "ms");
             return;
         }
-        Logger.log("qml", "stt", "toggle | activeRecording=" + (_activeRecording !== null) + " jobs=" + _jobs.length + " lang=" + lang);
+        Logger.log("qml", "stt", "toggle | activeRecording=" + (_activeRecording !== null) + " jobs=" + _jobs.length);
 
         if (_activeRecording) {
             _lastToggleTime = now;
             stop();
         } else if (_jobs.length === 0) {
             _lastToggleTime = now;
-            start(lang);
+            start();
         } else {
             // Jobs exist but none recording — check for errors
             const errorJob = _mostRecentErrorJob();
@@ -125,13 +122,13 @@ Singleton {
                 actionTriggered(errorJob.sessionId, "retry");
             } else if (_jobs.length < _maxJobs) {
                 _lastToggleTime = now;
-                start(lang);
+                start();
             }
         }
     }
 
-    /// Start a new recording job with optional language code.
-    function start(lang: string): void {
+    /// Start a new recording job.
+    function start(): void {
         if (_activeRecording) {
             console.warn("[STT] start() called while already recording — ignoring");
             return;
@@ -145,20 +142,19 @@ Singleton {
             );
             return;
         }
-        Logger.log("qml", "stt", "start | lang=" + lang + " delivery=" + _deliveryMode + " jobs=" + _jobs.length);
+        Logger.log("qml", "stt", "start | delivery=" + _deliveryMode + " jobs=" + _jobs.length);
 
         // Check API key before starting
         if (_resolvedApiKey === "") {
             // Create a temporary job just to show the error in a card
-            const errorJob = _createJob("");
+            const errorJob = _createJob();
             errorJob._setErrorState("config", "API key not configured",
                 "Set OPENAI_API_KEY env var or stt.apiKey in shell.json");
             _jobs = [errorJob, ..._jobs];
             return;
         }
 
-        const safeLang = _sanitizeLanguage(lang);
-        const job = _createJob(safeLang || "");
+        const job = _createJob();
 
         // Capture target window and resolve agent data synchronously.
         job._captureTargetWindow();
@@ -217,17 +213,15 @@ Singleton {
         }
     }
 
-    /// Restart: cancel active recording + start new one with same language.
+    /// Restart: cancel active recording + start a new one.
     function restart(): void {
         actionTriggered(_activeRecording?.sessionId ?? "", "restart");
-        const savedLang = _activeRecording?._currentLanguage || _pendingRestartLang || "";
         restartDelayTimer.stop();
         if (_activeRecording) {
             const job = _activeRecording;
             _activeRecording = null;
             job.cancel();
         }
-        _pendingRestartLang = savedLang;
         restartDelayTimer.start();
     }
 
@@ -258,16 +252,6 @@ Singleton {
     // Internal helpers (service-level)
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _sanitizeLanguage(lang: string): string {
-        if (!lang) return "";
-        const sanitized = lang.replace(/[^a-zA-Z-]/g, "");
-        if (sanitized.length < 2 || sanitized.length > 5) {
-            console.warn("[STT] Invalid language code:", lang);
-            return "";
-        }
-        return sanitized;
-    }
-
     function _mostRecentErrorJob(): SttJob {
         for (const job of _jobs) {
             if (job._state === "error" && job.errorSource !== "config") return job;
@@ -281,10 +265,9 @@ Singleton {
 
     Component { id: jobComponent; SttJob {} }
 
-    function _createJob(lang: string): SttJob {
+    function _createJob(): SttJob {
         const job = jobComponent.createObject(root, {
             sessionId: Date.now().toString(),
-            _currentLanguage: lang,
             _activeDeliveryChoice: _lastDeliveryChoice
         });
 
@@ -354,13 +337,7 @@ Singleton {
     Timer {
         id: restartDelayTimer
         interval: 500
-        onTriggered: {
-            if (root._pendingRestartLang !== "") {
-                const lang = root._pendingRestartLang;
-                root._pendingRestartLang = "";
-                root.start(lang);
-            }
-        }
+        onTriggered: root.start()
     }
 
     // Ensure temp directory exists before first recording
@@ -410,9 +387,6 @@ Singleton {
         /// Whether currently recording
         readonly property bool recording: _state === "recording"
 
-        /// Current language code
-        readonly property string language: _currentLanguage
-
         /// Elapsed recording time in seconds
         readonly property real elapsedSeconds: _currentElapsed
 
@@ -455,7 +429,6 @@ Singleton {
 
         property string _state: "idle"
         property real _audioLevel: 0.0
-        property string _currentLanguage: ""
         property string _transcribedText: ""
 
         // Error detail properties
@@ -754,12 +727,11 @@ Singleton {
         function _startTranscription(audioFile: string): void {
             processingTimeoutTimer.start();
             const model = Config.stt?.model ?? "gpt-4o-transcribe";
-            const lang = _currentLanguage || "en";
             Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile);
 
             transcribeProcess.environment = ({ STT_API_KEY: root._resolvedApiKey });
             transcribeProcess.command = [
-                root._transcribeScript, audioFile, lang, model
+                root._transcribeScript, audioFile, model
             ];
             transcribeProcess.running = true;
         }

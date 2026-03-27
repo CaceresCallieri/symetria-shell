@@ -39,7 +39,6 @@ Item {
     }
     readonly property real serviceAudioLevel: job.audioLevel
     readonly property real serviceElapsedSeconds: job.elapsedSeconds
-    readonly property string serviceLanguage: job.language
     readonly property string serviceErrorDetail: job.errorDetail
     readonly property string serviceErrorHint: job.errorHint
     readonly property string serviceErrorRaw: job.errorRaw
@@ -226,16 +225,6 @@ Item {
     // state is set), but serves as a safe fallback for unknown states.
     readonly property var stateConfig: stateMap[root.serviceState] ?? stateMap["idle"]
 
-    // Language badge: maps ISO 639-1 codes to uppercase display labels
-    readonly property var languageDisplayNames: ({
-        "en": "EN", "es": "ES", "fr": "FR", "de": "DE",
-        "pt": "PT", "it": "IT", "ja": "JA", "zh": "ZH"
-    })
-    readonly property string languageLabel: {
-        if (root.serviceLanguage === "") return "";
-        return languageDisplayNames[root.serviceLanguage] ?? root.serviceLanguage.toUpperCase();
-    }
-
     // Success state: checkmark icon + delivery method subtitle
     Component {
         id: successComponent
@@ -385,31 +374,12 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 show: root.serviceState === "recording" || root.serviceState === "paused" || root.serviceState === "processing"
 
-                Row {
-                    spacing: Appearance.spacing.smaller
+                StyledText {
                     opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
-
-                    StyledText {
-                        visible: root.languageLabel !== ""
-                        text: root.languageLabel
-                        font.pointSize: Appearance.font.size.small
-                        font.family: Appearance.font.family.mono
-                        color: Colours.palette.m3outline
-                    }
-
-                    StyledText {
-                        visible: root.languageLabel !== ""
-                        text: "·"
-                        font.pointSize: Appearance.font.size.small
-                        color: Colours.palette.m3outline
-                    }
-
-                    StyledText {
-                        text: root.formatElapsedTime(root.serviceElapsedSeconds)
-                        font.pointSize: Appearance.font.size.small
-                        font.family: Appearance.font.family.mono
-                        color: Colours.palette.m3outline
-                    }
+                    text: root.formatElapsedTime(root.serviceElapsedSeconds)
+                    font.pointSize: Appearance.font.size.small
+                    font.family: Appearance.font.family.mono
+                    color: Colours.palette.m3outline
                 }
             }
 

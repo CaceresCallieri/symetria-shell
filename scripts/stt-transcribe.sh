@@ -2,7 +2,7 @@
 # Transcription helper for Symmetria STT
 # Sends audio to OpenAI's transcription API and outputs result text.
 #
-# Usage: STT_API_KEY=<key> stt-transcribe.sh <audio_file> <language> <model>
+# Usage: STT_API_KEY=<key> stt-transcribe.sh <audio_file> <model>
 # stdout: transcribed text (on success)
 # stderr: ERROR:<http_code>:<message> (on failure)
 # Exit:   0=success, 1=API error, 2=network error, 3=missing args
@@ -10,8 +10,7 @@
 set -e
 
 AUDIO_FILE="$1"
-LANGUAGE="$2"
-MODEL="$3"
+MODEL="$2"
 API_KEY="${STT_API_KEY:-}"
 
 # Unified debug log (shared timeline with QML/Lua/C++)
@@ -19,7 +18,7 @@ LOGFILE="${XDG_STATE_HOME:-$HOME/.local/state}/symmetria/debug.log"
 mkdir -p "$(dirname "$LOGFILE")" 2>/dev/null
 stt_log() { printf '%s [bash:%s] %s\n' "$(date +%H:%M:%S.%3N)" "$1" "$2" >> "$LOGFILE" 2>/dev/null; }
 
-if [ -z "$AUDIO_FILE" ] || [ -z "$LANGUAGE" ] || [ -z "$MODEL" ] || [ -z "$API_KEY" ]; then
+if [ -z "$AUDIO_FILE" ] || [ -z "$MODEL" ] || [ -z "$API_KEY" ]; then
     echo "ERROR:0:Missing required arguments (or STT_API_KEY not set)" >&2
     exit 3
 fi
@@ -29,7 +28,7 @@ if [ ! -f "$AUDIO_FILE" ]; then
     exit 3
 fi
 
-stt_log "transcribe" "started | file=$AUDIO_FILE lang=$LANGUAGE model=$MODEL"
+stt_log "transcribe" "started | file=$AUDIO_FILE model=$MODEL"
 
 # Temp file for response body
 RESP_BODY=$(mktemp)
@@ -38,6 +37,8 @@ trap 'rm -f "$RESP_BODY"' EXIT
 # Verbatim prompt prevents the LLM-based models (gpt-4o-transcribe) from
 # summarizing or paraphrasing speech instead of transcribing it literally.
 VERBATIM_PROMPT="Transcribe the following audio verbatim. Do NOT omit, summarize, paraphrase, or clean up anything. Include all words, filler words, repetitions, and false starts exactly as spoken. Output the complete, literal, word-for-word transcript.
+
+The speaker primarily speaks English and Spanish.
 
 When the transcription is long or covers multiple topics, organize it into paragraphs separated by blank lines. Break paragraphs at natural topic shifts or idea transitions. Do NOT add headings, bullet points, or any formatting other than paragraph breaks. Short, single-topic transcriptions should remain as a single paragraph."
 
@@ -49,7 +50,6 @@ HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     -F "file=@$AUDIO_FILE" \
     -F "model=$MODEL" \
     -F "response_format=text" \
-    -F "language=$LANGUAGE" \
     -F "prompt=$VERBATIM_PROMPT" \
     -F "temperature=0" \
     2>/dev/null) || {

@@ -33,11 +33,11 @@ Scope {
     IpcHandler {
         target: "stt"
 
-        function toggle(lang: string): void {
-            SttService.toggle(lang);
+        function toggle(): void {
+            SttService.toggle();
         }
-        function start(lang: string): void {
-            SttService.start(lang);
+        function start(): void {
+            SttService.start();
         }
         function stop(): void {
             SttService.stop();
