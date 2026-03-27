@@ -192,12 +192,25 @@ Item {
         anchors.right: parent.right
     }
 
+    Utilities.RecordingIndicator {
+        id: recordingIndicator
+
+        anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
+        anchors.right: sidebar.left
+        anchors.margins: Appearance.padding.normal
+    }
+
     Toasts.Toasts {
         id: toasts
 
         anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
         anchors.right: sidebar.left
         anchors.margins: Appearance.padding.normal
+        anchors.bottomMargin: Appearance.padding.normal + (recordingIndicator.active ? recordingIndicator.implicitHeight + Appearance.spacing.small : 0)
+
+        Behavior on anchors.bottomMargin {
+            Anim {}
+        }
     }
 
     Sidebar.Wrapper {
