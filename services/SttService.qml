@@ -19,6 +19,7 @@ import QtQuick
 ///   recording ⇄ paused → processing → transcribed → delivering → success → [removed]
 ///                            ↓             ↓
 ///                          error ──retry──→ processing
+///                                ╰─auto-retry─╯ (silent, ≤_maxAutoRetries times)
 Singleton {
     id: root
 
@@ -440,6 +441,7 @@ Singleton {
         // Auto-retry for transient errors (network, 5xx, timeout)
         property int _autoRetryCount: 0
         readonly property int _maxAutoRetries: 2
+        readonly property int _autoRetryDelayMs: 2000  // backoff before retrying transient failures
 
         // Elapsed time tracking
         property real _currentElapsed: 0
@@ -461,6 +463,9 @@ Singleton {
 
         // Pending action for recordProcess.onExited callback
         property string _pendingRecordAction: ""
+        // Set to true when processingTimeoutTimer kills transcribeProcess,
+        // so transcribeProcess.onExited can skip duplicate error handling.
+        property bool _pendingTimeoutKill: false
 
         // Runtime delivery choice for "ask" mode (inherited from service, locked on submit)
         property string _activeDeliveryChoice: "clipboard"
@@ -762,7 +767,7 @@ Singleton {
 
         /// Spawn the transcription helper script.
         function _startTranscription(audioFile: string): void {
-            processingTimeoutTimer.start();
+            processingTimeoutTimer.restart();
             const model = Config.stt?.model ?? "gpt-4o-transcribe";
             Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile);
 
@@ -889,7 +894,10 @@ Singleton {
             interval: Config.stt?.processingTimeout ?? 120000
             onTriggered: {
                 Logger.log("qml", "stt", "timeout | id=" + job.sessionId);
-                if (job.transcribeProcess.running) job.transcribeProcess.signal(9);
+                if (job.transcribeProcess.running) {
+                    job._pendingTimeoutKill = true;
+                    job.transcribeProcess.signal(9);
+                }
                 job._setErrorState("timeout", "Processing timed out", "Check your network connection");
                 job._tryAutoRetry();
             }
@@ -897,7 +905,7 @@ Singleton {
 
         // Delay before automatic retry (gives transient issues time to clear)
         readonly property Timer autoRetryTimer: Timer {
-            interval: 2000
+            interval: job._autoRetryDelayMs
             onTriggered: {
                 Logger.log("qml", "stt", "auto-retry-fire | id=" + job.sessionId);
                 job._startTranscription(job._currentAudioFile);
@@ -1006,6 +1014,11 @@ Singleton {
             }
             onExited: (code, status) => {
                 job.processingTimeoutTimer.stop();
+                if (job._pendingTimeoutKill) {
+                    job._pendingTimeoutKill = false;
+                    console.log("[STT:D10] transcribeProcess.onExited — killed by timeout handler, ignoring");
+                    return;
+                }
                 if (job._state !== "processing") {
                     console.log("[STT:D10] transcribeProcess.onExited — state is", job._state, ", ignoring");
                     return;
@@ -1019,13 +1032,11 @@ Singleton {
                     job.readyForDelivery();
                 } else {
                     Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail);
-                    if (job._errorDetail === "")
-                        job._setErrorState("api", "Transcription failed", "Check logs for details");
-                    else {
-                        job._errorSource = "api";
-                        job._state = "error";
+                    if (job._errorDetail === "") {
+                        job._errorDetail = "Transcription failed";
+                        job._errorHint = "Check logs for details";
                     }
-                    // Auto-retry transient errors (network, 5xx, timeout)
+                    job._setErrorState("api", job._errorDetail, job._errorHint);
                     job._tryAutoRetry();
                 }
             }
