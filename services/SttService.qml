@@ -437,6 +437,10 @@ Singleton {
         property string _errorSource: ""
         property string _errorRaw: ""
 
+        // Auto-retry for transient errors (network, 5xx, timeout)
+        property int _autoRetryCount: 0
+        readonly property int _maxAutoRetries: 2
+
         // Elapsed time tracking
         property real _currentElapsed: 0
         property real _recordingStartTime: 0
@@ -560,6 +564,8 @@ Singleton {
                 return;
             }
 
+            autoRetryTimer.stop();
+            _autoRetryCount = 0;  // manual retry resets the auto-retry budget
             _clearErrorState();
             _transcribedText = "";
             _state = "processing";
@@ -669,6 +675,37 @@ Singleton {
             _errorHint = "Check logs for details";
         }
 
+        /// Whether the current error is transient and safe to auto-retry.
+        function _isTransientError(): bool {
+            if (_errorSource === "timeout") return true;
+            if (_errorSource !== "api") return false;
+            // Network failures, server errors, and generic failures are transient.
+            // Auth (401) and quota (429) are permanent — user must fix config/plan.
+            return _errorDetail !== "Authentication failed"
+                && _errorDetail !== "Quota exceeded"
+                && _errorDetail !== "Configuration error";
+        }
+
+        /// Attempt auto-retry if the error is transient and retries remain.
+        /// Returns true if an auto-retry was scheduled, false otherwise.
+        function _tryAutoRetry(): bool {
+            if (_autoRetryCount >= _maxAutoRetries) return false;
+            if (!_isTransientError()) return false;
+            if (_currentAudioFile === "") return false;
+
+            _autoRetryCount++;
+            Logger.log("qml", "stt", "auto-retry | id=" + sessionId
+                + " attempt=" + _autoRetryCount + "/" + _maxAutoRetries
+                + " detail=" + _errorDetail);
+
+            // Return to processing state immediately so the UI doesn't flash error
+            _clearErrorState();
+            _transcribedText = "";
+            _state = "processing";
+            autoRetryTimer.start();
+            return true;
+        }
+
         /// Spawn pw-record for the current segment and start level monitor.
         function _startRecording(): void {
             const segmentPath = _currentSegmentPath;
@@ -756,6 +793,7 @@ Singleton {
             elapsedTimer.stop();
             successTimer.stop();
             processingTimeoutTimer.stop();
+            autoRetryTimer.stop();
             _removalTimer.stop();
         }
 
@@ -853,6 +891,16 @@ Singleton {
                 Logger.log("qml", "stt", "timeout | id=" + job.sessionId);
                 if (job.transcribeProcess.running) job.transcribeProcess.signal(9);
                 job._setErrorState("timeout", "Processing timed out", "Check your network connection");
+                job._tryAutoRetry();
+            }
+        }
+
+        // Delay before automatic retry (gives transient issues time to clear)
+        readonly property Timer autoRetryTimer: Timer {
+            interval: 2000
+            onTriggered: {
+                Logger.log("qml", "stt", "auto-retry-fire | id=" + job.sessionId);
+                job._startTranscription(job._currentAudioFile);
             }
         }
 
@@ -977,6 +1025,8 @@ Singleton {
                         job._errorSource = "api";
                         job._state = "error";
                     }
+                    // Auto-retry transient errors (network, 5xx, timeout)
+                    job._tryAutoRetry();
                 }
             }
         }
