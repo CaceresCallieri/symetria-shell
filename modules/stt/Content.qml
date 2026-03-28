@@ -198,7 +198,6 @@ Item {
             iconColor: Colours.palette.m3error
         },
         "success": {
-            icon: "check_circle",
             iconColor: Colours.palette.m3primary
         },
         "idle": {
@@ -234,6 +233,11 @@ Item {
 
                 implicitWidth: successIcon.implicitWidth + targetPadding
                 implicitHeight: successIcon.implicitHeight + Appearance.padding.smaller * 2
+
+                // Rectangle does not auto-apply implicitWidth/implicitHeight as width/height
+                // when placed inside a plain Item (non-layout). Explicit bindings are required.
+                width: implicitWidth
+                height: implicitHeight
 
                 radius: Appearance.rounding.full
                 color: Colours.pillStyle(
