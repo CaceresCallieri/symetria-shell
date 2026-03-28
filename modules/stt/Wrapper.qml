@@ -31,7 +31,7 @@ Item {
         // as each delegate's height grows.
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Appearance.spacing.small
+        spacing: 0
 
         Row {
             id: jobsRow

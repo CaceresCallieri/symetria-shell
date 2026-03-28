@@ -57,7 +57,7 @@ Item {
     readonly property bool serviceInjectionSubmitted: job.injectionSubmitted
 
     // Number of audio visualizer bars (compact layout)
-    readonly property int barCount: 12
+    readonly property int barCount: 16
     // Height of audio level bar container
     readonly property int audioBarContainerHeight: 24
 
@@ -341,17 +341,14 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        // Hover detection for the entire card — acceptedButtons: Qt.NoButton
-        // passes all clicks through to PillButtons underneath
-        MouseArea {
+        // HoverHandler instead of MouseArea — multiple HoverHandlers can
+        // be active simultaneously, so child MouseAreas (chip delete, PillButtons)
+        // don't steal containsMouse from the card and cause flicker.
+        HoverHandler {
             id: cardHover
 
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.NoButton
-
-            onContainsMouseChanged: {
-                if (containsMouse) {
+            onHoveredChanged: {
+                if (hovered) {
                     hoverDebounce.stop();
                     root.hovered = true;
                 } else {
@@ -533,12 +530,11 @@ Item {
             // ── Vocabulary hint chips ────────────────────────────────
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: compactRow.implicitWidth
                 show: SttService.sessionVocabHints.length > 0
                     && (root.serviceState === "recording" || root.serviceState === "paused")
 
-                Flow {
-                    width: compactRow.implicitWidth
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
                     spacing: Appearance.spacing.smaller
 
                     Repeater {
@@ -554,8 +550,8 @@ Item {
                             StyledRect {
                                 id: hintChipBg
 
-                                implicitWidth: hintChipRow.implicitWidth + Appearance.padding.small * 2
-                                implicitHeight: hintChipRow.implicitHeight + Appearance.padding.smaller * 2
+                                implicitWidth: Math.max(chipText.implicitWidth, chipDeleteIcon.implicitWidth) + Appearance.padding.large * 2
+                                implicitHeight: chipText.implicitHeight + Appearance.padding.small * 2
 
                                 radius: Appearance.rounding.full
                                 color: Colours.pillStyle(
@@ -563,38 +559,33 @@ Item {
                                     Colours.glass.subtle
                                 ).background
 
-                                Row {
-                                    id: hintChipRow
+                                MouseArea {
+                                    id: chipHover
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: chipHover.containsMouse ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: SttService.removeSessionHint(index)
+                                }
+
+                                StyledText {
+                                    id: chipText
 
                                     anchors.centerIn: parent
-                                    spacing: Appearance.spacing.smaller
+                                    visible: !chipHover.containsMouse
+                                    text: modelData
+                                    color: Colours.palette.m3onSurface
+                                    font.pointSize: Appearance.font.size.small
+                                }
 
-                                    StyledText {
-                                        text: modelData
-                                        color: Colours.palette.m3onSurface
-                                        font.pointSize: Appearance.font.size.small
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
+                                MaterialIcon {
+                                    id: chipDeleteIcon
 
-                                    MaterialIcon {
-                                        text: "close"
-                                        color: hintCloseArea.containsMouse
-                                            ? Colours.palette.m3onSurface
-                                            : Colours.palette.m3onSurfaceVariant
-                                        font.pointSize: Appearance.font.size.small
-                                        anchors.verticalCenter: parent.verticalCenter
-
-                                        Behavior on color { CAnim {} }
-
-                                        MouseArea {
-                                            id: hintCloseArea
-
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: SttService.removeSessionHint(index)
-                                        }
-                                    }
+                                    anchors.centerIn: parent
+                                    visible: chipHover.containsMouse
+                                    text: "delete"
+                                    color: Colours.palette.m3error
+                                    font.pointSize: Appearance.font.size.small
                                 }
                             }
                         }

@@ -14,7 +14,7 @@ import QtQuick
 Item {
     id: root
 
-    readonly property int minWidth: 300
+    readonly property int minWidth: 220
 
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight
@@ -32,7 +32,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
 
         implicitWidth: root.minWidth
-        implicitHeight: hintInput.implicitHeight + Appearance.padding.normal * 2
+        implicitHeight: hintInput.implicitHeight
 
         radius: Appearance.rounding.normal
         color: "transparent"
@@ -42,8 +42,9 @@ Item {
 
             anchors.centerIn: parent
             width: root.minWidth - Appearance.padding.large * 2
+            horizontalAlignment: TextInput.AlignHCenter
             placeholderText: SttService.sessionVocabHints.length === 0
-                ? "Type hint word, press Enter"
+                ? "Type hint word"
                 : "Add another..."
             font.pointSize: Appearance.font.size.small
 
