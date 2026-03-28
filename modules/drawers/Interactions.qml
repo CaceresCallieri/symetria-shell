@@ -51,6 +51,21 @@ CustomMouseArea {
         return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
+    // Narrower trigger zone for the utilities drawer — only the rightmost 1/4 of the panel width
+    // activates on hover, so the user must move to the very bottom-right corner to trigger it.
+    function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
+        const triggerWidth = panel.width / 4;
+        const panelRight = Config.border.thickness + panel.x + panel.width + Config.border.rounding;
+        const triggerLeft = panelRight - triggerWidth;
+        const inTriggerX = x >= triggerLeft && x <= panelRight;
+
+        const panelBottomEdge = root.height - agentBar.implicitHeight;
+        const inPanel = y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding;
+        const inAgentBar = y >= root.height - agentBar.implicitHeight - Config.border.rounding;
+
+        return inTriggerX && (inPanel || inAgentBar);
+    }
+
     function onWheel(event: WheelEvent): void {
         if (event.y < bar.implicitHeight) {
             bar.handleWheel(event.x, event.angleDelta);
@@ -169,8 +184,8 @@ CustomMouseArea {
         //         visibilities.dashboard = false;
         // }
 
-        // Show utilities on hover
-        const showUtilities = inBottomPanel(panels.utilities, x, y) || inAgentBarForPanel(panels.utilities, x, y);
+        // Show utilities on hover (corner-only trigger zone)
+        const showUtilities = inUtilitiesTriggerZone(panels.utilities, x, y);
 
         // Always update visibility based on hover if not in shortcut mode
         if (!utilitiesShortcutActive) {
@@ -203,8 +218,7 @@ CustomMouseArea {
         function onUtilitiesChanged() {
             if (root.visibilities.utilities) {
                 // Utilities became visible, immediately check if this should be shortcut mode
-                const inUtilitiesArea = root.inBottomPanel(root.panels.utilities, root.mouseX, root.mouseY)
-                    || root.inAgentBarForPanel(root.panels.utilities, root.mouseX, root.mouseY);
+                const inUtilitiesArea = root.inUtilitiesTriggerZone(root.panels.utilities, root.mouseX, root.mouseY);
                 if (!inUtilitiesArea) {
                     root.utilitiesShortcutActive = true;
                 }
