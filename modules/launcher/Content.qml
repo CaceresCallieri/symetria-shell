@@ -100,10 +100,10 @@ Item {
             anchors.leftMargin: Appearance.spacing.small
             anchors.rightMargin: Appearance.spacing.small
 
-            topPadding: Appearance.padding.larger
-            bottomPadding: Appearance.padding.larger
+            topPadding: Appearance.padding.normal
+            bottomPadding: Appearance.padding.normal
 
-            placeholderText: qsTr("Type \"%1\" for commands").arg(Config.launcher.actionPrefix)
+            placeholderText: ""
 
             onAccepted: {
                 const currentItem = list.currentList?.currentItem;

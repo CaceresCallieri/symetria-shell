@@ -34,7 +34,7 @@ Item {
 
             PropertyChanges {
                 root.implicitWidth: Config.launcher.sizes.itemWidth
-                root.implicitHeight: Math.min(root.maxHeight, appList.implicitHeight > 0 ? appList.implicitHeight : empty.implicitHeight)
+                root.implicitHeight: Math.min(root.maxHeight, appList.implicitHeight > 0 ? appList.implicitHeight : (root.search.text.length > 0 ? empty.implicitHeight : 0))
                 appList.active: true
             }
 
@@ -107,8 +107,8 @@ Item {
     Row {
         id: empty
 
-        opacity: root.currentList?.count === 0 ? 1 : 0
-        scale: root.currentList?.count === 0 ? 1 : 0.5
+        opacity: root.currentList?.count === 0 && root.search.text.length > 0 ? 1 : 0
+        scale: root.currentList?.count === 0 && root.search.text.length > 0 ? 1 : 0.5
 
         spacing: Appearance.spacing.normal
         padding: Appearance.padding.large
