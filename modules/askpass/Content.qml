@@ -18,7 +18,6 @@ Item {
     required property PersistentProperties visibilities
 
     readonly property int padding: Appearance.padding.large
-    readonly property int rounding: Appearance.rounding.large
 
     implicitWidth: dialog.implicitWidth
     implicitHeight: dialog.implicitHeight + padding
@@ -67,9 +66,6 @@ Item {
                     AskpassStore.passwordBuffer = AskpassStore.passwordBuffer.slice(0, -1);
                 }
                 event.accepted = true;
-            } else if (event.key === Qt.Key_Escape) {
-                AskpassStore.cancel();
-                event.accepted = true;
             } else if (event.text && event.text.length > 0) {
                 // Filter out control characters (0x00-0x1F and 0x7F)
                 // This prevents Tab, Ctrl sequences, etc. from entering password
@@ -86,8 +82,8 @@ Item {
 
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.margins: Appearance.padding.large
+            anchors.top: parent.top
+            anchors.margins: Appearance.padding.normal
 
             spacing: Appearance.spacing.normal
 
@@ -124,14 +120,10 @@ Item {
                     anchors.fill: parent
                     radius: Appearance.rounding.normal
                     color: dialog.activeFocus ? Qt.lighter(Colours.tPalette.m3surfaceContainer, 1.05) : Colours.tPalette.m3surfaceContainer
-                    border.width: dialog.activeFocus ? 1 : 1
+                    border.width: 1
                     border.color: dialog.activeFocus ? Colours.palette.m3primary : Colours.palette.m3outline
 
                     Behavior on border.color {
-                        CAnim {}
-                    }
-
-                    Behavior on border.width {
                         CAnim {}
                     }
 
@@ -334,7 +326,7 @@ Item {
 
                     Layout.fillWidth: true
                     implicitHeight: authLabel.implicitHeight + Appearance.padding.smaller * 2
-                    opacity: enabled ? 1.0 : 0.38
+                    opacity: enabled ? 1.0 : 0.38 // M3 disabled state opacity
                     enabled: AskpassStore.passwordBuffer.length > 0
 
                     readonly property var style: Colours.pillStyle(
