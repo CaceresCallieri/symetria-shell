@@ -341,9 +341,9 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        // HoverHandler instead of MouseArea — multiple HoverHandlers can
-        // be active simultaneously, so child MouseAreas (chip delete, PillButtons)
-        // don't steal containsMouse from the card and cause flicker.
+        // HoverHandler uses Qt Quick's pointer handler system (parallel delivery),
+        // unlike MouseArea which participates in grab exclusivity. Child MouseAreas
+        // in chip delegates cannot block this handler from receiving hover events.
         HoverHandler {
             id: cardHover
 
@@ -540,53 +540,48 @@ Item {
                     Repeater {
                         model: SttService.sessionVocabHints
 
-                        Item {
+                        StyledRect {
+                            id: hintChipBg
+
                             required property string modelData
                             required property int index
 
-                            implicitWidth: hintChipBg.implicitWidth
-                            implicitHeight: hintChipBg.implicitHeight
+                            implicitWidth: Math.max(chipText.implicitWidth, chipDeleteIcon.implicitWidth) + Appearance.padding.large * 2
+                            implicitHeight: chipText.implicitHeight + Appearance.padding.small * 2
 
-                            StyledRect {
-                                id: hintChipBg
+                            radius: Appearance.rounding.full
+                            color: Colours.pillStyle(
+                                Colours.palette.m3surfaceContainerHigh,
+                                Colours.glass.subtle
+                            ).background
 
-                                implicitWidth: Math.max(chipText.implicitWidth, chipDeleteIcon.implicitWidth) + Appearance.padding.large * 2
-                                implicitHeight: chipText.implicitHeight + Appearance.padding.small * 2
+                            MouseArea {
+                                id: chipDeleteArea
 
-                                radius: Appearance.rounding.full
-                                color: Colours.pillStyle(
-                                    Colours.palette.m3surfaceContainerHigh,
-                                    Colours.glass.subtle
-                                ).background
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: SttService.removeSessionHint(index)
+                            }
 
-                                MouseArea {
-                                    id: chipHover
+                            StyledText {
+                                id: chipText
 
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: chipHover.containsMouse ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                    onClicked: SttService.removeSessionHint(index)
-                                }
+                                anchors.centerIn: parent
+                                visible: !chipDeleteArea.containsMouse
+                                text: modelData
+                                color: Colours.palette.m3onSurface
+                                font.pointSize: Appearance.font.size.small
+                            }
 
-                                StyledText {
-                                    id: chipText
+                            MaterialIcon {
+                                id: chipDeleteIcon
 
-                                    anchors.centerIn: parent
-                                    visible: !chipHover.containsMouse
-                                    text: modelData
-                                    color: Colours.palette.m3onSurface
-                                    font.pointSize: Appearance.font.size.small
-                                }
-
-                                MaterialIcon {
-                                    id: chipDeleteIcon
-
-                                    anchors.centerIn: parent
-                                    visible: chipHover.containsMouse
-                                    text: "delete"
-                                    color: Colours.palette.m3error
-                                    font.pointSize: Appearance.font.size.small
-                                }
+                                anchors.centerIn: parent
+                                visible: chipDeleteArea.containsMouse
+                                text: "delete"
+                                color: Colours.palette.m3error
+                                font.pointSize: Appearance.font.size.small
                             }
                         }
                     }
