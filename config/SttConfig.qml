@@ -10,6 +10,10 @@ JsonObject {
     // Valid values: "clipboard" | "inject" | "submit" | "ask"
     property string deliveryMode: "clipboard"
 
+    // Persistent vocabulary hints sent with every transcription to improve
+    // proper noun / technical term accuracy (appended to the API prompt).
+    property list<string> vocabularyHints: []
+
     property JsonObject recording: JsonObject {
         property string format: "wav"
         property int sampleRate: 16000

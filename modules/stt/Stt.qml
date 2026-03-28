@@ -60,5 +60,8 @@ Scope {
         function mode(choice: string): void {
             SttService.setDeliveryChoice(choice);
         }
+        function hints(): void {
+            SttService.toggleVocabHints();
+        }
     }
 }

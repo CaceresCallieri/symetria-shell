@@ -68,6 +68,13 @@ Singleton {
     // FIFO delivery queues: windowAddress → [SttJob, ...]
     property var _deliveryQueues: ({})
 
+    // Per-session vocabulary hints (tag-chip widget).
+    // Service-level so the widget and IPC can modify them without job reference.
+    // Reset after each transcription completes (when _activeRecording → null).
+    property var _sessionVocabHints: []
+    property bool vocabHintsVisible: false
+    readonly property var sessionVocabHints: _sessionVocabHints
+
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
     readonly property string _tempDir: `${_runtimeDir}/symmetria-stt`
@@ -183,6 +190,8 @@ Singleton {
         actionTriggered(_activeRecording.sessionId, "stop");
         _activeRecording.stop();
         _activeRecording = null;
+        _sessionVocabHints = [];
+        vocabHintsVisible = false;
     }
 
     /// Toggle pause on the active recording.
@@ -210,6 +219,8 @@ Singleton {
         if (_activeRecording) {
             const job = _activeRecording;
             _activeRecording = null;
+            _sessionVocabHints = [];
+            vocabHintsVisible = false;
             job.cancel();
         }
     }
@@ -222,6 +233,8 @@ Singleton {
         restartDelayTimer.stop();
         const job = _activeRecording;
         _activeRecording = null;
+        _sessionVocabHints = [];
+        vocabHintsVisible = false;
         job.cancel();
         restartDelayTimer.start();
     }
@@ -247,6 +260,25 @@ Singleton {
         if (_activeRecording)
             _activeRecording._activeDeliveryChoice = mode;
         actionTriggered(_activeRecording?.sessionId ?? "", "mode-" + mode);
+    }
+
+    /// Add a per-session vocabulary hint (shown as chip in the widget).
+    function addSessionHint(word: string): void {
+        const trimmed = word.trim();
+        if (trimmed === "") return;
+        if (_sessionVocabHints.some(h => h.toLowerCase() === trimmed.toLowerCase())) return;
+        _sessionVocabHints = [..._sessionVocabHints, trimmed];
+    }
+
+    /// Remove a per-session vocabulary hint by index.
+    function removeSessionHint(index: int): void {
+        _sessionVocabHints = _sessionVocabHints.filter((_, i) => i !== index);
+    }
+
+    /// Toggle the vocabulary hints widget (only during active recording).
+    function toggleVocabHints(): void {
+        if (!_activeRecording) return;
+        vocabHintsVisible = !vocabHintsVisible;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -771,7 +803,15 @@ Singleton {
             const model = Config.stt?.model ?? "gpt-4o-transcribe";
             Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile);
 
-            transcribeProcess.environment = ({ STT_API_KEY: root._resolvedApiKey });
+            // Merge persistent config hints with per-session hints (deduplicated)
+            const persistentHints = Config.stt?.vocabularyHints ?? [];
+            const sessionHints = root._sessionVocabHints;
+            const allHints = [...new Set([...persistentHints, ...sessionHints])];
+
+            transcribeProcess.environment = ({
+                STT_API_KEY: root._resolvedApiKey,
+                STT_VOCABULARY_HINTS: allHints.join(", ")
+            });
             transcribeProcess.command = [
                 root._transcribeScript, audioFile, model
             ];

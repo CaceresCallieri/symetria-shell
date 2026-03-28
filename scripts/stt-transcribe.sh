@@ -42,6 +42,20 @@ The speaker primarily speaks English and Spanish.
 
 When the transcription is long or covers multiple topics, organize it into paragraphs separated by blank lines. Break paragraphs at natural topic shifts or idea transitions. Do NOT add headings, bullet points, or any formatting other than paragraph breaks. Short, single-topic transcriptions should remain as a single paragraph."
 
+# Append vocabulary hints if provided (comma-separated via env var)
+if [ -n "${STT_VOCABULARY_HINTS:-}" ]; then
+    # Truncate to ~400 chars to stay within 224-token prompt budget
+    if [ ${#STT_VOCABULARY_HINTS} -gt 400 ]; then
+        STT_VOCABULARY_HINTS="${STT_VOCABULARY_HINTS:0:400}"
+        STT_VOCABULARY_HINTS="${STT_VOCABULARY_HINTS%,*}"
+        stt_log "transcribe" "WARN: vocabulary hints truncated to fit token budget"
+    fi
+    VERBATIM_PROMPT="${VERBATIM_PROMPT}
+
+The following proper nouns, technical terms, or names may appear. Use these exact spellings when recognized: ${STT_VOCABULARY_HINTS}"
+    stt_log "transcribe" "hints=${STT_VOCABULARY_HINTS}"
+fi
+
 HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
     --max-time 110 \

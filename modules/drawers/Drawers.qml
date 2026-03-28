@@ -55,6 +55,7 @@ Variants {
                 || (visibilities.keychords && Config.keychords.enabled)
                 || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled)
                 || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                || SttService.vocabHintsVisible
 
             readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
             readonly property int dragMaskPadding: {
@@ -85,7 +86,7 @@ Variants {
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || visibilities.keychords ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || visibilities.keychords || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
                 x: Config.border.thickness + win.dragMaskPadding
@@ -134,6 +135,8 @@ Variants {
                     visibilities.keychords = false;
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
+                    // Close vocab hints input (but NOT the recording — chips persist)
+                    SttService.vocabHintsVisible = false;
                     panels.popouts.hasCurrent = false;
                     bar.closeTray();
                 }

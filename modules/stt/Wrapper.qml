@@ -21,19 +21,25 @@ Item {
     required property var panels
 
     visible: height > 0
-    implicitHeight: jobsRow.implicitHeight
-    implicitWidth: jobsRow.implicitWidth
+    implicitHeight: mainColumn.implicitHeight
+    implicitWidth: mainColumn.implicitWidth
 
-    Row {
-        id: jobsRow
+    Column {
+        id: mainColumn
 
         // Anchor content to BOTTOM of wrapper so it reveals from top-down
         // as each delegate's height grows.
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Appearance.spacing.normal
+        spacing: Appearance.spacing.small
 
-        Repeater {
+        Row {
+            id: jobsRow
+
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Appearance.spacing.normal
+
+            Repeater {
             model: ScriptModel {
                 values: SttService.jobs
             }
@@ -145,6 +151,14 @@ Item {
                     }
                 }
             }
+        }
+        }
+
+        FadeTransition {
+            show: SttService.vocabHintsVisible && SttService.active
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            VocabularyHints {}
         }
     }
 }

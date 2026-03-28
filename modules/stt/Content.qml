@@ -569,6 +569,77 @@ Item {
                 }
             }
 
+            // Active vocabulary hint chips (visible when session hints exist during recording/paused)
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: SttService.sessionVocabHints.length > 0
+                    && (root.serviceState === "recording" || root.serviceState === "paused")
+
+                Flow {
+                    width: root.minDrawerWidth - Appearance.padding.large * 2
+                    spacing: Appearance.spacing.smaller
+
+                    Repeater {
+                        model: SttService.sessionVocabHints
+
+                        Item {
+                            required property string modelData
+                            required property int index
+
+                            implicitWidth: hintChipBg.implicitWidth
+                            implicitHeight: hintChipBg.implicitHeight
+
+                            StyledRect {
+                                id: hintChipBg
+
+                                implicitWidth: hintChipRow.implicitWidth + Appearance.padding.small * 2
+                                implicitHeight: hintChipRow.implicitHeight + Appearance.padding.smaller * 2
+
+                                radius: Appearance.rounding.full
+                                color: Colours.pillStyle(
+                                    Colours.palette.m3surfaceContainerHigh,
+                                    Colours.glass.subtle
+                                ).background
+
+                                Row {
+                                    id: hintChipRow
+
+                                    anchors.centerIn: parent
+                                    spacing: Appearance.spacing.smaller
+
+                                    StyledText {
+                                        text: modelData
+                                        color: Colours.palette.m3onSurface
+                                        font.pointSize: Appearance.font.size.small
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    MaterialIcon {
+                                        text: "close"
+                                        color: hintCloseArea.containsMouse
+                                            ? Colours.palette.m3onSurface
+                                            : Colours.palette.m3onSurfaceVariant
+                                        font.pointSize: Appearance.font.size.small
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        Behavior on color { CAnim {} }
+
+                                        MouseArea {
+                                            id: hintCloseArea
+
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: SttService.removeSessionHint(index)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Signal handler for recording/paused-state buttons (pauseBtn, restartBtn,
             // cancelBtn, submitBtn) and delivery mode radio options.
             // These IDs exist in the main content scope.

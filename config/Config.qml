@@ -475,6 +475,7 @@ Singleton {
             autoHideDelay: stt.autoHideDelay,
             processingTimeout: stt.processingTimeout,
             deliveryMode: stt.deliveryMode,
+            vocabularyHints: stt.vocabularyHints,
             recording: {
                 format: stt.recording.format,
                 sampleRate: stt.recording.sampleRate,
