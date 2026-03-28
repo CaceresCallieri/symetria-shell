@@ -188,6 +188,11 @@ Singleton {
     function stop(): void {
         if (!_activeRecording) return;
         actionTriggered(_activeRecording.sessionId, "stop");
+        // Snapshot session hints onto the job before clearing service-level state.
+        // The recording→stop path is async (recordProcess.onExited calls
+        // _startTranscription later), so _sessionVocabHints would be empty
+        // by the time transcription starts without this snapshot.
+        _activeRecording._snapshotVocabHints = _sessionVocabHints.slice();
         _activeRecording.stop();
         _activeRecording = null;
         _sessionVocabHints = [];
@@ -499,6 +504,11 @@ Singleton {
         // so transcribeProcess.onExited can skip duplicate error handling.
         property bool _pendingTimeoutKill: false
 
+        // Vocabulary hints snapshot: populated by SttService.stop() before
+        // clearing _sessionVocabHints, so the async recordProcess.onExited
+        // path still has access to the hints at transcription time.
+        property var _snapshotVocabHints: []
+
         // Runtime delivery choice for "ask" mode (inherited from service, locked on submit)
         property string _activeDeliveryChoice: "clipboard"
 
@@ -803,9 +813,11 @@ Singleton {
             const model = Config.stt?.model ?? "gpt-4o-transcribe";
             Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile);
 
-            // Merge persistent config hints with per-session hints (deduplicated)
+            // Merge persistent config hints with per-session hints (deduplicated).
+            // Use _snapshotVocabHints (captured at stop-time) rather than
+            // root._sessionVocabHints, which is cleared before this async call fires.
             const persistentHints = Config.stt?.vocabularyHints ?? [];
-            const sessionHints = root._sessionVocabHints;
+            const sessionHints = job._snapshotVocabHints;
             const allHints = [...new Set([...persistentHints, ...sessionHints])];
 
             transcribeProcess.environment = ({

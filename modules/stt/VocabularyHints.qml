@@ -41,7 +41,7 @@ Item {
             id: hintInput
 
             anchors.centerIn: parent
-            width: parent.implicitWidth - Appearance.padding.large * 2
+            width: root.minWidth - Appearance.padding.large * 2
             placeholderText: SttService.sessionVocabHints.length === 0
                 ? "Type hint word, press Enter"
                 : "Add another..."

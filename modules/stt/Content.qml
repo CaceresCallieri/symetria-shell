@@ -572,6 +572,7 @@ Item {
             // Active vocabulary hint chips (visible when session hints exist during recording/paused)
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: root.minDrawerWidth - Appearance.padding.large * 2
                 show: SttService.sessionVocabHints.length > 0
                     && (root.serviceState === "recording" || root.serviceState === "paused")
 

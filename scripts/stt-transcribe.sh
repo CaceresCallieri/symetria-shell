@@ -47,7 +47,12 @@ if [ -n "${STT_VOCABULARY_HINTS:-}" ]; then
     # Truncate to ~400 chars to stay within 224-token prompt budget
     if [ ${#STT_VOCABULARY_HINTS} -gt 400 ]; then
         STT_VOCABULARY_HINTS="${STT_VOCABULARY_HINTS:0:400}"
-        STT_VOCABULARY_HINTS="${STT_VOCABULARY_HINTS%,*}"
+        # Strip trailing partial word (up to last comma). Guard against the
+        # case where no comma exists in the truncated string — that would
+        # make %,* strip the entire value.
+        if [[ "$STT_VOCABULARY_HINTS" == *,* ]]; then
+            STT_VOCABULARY_HINTS="${STT_VOCABULARY_HINTS%,*}"
+        fi
         stt_log "transcribe" "WARN: vocabulary hints truncated to fit token budget"
     fi
     VERBATIM_PROMPT="${VERBATIM_PROMPT}
