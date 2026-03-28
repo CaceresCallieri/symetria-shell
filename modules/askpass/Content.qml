@@ -36,11 +36,17 @@ Item {
         anchors.topMargin: root.padding
         anchors.horizontalCenter: parent.horizontalCenter
 
-        implicitWidth: 400
-        implicitHeight: content.implicitHeight + Appearance.padding.large * 2
+        implicitWidth: 350
+        implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
         radius: Appearance.rounding.normal
         color: "transparent"
+
+        readonly property bool showButtons: dialogHover.hovered || AskpassStore.passwordBuffer.length > 0
+
+        HoverHandler {
+            id: dialogHover
+        }
 
         focus: true
         Keys.onEscapePressed: AskpassStore.cancel()
@@ -85,14 +91,6 @@ Item {
 
             spacing: Appearance.spacing.normal
 
-            // Title
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: qsTr("Authentication Required")
-                font.pointSize: Appearance.font.size.large
-                font.weight: 500
-            }
-
             // Prompt message from sudo
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
@@ -118,9 +116,9 @@ Item {
             Item {
                 id: passwordContainer
 
-                Layout.topMargin: Appearance.spacing.large
+                Layout.topMargin: Appearance.spacing.small
                 Layout.fillWidth: true
-                implicitHeight: Math.max(48, charList.implicitHeight + Appearance.padding.normal * 2)
+                implicitHeight: Math.max(36, charList.implicitHeight + Appearance.padding.smaller * 2)
 
                 StyledRect {
                     anchors.fill: parent
@@ -247,35 +245,143 @@ Item {
                 }
             }
 
-            // Buttons
+            // Buttons (hover-revealed matte pills)
             RowLayout {
-                Layout.topMargin: Appearance.spacing.normal
+                id: buttonRow
+
+                Layout.topMargin: Appearance.spacing.small
                 Layout.fillWidth: true
+                Layout.preferredHeight: dialog.showButtons ? implicitHeight : 0
                 spacing: Appearance.spacing.normal
+                clip: true
 
-                TextButton {
-                    id: cancelButton
-
-                    Layout.fillWidth: true
-                    Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.palette.m3secondaryContainer
-                    inactiveOnColour: Colours.palette.m3onSecondaryContainer
-                    text: qsTr("Cancel")
-
-                    onClicked: AskpassStore.cancel()
+                opacity: dialog.showButtons ? 1 : 0
+                transform: Translate {
+                    y: dialog.showButtons ? 0 : 8
+                    Behavior on y {
+                        Anim {
+                            duration: Appearance.anim.durations.small
+                            easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+                        }
+                    }
                 }
 
-                TextButton {
-                    id: submitButton
+                Behavior on opacity {
+                    Anim {
+                        duration: Appearance.anim.durations.small
+                    }
+                }
+
+                Behavior on Layout.preferredHeight {
+                    Anim {
+                        duration: Appearance.anim.durations.small
+                        easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+                    }
+                }
+
+                // Cancel pill
+                Item {
+                    id: cancelPill
 
                     Layout.fillWidth: true
-                    Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.palette.m3primary
-                    inactiveOnColour: Colours.palette.m3onPrimary
-                    text: qsTr("Authenticate")
+                    implicitHeight: cancelLabel.implicitHeight + Appearance.padding.smaller * 2
+
+                    readonly property var style: Colours.pillStyle(
+                        Colours.palette.m3surfaceContainerHigh,
+                        cancelState.containsMouse ? Colours.glass.medium : Colours.glass.subtle
+                    )
+
+                    StyledRect {
+                        anchors.fill: parent
+                        radius: Appearance.rounding.full
+                        color: cancelPill.style.background
+                        border.width: 1
+                        border.color: cancelPill.style.border
+
+                        Behavior on color {
+                            CAnim {}
+                        }
+
+                        Behavior on border.color {
+                            CAnim {}
+                        }
+                    }
+
+                    StateLayer {
+                        id: cancelState
+
+                        radius: Appearance.rounding.full
+                        color: Colours.palette.m3onSurfaceVariant
+
+                        function onClicked(): void {
+                            AskpassStore.cancel();
+                        }
+                    }
+
+                    StyledText {
+                        id: cancelLabel
+
+                        anchors.centerIn: parent
+                        text: qsTr("Cancel")
+                        color: Colours.palette.m3onSurfaceVariant
+                        font.pointSize: Appearance.font.size.small
+                    }
+                }
+
+                // Authenticate pill
+                Item {
+                    id: authPill
+
+                    Layout.fillWidth: true
+                    implicitHeight: authLabel.implicitHeight + Appearance.padding.smaller * 2
+                    opacity: enabled ? 1.0 : 0.38
                     enabled: AskpassStore.passwordBuffer.length > 0
 
-                    onClicked: AskpassStore.submitPassword(AskpassStore.passwordBuffer)
+                    readonly property var style: Colours.pillStyle(
+                        Colours.palette.m3surfaceContainerHigh,
+                        authState.containsMouse ? Colours.glass.medium : Colours.glass.subtle
+                    )
+
+                    StyledRect {
+                        anchors.fill: parent
+                        radius: Appearance.rounding.full
+                        color: authPill.style.background
+                        border.width: 1
+                        border.color: authPill.style.border
+
+                        Behavior on color {
+                            CAnim {}
+                        }
+
+                        Behavior on border.color {
+                            CAnim {}
+                        }
+                    }
+
+                    StateLayer {
+                        id: authState
+
+                        radius: Appearance.rounding.full
+                        color: Colours.palette.m3onSurfaceVariant
+                        disabled: !authPill.enabled
+
+                        function onClicked(): void {
+                            AskpassStore.submitPassword(AskpassStore.passwordBuffer);
+                        }
+                    }
+
+                    StyledText {
+                        id: authLabel
+
+                        anchors.centerIn: parent
+                        text: qsTr("Authenticate")
+                        color: Colours.palette.m3onSurfaceVariant
+                        font.pointSize: Appearance.font.size.small
+                    }
+
+                    Behavior on opacity {
+                        Anim {}
+                    }
                 }
             }
         }
