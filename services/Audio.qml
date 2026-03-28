@@ -104,6 +104,7 @@ Singleton {
     }
 
     Component.onCompleted: {
+        console.log("[BOOT] Audio.onCompleted @ " + Date.now());
         previousSinkName = sink?.description || sink?.name || qsTr("Unknown Device");
         previousSourceName = source?.description || source?.name || qsTr("Unknown Device");
     }

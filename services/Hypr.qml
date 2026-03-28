@@ -49,7 +49,7 @@ Singleton {
         extras.batchMessage(["keyword bindlni ,Caps_Lock,global,symmetria:refreshDevices", "keyword bindlni ,Num_Lock,global,symmetria:refreshDevices"]);
     }
 
-    Component.onCompleted: reloadDynamicConfs()
+    Component.onCompleted: { console.log("[BOOT] Hypr.onCompleted @ " + Date.now()); reloadDynamicConfs(); }
 
     onCapsLockChanged: {
         if (!Config.utilities.toasts.capsLockChanged)
@@ -110,6 +110,7 @@ Singleton {
 
         path: Quickshell.env("SYMMETRIA_XKB_RULES_PATH") || "/usr/share/X11/xkb/rules/base.lst"
         onLoaded: {
+            console.log("[BOOT] Hypr: XKB rules base.lst loaded @ " + Date.now());
             const layoutMatch = text().match(/! layout\n([\s\S]*?)\n\n/);
             if (layoutMatch) {
                 const lines = layoutMatch[1].split("\n");

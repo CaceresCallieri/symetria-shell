@@ -100,6 +100,7 @@ Singleton {
     }
 
     Component.onCompleted: {
+        console.log("[BOOT] Recorder.onCompleted @ " + Date.now());
         console.log("[Recorder] service initialized, startPending:", startPending, "running:", props.running);
     }
 

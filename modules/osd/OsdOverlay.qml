@@ -82,6 +82,7 @@ Scope {
             }
 
             Component.onCompleted: {
+                console.log("[BOOT] OsdOverlay.StyledWindow created for " + modelData.name + " @ " + Date.now());
                 volume = Audio.volume;
                 muted = Audio.muted;
                 sourceVolume = Audio.sourceVolume;

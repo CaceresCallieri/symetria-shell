@@ -561,6 +561,7 @@ Singleton {
             }
         }
         onLoaded: {
+            console.log("[BOOT] Config: shell.json loaded @ " + Date.now());
             try {
                 JSON.parse(text());
                 const elapsed = timer.elapsedMs();
