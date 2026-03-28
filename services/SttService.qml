@@ -60,7 +60,7 @@ Singleton {
 
     // Runtime delivery choice for "ask" mode.
     // Persists across recordings within the same shell session.
-    property string _lastDeliveryChoice: "clipboard"
+    property string _lastDeliveryChoice: "submit"
 
     // Temp directory readiness
     property bool _tempDirReady: false
