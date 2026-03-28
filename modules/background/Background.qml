@@ -20,6 +20,8 @@ Loader {
 
             required property ShellScreen modelData
 
+            Component.onCompleted: console.log("[BOOT] Background.StyledWindow created for " + modelData.name + " @ " + Date.now())
+
             screen: modelData
             name: "background"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore

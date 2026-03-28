@@ -18,6 +18,8 @@ import QtQuick
 Item {
     id: root
 
+    Component.onCompleted: console.log("[BOOT] Panels created for " + screen.name + " @ " + Date.now())
+
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property Item bar

@@ -29,9 +29,11 @@ Singleton {
     readonly property var cachedCities: new Map()
 
     function reload(): void {
+        console.log("[BOOT] Weather.reload() start @ " + Date.now());
         const configLocation = Config.services.weatherLocation;
 
         if (configLocation) {
+            console.log("[BOOT] Weather.reload: using configured location: " + configLocation);
             if (configLocation.indexOf(",") !== -1 && !isNaN(parseFloat(configLocation.split(",")[0]))) {
                 loc = configLocation;
                 fetchCityFromCoords(configLocation);
@@ -39,7 +41,9 @@ Singleton {
                 fetchCoordsFromCity(configLocation);
             }
         } else if (!loc || timer.elapsed() > 900000) {
+            console.log("[BOOT] Weather.reload: no location, fetching from ipinfo.io @ " + Date.now());
             Requests.get("https://ipinfo.io/json", text => {
+                console.log("[BOOT] Weather: ipinfo.io response received @ " + Date.now());
                 const response = JSON.parse(text);
                 if (response.loc) {
                     loc = response.loc;
@@ -87,11 +91,13 @@ Singleton {
     }
 
     function fetchWeatherData(): void {
+        console.log("[BOOT] Weather.fetchWeatherData() start @ " + Date.now());
         const url = getWeatherUrl();
         if (url === "")
             return;
 
         Requests.get(url, text => {
+            console.log("[BOOT] Weather: open-meteo response received @ " + Date.now());
             const json = JSON.parse(text);
             if (!json.current || !json.daily)
                 return;
@@ -200,8 +206,8 @@ Singleton {
         return conditions[code] || "Unknown";
     }
 
-    Component.onCompleted: reload()
-    onLocChanged: fetchWeatherData()
+    Component.onCompleted: { console.log("[BOOT] Weather.onCompleted @ " + Date.now()); reload(); }
+    onLocChanged: { console.log("[BOOT] Weather.onLocChanged (loc=" + loc + ") @ " + Date.now()); fetchWeatherData(); }
 
     // Refresh weather data hourly; also re-check location in case it has changed
     Timer {

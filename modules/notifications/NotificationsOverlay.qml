@@ -25,6 +25,8 @@ Scope {
 
             required property ShellScreen modelData
 
+            Component.onCompleted: console.log("[BOOT] NotificationsOverlay.StyledWindow created for " + modelData.name + " @ " + Date.now())
+
             screen: modelData
             name: "notifications-overlay"
 

@@ -9,21 +9,26 @@ Singleton {
     id: root
 
     Component.onCompleted: {
+        console.log("[BOOT] Network.onCompleted @ " + Date.now());
         // Trigger ethernet device detection after initialization
         Qt.callLater(() => {
+            console.log("[BOOT] Network: getEthernetDevices() callLater @ " + Date.now());
             getEthernetDevices();
         });
         // Load saved connections on startup
         Nmcli.loadSavedConnections(() => {
+            console.log("[BOOT] Network: loadSavedConnections callback @ " + Date.now());
             root.savedConnections = Nmcli.savedConnections;
             root.savedConnectionSsids = Nmcli.savedConnectionSsids;
         });
         // Get initial WiFi status
         Nmcli.getWifiStatus((enabled) => {
+            console.log("[BOOT] Network: getWifiStatus callback @ " + Date.now());
             root.wifiEnabled = enabled;
         });
         // Sync networks from Nmcli on startup
         Qt.callLater(() => {
+            console.log("[BOOT] Network: syncNetworksFromNmcli callLater @ " + Date.now());
             syncNetworksFromNmcli();
         }, 100);
     }

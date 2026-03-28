@@ -27,6 +27,7 @@ Scope {
             id: win
 
             required property ShellScreen modelData
+            Component.onCompleted: console.log("[BOOT] Keycaster.StyledWindow created for " + modelData.name + " @ " + Date.now())
 
             readonly property bool shouldShow: wrapper.visible
 

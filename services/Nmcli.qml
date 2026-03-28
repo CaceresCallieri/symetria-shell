@@ -1265,6 +1265,7 @@ Singleton {
 
         running: true
         command: ["nmcli", "monitor"]
+        Component.onCompleted: console.log("[BOOT] Nmcli: nmcli monitor process started @ " + Date.now())
         environment: ({
                 LANG: "C.UTF-8",
                 LC_ALL: "C.UTF-8"
@@ -1324,10 +1325,11 @@ Singleton {
     }
 
     Component.onCompleted: {
-        getWifiStatus(() => {});
-        getNetworks(() => {});
-        loadSavedConnections(() => {});
-        getEthernetInterfaces(() => {});
+        console.log("[BOOT] Nmcli.onCompleted @ " + Date.now());
+        getWifiStatus(() => { console.log("[BOOT] Nmcli: getWifiStatus done @ " + Date.now()); });
+        getNetworks(() => { console.log("[BOOT] Nmcli: getNetworks done @ " + Date.now()); });
+        loadSavedConnections(() => { console.log("[BOOT] Nmcli: loadSavedConnections done @ " + Date.now()); });
+        getEthernetInterfaces(() => { console.log("[BOOT] Nmcli: getEthernetInterfaces done @ " + Date.now()); });
 
         Qt.callLater(() => {
             if (root.wirelessInterfaces.length > 0) {

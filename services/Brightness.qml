@@ -54,6 +54,7 @@ Singleton {
     }
 
     onMonitorsChanged: {
+        console.log("[BOOT] Brightness.onMonitorsChanged — starting ddcutil detect @ " + Date.now());
         ddcMonitors = [];
         ddcProc.running = true;
     }
@@ -70,7 +71,7 @@ Singleton {
         running: true
         command: ["sh", "-c", "asdbctl get"] // To avoid warnings if asdbctl is not installed
         stdout: StdioCollector {
-            onStreamFinished: root.appleDisplayPresent = text.trim().length > 0
+            onStreamFinished: { console.log("[BOOT] Brightness: asdbctl check done @ " + Date.now()); root.appleDisplayPresent = text.trim().length > 0; }
         }
     }
 
@@ -79,10 +80,13 @@ Singleton {
 
         command: ["ddcutil", "detect", "--brief"]
         stdout: StdioCollector {
-            onStreamFinished: root.ddcMonitors = text.trim().split("\n\n").filter(d => d.startsWith("Display ")).map(d => ({
+            onStreamFinished: {
+                console.log("[BOOT] Brightness: ddcutil detect done @ " + Date.now());
+                root.ddcMonitors = text.trim().split("\n\n").filter(d => d.startsWith("Display ")).map(d => ({
                         busNum: d.match(/I2C bus:[ ]*\/dev\/i2c-([0-9]+)/)[1],
                         connector: d.match(/DRM connector:\s+(.*)/)[1].replace(/^card\d+-/, "") // strip "card1-"
-                    }))
+                    }));
+            }
         }
     }
 
@@ -164,6 +168,7 @@ Singleton {
         readonly property Process initProc: Process {
             stdout: StdioCollector {
                 onStreamFinished: {
+                    console.log("[BOOT] Brightness.Monitor.initProc done for " + monitor.modelData.name + " @ " + Date.now());
                     if (monitor.isAppleDisplay) {
                         const val = parseInt(text.trim());
                         monitor.brightness = val / 101;
@@ -221,6 +226,6 @@ Singleton {
         }
 
         onBusNumChanged: initBrightness()
-        Component.onCompleted: initBrightness()
+        Component.onCompleted: { console.log("[BOOT] Brightness.Monitor.onCompleted for " + modelData.name + " @ " + Date.now()); initBrightness(); }
     }
 }

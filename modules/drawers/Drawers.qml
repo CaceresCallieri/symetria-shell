@@ -35,14 +35,17 @@ Variants {
             return false;
         }
 
-        Exclusions {
-            screen: scope.modelData
-            bar: bar
-            agentBar: agentBar
-        }
+        // BOOT PROFILER: Exclusions disabled to test single-window delay
+        // Exclusions {
+        //     screen: scope.modelData
+        //     bar: bar
+        //     agentBar: agentBar
+        // }
 
         StyledWindow {
             id: win
+
+            Component.onCompleted: console.log("[BOOT] Drawers.StyledWindow created for " + scope.modelData.name + " @ " + Date.now())
 
             readonly property bool _shouldGrabFocus:
                 (visibilities.launcher && Config.launcher.enabled)
@@ -191,7 +194,7 @@ Variants {
                 property bool packages
                 property bool keychords
 
-                Component.onCompleted: Visibilities.load(scope.modelData, this)
+                Component.onCompleted: { console.log("[BOOT] Drawers.Visibilities.load for " + scope.modelData.name + " @ " + Date.now()); Visibilities.load(scope.modelData, this); }
             }
 
             Interactions {
@@ -223,7 +226,7 @@ Variants {
 
                     disabled: scope.barDisabled
 
-                    Component.onCompleted: { Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
+                    Component.onCompleted: { console.log("[BOOT] Drawers.BarWrapper ready for " + scope.modelData.name + " @ " + Date.now()); Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
                 }
 
                 AgentBarModule.AgentBarWrapper {

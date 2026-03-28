@@ -363,6 +363,7 @@ Singleton {
     }
 
     Component.onCompleted: {
+        console.log("[BOOT] AgentService.onCompleted @ " + Date.now());
         console.debug("[AgentService] INIT: agentbar.enabled =", Config.agentbar.enabled);
         if (Config.agentbar.enabled)
             _startBridge();

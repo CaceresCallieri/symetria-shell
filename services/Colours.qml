@@ -233,7 +233,7 @@ Singleton {
         path: Qt.resolvedUrl("../config/color-scheme.json")
         watchChanges: true
         onFileChanged: reload()
-        onLoaded: root.load(text(), false)
+        onLoaded: { console.log("[BOOT] Colours: color-scheme.json loaded @ " + Date.now()); root.load(text(), false); }
     }
 
     IpcHandler {

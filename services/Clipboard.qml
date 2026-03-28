@@ -143,6 +143,7 @@ Singleton {
 
     // Check for cliphist on startup
     Component.onCompleted: {
+        console.log("[BOOT] Clipboard.onCompleted — checking cliphist @ " + Date.now());
         checkProcess.running = true;
     }
 
@@ -158,6 +159,7 @@ Singleton {
         id: checkProcess
         command: ["which", "cliphist"]
         onExited: (exitCode, exitStatus) => {
+            console.log("[BOOT] Clipboard: cliphist check done (exit=" + exitCode + ") @ " + Date.now());
             if (exitCode !== 0) {
                 console.error("Clipboard: cliphist not installed. Install with: paru -S cliphist");
                 root.cliphistAvailable = false;

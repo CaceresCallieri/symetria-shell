@@ -117,7 +117,9 @@ Searcher {
 
     // Build workspace map after component initialization (Qt.callLater ensures all properties are ready)
     Component.onCompleted: {
+        console.log("[BOOT] Wallpapers.onCompleted @ " + Date.now());
         Qt.callLater(() => {
+            console.log("[BOOT] Wallpapers: rebuildWorkspaceMap callLater @ " + Date.now());
             rebuildWorkspaceMap();
         });
     }
@@ -170,6 +172,7 @@ Searcher {
         recursive: true
         path: Paths.wallsdir
         filter: FileSystemModel.Images
+        onEntriesChanged: console.log("[BOOT] Wallpapers: FileSystemModel scan complete (" + entries.length + " images) @ " + Date.now())
     }
 
     FileSystemModel {
