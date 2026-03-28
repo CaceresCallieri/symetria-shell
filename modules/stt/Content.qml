@@ -56,9 +56,6 @@ Item {
     readonly property bool serviceInjectionDowngraded: job.injectionDowngraded
     readonly property bool serviceInjectionSubmitted: job.injectionSubmitted
 
-    readonly property int padding: Appearance.padding.large
-    readonly property int rounding: Appearance.rounding.large
-
     // Number of audio visualizer bars (compact layout)
     readonly property int barCount: 12
     // Height of audio level bar container
@@ -79,11 +76,12 @@ Item {
     }
 
     // Audio visualization tuning constants
+    // Adjust smoothing/gain if bars feel laggy or jittery.
     readonly property QtObject audioConfig: QtObject {
-        readonly property real smoothing: 0.35
-        readonly property real noiseFloor: 0.025
-        readonly property real gain: 15.0
-        readonly property real powerCurve: 0.5
+        readonly property real smoothing: 0.35    // 0.2=laggy, 0.5=jittery, 0.35=balanced
+        readonly property real noiseFloor: 0.025  // just below ambient (~0.03), silence ≈ 0
+        readonly property real gain: 15.0         // clips at ~0.09 RMS (speech ceiling)
+        readonly property real powerCurve: 0.5    // sqrt curve: boosts mids
         readonly property real waveVariation: 0.30
         readonly property real waveSpeed: 0.08
         readonly property real waveFrequency: 0.8
@@ -184,42 +182,32 @@ Item {
     readonly property var stateMap: ({
         "recording": {
             icon: "mic",
-            iconColor: Colours.palette.m3primary,
-            statusText: qsTr("Recording..."),
-            textColor: Colours.palette.m3onSurface
+            iconColor: Colours.palette.m3primary
         },
         "paused": {
             icon: "pause",
-            iconColor: Colours.palette.m3tertiary,
-            statusText: qsTr("Paused"),
-            textColor: Colours.palette.m3onSurface
+            iconColor: Colours.palette.m3tertiary
         },
         "processing": {
             icon: "hourglass_top",
-            iconColor: Colours.palette.m3secondary,
-            statusText: qsTr("Transcribing..."),
-            textColor: Colours.palette.m3onSurface
+            iconColor: Colours.palette.m3secondary
         },
         "error": {
             icon: "error",
-            iconColor: Colours.palette.m3error,
-            statusText: qsTr("Failed"),
-            textColor: Colours.palette.m3error
+            iconColor: Colours.palette.m3error
         },
         "success": {
             icon: "check_circle",
-            iconColor: Colours.palette.m3primary,
-            statusText: qsTr("Done!"),
-            textColor: Colours.palette.m3onSurface
+            iconColor: Colours.palette.m3primary
         },
         "idle": {
             icon: "mic",
-            iconColor: Colours.palette.m3onSurface,
-            statusText: "",
-            textColor: Colours.palette.m3onSurface
+            iconColor: Colours.palette.m3onSurface
         }
     })
 
+    // "idle" is the safe fallback — jobs are added to _jobs only after state is "recording",
+    // so this branch is unreachable in normal operation but guards against unknown states.
     readonly property var stateConfig: stateMap[root.serviceState] ?? stateMap["idle"]
 
     // Success state: checkmark icon + delivery method subtitle
@@ -312,6 +300,8 @@ Item {
                 }
             }
 
+            // retryBtn and errorCancelBtn only exist in this component's scope,
+            // so this Connections block must live here rather than in the outer handler.
             Connections {
                 target: SttService
                 function onActionTriggered(sessionId: string, action: string): void {
@@ -325,14 +315,14 @@ Item {
     }
 
     implicitWidth: container.implicitWidth
-    implicitHeight: container.implicitHeight + padding
+    implicitHeight: container.implicitHeight + Appearance.padding.large
 
     // Main container
     StyledRect {
         id: container
 
         anchors.top: parent.top
-        anchors.topMargin: root.padding
+        anchors.topMargin: Appearance.padding.large
         anchors.horizontalCenter: parent.horizontalCenter
 
         implicitWidth: content.implicitWidth + Appearance.padding.large * 2
@@ -455,8 +445,7 @@ Item {
                                     readonly property real waveOpacity: {
                                         if (root.serviceState === "processing") {
                                             const opacity = root.processingWaveOpacities[index];
-                                            if (opacity !== undefined && opacity >= 0 && opacity <= 1)
-                                                return opacity;
+                                            if (opacity !== undefined) return opacity;
                                         }
                                         if (root.serviceState === "paused")
                                             return root.pausedDimOpacity;
@@ -469,6 +458,7 @@ Item {
                                         smoothedHeight = smoothedHeight + (targetHeight - smoothedHeight) * root.audioConfig.smoothing;
                                     }
 
+                                    // Row doesn't support Layout.*, so y is calculated manually for vertical centering
                                     width: 4
                                     height: smoothedHeight
                                     y: parent ? (parent.height - height) / 2 : 0
@@ -640,7 +630,6 @@ Item {
                         case "mode-clipboard":
                         case "mode-inject":
                         case "mode-submit":
-                            root.job.setDeliveryChoice(action.replace("mode-", ""));
                             modeBtn.triggerPress();
                             break;
                     }
