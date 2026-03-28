@@ -48,4 +48,4 @@ If similar issues arise with other HTTP requests:
 
 - Qt bug tracker has multiple reports of HTTP/2 protocol errors with `QNetworkAccessManager`
 - The `Http2AllowedAttribute` was introduced in Qt 5.15 and defaults to `true` in Qt 6
-- An alternative per-manager approach: `m_manager->setAutoDeleteReplies(true)` and configuring via `QNetworkRequest::Http2DirectAttribute` — but per-request is simpler and more targeted
+- An alternative manager-level approach: set `QNetworkRequest::Http2DirectAttribute` to `false` on a `QSslConfiguration` attached to the manager — but per-request attribute is simpler and more targeted
