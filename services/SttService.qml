@@ -449,6 +449,9 @@ Singleton {
         /// Whether RPC confirmed Enter was sent
         readonly property bool injectionSubmitted: _injectionSubmitted
 
+        /// Whether this job is currently in an auto-retry cycle
+        readonly property bool autoRetrying: _autoRetryCount > 0 && _state === "processing"
+
         /// Whether the job is closing (triggers fade animation)
         property bool closing: false
 

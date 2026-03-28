@@ -55,6 +55,7 @@ Item {
     readonly property string serviceInjectionPath: job.injectionPath
     readonly property bool serviceInjectionDowngraded: job.injectionDowngraded
     readonly property bool serviceInjectionSubmitted: job.injectionSubmitted
+    readonly property bool serviceAutoRetrying: job.autoRetrying
 
     // Number of audio visualizer bars (compact layout)
     readonly property int barCount: 16
@@ -489,6 +490,19 @@ Item {
                 }
             }
 
+            // ── Auto-retry indicator ────────────────────────────────
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.serviceAutoRetrying
+
+                StyledText {
+                    text: "retrying…"
+                    font.pointSize: Appearance.font.size.small
+                    font.italic: true
+                    color: Colours.palette.m3outline
+                }
+            }
+
             // ── Hover-expanded action buttons ────────────────────────
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
@@ -625,6 +639,7 @@ Item {
             // ── State indicator (success/error) ──────────────────────
             Loader {
                 Layout.alignment: Qt.AlignHCenter
+                visible: sourceComponent !== null
 
                 sourceComponent: {
                     switch (root.serviceState) {
