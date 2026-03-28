@@ -17,6 +17,7 @@ void Requests::get(const QUrl& url, QJSValue onSuccess, QJSValue onError) const 
     }
 
     QNetworkRequest request(url);
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     auto reply = m_manager->get(request);
 
     QObject::connect(reply, &QNetworkReply::finished, [reply, onSuccess, onError]() {

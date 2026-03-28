@@ -192,6 +192,7 @@ Singleton {
         return conditions[code] || "Unknown";
     }
 
+    Component.onCompleted: reload()
     onLocChanged: fetchWeatherData()
 
     // Refresh current location hourly
