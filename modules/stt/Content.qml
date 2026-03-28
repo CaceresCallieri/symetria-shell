@@ -211,39 +211,100 @@ Item {
     // so this branch is unreachable in normal operation but guards against unknown states.
     readonly property var stateConfig: stateMap[root.serviceState] ?? stateMap["idle"]
 
-    // Success state: checkmark icon + delivery method subtitle
+    // Success state: the delivery mode icon slides from its compact-row
+    // position to center while scaling up, reinforcing what action was taken.
     Component {
         id: successComponent
 
-        ColumnLayout {
-            spacing: Appearance.spacing.small
+        // Wrapper matches the compact row's dimensions so the card
+        // background stays the same size during the success state.
+        Item {
+            implicitWidth: compactRow.implicitWidth
+            implicitHeight: compactRow.implicitHeight
 
-            MaterialIcon {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.stateConfig.icon
-                color: root.stateConfig.iconColor
-                font.pointSize: Appearance.font.size.extraLarge
-            }
+            // Pill-shaped container matching PillButton's matte background,
+            // so the icon keeps its dark pill as it slides to center.
+            StyledRect {
+                id: successPill
 
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                visible: text !== ""
-                text: {
-                    if (root.serviceInjectionDowngraded)
-                        return qsTr("Pasted (submit skipped)");
-                    switch (root.serviceInjectionPath) {
-                        case "rpc":
-                            return root.serviceInjectionSubmitted
-                                ? qsTr("Submitted")
-                                : qsTr("Injected");
-                        case "paste": return qsTr("Pasted");
-                        default: return qsTr("Copied");
+                anchors.verticalCenter: parent.verticalCenter
+
+                readonly property real targetIconSize: Appearance.font.size.large
+                readonly property real targetPadding: Appearance.padding.normal * 2
+
+                implicitWidth: successIcon.implicitWidth + targetPadding
+                implicitHeight: successIcon.implicitHeight + Appearance.padding.smaller * 2
+
+                radius: Appearance.rounding.full
+                color: Colours.pillStyle(
+                    Colours.palette.m3surfaceContainerHigh,
+                    Colours.glass.subtle
+                ).background
+
+                opacity: 0
+
+                MaterialIcon {
+                    id: successIcon
+
+                    anchors.centerIn: parent
+                    text: {
+                        if (root.serviceInjectionDowngraded) return "content_copy";
+                        switch (root.serviceInjectionPath) {
+                            case "rpc":
+                                return root.serviceInjectionSubmitted ? "send" : "input";
+                            case "paste": return "input";
+                            default: return "content_copy";
+                        }
+                    }
+                    color: root.serviceInjectionDowngraded
+                        ? Colours.palette.m3error
+                        : root.stateConfig.iconColor
+                    font.pointSize: successPill.targetIconSize
+                }
+
+                Component.onCompleted: {
+                    // Start at mode button's position and size, then animate
+                    // to center at larger size with overshoot.
+                    if (root.serviceIsAskMode) {
+                        x = modeBtn.x + modeBtn.width / 2 - width / 2;
+                        scale = modeBtn.width / width;
+                    } else {
+                        x = (parent.width - width) / 2;
+                        scale = 0.4;
+                    }
+                    popAnim.start();
+                }
+
+                ParallelAnimation {
+                    id: popAnim
+
+                    NumberAnimation {
+                        target: successPill
+                        property: "x"
+                        to: (successPill.parent.width - successPill.width) / 2
+                        duration: Appearance.anim.durations.expressiveDefaultSpatial
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                    }
+
+                    NumberAnimation {
+                        target: successPill
+                        property: "scale"
+                        to: 1.0
+                        duration: Appearance.anim.durations.expressiveDefaultSpatial
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                    }
+
+                    NumberAnimation {
+                        target: successPill
+                        property: "opacity"
+                        to: 1.0
+                        duration: Appearance.anim.durations.small
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
                     }
                 }
-                color: root.serviceInjectionDowngraded
-                    ? Colours.palette.m3error
-                    : Colours.palette.m3onSurfaceVariant
-                font.pointSize: Appearance.font.size.small
             }
         }
     }
