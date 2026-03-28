@@ -5,15 +5,15 @@ import Quickshell.Io
 import "services"
 
 Scope {
+    // Rate limiting: prevent phishing via rapid dialog spam
+    property real lastCallTime: 0
+    readonly property int rateLimitMs: 1000
+
+    // FIFO path validation prefix - must match symmetria-askpass.sh
+    readonly property string validFifoPrefix: "/tmp/symmetria-askpass-"
+
     IpcHandler {
         target: "askpass"
-
-        // Rate limiting: prevent phishing via rapid dialog spam
-        property real lastCallTime: 0
-        readonly property int rateLimitMs: 1000
-
-        // FIFO path validation prefix - must match symmetria-askpass.sh
-        readonly property string validFifoPrefix: "/tmp/symmetria-askpass-"
 
         function prompt(message: string, fifoPath: string, commandInfo: string): void {
             // Security: validate FIFO path to prevent writing to arbitrary files

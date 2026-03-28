@@ -282,7 +282,7 @@ Item {
                 required property int index
 
                 entryId: modelData.id
-                enabled: modelData.enabled !== false
+                entryEnabled: modelData.enabled !== false
                 isFirst: index === 0
                 isLast: false
             }
@@ -330,7 +330,7 @@ Item {
                 required property int index
 
                 entryId: modelData.id
-                enabled: modelData.enabled !== false
+                entryEnabled: modelData.enabled !== false
                 isFirst: false
                 isLast: index === rightRepeater.count - 1
             }
@@ -342,7 +342,7 @@ Item {
         id: barLoader
 
         required property string entryId
-        required property bool enabled
+        required property bool entryEnabled
         property bool isFirst: false
         property bool isLast: false
 
@@ -356,8 +356,8 @@ Item {
         Layout.alignment: Qt.AlignVCenter
         Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
         Layout.rightMargin: hasPillMargins ? root.pillExternalMargin : 0
-        visible: enabled
-        active: enabled
+        visible: entryEnabled
+        active: entryEnabled
 
         sourceComponent: {
             switch (entryId) {
