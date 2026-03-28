@@ -32,7 +32,7 @@ stt_log "transcribe" "started | file=$AUDIO_FILE model=$MODEL"
 
 # Temp file for response body
 RESP_BODY=$(mktemp)
-trap 'rm -f "$RESP_BODY"' EXIT
+trap 'rm -f "$RESP_BODY" "$CURL_ERR"' EXIT
 
 # Verbatim prompt prevents the LLM-based models (gpt-4o-transcribe) from
 # summarizing or paraphrasing speech instead of transcribing it literally.
@@ -61,6 +61,7 @@ The following proper nouns, technical terms, or names may appear. Use these exac
     stt_log "transcribe" "hints=${STT_VOCABULARY_HINTS}"
 fi
 
+CURL_ERR=$(mktemp)
 HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
     --max-time 110 \
@@ -71,10 +72,14 @@ HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     -F "response_format=text" \
     -F "prompt=$VERBATIM_PROMPT" \
     -F "temperature=0" \
-    2>/dev/null) || {
-        echo "ERROR:0:Network error (curl failed)" >&2
+    2>"$CURL_ERR") || {
+        CURL_DETAIL=$(head -c 200 "$CURL_ERR" 2>/dev/null)
+        rm -f "$CURL_ERR"
+        stt_log "transcribe" "curl-failed | ${CURL_DETAIL:-unknown}"
+        echo "ERROR:0:Network error — ${CURL_DETAIL:-curl failed}" >&2
         exit 2
     }
+rm -f "$CURL_ERR"
 
 case "$HTTP_CODE" in
     200)

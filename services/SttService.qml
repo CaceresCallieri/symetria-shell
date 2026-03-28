@@ -1083,7 +1083,7 @@ Singleton {
                         job._cleanupTempFiles();
                     job.readyForDelivery();
                 } else {
-                    Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail);
+                    Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail + " raw=" + job._errorRaw);
                     if (job._errorDetail === "") {
                         job._errorDetail = "Transcription failed";
                         job._errorHint = "Check logs for details";
