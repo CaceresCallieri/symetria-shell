@@ -24,6 +24,9 @@ ShellRoot {
         running: true
         onTriggered: Quickshell.watchFiles = false
     }
+    // Temporary startup profiler — remove after verification
+    Component.onCompleted: console.log("[BOOT] ShellRoot @ " + Date.now())
+    Timer { interval: 500; running: true; repeat: true; property int b: 0; onTriggered: { b++; console.log("[BOOT:HB] #" + b + " @ " + Date.now()); if (b >= 10) running = false; } }
 
     Background {}
     Drawers {}

@@ -7,7 +7,7 @@ import QtQuick.Shapes
 ShapePath {
     id: root
 
-    required property Wrapper wrapper
+    required property Item wrapper
     required property var sidebar
     readonly property real rounding: Config.border.rounding
     readonly property bool flatten: wrapper.height < rounding * 2

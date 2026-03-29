@@ -3,8 +3,9 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
-import qs.modules.windowinfo
-import qs.modules.controlcenter
+// Heavy module imports deferred — loaded on-demand via setSource()
+// import qs.modules.windowinfo   (4 files)
+// import qs.modules.controlcenter (49 files)
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -159,28 +160,32 @@ Item {
     }
 
     DetachedComp {
+        id: winfoComp
         shouldBeActive: root.detachedMode === "winfo"
         asynchronous: true
         anchors.centerIn: parent
 
-        sourceComponent: WindowInfo {
-            screen: root.screen
-            client: Hypr.activeToplevel
+        onShouldBeActiveChanged: {
+            if (shouldBeActive && !item)
+                setSource(Qt.resolvedUrl("../../windowinfo/WindowInfo.qml"), {
+                    screen: root.screen,
+                    client: Qt.binding(() => Hypr.activeToplevel)
+                });
         }
     }
 
     DetachedComp {
+        id: ccComp
         shouldBeActive: root.detachedMode === "any"
         asynchronous: true
         anchors.centerIn: parent
 
-        sourceComponent: ControlCenter {
-            screen: root.screen
-            active: root.queuedMode
-
-            function close(): void {
-                root.close();
-            }
+        onShouldBeActiveChanged: {
+            if (shouldBeActive && !item)
+                setSource(Qt.resolvedUrl("../../controlcenter/ControlCenter.qml"), {
+                    screen: root.screen,
+                    active: Qt.binding(() => root.queuedMode)
+                });
         }
     }
 

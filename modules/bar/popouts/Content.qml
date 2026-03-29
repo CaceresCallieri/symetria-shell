@@ -122,7 +122,8 @@ Item {
 
         Popout {
             name: "calendar"
-            sourceComponent: Calendar {}
+            // URL-based loading defers dashboard module compilation (~14 files)
+            source: shouldBeActive ? Qt.resolvedUrl("calendarcontent/Calendar.qml") : ""
         }
 
         Popout {
