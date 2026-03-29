@@ -77,11 +77,17 @@ Item {
 
         active: root.shouldBeVisible || root.visible
 
-        sourceComponent: Bar {
-            height: root.contentHeight
-            screen: root.screen
-            visibilities: root.visibilities
-            popouts: root.popouts
+        // URL-based loading defers compilation of Bar.qml and its
+        // subdirectory imports (~25 files) from import-time to activation.
+        onActiveChanged: {
+            if (active && !item) {
+                setSource(Qt.resolvedUrl("Bar.qml"), {
+                    height: Qt.binding(() => root.contentHeight),
+                    screen: root.screen,
+                    visibilities: root.visibilities,
+                    popouts: root.popouts
+                });
+            }
         }
     }
 }

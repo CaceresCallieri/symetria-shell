@@ -1,16 +1,18 @@
 import qs.services
 import qs.config
-import qs.modules.session as Session
-import qs.modules.launcher as Launcher
-import qs.modules.dashboard as Dashboard
-import qs.modules.bar.popouts as BarPopouts
-import qs.modules.utilities as Utilities
-import qs.modules.sidebar as Sidebar
-import qs.modules.clipboard as ClipboardModule
-import qs.modules.askpass as Askpass
-import qs.modules.stt as SttModule
-import qs.modules.calculator as CalculatorModule
-import qs.modules.packages as PackagesModule
+// Relative path imports — qs.modules.* paths don't resolve in
+// setSource-loaded files, so we use directory-relative paths instead.
+import "../../session" as Session
+import "../../launcher" as Launcher
+import "../../dashboard" as Dashboard
+import "../../bar/popouts" as BarPopouts
+import "../../utilities" as Utilities
+import "../../sidebar" as Sidebar
+import "../../clipboard" as ClipboardModule
+import "../../askpass" as Askpass
+import "../../stt" as SttModule
+import "../../calculator" as CalculatorModule
+import "../../packages" as PackagesModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -20,7 +22,7 @@ import QtQuick.Shapes
 Item {
     id: root
 
-    required property Panels panels
+    required property Item panels
     required property Item bar
     required property Item agentBar
 
