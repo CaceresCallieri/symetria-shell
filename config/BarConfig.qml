@@ -85,7 +85,17 @@ JsonObject {
         property list<var> namedWorkspaceIcons: [
             { name: "gaming", icon: "mat:sports_esports" },
             { name: "music", icon: "mat:library_music" },
-            { name: "theater", icon: "mat:theater_comedy" }
+            { name: "theater", icon: "mat:theater_comedy" },
+            { name: "symmetria", icon: "mat:deployed_code" },
+            { name: "whatsapp", icon: "mat:chat" },
+            { name: "netcolor", icon: "mat:palette" },
+            { name: "bambin", icon: "mat:child_care" },
+            { name: "fps", icon: "mat:target" },
+            { name: "dotfiles", icon: "mat:settings" },
+            { name: "hyprdots", icon: "mat:tune" },
+            { name: "kosmos", icon: "mat:rocket_launch" },
+            { name: "magistralia", icon: "mat:school" },
+            { name: "corpy", icon: "mat:code" }
         ]
     }
     component Tray: JsonObject {
