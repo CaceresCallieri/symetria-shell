@@ -111,13 +111,14 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: Appearance.spacing.smaller
 
-                // Project name label
+                // Project name label — hidden when project matches workspace (icon already identifies it)
                 StyledText {
                     Layout.alignment: Qt.AlignVCenter
                     text: modelData.project
                     color: Colours.palette.m3primary
                     font.weight: Font.Bold
                     font.pointSize: Appearance.font.size.small
+                    visible: modelData.project !== (root.currentWorkspace?.name ?? "")
                 }
 
                 // Agent chips for this project
