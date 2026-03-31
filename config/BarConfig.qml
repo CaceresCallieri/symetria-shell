@@ -89,7 +89,7 @@ JsonObject {
             { name: "symmetria", icon: "mat:deployed_code" },
             { name: "symmetria-whatsapp", icon: "mat:chat" },
             { name: "netcolor", icon: "mat:palette" },
-            { name: "bambin", icon: "mat:child_care" },
+            { name: "bambin", icon: "mat:format_paint" },
             { name: "fps-game", icon: "mat:target" },
             { name: ".dotfiles", icon: "mat:settings" },
             { name: ".hyprdots", icon: "mat:tune" },
