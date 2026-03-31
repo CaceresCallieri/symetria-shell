@@ -16,5 +16,29 @@
             { "key": "f", "label": "File Manager", "command": "nautilus" },
             { "key": "e", "label": "Editor", "command": "neovide" }
         ]
+    },
+
+    "_comment_subgroups": "Chords can use 'group' instead of 'command' to navigate to another chord group (nested menus)",
+
+    "workspace-action": {
+        "title": "Workspace Action",
+        "chords": [
+            { "key": "s", "label": "Switch workspace", "group": "switch-workspace" },
+            { "key": "m", "label": "Move window", "group": "move-to-workspace" }
+        ]
+    },
+    "switch-workspace": {
+        "title": "Switch →",
+        "chords": [
+            { "key": "1", "label": "Workspace 1", "command": "hyprctl dispatch workspace 1" },
+            { "key": "2", "label": "Workspace 2", "command": "hyprctl dispatch workspace 2" }
+        ]
+    },
+    "move-to-workspace": {
+        "title": "Move Window →",
+        "chords": [
+            { "key": "1", "label": "Workspace 1", "command": "hyprctl dispatch movetoworkspacesilent 1" },
+            { "key": "2", "label": "Workspace 2", "command": "hyprctl dispatch movetoworkspacesilent 2" }
+        ]
     }
 }

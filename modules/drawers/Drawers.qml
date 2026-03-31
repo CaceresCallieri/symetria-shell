@@ -240,6 +240,7 @@ Variants {
             KeyChordsModule.Overlay {
                 anchors.fill: parent
                 visibilities: visibilities
+                bottomOffset: agentBar.implicitHeight
             }
 
         }

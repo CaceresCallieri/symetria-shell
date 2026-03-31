@@ -71,7 +71,18 @@ Singleton {
         _activeChords = [];
     }
 
-    /// Handle a key press. Returns true if matched (command executed).
+    /// Dispatch a matched chord — either navigate to a sub-group or execute a command.
+    /// Centralizes dispatch logic for both keyboard (handleKey) and mouse (Overlay click) paths.
+    function dispatchChord(chord: var): void {
+        if (chord.group) {
+            activate(chord.group);
+        } else {
+            dismiss();
+            executeCommand(chord.command);
+        }
+    }
+
+    /// Handle a key press. Returns true if matched (command executed or group navigated).
     function handleKey(key: string): bool {
         if (!active || !_activeChords || _activeChords.length === 0)
             return false;
@@ -80,9 +91,7 @@ Singleton {
 
         for (const chord of _activeChords) {
             if (chord.key.toUpperCase() === normalized) {
-                const command = chord.command;
-                dismiss();
-                executeCommand(command);
+                dispatchChord(chord);
                 return true;
             }
         }
@@ -145,7 +154,10 @@ Singleton {
             const validChords = group.chords.filter(c =>
                 c && typeof c.key === "string" && c.key.length === 1 &&
                 typeof c.label === "string" && c.label.length > 0 &&
-                typeof c.command === "string" && c.command.length > 0
+                (
+                    (typeof c.command === "string" && c.command.length > 0) ||
+                    (typeof c.group === "string" && c.group.length > 0)
+                )
             );
 
             if (validChords.length > 0) {
@@ -153,6 +165,14 @@ Singleton {
                     title: typeof group.title === "string" ? group.title : name,
                     chords: validChords
                 };
+            }
+        }
+
+        // Warn about dangling sub-group references (catches typos at load time)
+        for (const [name, group] of Object.entries(result)) {
+            for (const chord of group.chords) {
+                if (chord.group && !result[chord.group])
+                    console.warn("[KeyChords] Chord in", name, "references unknown group:", chord.group);
             }
         }
 

@@ -8,12 +8,11 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-/// Centered floating dialog for KeyChords which-key display.
+/// Bottom-anchored horizontal panel for KeyChords which-key display.
 ///
-/// Shows available chord keys for the active group. All keyboard
-/// input is captured — matched keys execute commands, Escape dismisses,
-/// unmatched keys are silently consumed. Click outside dismisses via
-/// HyprlandFocusGrab (in Drawers.qml) or the transparent catch area.
+/// Shows available chord keys for the active group in a multi-column
+/// grid that adapts to content size. Positioned above the agent bar,
+/// centered horizontally. Container shrinks to fit when few items.
 ///
 /// Lives as a direct child of StyledWindow in Drawers.qml (not inside
 /// Panels) to avoid Region mask issues with click-through.
@@ -21,33 +20,29 @@ Item {
     id: root
 
     required property PersistentProperties visibilities
+    required property real bottomOffset
 
     readonly property bool shouldShow: visibilities.keychords && Config.keychords.enabled && KeyChordsService.active
 
-    visible: dialogScale > 0
-
-    // Animated properties driven by shouldShow state.
-    // IMPORTANT: The idle value MUST be 0.0, not 0.01 or any positive number.
-    // When dialogScale > 0, this Item is visible: true, which means its
-    // full-window dismiss MouseArea participates in Qt Quick's cursor
-    // hit-testing — even with enabled: false. Being the highest z-order
-    // sibling in Drawers.qml, its default ArrowCursor shadows every
-    // cursorShape below (buttons, tray items, etc.), preventing pointer
-    // cursors from ever reaching the Wayland cursor-shape-v1 protocol.
+    // IMPORTANT: The idle value of dialogOpacity MUST reach 0.0 so visible becomes false.
+    // When visible: true, the full-window dismiss MouseArea participates in Qt Quick's
+    // cursor hit-testing — even with enabled: false. Being the highest z-order sibling
+    // in Drawers.qml, its default ArrowCursor shadows every cursorShape below.
     // See: docs/cursor-shape-layer-shell.md
-    property real dialogScale: shouldShow ? 1.0 : 0.0
-    property real dialogOpacity: shouldShow ? 1.0 : 0.0
+    visible: dialogOpacity > 0
 
-    Behavior on dialogScale {
-        NumberAnimation {
-            duration: Appearance.anim.durations.normal
-            easing.type: Easing.OutBack
-            easing.overshoot: 1.5
-        }
-    }
+    property real dialogOpacity: shouldShow ? 1.0 : 0.0
+    property real dialogTranslateY: shouldShow ? 0 : dialogWrapper.height + root.bottomOffset
 
     Behavior on dialogOpacity {
         Anim {}
+    }
+
+    Behavior on dialogTranslateY {
+        NumberAnimation {
+            duration: Appearance.anim.durations.normal
+            easing.type: Easing.OutCubic
+        }
     }
 
     FocusManager {
@@ -56,32 +51,32 @@ Item {
     }
 
     // Transparent click catcher — dismiss when clicking outside the dialog.
-    // Only enabled when the dialog is showing to avoid blocking click events.
-    // Note: enabled: false does NOT prevent cursor shadowing — that is handled
-    // by the parent Item's visible: dialogScale > 0 gate, which removes this
-    // entire subtree from Qt Quick's cursor hit-testing when idle.
     MouseArea {
         anchors.fill: parent
         enabled: root.shouldShow
         onClicked: KeyChordsService.dismiss()
     }
 
-    // Centered dialog container
+    // Bottom-centered dialog — sized by content, not by screen
     Item {
         id: dialogWrapper
 
-        anchors.centerIn: parent
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.bottomOffset
+        anchors.horizontalCenter: parent.horizontalCenter
         width: dialog.implicitWidth
         height: dialog.implicitHeight
 
-        scale: root.dialogScale
+        transform: Translate {
+            y: root.dialogTranslateY
+        }
         opacity: root.dialogOpacity
 
         StyledRect {
             id: dialog
 
-            implicitWidth: dialogContent.implicitWidth + Appearance.padding.large * 6   // 6× = 90px per side: generous breathing room for floating overlay
-            implicitHeight: dialogContent.implicitHeight + Appearance.padding.large * 6  // 6× = 90px per side: generous breathing room for floating overlay
+            implicitWidth: dialogContent.implicitWidth + Appearance.padding.large * 2
+            implicitHeight: dialogContent.implicitHeight + Appearance.padding.large * 2
 
             readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
@@ -107,25 +102,33 @@ Item {
                 id: dialogContent
 
                 anchors.centerIn: parent
-                spacing: Appearance.spacing.large
+                spacing: Appearance.spacing.normal
 
                 // Group title
                 StyledText {
                     Layout.alignment: Qt.AlignHCenter
 
                     text: KeyChordsService.activeGroupTitle
-                    font.pointSize: Appearance.font.size.large
+                    font.pointSize: Appearance.font.size.normal
                     font.weight: Font.DemiBold
-                    color: Colours.palette.m3onSurface
+                    color: Colours.palette.m3onSurfaceVariant
                 }
 
-                // Chord keys grid
+                // Chord keys grid — columns computed from screen width, container shrinks to fit
                 Grid {
+                    id: chordGrid
+
                     Layout.alignment: Qt.AlignHCenter
 
-                    columns: 2
+                    readonly property int targetItemWidth: Config.keychords.sizes.itemWidth
+                    readonly property real availableWidth: root.width - Appearance.padding.large * 4
+                    columns: Math.max(1, Math.min(
+                        KeyChordsService.activeChords.length ?? 1,
+                        Math.floor(availableWidth / (targetItemWidth + columnSpacing))
+                    ))
+
                     columnSpacing: Appearance.spacing.small
-                    rowSpacing: Appearance.spacing.normal
+                    rowSpacing: Appearance.spacing.small
 
                     Repeater {
                         model: KeyChordsService.activeChords
@@ -135,13 +138,10 @@ Item {
 
                             keyLetter: modelData.key
                             label: modelData.label
-
-                            // Each chord key takes equal share of the row
-                            width: (Config.keychords.sizes.maxWidth - Appearance.spacing.small) / 2
+                            width: Config.keychords.sizes.itemWidth
 
                             onActivated: {
-                                KeyChordsService.dismiss();
-                                KeyChordsService.executeCommand(modelData.command);
+                                KeyChordsService.dispatchChord(modelData);
                             }
                         }
                     }

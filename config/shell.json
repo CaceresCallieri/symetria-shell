@@ -563,7 +563,7 @@
   "keychords": {
     "enabled": true,
     "sizes": {
-      "maxWidth": 500,
+      "itemWidth": 160,
       "keyWidth": 32,
       "itemHeight": 28
     }

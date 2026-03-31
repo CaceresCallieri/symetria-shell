@@ -529,7 +529,7 @@ Singleton {
         return {
             enabled: keychords.enabled,
             sizes: {
-                maxWidth: keychords.sizes.maxWidth,
+                itemWidth: keychords.sizes.itemWidth,
                 keyWidth: keychords.sizes.keyWidth,
                 itemHeight: keychords.sizes.itemHeight
             }
