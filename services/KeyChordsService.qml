@@ -35,6 +35,10 @@ Singleton {
     /// All parsed chord groups from JSON. Map of groupName → {title, chords[]}.
     property var chordGroups: ({})
 
+    /// Navigation stack for sub-group back-navigation.
+    /// Each entry is a group name. Escape pops back; empty stack → dismiss.
+    property var _groupHistory: []
+
     /// Activate a chord group by name. Toggles off if same group is already active.
     /// Note: the toggle-dismiss applies to sub-groups too — navigating to the same
     /// group twice in a row (e.g., pressing the same chord key again) dismisses the overlay.
@@ -69,12 +73,24 @@ Singleton {
         active = true;
     }
 
-    /// Dismiss the overlay without executing any command.
+    /// Dismiss the overlay without executing any command. Clears navigation history.
     function dismiss(): void {
         active = false;
         _activeGroup = "";
         _activeGroupTitle = "";
         _activeChords = [];
+        _groupHistory = [];
+    }
+
+    /// Navigate back to the parent chord group, or dismiss if at the top level.
+    function navigateBack(): void {
+        if (_groupHistory.length > 0) {
+            const parent = _groupHistory.pop();
+            _groupHistory = _groupHistory; // trigger binding update
+            activate(parent);
+        } else {
+            dismiss();
+        }
     }
 
     /// Dispatch a matched chord — either navigate to a sub-group or execute a command.
@@ -82,6 +98,8 @@ Singleton {
     /// If a chord has both `group` and `command`, `group` takes precedence.
     function dispatchChord(chord: var): void {
         if (chord.group) {
+            _groupHistory.push(_activeGroup);
+            _groupHistory = _groupHistory; // trigger binding update
             activate(chord.group);
         } else {
             dismiss();

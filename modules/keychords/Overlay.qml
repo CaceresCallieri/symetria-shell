@@ -102,7 +102,7 @@ Item {
 
             Keys.onEscapePressed: event => {
                 event.accepted = true;
-                KeyChordsService.dismiss();
+                KeyChordsService.navigateBack();
             }
 
             ColumnLayout {
