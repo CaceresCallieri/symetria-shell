@@ -401,7 +401,8 @@ Singleton {
                 numLockChanged: utilities.toasts.numLockChanged,
                 kbLayoutChanged: utilities.toasts.kbLayoutChanged,
                 vpnChanged: utilities.toasts.vpnChanged,
-                nowPlaying: utilities.toasts.nowPlaying
+                nowPlaying: utilities.toasts.nowPlaying,
+                focusModeChanged: utilities.toasts.focusModeChanged
             },
             vpn: {
                 enabled: utilities.vpn.enabled,

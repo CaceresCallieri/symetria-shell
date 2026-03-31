@@ -33,7 +33,7 @@ Loader {
 
             Item {
                 anchors.fill: parent
-                opacity: Wallpapers.focusMode ? 0 : 1
+                opacity: Wallpapers.wallpaperVisible ? 1 : 0
 
                 Behavior on opacity {
                     Anim {}

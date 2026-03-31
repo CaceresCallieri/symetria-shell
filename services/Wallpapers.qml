@@ -21,8 +21,11 @@ Searcher {
     property string actualCurrent
     property bool previewColourLock
     property bool focusMode: false
+    readonly property bool wallpaperVisible: !focusMode
 
     onFocusModeChanged: {
+        if (!Config.utilities.toasts.focusModeChanged)
+            return;
         if (focusMode)
             Toaster.toast(qsTr("Focus mode"), qsTr("Wallpaper hidden for distraction-free work"), "visibility_off");
         else
