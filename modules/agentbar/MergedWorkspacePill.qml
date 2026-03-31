@@ -37,7 +37,8 @@ Item {
 
     // Special workspace detection
     readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
-    readonly property bool isSpecial: currentWorkspace?.name.startsWith("special:") ?? false
+    readonly property string currentWorkspaceName: currentWorkspace?.name ?? ""  // "" when workspace not yet reported by Hyprland
+    readonly property bool isSpecial: currentWorkspaceName.startsWith("special:")
 
     // Icon resolution: special → getSpecialWsIcon, named → getNamedWsIcon, numbered → romanize
     // Uses AgentService.workspaceIconForWsId() which already handles all three cases.
@@ -118,7 +119,9 @@ Item {
                     color: Colours.palette.m3primary
                     font.weight: Font.Bold
                     font.pointSize: Appearance.font.size.small
-                    visible: modelData.project !== (root.currentWorkspace?.name ?? "")
+                    // Visible when project name adds info: hidden when it matches workspace name (icon already identifies it).
+                    // currentWorkspaceName is "" until Hyprland reports the workspace — always shows label in that transient state.
+                    visible: modelData.project !== root.currentWorkspaceName
                 }
 
                 // Agent chips for this project

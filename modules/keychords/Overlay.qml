@@ -80,8 +80,8 @@ Item {
         StyledRect {
             id: dialog
 
-            implicitWidth: dialogContent.implicitWidth + Appearance.padding.large * 6
-            implicitHeight: dialogContent.implicitHeight + Appearance.padding.large * 6
+            implicitWidth: dialogContent.implicitWidth + Appearance.padding.large * 6   // 6× = 90px per side: generous breathing room for floating overlay
+            implicitHeight: dialogContent.implicitHeight + Appearance.padding.large * 6  // 6× = 90px per side: generous breathing room for floating overlay
 
             readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
