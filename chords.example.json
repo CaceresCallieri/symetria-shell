@@ -1,4 +1,6 @@
 {
+    "_comment_format": "Keys starting with '_' are ignored by the loader (not valid chord groups). Use them for inline documentation.",
+
     "screenshot": {
         "title": "Screenshot",
         "chords": [
@@ -18,7 +20,7 @@
         ]
     },
 
-    "_comment_subgroups": "Chords can use 'group' instead of 'command' to navigate to another chord group (nested menus)",
+    "_comment_subgroups": "Chords can use 'group' instead of 'command' to navigate to another chord group (nested menus). If both are set, 'group' takes precedence.",
 
     "workspace-action": {
         "title": "Workspace Action",

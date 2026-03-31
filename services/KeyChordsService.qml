@@ -10,7 +10,9 @@ import QtQuick
 /// and manages active group state for the overlay UI.
 ///
 /// Chord groups are defined in ~/.config/symmetria/chords.json.
-/// Each group has a title and array of {key, label, command} entries.
+/// Each group has a title and array of {key, label, command?, group?} entries.
+/// Use `command` for shell execution or `group` to navigate to a sub-group.
+/// If both are present, `group` takes precedence.
 /// Commands are executed via "sh -c" for shell expansion ($HOME, pipes, etc.).
 Singleton {
     id: root
@@ -26,7 +28,7 @@ Singleton {
     readonly property string activeGroupTitle: _activeGroupTitle
     property string _activeGroupTitle: ""
 
-    /// JS array of {key, label, command} for the current group.
+    /// JS array of {key, label, command?, group?} for the current group.
     readonly property var activeChords: _activeChords
     property var _activeChords: []
 
@@ -34,6 +36,8 @@ Singleton {
     property var chordGroups: ({})
 
     /// Activate a chord group by name. Toggles off if same group is already active.
+    /// Note: the toggle-dismiss applies to sub-groups too — navigating to the same
+    /// group twice in a row (e.g., pressing the same chord key again) dismisses the overlay.
     function activate(group: string): void {
         if (!group) {
             console.warn("[KeyChords] activate() called with empty group");
@@ -52,6 +56,8 @@ Singleton {
             return;
         }
 
+        // Defensive: validateGroups guarantees chords is non-empty, but guard against
+        // direct mutations of chordGroups outside the normal load/validate path.
         if (!groupData.chords || groupData.chords.length === 0) {
             console.warn("[KeyChords] Chord group is empty:", group);
             return;
@@ -73,12 +79,13 @@ Singleton {
 
     /// Dispatch a matched chord — either navigate to a sub-group or execute a command.
     /// Centralizes dispatch logic for both keyboard (handleKey) and mouse (Overlay click) paths.
+    /// If a chord has both `group` and `command`, `group` takes precedence.
     function dispatchChord(chord: var): void {
         if (chord.group) {
             activate(chord.group);
         } else {
             dismiss();
-            executeCommand(chord.command);
+            _executeCommand(chord.command);
         }
     }
 
@@ -99,11 +106,15 @@ Singleton {
         return false;
     }
 
-    /// Execute a chord command via shell.
+    /// Execute a chord command via shell. Internal — callers should use dispatchChord().
     /// SECURITY: Commands come from user-controlled chords.json.
     /// This file is trusted at the same level as ~/.bashrc —
     /// no sanitization is performed; shell expansion is intentional.
-    function executeCommand(command: string): void {
+    function _executeCommand(command: string): void {
+        if (commandRunner.running) {
+            console.warn("[KeyChords] Previous command still running, skipping:", command);
+            return;
+        }
         commandRunner.command = ["sh", "-c", command];
         commandRunner.running = true;
     }
@@ -144,6 +155,10 @@ Singleton {
     }
 
     /// Validate and sanitize parsed JSON into clean chord groups.
+    /// Keys whose value is not an object (e.g., string comment keys starting with "_") are
+    /// silently ignored. Each chord must have a single-character `key`, a non-empty `label`,
+    /// and either a non-empty `command` (shell execution) or `group` (sub-group navigation).
+    /// If both are present, `group` takes precedence at dispatch time.
     function validateGroups(parsed: var): var {
         const result = {};
 

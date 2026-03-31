@@ -13,6 +13,8 @@ import QtQuick.Layouts
 /// Shows available chord keys for the active group in a multi-column
 /// grid that adapts to content size. Positioned above the agent bar,
 /// centered horizontally. Container shrinks to fit when few items.
+/// Slides up from below the agent bar on show; slides back down on dismiss.
+/// Keyboard Escape and clicking outside the panel both dismiss.
 ///
 /// Lives as a direct child of StyledWindow in Drawers.qml (not inside
 /// Panels) to avoid Region mask issues with click-through.
@@ -28,11 +30,14 @@ Item {
     // When visible: true, the full-window dismiss MouseArea participates in Qt Quick's
     // cursor hit-testing — even with enabled: false. Being the highest z-order sibling
     // in Drawers.qml, its default ArrowCursor shadows every cursorShape below.
-    // See: docs/cursor-shape-layer-shell.md
+    // Note: enabled: false alone does NOT prevent cursor shadowing — visible: dialogOpacity > 0
+    // is the actual guard. See: docs/cursor-shape-layer-shell.md
     visible: dialogOpacity > 0
 
     property real dialogOpacity: shouldShow ? 1.0 : 0.0
-    property real dialogTranslateY: shouldShow ? 0 : dialogWrapper.height + root.bottomOffset
+    // Use a fixed 200px fallback when dialogWrapper.height is 0 (before first layout pass),
+    // so the slide-in animation has a non-zero starting offset.
+    property real dialogTranslateY: shouldShow ? 0 : (dialogWrapper.height > 0 ? dialogWrapper.height + root.bottomOffset : 200 + root.bottomOffset)
 
     Behavior on dialogOpacity {
         Anim {}
@@ -51,6 +56,8 @@ Item {
     }
 
     // Transparent click catcher — dismiss when clicking outside the dialog.
+    // Note: enabled: false alone does NOT prevent cursor shadowing — visible: dialogOpacity > 0
+    // is the actual guard. See: docs/cursor-shape-layer-shell.md
     MouseArea {
         anchors.fill: parent
         enabled: root.shouldShow
@@ -120,11 +127,10 @@ Item {
 
                     Layout.alignment: Qt.AlignHCenter
 
-                    readonly property int targetItemWidth: Config.keychords.sizes.itemWidth
-                    readonly property real availableWidth: root.width - Appearance.padding.large * 4
+                    readonly property real availableWidth: root.width > 0 ? root.width - Appearance.padding.large * 4 : 0
                     columns: Math.max(1, Math.min(
                         KeyChordsService.activeChords.length ?? 1,
-                        Math.floor(availableWidth / (targetItemWidth + columnSpacing))
+                        Math.floor(availableWidth / (Config.keychords.sizes.itemWidth + columnSpacing))
                     ))
 
                     columnSpacing: Appearance.spacing.small
