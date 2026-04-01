@@ -194,6 +194,7 @@ Singleton {
             );
 
             if (validChords.length > 0) {
+                validChords.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }));
                 result[name] = {
                     title: typeof group.title === "string" ? group.title : name,
                     chords: validChords
