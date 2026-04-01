@@ -51,7 +51,6 @@ Variants {
                 || (visibilities.askpass && Config.askpass.enabled)
                 || (visibilities.calculator && Config.calculator.enabled)
                 || (visibilities.packages && Config.packages.enabled)
-                || (visibilities.keychords && Config.keychords.enabled)
                 || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled)
                 || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
                 || SttService.vocabHintsVisible
@@ -79,13 +78,12 @@ Variants {
                 visibilities.clipboard = false;
                 visibilities.calculator = false;
                 visibilities.packages = false;
-                visibilities.keychords = false;
             }
 
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || visibilities.keychords || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
                 x: Config.border.thickness + win.dragMaskPadding
@@ -131,7 +129,7 @@ Variants {
                     visibilities.clipboard = false;
                     visibilities.calculator = false;
                     visibilities.packages = false;
-                    visibilities.keychords = false;
+                    // Note: keychords is NOT managed by Drawers — it has its own WlrLayer.Overlay window
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
                     // Close vocab hints input (but NOT the recording — chips persist)

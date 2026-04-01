@@ -3,6 +3,7 @@ pragma Singleton
 import qs.config
 import qs.utils
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
 
@@ -24,6 +25,10 @@ Singleton {
     readonly property string activeGroup: _activeGroup
     property string _activeGroup: ""
 
+    /// Target monitor — captured at activation so the overlay shows only on
+    /// the monitor that was focused when the chord was triggered.
+    property var targetMonitor: null
+
     /// Display title for the current group (e.g., "Screenshot").
     readonly property string activeGroupTitle: _activeGroupTitle
     property string _activeGroupTitle: ""
@@ -43,34 +48,40 @@ Singleton {
     /// Note: the toggle-dismiss applies to sub-groups too — navigating to the same
     /// group twice in a row (e.g., pressing the same chord key again) dismisses the overlay.
     function activate(group: string): void {
+        console.warn("[KeyChords:Service] activate() called with group:", group, "| current active:", active, "| current group:", _activeGroup);
         if (!group) {
-            console.warn("[KeyChords] activate() called with empty group");
+            console.warn("[KeyChords:Service] activate() called with empty group");
             return;
         }
 
         // Toggle behavior: same group → dismiss
         if (active && _activeGroup === group) {
+            console.warn("[KeyChords:Service] Toggle-dismiss: same group, dismissing");
             dismiss();
             return;
         }
 
         const groupData = chordGroups[group];
         if (!groupData) {
-            console.warn("[KeyChords] Unknown chord group:", group);
+            console.warn("[KeyChords:Service] Unknown chord group:", group, "| available groups:", Object.keys(chordGroups));
             return;
         }
 
         // Defensive: validateGroups guarantees chords is non-empty, but guard against
         // direct mutations of chordGroups outside the normal load/validate path.
         if (!groupData.chords || groupData.chords.length === 0) {
-            console.warn("[KeyChords] Chord group is empty:", group);
+            console.warn("[KeyChords:Service] Chord group is empty:", group);
             return;
         }
 
         _activeGroup = group;
         _activeGroupTitle = groupData.title || group;
         _activeChords = groupData.chords;
+        // Capture target monitor only on initial activation, not on sub-group navigation
+        if (!active)
+            targetMonitor = Hypr.focusedMonitor;
         active = true;
+        console.warn("[KeyChords:Service] Activated group:", group, "| chords:", groupData.chords.length, "| active is now:", active, "| targetMonitor:", targetMonitor?.name ?? "null");
     }
 
     /// Dismiss the overlay without executing any command. Clears navigation history.
@@ -80,6 +91,7 @@ Singleton {
         _activeGroupTitle = "";
         _activeChords = [];
         _groupHistory = [];
+        targetMonitor = null;
     }
 
     /// Navigate back to the parent chord group, or dismiss if at the top level.

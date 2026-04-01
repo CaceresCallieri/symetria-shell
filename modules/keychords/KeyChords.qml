@@ -1,41 +1,28 @@
 pragma ComponentBehavior: Bound
 
 import qs.services
-import qs.config
 import Quickshell
 import Quickshell.Io
-import QtQuick
 
-/// Root component for KeyChords which-key style overlay.
+/// IPC handler for KeyChords which-key overlay.
 ///
-/// Listens to KeyChordsService.active changes to show/hide the overlay
-/// on the focused monitor. Exposes IPC for triggering chord groups.
+/// Visibility is managed directly by KeyChordsOverlay using KeyChordsService state,
+/// decoupled from the Drawers PersistentProperties system.
 Scope {
-    Connections {
-        target: KeyChordsService
-
-        function onActiveChanged(): void {
-            if (!Config.keychords.enabled)
-                return;
-
-            if (KeyChordsService.active) {
-                const vis = Visibilities.getForActive();
-                if (vis) vis.keychords = true;
-            } else {
-                for (const [_, v] of Visibilities.screens)
-                    v.keychords = false;
-            }
-        }
-    }
+    // Note: visibility management previously lived here (setting vis.keychords on PersistentProperties).
+    // Now handled directly by KeyChordsOverlay via KeyChordsService.active + targetMonitor,
+    // decoupled from the Drawers visibility system to avoid HyprlandFocusGrab conflicts.
 
     IpcHandler {
         target: "chords"
 
         function activate(group: string): void {
+            console.warn("[KeyChords:IPC] activate IPC received, group:", group);
             KeyChordsService.activate(group);
         }
 
         function dismiss(): void {
+            console.warn("[KeyChords:IPC] dismiss IPC received");
             KeyChordsService.dismiss();
         }
     }

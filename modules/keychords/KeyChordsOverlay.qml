@@ -6,6 +6,7 @@ import qs.components.misc
 import qs.services
 import qs.config
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
@@ -32,12 +33,19 @@ Scope {
 
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            // Exclusive so the overlay grabs keyboard input immediately on map.
+            // Window is unmapped (visible: false) when hidden, so Exclusive doesn't
+            // steal focus when the overlay is inactive.
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
             anchors.top: true
             anchors.bottom: true
             anchors.left: true
             anchors.right: true
+
+            // Window maps when shouldShow triggers, unmaps after fade-out completes.
+            // This ensures Exclusive keyboard focus only applies while the overlay is on screen.
+            visible: win.shouldShow || win.dialogOpacity > 0
 
             // Full-window input when active (for dismiss MouseArea), click-through when hidden.
             mask: inputRegion
@@ -50,8 +58,21 @@ Scope {
                 height: win.shouldShow ? win.height : 0
             }
 
-            readonly property var screenVisibilities: Visibilities.getForMonitor(Hypr.monitorFor(modelData))
-            readonly property bool shouldShow: (screenVisibilities?.keychords ?? false) && Config.keychords.enabled && KeyChordsService.active
+            // Show only on the monitor that was focused when the chord was triggered.
+            // Decoupled from Drawers' PersistentProperties — uses service state directly
+            // to avoid HyprlandFocusGrab clearing the visibility flag.
+            readonly property bool shouldShow: Config.keychords.enabled && KeyChordsService.active && KeyChordsService.targetMonitor === Hypr.monitorFor(modelData)
+
+            onShouldShowChanged: console.warn("[KeyChords:Overlay]", modelData.name, "shouldShow:", shouldShow,
+                "| enabled:", Config.keychords.enabled,
+                "| service.active:", KeyChordsService.active,
+                "| targetMonitor:", KeyChordsService.targetMonitor?.name ?? "null",
+                "| myMonitor:", Hypr.monitorFor(modelData)?.name ?? "null")
+            onVisibleChanged: console.warn("[KeyChords:Overlay]", modelData.name, "window visible:", visible,
+                "| dialogOpacity:", dialogOpacity, "| shouldShow:", shouldShow)
+
+            Component.onCompleted: console.warn("[KeyChords:Overlay]", modelData.name, "window created",
+                "| monitor:", Hypr.monitorFor(modelData)?.name ?? "null")
 
             // Agent bar reference for bottom offset positioning.
             // Reactive via agentBarsVersion — resolves correctly even when agent bars register
@@ -87,6 +108,8 @@ Scope {
             FocusManager {
                 active: win.shouldShow
                 target: dialog
+                onOpen: () => console.warn("[KeyChords:Overlay]", win.modelData.name, "FocusManager: focus granted to dialog")
+                onClose: () => console.warn("[KeyChords:Overlay]", win.modelData.name, "FocusManager: focus released")
             }
 
             // Transparent click catcher — dismiss when clicking outside the dialog.
@@ -128,12 +151,14 @@ Scope {
                     focus: true
 
                     Keys.onPressed: event => {
+                        console.warn("[KeyChords:Overlay] Key pressed:", event.text, "| key:", event.key, "| focus:", dialog.activeFocus);
                         event.accepted = true;
                         if (event.text && event.text.length > 0)
                             KeyChordsService.handleKey(event.text);
                     }
 
                     Keys.onEscapePressed: event => {
+                        console.warn("[KeyChords:Overlay] Escape pressed");
                         event.accepted = true;
                         KeyChordsService.navigateBack();
                     }
