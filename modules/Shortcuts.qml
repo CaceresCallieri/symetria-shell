@@ -162,7 +162,7 @@ Scope {
             }
 
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages", "keychords"].includes(drawer))
+                if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard

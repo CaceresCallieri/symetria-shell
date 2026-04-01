@@ -27,7 +27,8 @@ Singleton {
 
     /// Target monitor — captured at activation so the overlay shows only on
     /// the monitor that was focused when the chord was triggered.
-    property var targetMonitor: null
+    readonly property var targetMonitor: _targetMonitor
+    property var _targetMonitor: null
 
     /// Display title for the current group (e.g., "Screenshot").
     readonly property string activeGroupTitle: _activeGroupTitle
@@ -79,7 +80,7 @@ Singleton {
         _activeChords = groupData.chords;
         // Capture target monitor only on initial activation, not on sub-group navigation
         if (!active)
-            targetMonitor = Hypr.focusedMonitor;
+            _targetMonitor = Hypr.focusedMonitor;
         active = true;
         console.warn("[KeyChords:Service] Activated group:", group, "| chords:", groupData.chords.length, "| active is now:", active, "| targetMonitor:", targetMonitor?.name ?? "null");
     }
@@ -91,7 +92,7 @@ Singleton {
         _activeGroupTitle = "";
         _activeChords = [];
         _groupHistory = [];
-        targetMonitor = null;
+        _targetMonitor = null;
     }
 
     /// Navigate back to the parent chord group, or dismiss if at the top level.

@@ -186,7 +186,6 @@ Variants {
                 property bool keycaster
                 property bool calculator
                 property bool packages
-                property bool keychords
 
                 Component.onCompleted: Visibilities.load(scope.modelData, this)
             }
