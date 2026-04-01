@@ -6,7 +6,6 @@ import qs.services
 import qs.config
 import qs.modules.bar
 import qs.modules.agentbar as AgentBarModule
-import qs.modules.keychords as KeyChordsModule
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -235,12 +234,6 @@ Variants {
 
                     screen: scope.modelData
                 }
-            }
-
-            KeyChordsModule.Overlay {
-                anchors.fill: parent
-                visibilities: visibilities
-                bottomOffset: agentBar.implicitHeight
             }
 
         }

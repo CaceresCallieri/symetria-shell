@@ -102,6 +102,9 @@ Item {
         }
     }
 
+    Component.onCompleted: { Visibilities.agentBars.set(screen, this); Visibilities.agentBarsVersion++; }
+    Component.onDestruction: { Visibilities.agentBars.delete(screen); Visibilities.agentBarsVersion++; }
+
     // Right-aligned sprite preview (controlled by /test-sprite skill)
     SpritePreview {
         id: preview

@@ -14,6 +14,7 @@ import "modules/askpass"
 import "modules/stt"
 import "modules/keycaster"
 import "modules/keychords"
+import "modules/keychords" as KeyChordsModule
 import Quickshell
 import QtQuick
 
@@ -34,6 +35,7 @@ ShellRoot {
     Stt {}
     Keycaster {}
     KeyChords {}
+    KeyChordsModule.KeyChordsOverlay {}
     Lock {
         id: lock
     }
