@@ -86,7 +86,7 @@ JsonObject {
             { name: "gaming", icon: "mat:sports_esports" },
             { name: "music", icon: "mat:library_music" },
             { name: "theater", icon: "mat:theater_comedy" },
-            { name: "symmetria", icon: "mat:deployed_code" },
+            { name: "symmetria", icon: "mat:balance" },
             { name: "symmetria-whatsapp", icon: "mat:chat" },
             { name: "netcolor", icon: "mat:palette" },
             { name: "bambin", icon: "mat:format_paint" },
