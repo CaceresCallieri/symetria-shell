@@ -41,7 +41,7 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        readonly property bool showButtons: dialogHover.hovered || AskpassStore.passwordBuffer.length > 0
+        readonly property bool showButtons: dialogHover.hovered
 
         HoverHandler {
             id: dialogHover
