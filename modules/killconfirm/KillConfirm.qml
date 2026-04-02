@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import qs.services
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 
 /// IPC handler for the kill-window confirmation overlay.
@@ -43,8 +42,8 @@ Scope {
     }
 
     function confirm(): void {
-        dismiss();
         Hypr.dispatch("forcekillactive");
+        dismiss();
     }
 
     function dismiss(): void {

@@ -180,7 +180,7 @@ Scope {
                         StyledText {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.maximumWidth: 350
-                            text: qsTr("This sends SIGTERM and may close all instances of the application. Unsaved work will be lost.")
+                            text: qsTr("This forcibly kills the process (SIGKILL) with no cleanup. Unsaved work will be lost.")
                             font.pointSize: Appearance.font.size.smaller
                             color: Colours.palette.m3onSurfaceVariant
                             wrapMode: Text.WordWrap
