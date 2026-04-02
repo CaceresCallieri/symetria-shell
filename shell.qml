@@ -15,6 +15,7 @@ import "modules/stt"
 import "modules/keycaster"
 import "modules/keychords"
 import "modules/keychords" as KeyChordsModule
+import "modules/killconfirm"
 import Quickshell
 import QtQuick
 
@@ -36,6 +37,12 @@ ShellRoot {
     Keycaster {}
     KeyChords {}
     KeyChordsModule.KeyChordsOverlay {}
+    KillConfirm {
+        id: killConfirm
+    }
+    KillConfirmOverlay {
+        handler: killConfirm
+    }
     Lock {
         id: lock
     }
