@@ -10,6 +10,7 @@ Item {
     id: root
 
     required property Item bar
+    required property Item agentBar
 
     anchors.fill: parent
 
@@ -38,6 +39,7 @@ Item {
             anchors.fill: parent
             anchors.margins: Config.border.thickness
             anchors.topMargin: root.bar.implicitHeight
+            anchors.bottomMargin: root.agentBar.implicitHeight
             // Left corners rounded by Border, right corners handled by Backgrounds
             topLeftRadius: Config.border.rounding
             topRightRadius: 0

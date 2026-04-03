@@ -24,33 +24,42 @@ Loader {
             name: "background"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Background
-            color: "black"
+            color: Colours.palette.m3surface
 
             anchors.top: true
             anchors.bottom: true
             anchors.left: true
             anchors.right: true
 
-            Wallpaper {
-                id: wallpaper
-                screen: win.modelData
-            }
-
-            Visualiser {
+            Item {
                 anchors.fill: parent
-                screen: win.modelData
-                wallpaper: wallpaper
-            }
+                opacity: Wallpapers.wallpaperVisible ? 1 : 0
 
-            Loader {
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.margins: Appearance.padding.large
+                Behavior on opacity {
+                    Anim {}
+                }
 
-                active: Config.background.desktopClock.enabled
-                asynchronous: true
+                Wallpaper {
+                    id: wallpaper
+                    screen: win.modelData
+                }
 
-                source: "DesktopClock.qml"
+                Visualiser {
+                    anchors.fill: parent
+                    screen: win.modelData
+                    wallpaper: wallpaper
+                }
+
+                Loader {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: Appearance.padding.large
+
+                    active: Config.background.desktopClock.enabled
+                    asynchronous: true
+
+                    source: "DesktopClock.qml"
+                }
             }
         }
     }

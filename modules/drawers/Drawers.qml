@@ -5,7 +5,7 @@ import qs.components.containers
 import qs.services
 import qs.config
 import qs.modules.bar
-import qs.modules.keychords as KeyChordsModule
+import qs.modules.agentbar as AgentBarModule
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -37,10 +37,23 @@ Variants {
         Exclusions {
             screen: scope.modelData
             bar: bar
+            agentBar: agentBar
         }
 
         StyledWindow {
             id: win
+
+            readonly property bool _shouldGrabFocus:
+                (visibilities.launcher && Config.launcher.enabled)
+                || (visibilities.session && Config.session.enabled)
+                || (visibilities.sidebar && Config.sidebar.enabled)
+                || (visibilities.clipboard && Config.clipboard.enabled)
+                || (visibilities.askpass && Config.askpass.enabled)
+                || (visibilities.calculator && Config.calculator.enabled)
+                || (visibilities.packages && Config.packages.enabled)
+                || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled)
+                || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                || SttService.vocabHintsVisible
 
             readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
             readonly property int dragMaskPadding: {
@@ -65,19 +78,18 @@ Variants {
                 visibilities.clipboard = false;
                 visibilities.calculator = false;
                 visibilities.packages = false;
-                visibilities.keychords = false;
             }
 
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || visibilities.keychords ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
                 x: Config.border.thickness + win.dragMaskPadding
                 y: bar.implicitHeight + win.dragMaskPadding
                 width: win.width - Config.border.thickness * 2 - win.dragMaskPadding * 2
-                height: win.height - bar.implicitHeight - Config.border.thickness - win.dragMaskPadding * 2
+                height: win.height - bar.implicitHeight - agentBar.implicitHeight - win.dragMaskPadding * 2
                 intersection: Intersection.Xor
 
                 regions: regions.instances
@@ -107,7 +119,7 @@ Variants {
             HyprlandFocusGrab {
                 id: focusGrab
 
-                active: (visibilities.launcher && Config.launcher.enabled) || (visibilities.session && Config.session.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (visibilities.keychords && Config.keychords.enabled) || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+                active: win._shouldGrabFocus
                 windows: [win]
                 onCleared: {
                     visibilities.launcher = false;
@@ -117,9 +129,11 @@ Variants {
                     visibilities.clipboard = false;
                     visibilities.calculator = false;
                     visibilities.packages = false;
-                    visibilities.keychords = false;
+                    // Note: keychords is NOT managed by Drawers — it has its own WlrLayer.Overlay window
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
+                    // Close vocab hints input (but NOT the recording — chips persist)
+                    SttService.vocabHintsVisible = false;
                     panels.popouts.hasCurrent = false;
                     bar.closeTray();
                 }
@@ -147,11 +161,13 @@ Variants {
 
                 Border {
                     bar: bar
+                    agentBar: agentBar
                 }
 
                 Backgrounds {
                     panels: panels
                     bar: bar
+                    agentBar: agentBar
                 }
             }
 
@@ -159,7 +175,6 @@ Variants {
                 id: visibilities
 
                 property bool bar
-                property bool osd
                 property bool session
                 property bool launcher
                 property bool dashboard
@@ -171,7 +186,6 @@ Variants {
                 property bool keycaster
                 property bool calculator
                 property bool packages
-                property bool keychords
 
                 Component.onCompleted: Visibilities.load(scope.modelData, this)
             }
@@ -182,13 +196,14 @@ Variants {
                 visibilities: visibilities
                 panels: panels
                 bar: bar
+                agentBar: agentBar
 
                 Panels {
                     id: panels
-
                     screen: scope.modelData
                     visibilities: visibilities
                     bar: bar
+                    agentBar: agentBar
                 }
 
                 BarWrapper {
@@ -204,14 +219,20 @@ Variants {
 
                     disabled: scope.barDisabled
 
-                    Component.onCompleted: Visibilities.bars.set(scope.modelData, this)
+                    Component.onCompleted: { Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
+                }
+
+                AgentBarModule.AgentBarWrapper {
+                    id: agentBar
+
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+
+                    screen: scope.modelData
                 }
             }
 
-            KeyChordsModule.Overlay {
-                anchors.fill: parent
-                visibilities: visibilities
-            }
         }
     }
 }

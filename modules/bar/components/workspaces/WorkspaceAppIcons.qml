@@ -151,7 +151,7 @@ Row {
             Component {
                 id: singleIcon
 
-                WorkspaceAppIcon {
+                ClientAppIcon {
                     client: modelData.clients[0]
                 }
             }
@@ -163,8 +163,8 @@ Row {
                 Rectangle {
                     id: container
 
-                    // Glassmorphism styling (subtle intensity for background element)
-                    readonly property var glassStyle: Colours.glassmorphism(
+                    // Pill styling (subtle intensity for background element)
+                    readonly property var glassStyle: Colours.pillStyle(
                         Colours.palette.m3surfaceContainerHigh,
                         Colours.glass.subtle
                     )
@@ -193,7 +193,7 @@ Row {
                         Repeater {
                             model: modelData.clients
 
-                            WorkspaceAppIcon {
+                            ClientAppIcon {
                                 required property var modelData
                                 client: modelData
                                 animateEntry: false

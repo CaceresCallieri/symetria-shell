@@ -30,11 +30,12 @@ CollapsibleSection {
 
                 readonly property string schemeKey: `${modelData.name} ${modelData.flavour}`
                 readonly property bool isCurrent: schemeKey === Schemes.currentScheme
+                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
 
-                color: Qt.alpha(Colours.tPalette.m3surfaceContainer, isCurrent ? Colours.tPalette.m3surfaceContainer.a : 0)
+                color: isCurrent ? activePill.background : "transparent"
                 radius: Appearance.rounding.normal
                 border.width: isCurrent ? 1 : 0
-                border.color: Colours.palette.m3primary
+                border.color: isCurrent ? activePill.border : "transparent"
 
                 StateLayer {
                     function onClicked(): void {

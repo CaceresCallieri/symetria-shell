@@ -51,10 +51,11 @@ CollapsibleSection {
                     width: ListView.view.width
 
                     readonly property bool isCurrent: modelData === rootPane.fontFamilyMaterial
-                    color: Qt.alpha(Colours.tPalette.m3surfaceContainer, isCurrent ? Colours.tPalette.m3surfaceContainer.a : 0)
+                    readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                    color: isCurrent ? activePill.background : "transparent"
                     radius: Appearance.rounding.normal
                     border.width: isCurrent ? 1 : 0
-                    border.color: Colours.palette.m3primary
+                    border.color: isCurrent ? activePill.border : "transparent"
 
                     StateLayer {
                         function onClicked(): void {
@@ -132,10 +133,11 @@ CollapsibleSection {
                     width: ListView.view.width
 
                     readonly property bool isCurrent: modelData === rootPane.fontFamilyMono
-                    color: Qt.alpha(Colours.tPalette.m3surfaceContainer, isCurrent ? Colours.tPalette.m3surfaceContainer.a : 0)
+                    readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                    color: isCurrent ? activePill.background : "transparent"
                     radius: Appearance.rounding.normal
                     border.width: isCurrent ? 1 : 0
-                    border.color: Colours.palette.m3primary
+                    border.color: isCurrent ? activePill.border : "transparent"
 
                     StateLayer {
                         function onClicked(): void {
@@ -213,10 +215,11 @@ CollapsibleSection {
                     width: ListView.view.width
 
                     readonly property bool isCurrent: modelData === rootPane.fontFamilySans
-                    color: Qt.alpha(Colours.tPalette.m3surfaceContainer, isCurrent ? Colours.tPalette.m3surfaceContainer.a : 0)
+                    readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                    color: isCurrent ? activePill.background : "transparent"
                     radius: Appearance.rounding.normal
                     border.width: isCurrent ? 1 : 0
-                    border.color: Colours.palette.m3primary
+                    border.color: isCurrent ? activePill.border : "transparent"
 
                     StateLayer {
                         function onClicked(): void {

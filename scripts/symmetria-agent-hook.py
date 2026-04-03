@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Symmetria Agent Hook — reports Claude Code lifecycle events to the agent bridge.
+
+Invoked by Claude Code's hooks system (async: true) on every lifecycle event.
+Reads SYMMETRIA_AGENT_ID from the environment (set by orchestrator.nvim) and
+sends an activity-state message to the bridge's Unix socket.
+
+For events requiring user attention (Stop, PermissionRequest), a second
+"notification" message is sent in the same write batch. The bridge enriches
+it with project/workspace info; AgentService spawns notify-send.
+
+Exit code is always 0 — hook failures must never block Claude Code.
+"""
+
+import json
+import os
+import socket
+import sys
+
+SOCKET_PATH = f"/run/user/{os.getuid()}/symmetria-agents.sock"
+
+# Hook event → activity state mapping
+EVENT_STATE_MAP = {
+    "SessionStart": "starting",
+    "UserPromptSubmit": "thinking",
+    "PreToolUse": "working",
+    "PostToolUse": "thinking",
+    "PostToolUseFailure": "thinking",
+    "PermissionRequest": "needs_permission",
+    "SubagentStart": "working",
+    "SubagentStop": "thinking",
+    "PreCompact": "thinking",
+    "Stop": "idle",
+    "SessionEnd": "offline",
+}
+
+# Tool name → human-readable display name
+TOOL_DISPLAY_NAMES = {
+    "Edit": "Editing",
+    "Write": "Writing",
+    "Read": "Reading",
+    "Bash": "Running",
+    "Glob": "Searching",
+    "Grep": "Searching",
+    "Task": "Delegating",
+    "WebFetch": "Fetching",
+    "UrlFetch": "Fetching",
+    "WebSearch": "Searching",
+    "NotebookEdit": "Editing",
+    "AskUserQuestion": "Asking",
+    "ExitPlanMode": "Planning",
+    "TodoWrite": "Organizing",
+    "TaskCreate": "Organizing",
+    "TaskUpdate": "Organizing",
+    "TaskList": "Organizing",
+    "TaskGet": "Organizing",
+}
+
+# Events that warrant a desktop notification (sent as a second message after activity).
+# Only events where the agent is BLOCKED and needs human attention belong here.
+# PostToolUseFailure is intentionally excluded — the agent recovers on its own.
+NOTIFICATION_EVENTS = {
+    "Stop": {
+        "title_suffix": "Ready",
+        "message": "Task completed. Awaiting your input.",
+        "urgency": "normal",
+    },
+    "PermissionRequest": {
+        "title_suffix": "Permission Required",
+        "urgency": "critical",
+    },
+}
+
+
+def _build_notification(hook_name: str, event: dict, agent_id: str) -> dict | None:
+    """Build a notification message if the event warrants user attention."""
+
+    # Direct event notifications (Stop, PermissionRequest)
+    if hook_name in NOTIFICATION_EVENTS:
+        info = NOTIFICATION_EVENTS[hook_name]
+        message = info.get("message", "")
+
+        # PermissionRequest: extract tool details
+        if hook_name == "PermissionRequest":
+            tool_name = event.get("tool_name", "a tool")
+            tool_command = event.get("tool_input", {}).get("command", "")
+            if tool_command:
+                if len(tool_command) > 50:
+                    message = f"Approve {tool_name}: {tool_command[:50]}..."
+                else:
+                    message = f"Approve {tool_name}: {tool_command}"
+            else:
+                message = f"Needs permission to use {tool_name}."
+
+        return {
+            "type": "notification",
+            "agent_id": agent_id,
+            "event": hook_name,
+            "title_suffix": info["title_suffix"],
+            "message": message,
+            "urgency": info["urgency"],
+        }
+
+    return None
+
+
+def main():
+    # Bail silently if not spawned by orchestrator
+    agent_id = os.environ.get("SYMMETRIA_AGENT_ID", "")
+    if not agent_id:
+        return
+
+    # Read hook event JSON from stdin
+    raw = sys.stdin.read().strip()
+    if not raw:
+        return
+
+    event = json.loads(raw)
+    hook_name = event.get("hook_event_name", "")
+
+    state = EVENT_STATE_MAP.get(hook_name, "")
+
+    # Clear-sourced SessionStart → "clearing" state for blink animation (start → stop).
+    # Normal SessionStart (startup/resume) keeps "starting" (eye-opening + hold).
+    if hook_name == "SessionStart" and event.get("source", "") == "clear":
+        state = "clearing"
+
+    # All events must have a mapped state to proceed.
+    if not state:
+        return
+
+    # Detect plan mode from permission_mode field (present in all hook events).
+    # This is reliable regardless of how plan mode was entered (Shift+Tab, /plan,
+    # --permission-mode plan, or AI-initiated EnterPlanMode tool).
+    # EnterPlanMode/ExitPlanMode tools do NOT reliably fire PreToolUse hooks.
+    plan_mode = event.get("permission_mode", "") == "plan"
+
+    # Resolve tool display name for tool-bearing events
+    tool = ""
+    if hook_name in ("PreToolUse", "PermissionRequest"):
+        tool_name = event.get("tool_name", "")
+        tool = TOOL_DISPLAY_NAMES.get(tool_name, tool_name)
+    elif hook_name == "SubagentStart":
+        tool = "Delegating"  # no tool_name in payload; label directly
+
+    # Build messages before opening socket
+    activity_msg = json.dumps({
+        "type": "activity",
+        "agent_id": agent_id,
+        "state": state,
+        "tool": tool,
+        "in_plan_mode": plan_mode,
+    })
+    notif = _build_notification(hook_name, event, agent_id)
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(1.0)
+    sock.connect(SOCKET_PATH)
+
+    sock.sendall((activity_msg + "\n").encode())
+    if notif:
+        sock.sendall((json.dumps(notif) + "\n").encode())
+
+    sock.close()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        # Log to debug file before swallowing — silent failures make debugging impossible
+        try:
+            log_dir = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
+            log_path = os.path.join(log_dir, "symmetria", "debug.log")
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a") as f:
+                from datetime import datetime
+                f.write(f"{datetime.now().strftime('%H:%M:%S.%f')[:12]} [py:hook] error: {e}\n")
+        except Exception:
+            pass  # Truly cannot log — give up silently

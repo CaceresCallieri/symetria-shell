@@ -121,6 +121,11 @@ Item {
         }
 
         Popout {
+            name: "calendar"
+            sourceComponent: Calendar {}
+        }
+
+        Popout {
             name: "updates"
             sourceComponent: Updates {}
         }
@@ -128,6 +133,11 @@ Item {
         Popout {
             name: "ram"
             sourceComponent: Ram {}
+        }
+
+        Popout {
+            name: "stt"
+            sourceComponent: SttActions {}
         }
 
         Repeater {

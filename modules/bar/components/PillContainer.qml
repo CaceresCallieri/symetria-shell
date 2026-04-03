@@ -7,7 +7,7 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-// Base component for glassmorphism pill containers in the bar.
+// Base component for pill-styled containers in the bar.
 // Provides consistent styling and layout structure for StatusIcons, TimePill, SystemPill, etc.
 //
 // Usage:
@@ -37,7 +37,7 @@ StyledRect {
 
     // Glassmorphism styling (subtle intensity for background containers).
     // Centralized here - changes apply to all pills automatically.
-    readonly property var glassStyle: Colours.glassmorphism(
+    readonly property var glassStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
         Colours.glass.subtle
     )

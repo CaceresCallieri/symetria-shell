@@ -70,6 +70,7 @@ Item {
             fillMode: Image.PreserveAspectFit
             asynchronous: true
             smooth: true
+            cache: true
 
             layer.enabled: true
             layer.effect: OpacityMask {

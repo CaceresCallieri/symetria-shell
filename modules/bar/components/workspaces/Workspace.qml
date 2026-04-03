@@ -68,6 +68,8 @@ Item {
     // MouseAreas inside innerLayout sit on top and receive clicks first.
     MouseArea {
         anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
 
         onClicked: event => {
             if (!root.isActive) {

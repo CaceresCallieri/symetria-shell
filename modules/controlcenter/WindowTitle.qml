@@ -10,8 +10,12 @@ StyledRect {
     required property ShellScreen screen
     required property Session session
 
+    readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
     implicitHeight: text.implicitHeight + Appearance.padding.normal
-    color: Colours.tPalette.m3surfaceContainer
+    color: pill.background
+    border.color: pill.border
+    border.width: 1
 
     StyledText {
         id: text

@@ -1,7 +1,9 @@
 pragma ComponentBehavior: Bound
 
+import qs.components
 import qs.services
 import qs.config
+import qs.modules.stt as SttModule
 import "popouts" as BarPopouts
 import "components"
 import "components/workspaces"
@@ -177,6 +179,18 @@ Item {
             closeTray();
 
         if (!target) {
+            // Check STT center embed (not in left/right sections)
+            if (sttCenterContainer.visible) {
+                const localPos = mapToItem(sttCenterContainer, x, sttCenterContainer.height / 2);
+                if (localPos.x >= 0 && localPos.x <= sttCenterContainer.width) {
+                    popouts.currentName = "stt";
+                    popouts.currentCenter = Qt.binding(
+                        () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
+                    );
+                    popouts.hasCurrent = true;
+                    return;
+                }
+            }
             popouts.hasCurrent = false;
             return;
         }
@@ -210,12 +224,14 @@ Item {
             }
         }
 
-        // TimePill: weather popout only (clock/date have no popout content yet)
+        // TimePill: weather, clock, and date popouts
         if (id === "timePill" && Config.bar.popouts.timePill) {
             const container = item?.iconContainer;
             if (detectChildPopout(container, x, (child) => {
                 const name = child?.name;
-                return name === "weather" ? "weather" : null;
+                if (name === "weather") return "weather";
+                if (name === "date" || name === "clock") return "calendar";
+                return null;
             }))
                 return;
         }
@@ -279,7 +295,7 @@ Item {
                 required property int index
 
                 entryId: modelData.id
-                enabled: modelData.enabled !== false
+                entryEnabled: modelData.enabled !== false
                 isFirst: index === 0
                 isLast: false
             }
@@ -287,15 +303,113 @@ Item {
     }
 
     // Center section - truly centered (workspaces)
+    // Hidden when merged mode is active (workspaces move to the bottom merged bar).
+    // _shouldBeActive drives the desired state; active stays true while opacity > 0
+    // so the Loader keeps its content alive during the fade-out animation.
     Loader {
         id: centerLoader
+
+        readonly property bool _shouldBeActive: root.centerEntry?.enabled !== false && !AgentService.mergeActive
+
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        active: root.centerEntry?.enabled !== false
-        visible: active
+        active: _shouldBeActive || opacity > 0
+        opacity: _shouldBeActive ? 1 : 0
+        visible: opacity > 0
 
         sourceComponent: Workspaces {
             screen: root.screen
+        }
+
+        Behavior on opacity {
+            Anim {}
+        }
+    }
+
+    // STT bar embed — shown in center when merge mode is active and recording.
+    // Clip-reveals from center outward: container grows horizontally while
+    // content stays centered, so the middle portion appears first.
+    //
+    // Animation is decoupled from SttService.active (which lingers ~450ms
+    // for the drawer hide animation) — instead, the job's `closing` signal
+    // triggers the reverse clip animation immediately on cancel/restart.
+    Item {
+        id: sttCenterContainer
+
+        // Manually managed show state: set true when STT starts recording,
+        // set false immediately when the job's closing signal fires.
+        property bool _showEmbed: false
+        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
+
+        // Track the latest job to watch its closing signal
+        readonly property SttService.SttJob _latestJob: {
+            const jobs = SttService.jobs;
+            return jobs.length > 0 ? jobs[jobs.length - 1] : null;
+        }
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        clip: true
+
+        // visible must be true BEFORE width > 0 so children compute
+        // layout sizes (Qt Quick Layouts defer when ancestors are invisible).
+        // clip: true + width: 0 naturally hides content until the reveal animation.
+        visible: _shouldBeActive || width > 0
+        implicitWidth: _shouldBeActive ? sttEmbed.implicitWidth : 0
+        implicitHeight: sttEmbed.implicitHeight
+        width: implicitWidth
+        height: implicitHeight
+
+        SttModule.SttBarEmbed {
+            id: sttEmbed
+
+            x: (sttCenterContainer.width - implicitWidth) / 2
+            width: implicitWidth
+        }
+
+        Behavior on implicitWidth {
+            Anim {
+                duration: Appearance.anim.durations.expressiveDefaultSpatial
+                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            }
+        }
+
+        // Show embed when STT becomes active; closing signal handles hide.
+        // The fallback to false on !active is a safety net for edge cases
+        // where closing might not fire (e.g., service teardown).
+        Connections {
+            target: SttService
+
+            function onActiveChanged(): void {
+                sttCenterContainer._showEmbed = SttService.active;
+            }
+
+            function onVocabHintsVisibleChanged(): void {
+                if (!sttCenterContainer._shouldBeActive) return;
+
+                if (SttService.vocabHintsVisible) {
+                    root.popouts.currentName = "stt";
+                    root.popouts.currentCenter = Qt.binding(
+                        () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
+                    );
+                    root.popouts.hasCurrent = true;
+                } else if (root.popouts.currentName === "stt") {
+                    root.popouts.hasCurrent = false;
+                }
+            }
+        }
+
+        // Immediate close animation: react to job.closing rather than
+        // waiting for the job to be removed from the jobs array (~450ms).
+        // For restart: close starts at T=0, new job opens at T=500ms —
+        // producing a clean close → gap → open sequence.
+        Connections {
+            target: sttCenterContainer._latestJob
+
+            function onClosingChanged(): void {
+                if (sttCenterContainer._latestJob?.closing)
+                    sttCenterContainer._showEmbed = false;
+            }
         }
     }
 
@@ -316,7 +430,7 @@ Item {
                 required property int index
 
                 entryId: modelData.id
-                enabled: modelData.enabled !== false
+                entryEnabled: modelData.enabled !== false
                 isFirst: false
                 isLast: index === rightRepeater.count - 1
             }
@@ -328,7 +442,7 @@ Item {
         id: barLoader
 
         required property string entryId
-        required property bool enabled
+        required property bool entryEnabled
         property bool isFirst: false
         property bool isLast: false
 
@@ -342,8 +456,8 @@ Item {
         Layout.alignment: Qt.AlignVCenter
         Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
         Layout.rightMargin: hasPillMargins ? root.pillExternalMargin : 0
-        visible: enabled
-        active: enabled
+        visible: entryEnabled
+        active: entryEnabled
 
         sourceComponent: {
             switch (entryId) {
@@ -390,6 +504,7 @@ Item {
         id: statusIconsComp
         StatusIcons {}
     }
+
 
     Component {
         id: powerComp

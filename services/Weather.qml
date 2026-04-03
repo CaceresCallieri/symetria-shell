@@ -23,6 +23,8 @@ Singleton {
     readonly property real windSpeed: cc?.windSpeed ?? 0
     readonly property string sunrise: cc ? Qt.formatDateTime(new Date(cc.sunrise), Config.services.useTwelveHourClock ? "h:mm A" : "h:mm") : "--:--"
     readonly property string sunset: cc ? Qt.formatDateTime(new Date(cc.sunset), Config.services.useTwelveHourClock ? "h:mm A" : "h:mm") : "--:--"
+    readonly property string tempMax: forecast.length > 0 ? (Config.services.useFahrenheit ? `${forecast[0].maxTempF}°` : `${forecast[0].maxTempC}°`) : ""
+    readonly property string tempMin: forecast.length > 0 ? (Config.services.useFahrenheit ? `${forecast[0].minTempF}°` : `${forecast[0].minTempC}°`) : ""
 
     readonly property var cachedCities: new Map()
 
@@ -36,7 +38,7 @@ Singleton {
             } else {
                 fetchCoordsFromCity(configLocation);
             }
-        } else if (!loc || timer.elapsed() > 900) {
+        } else if (!loc || timer.elapsed() > 900000) {
             Requests.get("https://ipinfo.io/json", text => {
                 const response = JSON.parse(text);
                 if (response.loc) {
@@ -151,7 +153,15 @@ Singleton {
 
         const [lat, lon] = loc.split(",");
         const baseUrl = "https://api.open-meteo.com/v1/forecast";
-        const params = ["latitude=" + lat, "longitude=" + lon, "hourly=weather_code,temperature_2m", "daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset", "current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m", "timezone=auto", "forecast_days=7"];
+        const params = [
+            "latitude=" + lat,
+            "longitude=" + lon,
+            "hourly=weather_code,temperature_2m",
+            "daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset",
+            "current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m",
+            "timezone=auto",
+            "forecast_days=7"
+        ];
 
         return baseUrl + "?" + params.join("&");
     }
@@ -190,14 +200,18 @@ Singleton {
         return conditions[code] || "Unknown";
     }
 
+    Component.onCompleted: reload()
     onLocChanged: fetchWeatherData()
 
-    // Refresh current location hourly
+    // Refresh weather data hourly; also re-check location in case it has changed
     Timer {
         interval: 3600000 // 1 hour
         running: true
         repeat: true
-        onTriggered: fetchWeatherData()
+        onTriggered: {
+            reload()         // re-fetch location if missing or stale (offline recovery)
+            fetchWeatherData() // always refresh weather data when loc is already known
+        }
     }
 
     ElapsedTimer {

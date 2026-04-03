@@ -27,8 +27,21 @@ StyledRect {
     readonly property int nonAnimHeight: summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height) + inner.anchors.margins * 2
     property bool expanded: Config.notifs.openExpanded
 
-    color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3secondaryContainer : Colours.tPalette.m3surfaceContainer
+    readonly property color cardBaseColor: root.modelData.urgency === NotificationUrgency.Critical
+        ? Colours.palette.m3error
+        : Colours.palette.m3surfaceContainerHigh
+    readonly property var cardStyle: Colours.pillStyle(cardBaseColor, Colours.glass.medium)
+    readonly property var foregroundContainerStyle: Colours.pillStyle(cardBaseColor, Colours.glass.strong)
+
+    color: cardStyle.background
     radius: Appearance.rounding.normal
+    border.width: 1
+    border.color: cardStyle.border
+
+    Behavior on border.color {
+        CAnim {}
+    }
+
     implicitWidth: Config.notifs.sizes.width
     implicitHeight: inner.implicitHeight
 
@@ -151,9 +164,11 @@ StyledRect {
 
                 sourceComponent: StyledRect {
                     radius: Appearance.rounding.full
-                    color: root.hasTransparentIcon ? "transparent" : root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3error : root.modelData.urgency === NotificationUrgency.Low ? Colours.layer(Colours.palette.m3surfaceContainerHighest, 2) : Colours.palette.m3secondaryContainer
-                    implicitWidth: root.hasImage ? Config.notifs.sizes.badge : Config.notifs.sizes.image
-                    implicitHeight: root.hasImage ? Config.notifs.sizes.badge : Config.notifs.sizes.image
+                    color: root.hasTransparentIcon ? "transparent" : root.foregroundContainerStyle.background
+                    border.width: root.hasTransparentIcon ? 0 : 1
+                    border.color: root.hasTransparentIcon ? "transparent" : root.foregroundContainerStyle.border
+                    implicitWidth: root.hasImage ? Config.notifs.sizes.badge : Math.round(Config.notifs.sizes.image * 0.75)
+                    implicitHeight: root.hasImage ? Config.notifs.sizes.badge : Math.round(Config.notifs.sizes.image * 0.75)
 
                     Loader {
                         id: icon
@@ -165,7 +180,7 @@ StyledRect {
 
                         // Custom icons: 80% for padding, system icons: 60% (with colored background)
                         width: root.hasTransparentIcon ? Math.round(parent.width * 0.8) : Math.round(parent.width * 0.6)
-                        height: root.hasTransparentIcon ? Math.round(parent.height * 0.8) : Math.round(parent.width * 0.6)
+                        height: root.hasTransparentIcon ? Math.round(parent.height * 0.8) : Math.round(parent.height * 0.6)
 
                         // Use plain Image for custom file paths (preserves SVG transparency)
                         // Use ColouredIcon for system icons (uses Qt icon theme engine)
@@ -197,7 +212,7 @@ StyledRect {
                         ColouredIcon {
                             anchors.fill: parent
                             source: Quickshell.iconPath(root.modelData.appIcon)
-                            colour: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3onError : root.modelData.urgency === NotificationUrgency.Low ? Colours.palette.m3onSurface : Colours.palette.m3onSecondaryContainer
+                            colour: Colours.palette.m3onSurface
                             layer.enabled: root.modelData.appIcon.endsWith("symbolic")
                         }
                     }
@@ -212,7 +227,7 @@ StyledRect {
                         sourceComponent: MaterialIcon {
                             text: Icons.getNotifIcon(root.modelData.summary, root.modelData.urgency)
 
-                            color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3onError : root.modelData.urgency === NotificationUrgency.Low ? Colours.palette.m3onSurface : Colours.palette.m3onSecondaryContainer
+                            color: Colours.palette.m3onSurface
                             font.pointSize: Appearance.font.size.large
                         }
                     }
@@ -357,7 +372,7 @@ StyledRect {
 
                 StateLayer {
                     radius: Appearance.rounding.full
-                    color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                    color: Colours.palette.m3onSurface
 
                     function onClicked() {
                         root.expanded = !root.expanded;
@@ -478,7 +493,9 @@ StyledRect {
         required property var modelData
 
         radius: Appearance.rounding.full
-        color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3secondary : Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
+        color: root.foregroundContainerStyle.background
+        border.width: 1
+        border.color: root.foregroundContainerStyle.border
 
         Layout.preferredWidth: actionText.width + Appearance.padding.normal * 2
         Layout.preferredHeight: actionText.height + Appearance.padding.small * 2
@@ -487,7 +504,7 @@ StyledRect {
 
         StateLayer {
             radius: Appearance.rounding.full
-            color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3onSecondary : Colours.palette.m3onSurface
+            color: Colours.palette.m3onSurface
 
             function onClicked(): void {
                 action.modelData.invoke();
@@ -499,7 +516,7 @@ StyledRect {
 
             anchors.centerIn: parent
             text: actionTextMetrics.elidedText
-            color: root.modelData.urgency === NotificationUrgency.Critical ? Colours.palette.m3onSecondary : Colours.palette.m3onSurfaceVariant
+            color: Colours.palette.m3onSurface
             font.pointSize: Appearance.font.size.small
         }
 

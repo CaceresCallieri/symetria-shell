@@ -5,6 +5,7 @@ import qs.config
 import QtQuick
 
 // Unified active workspace indicator supporting both Repeater and ListView modes.
+// Shared by both the top bar workspace pill and the merged agentbar workspace strip.
 // - Repeater mode: Used by numbered/named workspaces (searches by activeWsId)
 //   Item requirements: ws, x, indicatorSize, indicatorOffset
 // - ListView mode: Used by special workspaces (uses currentItem directly)
@@ -26,8 +27,8 @@ StyledRect {
     property color indicatorColor: Colours.palette.m3primary
     property color textColor: Colours.palette.m3onPrimary
 
-    // --- Glassmorphism styling (strong intensity for active indicator) ---
-    readonly property var glassStyle: Colours.glassmorphism(indicatorColor, Colours.glass.strong)
+    // --- Pill styling (strong intensity for active indicator) ---
+    readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong)
 
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
@@ -73,7 +74,7 @@ StyledRect {
         const s = Math.abs(leading - trailing) + currentSize;
         // Handle activeTrail animation: extend indicator to cover previous workspace
         // (only applicable in Repeater mode - ListView mode doesn't support trail)
-        if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx !== undefined && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
+        if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
             const prevWs = workspaces?.itemAt(previousWsIdx);
             return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
         }
@@ -81,7 +82,7 @@ StyledRect {
     }
 
     // Track workspace index changes for trail animation
-    property int currentWsIdxTracked: -1  // Current workspace index being tracked
+    property int currentWsIdxTracked: -1  // Committed snapshot of currentWsIdx — captures "previous" before next update
     property int previousWsIdx: -1        // Previous workspace for trail animation
 
     onCurrentWsIdxChanged: {

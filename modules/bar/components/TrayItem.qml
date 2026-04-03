@@ -13,6 +13,8 @@ MouseArea {
     required property SystemTrayItem modelData
 
     acceptedButtons: Qt.LeftButton | Qt.RightButton
+    hoverEnabled: true
+    cursorShape: Qt.PointingHandCursor
     implicitWidth: Config.bar.sizes.iconSize
     implicitHeight: Config.bar.sizes.iconSize
 

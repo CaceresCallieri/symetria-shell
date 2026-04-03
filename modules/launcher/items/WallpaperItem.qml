@@ -3,7 +3,7 @@ import qs.components.effects
 import qs.components.images
 import qs.services
 import qs.config
-import Symmetria.Models
+import Symmetria.FileManager.Models
 import Quickshell
 import QtQuick
 

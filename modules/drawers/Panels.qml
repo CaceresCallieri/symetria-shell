@@ -1,6 +1,5 @@
+import qs.components
 import qs.config
-import qs.modules.osd as Osd
-import qs.modules.notifications as Notifications
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.dashboard as Dashboard
@@ -22,9 +21,9 @@ Item {
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property Item bar
+    required property Item agentBar
 
     readonly property alias osd: osd
-    readonly property alias notifications: notifications
     readonly property alias session: session
     readonly property alias launcher: launcher
     readonly property alias dashboard: dashboard
@@ -41,27 +40,27 @@ Item {
     anchors.fill: parent
     anchors.margins: Config.border.thickness
     anchors.topMargin: bar.implicitHeight
+    anchors.bottomMargin: agentBar.implicitHeight
 
-    Osd.Wrapper {
+    // Invisible placeholder — OSD now lives in its own overlay window (OsdOverlay.qml).
+    // This Item preserves the position reference for Interactions.qml's hover zone
+    // calculation (inRightPanel uses x, y, height to define the trigger area).
+    Item {
         id: osd
 
-        clip: session.width > 0 || sidebar.width > 0
-        screen: root.screen
-        visibilities: root.visibilities
+        implicitWidth: 0
+        implicitHeight: {
+            let h = Config.osd.sizes.sliderHeight;
+            if (Config.osd.enableMicrophone)
+                h += Config.osd.sizes.sliderHeight + Appearance.spacing.normal;
+            if (Config.osd.enableBrightness)
+                h += Config.osd.sizes.sliderHeight + Appearance.spacing.normal;
+            return h + Appearance.padding.large * 2;
+        }
 
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
         anchors.rightMargin: session.width + sidebar.width
-    }
-
-    Notifications.Wrapper {
-        id: notifications
-
-        visibilities: root.visibilities
-        panels: root
-
-        anchors.top: parent.top
-        anchors.right: parent.right
     }
 
     Session.Wrapper {
@@ -119,6 +118,9 @@ Item {
         }
     }
 
+    // DISABLED: Dashboard panel is disabled and slated for removal.
+    // Some sub-features (weather/forecast) may be extracted and reimplemented elsewhere.
+    // The component is kept instantiated but gated by Config.dashboard.enabled (set to false).
     Dashboard.Wrapper {
         id: dashboard
 
@@ -167,8 +169,8 @@ Item {
         screen: root.screen
 
         x: {
-            if (isDetached)
-                return (root.width - nonAnimWidth) / 2;
+            if (popouts._detachedFull)
+                return 0;
 
             const off = currentCenter - Config.border.thickness - nonAnimWidth / 2;
             const diff = root.width - Math.floor(off + nonAnimWidth);
@@ -176,7 +178,7 @@ Item {
                 return off + diff;
             return Math.max(off, 0);
         }
-        y: isDetached ? (root.height - nonAnimHeight) / 2 : 0
+        y: 0
     }
 
     Utilities.Wrapper {
@@ -190,12 +192,25 @@ Item {
         anchors.right: parent.right
     }
 
+    Utilities.RecordingIndicator {
+        id: recordingIndicator
+
+        anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
+        anchors.right: sidebar.left
+        anchors.margins: Appearance.padding.normal
+    }
+
     Toasts.Toasts {
         id: toasts
 
         anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
         anchors.right: sidebar.left
-        anchors.margins: Appearance.padding.normal
+        anchors.rightMargin: Appearance.padding.normal
+        anchors.bottomMargin: Appearance.padding.normal + (recordingIndicator.active ? recordingIndicator.implicitHeight + Appearance.spacing.small : 0)
+
+        Behavior on anchors.bottomMargin {
+            Anim {}
+        }
     }
 
     Sidebar.Wrapper {
@@ -204,7 +219,7 @@ Item {
         visibilities: root.visibilities
         panels: root
 
-        anchors.top: notifications.bottom
+        anchors.top: parent.top
         anchors.bottom: utilities.top
         anchors.right: parent.right
     }

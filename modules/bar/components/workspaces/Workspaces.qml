@@ -14,10 +14,11 @@ Item {
     required property ShellScreen screen
 
     readonly property bool onSpecial: (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor)?.lastIpcObject.specialWorkspace.name !== ""
-    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.monitorFor(screen).activeWorkspace?.id ?? 1) : Hypr.activeWsId
+    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.monitorFor(screen)?.activeWorkspace?.id ?? 1) : Hypr.activeWsId
 
-    // Monitor focus detection for indicator dots
-    readonly property bool isMonitorFocused: Hypr.monitorFor(screen).focused
+    // Monitor focus detection for indicator dots (hidden with single monitor)
+    readonly property bool multiMonitor: Quickshell.screens.length > 1
+    readonly property bool isMonitorFocused: multiMonitor && (Hypr.monitorFor(screen)?.focused ?? false)
 
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
         acc[curr.id] = curr.lastIpcObject.windows > 0;
@@ -57,8 +58,8 @@ Item {
 
     property real blur: onSpecial ? 1 : 0
 
-    // Glassmorphism styling (matching other bar pills like Tray, TimePill, SystemPill)
-    readonly property var glassStyle: Colours.glassmorphism(
+    // Pill styling (matching other bar pills like Tray, TimePill, SystemPill)
+    readonly property var glassStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
         Colours.glass.subtle
     )
@@ -68,7 +69,7 @@ Item {
     readonly property int dotSpacing: Appearance.spacing.normal
 
     implicitHeight: Config.bar.sizes.innerWidth
-    implicitWidth: leftDot.width + dotSpacing + pill.implicitWidth + dotSpacing + rightDot.width
+    implicitWidth: multiMonitor ? leftDot.width + dotSpacing + pill.implicitWidth + dotSpacing + rightDot.width : pill.implicitWidth
 
     // Focus indicator dot - left side
     Rectangle {
@@ -76,6 +77,7 @@ Item {
         anchors.right: pill.left
         anchors.rightMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize
         radius: root.dotSize / 2
@@ -166,7 +168,6 @@ Item {
                 }
             }
 
-
             Behavior on scale {
                 Anim {}
             }
@@ -208,6 +209,7 @@ Item {
         anchors.left: pill.right
         anchors.leftMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize
         radius: root.dotSize / 2

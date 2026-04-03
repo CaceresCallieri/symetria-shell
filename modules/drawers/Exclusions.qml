@@ -10,6 +10,7 @@ Scope {
 
     required property ShellScreen screen
     required property Item bar
+    required property Item agentBar
 
     ExclusionZone {
         anchors.top: true
@@ -26,6 +27,7 @@ Scope {
 
     ExclusionZone {
         anchors.bottom: true
+        exclusiveZone: root.agentBar.exclusiveZone
     }
 
     component ExclusionZone: StyledWindow {

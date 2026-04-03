@@ -15,7 +15,7 @@ Singleton {
     // UNIFIED BACKGROUND TINT - Change this ONE value to customize all backgrounds
     // ═══════════════════════════════════════════════════════════════════════════
     readonly property color panelBackgroundTint: "#000000"
-    readonly property real panelBackgroundAlpha: 0.5
+    readonly property real panelBackgroundAlpha: 1.0
 
     // Derived properties - these automatically update when panelBackgroundTint changes
     // Legacy: Use for isolated components where overlap is impossible
@@ -30,6 +30,7 @@ Singleton {
     property bool showPreview
     property string scheme
     property string flavour
+    property var _paletteKeys: []
     readonly property bool light: showPreview ? previewLight : currentLight
     property bool currentLight
     property bool previewLight
@@ -119,6 +120,57 @@ Singleton {
         };
     }
 
+    // Matte pill constants — refined dark aesthetic with subtle white edge
+    readonly property QtObject matteConstants: QtObject {
+        // Dark charcoal base lightness (fully opaque)
+        readonly property real baseLightness: 0.10
+
+        // How much intensity brightens the background
+        readonly property real lightnessRange: 0.08
+
+        // Saturation fraction of baseColor applied to background (0 = pure grey, higher = more palette tinting)
+        readonly property real colorTint: 0.12
+
+        // Border base color — pure white is chromatically neutral,
+        // works with any M3 palette and reads as a subtle light edge
+        readonly property color borderColor: "#ffffff"
+
+        // Border opacity — barely perceptible edge definition
+        // (0.12 = just enough to separate pill from background)
+        readonly property real borderOpacity: 0.12
+    }
+
+    // Matte pill helper: returns opaque dark background + subtle white border
+    //
+    // @param baseColor: M3 palette color for hue tinting (e.g., m3surfaceContainerHigh, m3primary)
+    // @param intensity: Brightness from 0 (deep black) to 1 (slightly lighter)
+    // @returns: { background: color, border: color }
+    function mattePill(baseColor: color, intensity: real): var {
+        const clampedIntensity = Math.max(0, Math.min(1, intensity));
+        const lightness = matteConstants.baseLightness + clampedIntensity * matteConstants.lightnessRange;
+        const tint = matteConstants.colorTint;
+        // Note: achromatic base colors (saturation ≈ 0) produce pure grey — tint only visible with chromatic bases
+
+        const background = Qt.hsla(
+            baseColor.hslHue,
+            baseColor.hslSaturation * tint,
+            lightness,
+            1.0
+        );
+        const border = Qt.alpha(matteConstants.borderColor, matteConstants.borderOpacity);
+
+        return { background: background, border: border };
+    }
+
+    // Unified pill style accessor — delegates to glassmorphism or mattePill
+    // based on config toggle. Same signature and return type as glassmorphism().
+    function pillStyle(baseColor: color, intensity: real): var {
+        if (Appearance.pillStyle === "matte")
+            return mattePill(baseColor, intensity);
+        // Default / "glass": use glassmorphism as fallback for any non-"matte" value
+        return glassmorphism(baseColor, intensity);
+    }
+
     // Glassmorphism intensity presets for common use cases
     //
     // Usage Guidelines - Base Color Selection:
@@ -161,11 +213,16 @@ Singleton {
             previewLight = scheme.mode === "light";
         }
 
+        const keys = [];
         for (const [name, colour] of Object.entries(scheme.colours)) {
             const propName = name.startsWith("term") ? name : `m3${name}`;
-            if (colours.hasOwnProperty(propName))
+            if (colours.hasOwnProperty(propName)) {
                 colours[propName] = `#${colour}`;
+                keys.push(propName);
+            }
         }
+        if (!isPreview)
+            root._paletteKeys = keys;
     }
 
     function setMode(mode: string): void {
@@ -177,6 +234,74 @@ Singleton {
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root.load(text(), false)
+    }
+
+    IpcHandler {
+        target: "theme"
+
+        function getTheme(): string {
+            const p = {};
+            for (const key of root._paletteKeys)
+                p[key] = String(root.palette[key]);
+
+            return JSON.stringify({
+                meta: {
+                    name: root.scheme,
+                    flavour: root.flavour,
+                    light: root.light,
+                },
+                palette: p,
+                appearance: {
+                    rounding: {
+                        small: Appearance.rounding.small,
+                        normal: Appearance.rounding.normal,
+                        large: Appearance.rounding.large,
+                        full: Appearance.rounding.full,
+                    },
+                    spacing: {
+                        small: Appearance.spacing.small,
+                        smaller: Appearance.spacing.smaller,
+                        normal: Appearance.spacing.normal,
+                        larger: Appearance.spacing.larger,
+                        large: Appearance.spacing.large,
+                    },
+                    padding: {
+                        small: Appearance.padding.small,
+                        smaller: Appearance.padding.smaller,
+                        normal: Appearance.padding.normal,
+                        larger: Appearance.padding.larger,
+                        large: Appearance.padding.large,
+                    },
+                    font: {
+                        family: {
+                            sans: Appearance.font.family.sans,
+                            mono: Appearance.font.family.mono,
+                            material: Appearance.font.family.material,
+                        },
+                        size: {
+                            small: Appearance.font.size.small,
+                            smaller: Appearance.font.size.smaller,
+                            normal: Appearance.font.size.normal,
+                            larger: Appearance.font.size.larger,
+                            large: Appearance.font.size.large,
+                            extraLarge: Appearance.font.size.extraLarge,
+                        },
+                    },
+                    anim: {
+                        duration: Appearance.anim.durations.normal,
+                        curves: {
+                            standard: Appearance.anim.curves.standard,
+                            standardDecel: Appearance.anim.curves.standardDecel,
+                        },
+                    },
+                    transparency: {
+                        enabled: Appearance.transparency.enabled,
+                        base: Appearance.transparency.base,
+                        layers: Appearance.transparency.layers,
+                    },
+                },
+            });
+        }
     }
 
     ImageAnalyser {

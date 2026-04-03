@@ -27,9 +27,21 @@ Singleton {
     // Preview length for text entries
     readonly property int previewLength: Config.clipboard.previewLength
 
+    // Script path for image decoding (handles truncated PNG repair via PIL)
+    readonly property string _decodeScript: Qt.resolvedUrl("../scripts/cliphist-decode-image.sh").toString().replace(/^file:\/\//, "")
+
     // Refresh the clipboard history
     function refresh(): void {
         if (cliphistAvailable) {
+            // Clear the grid model immediately so delegates don't reference
+            // files that are about to be deleted by cache cleanup.
+            decodedImageModel.clear();
+
+            // Abort any pending decode queue from a previous refresh
+            _decodeQueue = [];
+            _refreshGeneration++;
+
+            console.debug(`[Clipboard] refresh: active=${_activeDecodes}`);
             cacheCleanupProcess.running = true;
         }
     }
@@ -51,17 +63,71 @@ Singleton {
         clearProcess.running = true;
     }
 
-    // Decode an image entry to cache for thumbnail display
-    function decodeImage(entry: ClipboardEntry): void {
+    // --- Sequential decode queue to avoid thundering herd on cliphist's bolt DB ---
+    // With 152 images, spawning all at once causes concurrent reads that corrupt output.
+    // 6 balances startup speed vs bolt DB I/O; safe since we only decode ~12-18 images
+    // (maxImagesDisplayed + backfills for truncated entries), not the full 150+ pool.
+    readonly property int _maxConcurrentDecodes: 6
+    property int _activeDecodes: 0
+    property int _refreshGeneration: 0
+    property var _decodeQueue: []
+    // Reserve pool: remaining images not yet queued, used to backfill when
+    // truncated images are skipped (so the grid fills to maxImagesDisplayed).
+    property var _imagePool: []
+
+    // Public model for the image grid. Pre-populated with slots in correct
+    // order at parse time; delegates bind to entry.imagePath and auto-update
+    // when decodes complete. No model mutations during decoding (order-safe).
+    property alias decodedImageEntries: decodedImageModel
+    ListModel { id: decodedImageModel }
+
+    function _enqueueDecode(entry: ClipboardEntry): void {
         if (!entry.isImage || entry.imagePath !== "") return;
+        _decodeQueue.push(entry);
+    }
 
+    function _processDecodeQueue(): void {
+        while (_activeDecodes < _maxConcurrentDecodes && _decodeQueue.length > 0) {
+            _startDecode(_decodeQueue.shift());
+        }
+    }
+
+    // Linear scan is fine: model is bounded by maxImagesDisplayed (default 12).
+    function _findModelIndex(entryId: string): int {
+        for (let i = 0; i < decodedImageModel.count; i++) {
+            if (decodedImageModel.get(i).entryId === entryId)
+                return i;
+        }
+        return -1;
+    }
+
+    // Called when a decode is skipped (truncated) or fails. Removes the
+    // entry's slot from the model and tries to backfill from the reserve pool.
+    function _handleSkippedDecode(entryId: string): void {
+        const modelIdx = _findModelIndex(entryId);
+        if (modelIdx >= 0)
+            decodedImageModel.remove(modelIdx);
+
+        // Pull next valid entry from the reserve pool and append at end
+        // (pool entries are always older, so tail position is correct).
+        while (_imagePool.length > 0) {
+            const next = _imagePool.shift();
+            if (next && next.isImage && next.imagePath === "") {
+                decodedImageModel.append({"entry": next, "entryId": next.id});
+                _enqueueDecode(next);
+                return;
+            }
+        }
+    }
+
+    function _startDecode(entry: ClipboardEntry): void {
         const outputPath = `${Paths.clipboardcache}/${entry.id}.png`;
-
-        // Create decode process dynamically
         const process = decodeComponent.createObject(root, {
             entryId: entry.id,
-            outputPath: outputPath
+            outputPath: outputPath,
+            generation: root._refreshGeneration
         });
+        _activeDecodes++;
         process.running = true;
     }
 
@@ -72,6 +138,7 @@ Singleton {
         required property string entryType  // "text" or "image"
         property bool isImage: entryType === "image"
         property string imagePath: ""  // Path to cached image thumbnail (set after decoding)
+        property bool skipped: false   // True if image was truncated and skipped during decode
     }
 
     // Check for cliphist on startup
@@ -165,17 +232,29 @@ Singleton {
                     root.entries = newEntries;
                     root.hasData = true;
 
-                    // Decode image entries to cache for thumbnail display
-                    // Deferred to next event loop to:
-                    // 1. Prevent blocking UI while entries render
-                    // 2. Ensure all entries are fully constructed before decode starts
-                    Qt.callLater(() => {
-                        for (const entry of root.entries) {
-                            if (entry.isImage) {
-                                root.decodeImage(entry);
-                            }
-                        }
-                    });
+                    // Pre-populate the image model with slots in newest-first order.
+                    // Delegates bind to entry.imagePath and show loading placeholders
+                    // until decodes set imagePath (no model mutations during decoding).
+                    const allImages = newEntries.filter(e => e.isImage);
+                    const maxDisplay = Config.clipboard.maxImagesDisplayed;
+                    const imagesToDecode = allImages.slice(0, maxDisplay);
+                    console.debug(`[Clipboard] ${newEntries.length} entries parsed, ${allImages.length} images total, decoding first ${imagesToDecode.length} (max concurrent: ${root._maxConcurrentDecodes})`);
+
+                    root._decodeQueue = [];
+                    root._imagePool = allImages.slice(maxDisplay);
+
+                    // Pre-populate model — order is locked here, before any I/O.
+                    // Store entryId as a plain string role for reliable lookup
+                    // (ListModel.get() may not preserve QML object references).
+                    for (const entry of imagesToDecode) {
+                        decodedImageModel.append({"entry": entry, "entryId": entry.id});
+                    }
+
+                    // Start concurrent decodes (completions just set imagePath)
+                    for (const entry of imagesToDecode) {
+                        root._enqueueDecode(entry);
+                    }
+                    root._processDecodeQueue();
 
                 } catch (e) {
                     // Clean up any partially created new entries on failure
@@ -198,37 +277,61 @@ Singleton {
         ClipboardEntry {}
     }
 
-    // Component for async image decoding (no resize - Qt handles via sourceSize)
+    // Component for async image decoding with truncated PNG detection.
+    // Exit codes: 0 = success, 1 = failure, 2 = truncated (skipped).
     Component {
         id: decodeComponent
 
         Process {
+            id: decodeProcess
+
             property string entryId
             property string outputPath
+            property string decodedSize: ""
+            property int generation: 0
 
-            // Use parameterized shell arguments to prevent command injection
-            command: ["sh", "-c",
-                "mkdir -p \"$1\" && cliphist decode \"$2\" > \"$3\"",
-                "--",
-                Paths.clipboardcache,
-                entryId,
-                outputPath
-            ]
+            // Script handles: cliphist decode → PIL validate/resize → atomic rename
+            // Outputs file size to stdout on success, exits 2 for truncated images.
+            command: [root._decodeScript, entryId, outputPath]
+
+            stdout: StdioCollector {
+                onStreamFinished: decodeProcess.decodedSize = text.trim()
+            }
 
             onExited: (exitCode, exitStatus) => {
+                // Counter is cross-generation: stale decodes still decrement it,
+                // which may temporarily throttle the new generation's queue pump.
+                root._activeDecodes--;
+                if (generation !== root._refreshGeneration) {
+                    destroy();
+                    return;
+                }
                 if (exitCode === 0) {
+                    // Just set imagePath — the delegate is already bound to it
+                    // and will switch from loading placeholder to thumbnail.
                     const entry = root.entries.find(e => e.id === entryId);
                     if (entry) {
                         entry.imagePath = outputPath;
+                        console.debug(`[Clipboard] decode ${entryId}: OK size=${decodedSize}B`);
                     }
+                } else if (exitCode === 2) {
+                    const skippedEntry = root.entries.find(e => e.id === entryId);
+                    if (skippedEntry) skippedEntry.skipped = true;
+                    console.debug(`[Clipboard] decode ${entryId}: skipped (truncated)`);
+                    root._handleSkippedDecode(entryId);
                 } else {
-                    ProcessUtils.logExit("Clipboard", "decode " + entryId, exitCode, "");
+                    console.warn(`[Clipboard] decode ${entryId}: FAILED exit=${exitCode}`);
+                    root._handleSkippedDecode(entryId);
                 }
+                root._processDecodeQueue();
                 destroy();
             }
 
             stderr: StdioCollector {
-                onStreamFinished: ProcessUtils.logStderr("Clipboard", "decode " + entryId, text)
+                onStreamFinished: {
+                    if (text.trim())
+                        console.warn(`[Clipboard] decode ${entryId} stderr: ${text.trim()}`);
+                }
             }
         }
     }
@@ -242,7 +345,7 @@ Singleton {
 
         onExited: (exitCode, exitStatus) => {
             ProcessUtils.logExit("Clipboard", "restore", exitCode, "");
-            if (entryId !== "") {
+            if (exitCode === 0) {
                 root.refresh();
             }
         }
@@ -261,7 +364,7 @@ Singleton {
 
         onExited: (exitCode, exitStatus) => {
             ProcessUtils.logExit("Clipboard", "delete", exitCode, "");
-            if (entryId !== "") {
+            if (exitCode === 0) {
                 root.refresh();
             }
         }

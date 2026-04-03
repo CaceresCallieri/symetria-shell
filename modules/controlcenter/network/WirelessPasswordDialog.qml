@@ -61,7 +61,7 @@ Item {
         implicitHeight: content.implicitHeight + Appearance.padding.large * 2
 
         radius: Appearance.rounding.normal
-        color: Colours.tPalette.m3surface
+        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
         opacity: root.session.network.showPasswordDialog && !root.isClosing ? 1 : 0
         scale: root.session.network.showPasswordDialog && !root.isClosing ? 1 : 0.7
 
@@ -211,7 +211,9 @@ Item {
                 StyledRect {
                     anchors.fill: parent
                     radius: Appearance.rounding.normal
-                    color: passwordContainer.activeFocus ? Qt.lighter(Colours.tPalette.m3surfaceContainer, 1.05) : Colours.tPalette.m3surfaceContainer
+                    readonly property var inputPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+
+                    color: passwordContainer.activeFocus ? Qt.lighter(inputPill.background, 1.05) : inputPill.background
                     border.width: passwordContainer.activeFocus || connectButton.hasError ? 4 : (root.visible ? 1 : 0)
                     border.color: {
                         if (connectButton.hasError) {

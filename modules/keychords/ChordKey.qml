@@ -41,13 +41,13 @@ Item {
         StyledRect {
             id: keyBadge
 
-            readonly property var glassStyle: Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+            readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
             Layout.preferredWidth: Config.keychords.sizes.keyWidth
             Layout.preferredHeight: Config.keychords.sizes.keyWidth
 
             radius: 8
-            color: glassStyle.background
+            color: Qt.darker(glassStyle.background, 1.15)
             border.color: glassStyle.border
             border.width: 1
 

@@ -8,8 +8,11 @@ import QtQuick
 
 /// Animation wrapper for STT drawer.
 ///
-/// Handles slide-down animation from top of screen, similar to Askpass.
-/// Content is anchored to bottom so it reveals top-down as height grows.
+/// Each job card independently slides down (show) and up (hide), preserving
+/// the same reveal-from-top pattern used by Askpass.  The wrapper itself is a
+/// passive container that tracks the Row's natural dimensions — no animation
+/// logic at this level.  The TopHangingBackground in Backgrounds.qml reads
+/// wrapper.width / wrapper.height and auto-adapts.
 Item {
     id: root
 
@@ -17,128 +20,146 @@ Item {
     required property PersistentProperties visibilities
     required property var panels
 
-    readonly property bool shouldBeActive: visibilities.stt && Config.stt.enabled
-    property int contentHeight
+    // Hidden when merge mode is active — bar embed (SttBarEmbed) takes over.
+    visible: height > 0 && !AgentService.mergeActive
+    implicitHeight: AgentService.mergeActive ? 0 : mainColumn.implicitHeight
+    implicitWidth: mainColumn.implicitWidth
 
-    visible: height > 0
-    implicitHeight: 0
-    implicitWidth: content.implicitWidth
+    Column {
+        id: mainColumn
 
-    onShouldBeActiveChanged: {
-        if (shouldBeActive) {
-            // If the pre-load timer is still running, finalize immediately
-            // so content becomes visible before the show animation starts.
-            if (timer.running) {
-                timer.stop();
-                timer.finalize();
-            }
-            hideAnim.stop();
-            showAnim.start();
-        } else {
-            showAnim.stop();
-            hideAnim.start();
-        }
-    }
-
-    SequentialAnimation {
-        id: showAnim
-
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: root.contentHeight
-            duration: Appearance.anim.durations.expressiveDefaultSpatial
-            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-        }
-        ScriptAction {
-            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
-        }
-    }
-
-    SequentialAnimation {
-        id: hideAnim
-
-        ScriptAction {
-            // Break the binding established by showAnim to prevent binding loops
-            // during the hide animation. Assigns current value without reactive binding.
-            script: root.implicitHeight = root.implicitHeight
-        }
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: 0
-            easing.bezierCurve: Appearance.anim.curves.emphasized
-        }
-    }
-
-    Connections {
-        target: Config.stt
-
-        function onEnabledChanged(): void {
-            timer.startPreload();
-        }
-    }
-
-    Timer {
-        id: timer
-
-        interval: Appearance.anim.durations.extraLarge
-
-        /// Pre-load content invisibly so it can measure its layout.
-        /// If the drawer is already active, skip the timer and finalize immediately.
-        function startPreload(): void {
-            if (!root.shouldBeActive) {
-                content.visible = false;
-                content.active = true;
-                start();
-            } else {
-                finalize();
-            }
-        }
-
-        /// Finalize layout after pre-load: capture content height, restore
-        /// the active binding, and re-sync the show animation if needed.
-        function finalize(): void {
-            root.contentHeight = content.implicitHeight;
-            content.active = Qt.binding(() => root.shouldBeActive || root.visible);
-            content.visible = true;
-            if (showAnim.running) {
-                showAnim.stop();
-                showAnim.start();
-            }
-        }
-
-        onTriggered: finalize()
-    }
-
-    Loader {
-        id: content
-
-        // For top-sliding drawer: anchor content to BOTTOM of wrapper
-        // so it reveals from top-down as wrapper height grows
+        // Anchor content to BOTTOM of wrapper so it reveals from top-down
+        // as each delegate's height grows.
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 0
 
-        visible: false
-        active: false
-        Component.onCompleted: timer.startPreload()
+        Row {
+            id: jobsRow
 
-        sourceComponent: Content {
-            screen: root.screen
-            visibilities: root.visibilities
-            serviceState: SttService.state
-            serviceAudioLevel: SttService.audioLevel
-            serviceElapsedSeconds: SttService.elapsedSeconds
-            serviceLanguage: SttService.language
-            serviceErrorDetail: SttService.errorDetail
-            serviceErrorHint: SttService.errorHint
-            serviceErrorRaw: SttService.errorRaw
-            serviceErrorSource: SttService.errorSource
-            serviceIsAskMode: SttService.isAskMode
-            serviceDeliveryChoice: SttService.activeDeliveryChoice
-            serviceTargetInfo: SttService.targetInfo
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Appearance.spacing.normal
 
-            Component.onCompleted: root.contentHeight = implicitHeight
+            Repeater {
+                model: ScriptModel {
+                    values: SttService.jobs
+                }
+
+                Item {
+                    id: jobDelegate
+
+                    required property SttService.SttJob modelData
+                    required property int index
+
+                    // Target height for the show animation.  Updated reactively
+                    // via onImplicitHeightChanged on Content — NOT captured in
+                    // Component.onCompleted (which fires before the QML polish
+                    // phase where ColumnLayout computes implicitHeight).
+                    property real contentHeight: 0
+
+                    // Guard: only react to Content height changes during the
+                    // initial reveal.  Set to false by showAnim's ScriptAction.
+                    property bool initialShow: true
+
+                    implicitWidth: jobContent.implicitWidth
+                    implicitHeight: 0
+                    clip: true
+
+                    Content {
+                        id: jobContent
+                        anchors.bottom: parent.bottom
+                        screen: root.screen
+                        visibilities: root.visibilities
+                        job: jobDelegate.modelData
+                    }
+
+                    // ── Capture contentHeight reactively after polish ─────────
+                    // Component.onCompleted fires BEFORE ColumnLayout polishes,
+                    // so implicitHeight is wrong at that point.  This handler
+                    // fires AFTER polish, giving us the correct final height.
+                    //
+                    // If Content's height grows (e.g., FadeTransitions becoming
+                    // visible), we stop the in-flight showAnim and restart it
+                    // from the current position toward the new target.
+                    Connections {
+                        target: jobContent
+
+                        function onImplicitHeightChanged(): void {
+                            if (!jobDelegate.initialShow) return;
+                            const h = jobContent.implicitHeight;
+                            if (h <= 0) return;
+
+                            // Only grow — shrinking mid-reveal would look jarring.
+                            if (h > jobDelegate.contentHeight) {
+                                // Stop resets from-value to current position before restart.
+                                if (showAnim.running) showAnim.stop();
+                                jobDelegate.contentHeight = h;
+                            }
+                        }
+                    }
+
+                    // ── Show: slide down when content height is known ─────────
+                    onContentHeightChanged: {
+                        if (contentHeight > 0 && !showAnim.running)
+                            showAnim.start();
+                    }
+
+                    SequentialAnimation {
+                        id: showAnim
+
+                        Anim {
+                            target: jobDelegate
+                            property: "implicitHeight"
+                            to: jobDelegate.contentHeight
+                            duration: Appearance.anim.durations.expressiveDefaultSpatial
+                            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                        }
+                        ScriptAction {
+                            script: {
+                                jobDelegate.initialShow = false;
+                                jobContent.enableHeightTransition = true;
+                                jobDelegate.implicitHeight = Qt.binding(() => jobContent.implicitHeight);
+                            }
+                        }
+                    }
+
+                    // ── Hide: slide up when job is closing ────────────────────
+                    Connections {
+                        target: jobDelegate.modelData
+
+                        function onClosingChanged(): void {
+                            if (jobDelegate.modelData.closing) {
+                                jobDelegate.initialShow = false;
+                                showAnim.stop();
+                                hideAnim.start();
+                            }
+                        }
+                    }
+
+                    SequentialAnimation {
+                        id: hideAnim
+
+                        ScriptAction {
+                            // Break the live binding so height can animate freely.
+                            script: jobDelegate.implicitHeight = jobDelegate.implicitHeight
+                        }
+                        Anim {
+                            target: jobDelegate
+                            property: "implicitHeight"
+                            to: 0
+                            duration: Appearance.anim.durations.normal  // shorter than show — hides should feel snappy
+                            easing.bezierCurve: Appearance.anim.curves.emphasized
+                        }
+                    }
+                }
+            }
+        }
+
+        FadeTransition {
+            show: SttService.vocabHintsVisible && SttService.active
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            VocabularyHints {}
         }
     }
 }

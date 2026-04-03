@@ -10,6 +10,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
+        hoverEnabled: true
         onClicked: {
             const visibilities = Visibilities.getForActive();
             visibilities.launcher = !visibilities.launcher;

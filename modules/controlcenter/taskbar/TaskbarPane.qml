@@ -19,6 +19,10 @@ Item {
 
     required property Session session
 
+    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
+    readonly property var settingsPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+    readonly property var borderPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
     property bool clockShowIcon: Config.bar.clock.showIcon ?? true
     property bool persistent: Config.bar.persistent ?? true
     property bool showOnHover: Config.bar.showOnHover ?? true
@@ -34,6 +38,7 @@ Item {
     property bool trayCompact: Config.bar.tray.compact ?? false
     property bool trayRecolour: Config.bar.tray.recolour ?? false
     property int workspacesShown: Config.bar.workspaces.shown ?? 5
+    property bool workspacesShowOnlyOccupied: Config.bar.workspaces.showOnlyOccupied ?? false
     property bool workspacesActiveIndicator: Config.bar.workspaces.activeIndicator ?? true
     property bool workspacesOccupiedBg: Config.bar.workspaces.occupiedBg ?? false
     property bool workspacesShowWindows: Config.bar.workspaces.showWindows ?? false
@@ -75,6 +80,7 @@ Item {
         Config.bar.tray.compact = root.trayCompact;
         Config.bar.tray.recolour = root.trayRecolour;
         Config.bar.workspaces.shown = root.workspacesShown;
+        Config.bar.workspaces.showOnlyOccupied = root.workspacesShowOnlyOccupied;
         Config.bar.workspaces.activeIndicator = root.workspacesActiveIndicator;
         Config.bar.workspaces.occupiedBg = root.workspacesOccupiedBg;
         Config.bar.workspaces.showWindows = root.workspacesShowWindows;
@@ -113,7 +119,7 @@ Item {
         anchors.rightMargin: Appearance.padding.normal
 
         radius: taskbarBorder.innerRadius
-        color: "transparent"
+        color: root.contentPill.background
 
         Loader {
             id: taskbarLoader
@@ -130,6 +136,7 @@ Item {
 
     InnerBorder {
         id: taskbarBorder
+        borderColor: root.borderPill.border
         leftThickness: 0
         rightThickness: Appearance.padding.normal
     }
@@ -261,7 +268,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShownRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -277,10 +286,12 @@ Item {
 
                                 StyledText {
                                     Layout.fillWidth: true
+                                    opacity: root.workspacesShowOnlyOccupied ? 0.5 : 1.0
                                     text: qsTr("Shown")
                                 }
 
                                 CustomSpinBox {
+                                    enabled: !root.workspacesShowOnlyOccupied
                                     min: 1
                                     max: 20
                                     value: root.workspacesShown
@@ -294,9 +305,46 @@ Item {
 
                         StyledRect {
                             Layout.fillWidth: true
+                            implicitHeight: workspacesShowOnlyOccupiedRow.implicitHeight + Appearance.padding.large * 2
+                            radius: Appearance.rounding.normal
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
+                            border.width: 1
+
+                            Behavior on implicitHeight {
+                                Anim {}
+                            }
+
+                            RowLayout {
+                                id: workspacesShowOnlyOccupiedRow
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.margins: Appearance.padding.large
+                                spacing: Appearance.spacing.normal
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: qsTr("Show only occupied")
+                                }
+
+                                StyledSwitch {
+                                    checked: root.workspacesShowOnlyOccupied
+                                    onToggled: {
+                                        root.workspacesShowOnlyOccupied = checked;
+                                        root.saveConfig();
+                                    }
+                                }
+                            }
+                        }
+
+                        StyledRect {
+                            Layout.fillWidth: true
                             implicitHeight: workspacesActiveIndicatorRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -329,7 +377,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesOccupiedBgRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -345,10 +395,12 @@ Item {
 
                                 StyledText {
                                     Layout.fillWidth: true
+                                    opacity: root.workspacesShowOnlyOccupied ? 0.5 : 1.0
                                     text: qsTr("Occupied background")
                                 }
 
                                 StyledSwitch {
+                                    enabled: !root.workspacesShowOnlyOccupied
                                     checked: root.workspacesOccupiedBg
                                     onToggled: {
                                         root.workspacesOccupiedBg = checked;
@@ -362,7 +414,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesShowWindowsRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}
@@ -395,7 +449,9 @@ Item {
                             Layout.fillWidth: true
                             implicitHeight: workspacesPerMonitorRow.implicitHeight + Appearance.padding.large * 2
                             radius: Appearance.rounding.normal
-                            color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                            color: root.settingsPill.background
+                            border.color: root.settingsPill.border
+                            border.width: 1
 
                             Behavior on implicitHeight {
                                 Anim {}

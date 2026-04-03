@@ -7,7 +7,7 @@ import qs.components.effects
 import qs.components.images
 import qs.services
 import qs.config
-import Symmetria.Models
+import Symmetria.FileManager.Models
 import QtQuick
 
 GridView {
@@ -15,6 +15,7 @@ GridView {
 
     required property Session session
 
+    readonly property var placeholderPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
     readonly property int minCellWidth: 200 + Appearance.spacing.normal
     readonly property int columnsCount: Math.max(1, Math.floor(width / minCellWidth))
 
@@ -61,7 +62,7 @@ GridView {
                 anchors.rightMargin: itemMargin
                 anchors.topMargin: itemMargin
                 anchors.bottomMargin: itemMargin
-                color: Colours.tPalette.m3surfaceContainer
+                color: root.placeholderPill.background
                 radius: itemRadius
                 antialiasing: true
                 layer.enabled: true

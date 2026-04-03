@@ -82,25 +82,26 @@ Scope {
 
     CustomShortcut {
         name: "showall"
-        description: "Toggle launcher, dashboard and osd"
+        description: "Toggle launcher, OSD overlay, and utilities"
         onPressed: {
             if (root.hasFullscreen)
                 return;
             const v = Visibilities.getForActive();
-            v.launcher = v.dashboard = v.osd = v.utilities = !(v.launcher || v.dashboard || v.osd || v.utilities);
+            const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
+            const anyShowing = v.launcher || v.utilities || (overlay?.showing ?? false);
+            const show = !anyShowing;
+            v.launcher = v.utilities = show;
+            if (show) overlay?.show(); else overlay?.hide();
         }
     }
 
-    CustomShortcut {
-        name: "dashboard"
-        description: "Toggle dashboard"
-        onPressed: {
-            if (root.hasFullscreen)
-                return;
-            const visibilities = Visibilities.getForActive();
-            visibilities.dashboard = !visibilities.dashboard;
-        }
-    }
+    // DISABLED: Dashboard is disabled and slated for removal.
+    // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
+    // CustomShortcut {
+    //     name: "dashboard"
+    //     description: "Toggle dashboard"
+    //     onPressed: { ... }
+    // }
 
     CustomShortcut {
         name: "session"
@@ -152,8 +153,16 @@ Scope {
         target: "drawers"
 
         function toggle(drawer: string): void {
+            // OSD is no longer a drawer — route to overlay
+            if (drawer === "osd") {
+                const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
+                if (overlay) overlay.toggle();
+                else console.warn("[IPC] OSD overlay not available");
+                return;
+            }
+
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "dashboard", "clipboard", "calculator", "packages", "keychords"].includes(drawer))
+                if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard

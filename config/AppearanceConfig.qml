@@ -7,6 +7,7 @@ JsonObject {
     property FontStuff font: FontStuff {}
     property Anim anim: Anim {}
     property Transparency transparency: Transparency {}
+    property string pillStyle: "matte"  // "glass" or "matte"
 
     component Rounding: JsonObject {
         property real scale: 1

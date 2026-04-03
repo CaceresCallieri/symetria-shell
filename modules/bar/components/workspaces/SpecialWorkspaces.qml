@@ -239,6 +239,8 @@ Item {
         property real startX
 
         anchors.fill: view
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
 
         drag.target: view.contentItem
         drag.axis: Drag.XAxis

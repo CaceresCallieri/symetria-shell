@@ -5,10 +5,19 @@ import Quickshell
 Singleton {
     property var screens: new Map()
     property var bars: new Map()
+    property var osdOverlays: new Map()
+    property var agentBars: new Map()
 
     // Reactive counter - increments when screens map changes.
     // Include this in bindings that use screens.get() to force re-evaluation.
     property int screensVersion: 0
+
+    // Reactive counter - increments when bars map changes.
+    // Include this in bindings that use bars.get() to force re-evaluation.
+    property int barsVersion: 0
+
+    // Reactive counter - increments when agentBars map changes.
+    property int agentBarsVersion: 0
 
     function load(screen: ShellScreen, visibilities: var): void {
         screens.set(Hypr.monitorFor(screen), visibilities);

@@ -33,6 +33,7 @@ Singleton {
     property alias calculator: adapter.calculator
     property alias packages: adapter.packages
     property alias keychords: adapter.keychords
+    property alias agentbar: adapter.agentbar
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -109,7 +110,8 @@ Singleton {
             keycaster: serializeKeycaster(),
             calculator: serializeCalculator(),
             packages: serializePackages(),
-            keychords: serializeKeyChords()
+            keychords: serializeKeyChords(),
+            agentbar: serializeAgentBar()
         };
     }
 
@@ -134,7 +136,8 @@ Singleton {
                 enabled: appearance.transparency.enabled,
                 base: appearance.transparency.base,
                 layers: appearance.transparency.layers
-            }
+            },
+            pillStyle: appearance.pillStyle
         };
     }
 
@@ -186,21 +189,24 @@ Singleton {
             },
             popouts: {
                 tray: bar.popouts.tray,
-                statusIcons: bar.popouts.statusIcons
+                statusIcons: bar.popouts.statusIcons,
+                timePill: bar.popouts.timePill,
+                systemPill: bar.popouts.systemPill
             },
             workspaces: {
                 shown: bar.workspaces.shown,
+                showOnlyOccupied: bar.workspaces.showOnlyOccupied,
                 activeIndicator: bar.workspaces.activeIndicator,
                 occupiedBg: bar.workspaces.occupiedBg,
                 showWindows: bar.workspaces.showWindows,
                 showWindowsOnSpecialWorkspaces: bar.workspaces.showWindowsOnSpecialWorkspaces,
                 activeTrail: bar.workspaces.activeTrail,
                 perMonitorWorkspaces: bar.workspaces.perMonitorWorkspaces,
-                label: bar.workspaces.label,
-                occupiedLabel: bar.workspaces.occupiedLabel,
-                activeLabel: bar.workspaces.activeLabel,
-                capitalisation: bar.workspaces.capitalisation,
-                specialWorkspaceIcons: bar.workspaces.specialWorkspaceIcons
+                specialWorkspaceIcons: bar.workspaces.specialWorkspaceIcons,
+                useActualAppIcons: bar.workspaces.useActualAppIcons,
+                terminalAppDetection: bar.workspaces.terminalAppDetection,
+                appIconsClickToFocus: bar.workspaces.appIconsClickToFocus,
+                namedWorkspaceIcons: bar.workspaces.namedWorkspaceIcons
             },
             tray: {
                 background: bar.tray.background,
@@ -225,6 +231,16 @@ Singleton {
                 trayMenuWidth: bar.sizes.trayMenuWidth,
                 batteryWidth: bar.sizes.batteryWidth,
                 networkWidth: bar.sizes.networkWidth
+            },
+            timePill: {
+                showClock: bar.timePill.showClock,
+                showDate: bar.timePill.showDate,
+                showWeather: bar.timePill.showWeather
+            },
+            systemPill: {
+                showCpu: bar.systemPill.showCpu,
+                showRam: bar.systemPill.showRam,
+                showUpdates: bar.systemPill.showUpdates
             }
         };
     }
@@ -385,7 +401,8 @@ Singleton {
                 numLockChanged: utilities.toasts.numLockChanged,
                 kbLayoutChanged: utilities.toasts.kbLayoutChanged,
                 vpnChanged: utilities.toasts.vpnChanged,
-                nowPlaying: utilities.toasts.nowPlaying
+                nowPlaying: utilities.toasts.nowPlaying,
+                focusModeChanged: utilities.toasts.focusModeChanged
             },
             vpn: {
                 enabled: utilities.vpn.enabled,
@@ -459,6 +476,7 @@ Singleton {
             autoHideDelay: stt.autoHideDelay,
             processingTimeout: stt.processingTimeout,
             deliveryMode: stt.deliveryMode,
+            vocabularyHints: stt.vocabularyHints,
             recording: {
                 format: stt.recording.format,
                 sampleRate: stt.recording.sampleRate,
@@ -511,9 +529,19 @@ Singleton {
         return {
             enabled: keychords.enabled,
             sizes: {
-                maxWidth: keychords.sizes.maxWidth,
+                itemWidth: keychords.sizes.itemWidth,
                 keyWidth: keychords.sizes.keyWidth,
                 itemHeight: keychords.sizes.itemHeight
+            }
+        };
+    }
+
+    function serializeAgentBar(): var {
+        return {
+            enabled: agentbar.enabled,
+            mergeWorkspaces: agentbar.mergeWorkspaces,
+            sizes: {
+                innerHeight: agentbar.sizes.innerHeight
             }
         };
     }
@@ -580,6 +608,7 @@ Singleton {
             property CalculatorConfig calculator: CalculatorConfig {}
             property PackagesConfig packages: PackagesConfig {}
             property KeyChordsConfig keychords: KeyChordsConfig {}
+            property AgentBarConfig agentbar: AgentBarConfig {}
         }
     }
 }

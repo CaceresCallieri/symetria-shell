@@ -2,7 +2,8 @@ pragma Singleton
 
 import qs.config
 import qs.utils
-import Symmetria.Models
+import Symmetria
+import Symmetria.FileManager.Models
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -19,6 +20,17 @@ Searcher {
     // Fallback logic uses workspace wallpapers or shows "missing wallpaper" UI.
     property string actualCurrent
     property bool previewColourLock
+    property bool focusMode: false
+    readonly property bool wallpaperVisible: !focusMode
+
+    onFocusModeChanged: {
+        if (!Config.utilities.toasts.focusModeChanged)
+            return;
+        if (focusMode)
+            Toaster.toast(qsTr("Focus mode"), qsTr("Wallpaper hidden for distraction-free work"), "visibility_off");
+        else
+            Toaster.toast(qsTr("Focus mode off"), qsTr("Wallpaper restored"), "visibility");
+    }
 
     // Per-workspace wallpaper support
     readonly property string workspaceWallpaperDir: `${Paths.wallsdir}/${Config.background.perWorkspaceWallpapers.directory}`
@@ -161,6 +173,22 @@ Searcher {
 
         function list(): string {
             return root.list.map(w => w.path).join("\n");
+        }
+
+        function toggleFocus(): void {
+            root.focusMode = !root.focusMode;
+        }
+
+        function focus(): void {
+            root.focusMode = true;
+        }
+
+        function unfocus(): void {
+            root.focusMode = false;
+        }
+
+        function isFocused(): bool {
+            return root.focusMode;
         }
     }
 

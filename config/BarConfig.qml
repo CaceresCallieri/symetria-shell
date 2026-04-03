@@ -85,7 +85,18 @@ JsonObject {
         property list<var> namedWorkspaceIcons: [
             { name: "gaming", icon: "mat:sports_esports" },
             { name: "music", icon: "mat:library_music" },
-            { name: "theater", icon: "mat:theater_comedy" }
+            { name: "theater", icon: "mat:theater_comedy" },
+            { name: "symmetria", icon: "mat:balance" },
+            { name: "symmetria-whatsapp", icon: "mat:chat" },
+            { name: "netcolor", icon: "mat:palette" },
+            { name: "bambin", icon: "mat:format_paint" },
+            { name: "fps-game", icon: "mat:target" },
+            { name: ".dotfiles", icon: "mat:settings" },
+            { name: ".hyprdots", icon: "mat:tune" },
+            { name: "kosmos", icon: "mat:rocket_launch" },
+            { name: "magistralia", icon: "mat:school" },
+            { name: "corpy", icon: "mat:code" },
+            { name: "nvim", icon: "mat:edit" }
         ]
     }
     component Tray: JsonObject {
@@ -134,6 +145,7 @@ JsonObject {
         property int batteryWidth: 250
         property int networkWidth: 320
         property int weatherWidth: 250
-        property int updatesWidth: 200
+        property int updatesWidth: 200  // Also used by Ram popout
+        property int calendarWidth: 300
     }
 }

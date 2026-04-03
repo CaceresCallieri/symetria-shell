@@ -7,7 +7,7 @@ import QtQuick
 
 /// Individual key chip for Keycaster display.
 ///
-/// Displays a single key or key combination with glassmorphism styling.
+/// Displays a single key or key combination with pill styling.
 /// Newest key is highlighted (m3primary, strong glass), older keys fade out.
 /// For mouse button events, renders a graphical MouseClickIcon instead of text.
 Item {
@@ -73,8 +73,8 @@ Item {
         id: chip
 
         readonly property var glassStyle: root.isNewest
-            ? Colours.glassmorphism(Colours.palette.m3primary, Colours.glass.strong)
-            : Colours.glassmorphism(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+            ? Colours.pillStyle(Colours.palette.m3primary, Colours.glass.strong)
+            : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
         // Keyboard key-like proportions: more padding, subtle rounding
         implicitWidth: chipContent.implicitWidth + Appearance.padding.large * 2

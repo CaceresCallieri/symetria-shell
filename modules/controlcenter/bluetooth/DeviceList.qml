@@ -139,7 +139,11 @@ DeviceList {
             width: ListView.view ? ListView.view.width : undefined
             implicitHeight: deviceInner.implicitHeight + Appearance.padding.normal * 2
 
-            color: Qt.alpha(Colours.tPalette.m3surfaceContainer, root.activeItem === modelData ? Colours.tPalette.m3surfaceContainer.a : 0)
+            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+            color: root.activeItem === modelData ? activePill.background : "transparent"
+            border.color: root.activeItem === modelData ? activePill.border : "transparent"
+            border.width: root.activeItem === modelData ? 1 : 0
             radius: Appearance.rounding.normal
 
             StateLayer {
@@ -164,7 +168,7 @@ DeviceList {
                     implicitHeight: icon.implicitHeight + Appearance.padding.normal * 2
 
                     radius: Appearance.rounding.normal
-                    color: device.connected ? Colours.palette.m3primaryContainer : (device.modelData && device.modelData.bonded) ? Colours.palette.m3secondaryContainer : Colours.tPalette.m3surfaceContainerHigh
+                    color: device.connected ? Colours.palette.m3primaryContainer : (device.modelData && device.modelData.bonded) ? Colours.palette.m3secondaryContainer : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
                     StyledRect {
                         anchors.fill: parent

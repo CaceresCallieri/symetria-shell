@@ -1,7 +1,5 @@
 import qs.services
 import qs.config
-import qs.modules.osd as Osd
-import qs.modules.notifications as Notifications
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.dashboard as Dashboard
@@ -24,10 +22,12 @@ Item {
 
     required property Panels panels
     required property Item bar
+    required property Item agentBar
 
     anchors.fill: parent
     anchors.margins: Config.border.thickness
     anchors.topMargin: bar.implicitHeight
+    anchors.bottomMargin: agentBar.implicitHeight
 
     // Enable layer rendering to prevent overlap artifacts
     layer.enabled: true
@@ -40,21 +40,6 @@ Item {
 
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-
-        Osd.Background {
-            wrapper: root.panels.osd
-
-            startX: shape.width - root.panels.session.width - root.panels.sidebar.width
-            startY: (shape.height - wrapper.height) / 2 - rounding
-        }
-
-        Notifications.Background {
-            wrapper: root.panels.notifications
-            sidebar: sidebar
-
-            startX: shape.width - rounding  // Start at TR corner's inner edge for union arc
-            startY: 0
-        }
 
         Session.Background {
             wrapper: root.panels.session
@@ -143,7 +128,7 @@ Item {
             panels: root.panels
 
             startX: shape.width
-            startY: root.panels.notifications.height
+            startY: 0
         }
     }
 }

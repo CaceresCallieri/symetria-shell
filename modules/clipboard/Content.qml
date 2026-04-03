@@ -28,6 +28,11 @@ Item {
     readonly property int tabText: 0
     readonly property int tabImages: 1
 
+    // Natural height of search bar — effectively constant since font sizes
+    // don't change at runtime. Used to expand contentWrapper on Images tab
+    // by exactly the amount searchWrapper loses, preserving total height.
+    readonly property real _searchBarNaturalHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+
     // Double-click confirmation state for clear all
     property bool confirmClear: false
 
@@ -35,9 +40,8 @@ Item {
     property string debouncedSearchText: ""
 
     // Get all entries (search-filtered if searching, otherwise all loaded entries)
-    // Comma operator forces QML binding to depend on entries.length
     readonly property var allFilteredEntries: {
-        Clipboard.entries.length;  // Dependency tracking
+        Clipboard.entries.length;  // Force reactive dependency on list changes
         if (!debouncedSearchText) return Clipboard.entries;
 
         // Direct FZF/Fuzzysort search on clipboard entries
@@ -52,32 +56,80 @@ Item {
         }).find(debouncedSearchText).map(r => r.item);
     }
 
-    // Helper: filter entries by type and apply display limit
-    function filterByType(isImage: bool, limit: int): list<var> {
-        return root.allFilteredEntries
-            .filter(e => e.isImage === isImage)
-            .slice(0, limit);
+    // All text entries from current search/filter — backing data for the ListModel
+    readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage)
+    // Whether more text entries can be loaded
+    readonly property bool _hasMoreText: _textModel.count < allTextEntries.length
+    readonly property int _pageSize: Config.clipboard.maxDisplayed
+
+    // Progressive ListModel: only holds the currently visible slice.
+    // append() adds entries without disturbing existing delegates or scroll position.
+    ListModel { id: _textModel }
+
+    // Sync model when backing data changes (search, new clipboard entries)
+    onAllTextEntriesChanged: _resetTextEntries()
+    // Images use a ListModel from Clipboard — append() adds delegates
+    // incrementally without destroying existing ones (progressive loading).
+    readonly property var imageEntries: Clipboard.decodedImageEntries
+
+    // Shared image navigation helpers (used by both search and imageNavFocus key handlers)
+    function _imageNavUp(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        const cols = imageGrid.columnCount;
+        if (imageGrid.currentIndex >= cols)
+            imageGrid.currentIndex -= cols;
     }
 
-    readonly property var textEntries: filterByType(false, Config.clipboard.maxDisplayed)
-    // Images bypass search filtering - they have no searchable text content
-    readonly property var imageEntries: Clipboard.entries
-        .filter(e => e.isImage)
-        .slice(0, Config.clipboard.maxImagesDisplayed)
+    function _imageNavDown(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        const cols = imageGrid.columnCount;
+        const newIndex = imageGrid.currentIndex + cols;
+        if (newIndex < root.imageEntries.count)
+            imageGrid.currentIndex = newIndex;
+    }
 
-    // Calculate estimated list height for text entries (images use grid)
-    function calculateListHeight(): real {
-        const entries = root.textEntries;
-        const maxItems = Math.min(Config.clipboard.maxDisplayed, entries.length);
-        const itemHeight = Config.clipboard.sizes.itemHeight;
-        const spacing = Appearance.spacing.small;
+    function _imageNavLeft(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        if (imageGrid.currentIndex > 0)
+            imageGrid.currentIndex--;
+    }
 
-        let totalHeight = 0;
-        for (let i = 0; i < maxItems; i++) {
-            totalHeight += itemHeight;
-            if (i < maxItems - 1) totalHeight += spacing;
+    function _imageNavRight(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid || root.imageEntries.count === 0) return;
+        const newIndex = imageGrid.currentIndex + 1;
+        if (newIndex < root.imageEntries.count)
+            imageGrid.currentIndex = newIndex;
+    }
+
+    function _imageNavConfirm(): void {
+        const imageGrid = imagePane.item;
+        if (!imageGrid) return;
+        const entry = root.imageEntries.get(imageGrid.currentIndex)?.entry;
+        if (entry) {
+            Clipboard.restore(entry.id);
+            root.visibilities.clipboard = false;
         }
-        return totalHeight;
+    }
+
+    function _resetTextEntries(): void {
+        _textModel.clear();
+        _appendTextEntries(Config.clipboard.maxDisplayed);
+    }
+
+    function _appendTextEntries(count): void {
+        const start = _textModel.count;
+        const end = Math.min(start + count, allTextEntries.length);
+        for (let i = start; i < end; i++)
+            _textModel.append({ idx: i });
+    }
+
+    function _loadMoreText(): void {
+        if (!_hasMoreText) return;
+        _appendTextEntries(_pageSize);
     }
 
     // Debounce timer for search input
@@ -100,7 +152,8 @@ Item {
                 root._refCounted = true;
                 Clipboard.refCount++;
             }
-            // Reset list indices on open
+            // Reset model to initial batch and list indices on open
+            root._resetTextEntries();
             if (textPane.item)
                 textPane.item.currentIndex = 0;
             if (imagePane.item)
@@ -137,7 +190,11 @@ Item {
     }
 
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
+    // padding * 3 = below-tabs gap + searchWrapper.topMargin + bottom margin
     implicitHeight: tabs.implicitHeight + tabs.anchors.topMargin + contentWrapper.implicitHeight + searchWrapper.implicitHeight + padding * 3
+    // Note: on Images tab, searchWrapper collapses to 0 but its anchors.topMargin
+    // (root.padding) remains, creating slightly more bottom padding. This is
+    // intentional — changing it would break the constant-sum animation invariant.
 
     // Tabs at top
     Tabs {
@@ -168,8 +225,17 @@ Item {
         radius: Appearance.rounding.normal
         color: "transparent"
 
-        // Use fixed height (1/2 of max) for consistent sizing between tabs
-        implicitHeight: root.maxHeight / 2
+        // Height expands on Images tab to reclaim collapsed search bar space
+        implicitHeight: root.state.currentTab === root.tabImages
+            ? root.maxHeight / 2 + root._searchBarNaturalHeight
+            : root.maxHeight / 2
+
+        Behavior on implicitHeight {
+            Anim {
+                duration: Appearance.anim.durations.large
+                easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+            }
+        }
 
         Flickable {
             id: view
@@ -220,7 +286,10 @@ Item {
                     id: textPane
                     index: 0
                     sourceComponent: TextList {
-                        entries: root.textEntries
+                        entries: _textModel
+                        allEntries: root.allTextEntries
+                        hasMore: root._hasMoreText
+                        loadMore: () => root._loadMoreText()
                         visibilities: root.visibilities
                         searchQuery: root.debouncedSearchText
                         maxHeight: contentWrapper.implicitHeight
@@ -246,10 +315,12 @@ Item {
         }
     }
 
-    // Search bar at bottom (like launcher)
+    // Search bar at bottom (like launcher) — collapses on Images tab
     StyledRect {
         id: searchWrapper
 
+        clip: true
+        visible: implicitHeight > 0
         color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
         radius: Appearance.rounding.full
 
@@ -260,7 +331,16 @@ Item {
         anchors.leftMargin: root.padding
         anchors.rightMargin: root.padding
 
-        implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+        implicitHeight: root.state.currentTab === root.tabText
+            ? Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
+            : 0
+
+        Behavior on implicitHeight {
+            Anim {
+                duration: Appearance.anim.durations.large
+                easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+            }
+        }
 
         MaterialIcon {
             id: searchIcon
@@ -291,133 +371,30 @@ Item {
             onTextChanged: searchDebounce.restart()
 
             onAccepted: {
-                if (root.state.currentTab === root.tabText) {
-                    const textList = textPane.item;
-                    if (!textList) return;
-                    const entry = root.textEntries[textList.currentIndex];
-                    if (entry) {
-                        Clipboard.restore(entry.id);
-                        root.visibilities.clipboard = false;
-                    }
-                } else {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid) return;
-                    const entry = root.imageEntries[imageGrid.currentIndex];
-                    if (entry) {
-                        Clipboard.restore(entry.id);
-                        root.visibilities.clipboard = false;
-                    }
-                }
-            }
-
-            Keys.onUpPressed: {
-                if (root.state.currentTab === root.tabText) {
-                    const textList = textPane.item;
-                    if (!textList) return;
-                    if (textList.currentIndex > 0)
-                        textList.currentIndex--;
-                } else {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
-                    const cols = imageGrid.columnCount;
-                    if (imageGrid.currentIndex >= cols)
-                        imageGrid.currentIndex -= cols;
-                }
-            }
-
-            Keys.onDownPressed: {
-                if (root.state.currentTab === root.tabText) {
-                    const textList = textPane.item;
-                    if (!textList) return;
-                    if (textList.currentIndex < root.textEntries.length - 1)
-                        textList.currentIndex++;
-                } else {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
-                    const cols = imageGrid.columnCount;
-                    const newIndex = imageGrid.currentIndex + cols;
-                    if (newIndex < root.imageEntries.length)
-                        imageGrid.currentIndex = newIndex;
-                }
-            }
-
-            Keys.onLeftPressed: {
-                if (root.state.currentTab === root.tabImages) {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
-                    if (imageGrid.currentIndex > 0)
-                        imageGrid.currentIndex--;
-                }
-            }
-
-            Keys.onRightPressed: {
-                if (root.state.currentTab === root.tabImages) {
-                    const imageGrid = imagePane.item;
-                    if (!imageGrid || root.imageEntries.length === 0) return;
-                    const newIndex = imageGrid.currentIndex + 1;
-                    if (newIndex < root.imageEntries.length)
-                        imageGrid.currentIndex = newIndex;
-                }
-            }
-
-            Keys.onEscapePressed: root.visibilities.clipboard = false
-
-            Keys.onPressed: event => {
-                // Tab key cycles between tabs
-                if (event.key === Qt.Key_Tab) {
-                    root.state.currentTab = (root.state.currentTab + 1) % 2;
-                    event.accepted = true;
-                }
-            }
-        }
-
-        // Invisible focus receiver for images tab keyboard navigation
-        Item {
-            id: imageNavFocus
-
-            visible: root.state.currentTab === root.tabImages
-            focus: visible
-            anchors.fill: parent
-
-            Keys.onUpPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
-                const cols = imageGrid.columnCount;
-                if (imageGrid.currentIndex >= cols)
-                    imageGrid.currentIndex -= cols;
-            }
-
-            Keys.onDownPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
-                const cols = imageGrid.columnCount;
-                const newIndex = imageGrid.currentIndex + cols;
-                if (newIndex < root.imageEntries.length)
-                    imageGrid.currentIndex = newIndex;
-            }
-
-            Keys.onLeftPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
-                if (imageGrid.currentIndex > 0)
-                    imageGrid.currentIndex--;
-            }
-
-            Keys.onRightPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid || root.imageEntries.length === 0) return;
-                const newIndex = imageGrid.currentIndex + 1;
-                if (newIndex < root.imageEntries.length)
-                    imageGrid.currentIndex = newIndex;
-            }
-
-            Keys.onReturnPressed: {
-                const imageGrid = imagePane.item;
-                if (!imageGrid) return;
-                const entry = root.imageEntries[imageGrid.currentIndex];
+                const textList = textPane.item;
+                if (!textList) return;
+                const idx = _textModel.get(textList.currentIndex)?.idx;
+                const entry = idx !== undefined ? root.allTextEntries[idx] : undefined;
                 if (entry) {
                     Clipboard.restore(entry.id);
                     root.visibilities.clipboard = false;
+                }
+            }
+
+            Keys.onUpPressed: {
+                const textList = textPane.item;
+                if (!textList) return;
+                if (textList.currentIndex > 0)
+                    textList.currentIndex--;
+            }
+
+            Keys.onDownPressed: {
+                const textList = textPane.item;
+                if (!textList) return;
+                if (textList.currentIndex < _textModel.count - 1) {
+                    textList.currentIndex++;
+                } else if (root._hasMoreText) {
+                    root._loadMoreText();
                 }
             }
 
@@ -499,6 +476,34 @@ Item {
         }
     }
 
+    // Invisible focus receiver for images tab keyboard navigation.
+    // Lives outside searchWrapper (which collapses on Images tab) so it
+    // remains visible and focusable for keyboard nav on the Images tab.
+    Item {
+        id: imageNavFocus
+
+        width: 0
+        height: 0
+        visible: root.state.currentTab === root.tabImages
+
+        Keys.onUpPressed: root._imageNavUp()
+        Keys.onDownPressed: root._imageNavDown()
+        Keys.onLeftPressed: root._imageNavLeft()
+        Keys.onRightPressed: root._imageNavRight()
+
+        Keys.onReturnPressed: root._imageNavConfirm()
+
+        Keys.onEscapePressed: root.visibilities.clipboard = false
+
+        Keys.onPressed: event => {
+            // Tab key cycles between tabs
+            if (event.key === Qt.Key_Tab) {
+                root.state.currentTab = (root.state.currentTab + 1) % 2;
+                event.accepted = true;
+            }
+        }
+    }
+
     // Confirmation timeout for clear all
     Timer {
         id: confirmTimer
@@ -540,7 +545,10 @@ Item {
     component TextList: Item {
         id: textListRoot
 
-        required property var entries
+        required property var entries        // ListModel for progressive loading
+        required property var allEntries     // Full JS array for entry lookup
+        required property bool hasMore
+        required property var loadMore       // () => void
         required property PersistentProperties visibilities
         required property string searchQuery
         required property real maxHeight
@@ -549,12 +557,12 @@ Item {
         property alias currentIndex: textList.currentIndex
 
         implicitWidth: Config.clipboard.sizes.itemWidth
-        implicitHeight: textListRoot.entries.length > 0 ? textList.height + Appearance.spacing.normal : emptyText.implicitHeight
+        implicitHeight: textListRoot.entries.count > 0 ? textList.height + Appearance.spacing.normal : emptyText.implicitHeight
 
         StyledListView {
             id: textList
 
-            visible: textListRoot.entries.length > 0
+            visible: textListRoot.entries.count > 0
             model: textListRoot.entries
             width: Config.clipboard.sizes.itemWidth
             height: Math.min(contentHeight, textListRoot.maxHeight)
@@ -563,6 +571,33 @@ Item {
             topMargin: Appearance.spacing.normal
             orientation: Qt.Vertical
             reuseItems: true
+
+            // Infinite scroll: load more entries when approaching bottom
+            onContentYChanged: _checkLoadMore()
+            onContentHeightChanged: _checkLoadMore()
+
+            function _checkLoadMore(): void {
+                if (!textListRoot.hasMore) return;
+                const threshold = 100;
+                if (contentY + height >= contentHeight - threshold)
+                    textListRoot.loadMore();
+            }
+
+            footer: Item {
+                width: textList.width
+                height: textListRoot.hasMore ? spinner.implicitHeight + Appearance.padding.large * 2 : 0
+                visible: textListRoot.hasMore
+
+                CircularIndicator {
+                    id: spinner
+                    anchors.centerIn: parent
+                    implicitSize: Appearance.font.size.large * 2
+                    strokeWidth: Appearance.padding.small * 0.5
+                    fgColour: Colours.palette.m3onSurfaceVariant
+                    bgColour: "transparent"
+                    running: parent.visible
+                }
+            }
 
             preferredHighlightBegin: 0
             preferredHighlightEnd: height
@@ -587,10 +622,10 @@ Item {
             }
 
             delegate: ClipboardItem {
-                required property var modelData
+                required property int idx
                 required property int index
 
-                entry: modelData
+                entry: textListRoot.allEntries[idx]
                 visibilities: textListRoot.visibilities
                 searchQuery: textListRoot.searchQuery
             }
@@ -636,7 +671,7 @@ Item {
         Row {
             id: emptyText
 
-            visible: textListRoot.entries.length === 0
+            visible: textListRoot.entries.count === 0
             readonly property bool isSearchEmpty: textListRoot.searchQuery !== ""
 
             opacity: visible ? 1 : 0

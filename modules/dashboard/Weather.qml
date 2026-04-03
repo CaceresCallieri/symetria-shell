@@ -12,8 +12,6 @@ Item {
 
     readonly property var today: Weather.forecast && Weather.forecast.length > 0 ? Weather.forecast[0] : null
 
-    Component.onCompleted: Weather.reload()
-
     ColumnLayout {
         id: layout
 

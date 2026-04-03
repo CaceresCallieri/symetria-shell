@@ -1,171 +1,90 @@
 pragma Singleton
 
 import qs.config
+import qs.services
 import qs.utils
 import Quickshell
 import Quickshell.Io
+import Symmetria
 import QtQuick
 
-/// Native speech-to-text service using pw-record + OpenAI API.
+/// Native speech-to-text service with pipeline queue support.
 ///
-/// Replaces HyprWhsprService with direct process management instead of
-/// file-watching / FIFO / inotifywait / systemd orchestration.
+/// Orchestrates up to 3 concurrent SttJob instances. At most one job can be
+/// in "recording" state; the rest process in the background.
 ///
-/// Pipeline: pw-record → WAV file → curl (OpenAI API) → wl-copy [→ sendshortcut inject]
+/// Pipeline per job: pw-record → WAV file → curl (OpenAI API) → wl-copy [→ sendshortcut inject]
 ///
-/// State machine:
-///   idle → recording ⇄ paused → processing → success/error → idle
-///
-/// Audio level comes from a separate pw-record → od → awk pipeline at ~10Hz.
-/// PipeWire natively multiplexes multiple readers from the same audio source.
+/// Job state machine:
+///   recording ⇄ paused → processing → transcribed → delivering → success → [removed]
+///                            ↓             ↓
+///                          error ──retry──→ processing
+///                                ╰─auto-retry─╯ (silent, ≤_maxAutoRetries times)
 Singleton {
     id: root
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Public interface (matches HyprWhsprService for UI compatibility)
+    // Public interface
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Current state: "idle", "recording", "paused", "processing", "error", "success"
-    readonly property string state: _state
+    /// Whether any jobs exist (controls drawer visibility)
+    readonly property bool active: _jobs.length > 0
 
-    /// Audio level (0.0-1.0) during recording
-    readonly property real audioLevel: _audioLevel
+    /// The job list — newest first. Bound by Wrapper's Repeater.
+    readonly property var jobs: _jobs
 
-    /// Whether any non-idle state is active (controls drawer visibility).
-    /// _keepDrawerOpen can diverge from _state in the API-key-missing path:
-    /// start() sets _keepDrawerOpen=true, then _setErrorState moves to "error".
-    /// Without _keepDrawerOpen, the brief idle→error transition would flicker the drawer.
-    readonly property bool active: _state !== "idle" && _keepDrawerOpen
+    /// The currently recording job (at most one), or null
+    readonly property SttJob activeRecording: _activeRecording
 
-    /// Whether currently recording
-    readonly property bool recording: _state === "recording"
-
-    /// Current speech-to-text language code (e.g., "en", "es")
-    readonly property string language: _currentLanguage
-
-    /// Elapsed recording time in seconds (pause-aware)
-    readonly property real elapsedSeconds: _currentElapsed
-
-    /// Error detail properties for the drawer UI
-    readonly property string errorDetail: _errorDetail
-    readonly property string errorHint: _errorHint
-    readonly property string errorRaw: _errorRaw
-    readonly property string errorSource: _errorSource
-
-    /// Transcribed text result (for success state preview)
-    readonly property string transcribedText: _transcribedText
-
-    /// Emitted when an action is successfully dispatched (not a no-op).
-    /// Used by Content.qml to animate the corresponding control button.
-    signal actionTriggered(string action)
-
-    /// Whether the delivery mode radio toggle should be shown
+    /// Whether the delivery mode radio toggle should be shown (from config)
     readonly property bool isAskMode: _deliveryMode === "ask"
 
-    /// The user's runtime delivery choice for "ask" mode
-    readonly property string activeDeliveryChoice: _activeDeliveryChoice
 
-    /// Target info string for display during recording through success states.
-    /// Returns e.g. "Implementing auth · symmetria · WS 2" or "" when not applicable.
-    /// Visible during: recording, paused, processing, success (socket data arrives ~300ms into recording).
-    /// Empty when: clipboard mode, idle/error states, or no target data.
-    readonly property string targetInfo: {
-        // Hidden during idle (no capture yet) and error (not useful)
-        if (_state === "idle" || _state === "error")
-            return "";
-
-        const effectiveMode = _deliveryMode === "ask" ? _activeDeliveryChoice : _deliveryMode;
-        if (effectiveMode === "clipboard")
-            return "";
-
-        const parts = [];
-
-        // Agent title (from orchestrator via stt-select-socket.sh)
-        if (_targetInstanceTitle)
-            parts.push(_targetInstanceTitle);
-
-        // Project folder (basename of cwd)
-        if (_targetInstanceCwd) {
-            const basename = _targetInstanceCwd.split("/").pop();
-            if (basename) parts.push(basename);
-        }
-
-        // Workspace (shown immediately since it's captured synchronously)
-        if (_targetWorkspaceId > 0)
-            parts.push(`WS ${_targetWorkspaceId}`);
-
-        return parts.length > 0 ? parts.join(" · ") : "";
-    }
+    /// Emitted when an action is successfully dispatched.
+    /// Used by Content.qml to animate the corresponding control button.
+    /// sessionId scopes the action to the correct job card in multi-job scenarios.
+    /// Empty sessionId means "broadcast to all" (used for service-level actions).
+    signal actionTriggered(string sessionId, string action)
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Internal state
+    // Shared state (service-level, not per-job)
     // ─────────────────────────────────────────────────────────────────────────
 
-    property string _state: "idle"
-    property real _audioLevel: 0.0
-    property bool _keepDrawerOpen: false
-    property string _currentLanguage: ""
-    property string _pendingRestartLang: ""
-    property string _transcribedText: ""
-
-    // Error detail properties
-    property string _errorDetail: ""
-    property string _errorHint: ""
-    property string _errorSource: ""  // "api", "config", "recording", "concat", "timeout", "internal"
-    property string _errorRaw: ""
-
-    // Elapsed time tracking
-    property real _currentElapsed: 0
-    property real _recordingStartTime: 0
-    property real _accumulatedSeconds: 0
-    readonly property int _elapsedTimerInterval: 250
-
-    // Auto-hide delay constraints (ms)
-    readonly property int _minAutoHideDelay: 500
-    readonly property int _maxAutoHideDelay: 10000
+    property var _jobs: []
+    property SttJob _activeRecording: null
+    readonly property int _maxJobs: 3
 
     // Toggle debouncing
     property real _lastToggleTime: 0
     readonly property int _toggleDebounceMs: 200
 
-    // Segment management
-    property int _segmentCounter: 0
-    property string _sessionId: ""
-    property var _segmentFiles: []
-    property string _currentAudioFile: ""  // Combined file for transcription/retry
-
-    // Target window for inject delivery (captured at submit time)
-    property string _targetWindowAddress: ""
-    property string _targetWindowClass: ""
-    property int _targetWindowPid: -1
-    // Target Neovim socket (captured at start-time; re-captured at stop-time only if PID changed)
-    property string _targetNvimSocket: ""
-    property int _targetNvimActiveBuf: -1
-    // Target info for display (captured at start-time from socket query + Hyprland)
-    property string _targetInstanceTitle: ""
-    property string _targetInstanceCwd: ""
-    property int _targetWorkspaceId: -1
-
-    // Pending action for recordProcess.onExited callback
-    // Values: "" (none), "pause", "submit", "cancel"
-    property string _pendingRecordAction: ""
-
     // Runtime delivery choice for "ask" mode.
     // Persists across recordings within the same shell session.
-    // First-time default is "clipboard" (safest).
-    property string _activeDeliveryChoice: "clipboard"
+    property string _lastDeliveryChoice: "submit"
+
+    // Temp directory readiness
+    property bool _tempDirReady: false
+
+    // FIFO delivery queues: windowAddress → [SttJob, ...]
+    property var _deliveryQueues: ({})
+
+    // Per-session vocabulary hints (tag-chip widget).
+    // Service-level so the widget and IPC can modify them without job reference.
+    // Reset after each transcription completes (when _activeRecording → null).
+    property var _sessionVocabHints: []
+    property bool vocabHintsVisible: false
+    readonly property var sessionVocabHints: _sessionVocabHints
 
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
     readonly property string _tempDir: `${_runtimeDir}/symmetria-stt`
 
     // Script paths (resolved relative to project root)
-    readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace("file://", "")
-    readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace("file://", "")
-    readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace("file://", "")
-    readonly property string _selectSocketScript: Qt.resolvedUrl("../scripts/stt-select-socket.sh").toString().replace("file://", "")
+    readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace(/^file:\/\//, "")
+    readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace(/^file:\/\//, "")
+    readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace(/^file:\/\//, "")
 
-    // Delivery mode: "clipboard" (default), "inject", "submit", or "ask" (runtime radio toggle)
+    // Delivery mode from config: "clipboard" (default), "inject", "submit", or "ask"
     readonly property string _deliveryMode: {
         const mode = Config.stt?.deliveryMode ?? "clipboard";
         if (mode === "inject" || mode === "submit" || mode === "ask") return mode;
@@ -179,843 +98,1096 @@ Singleton {
         return Quickshell.env("OPENAI_API_KEY") || "";
     }
 
-    // Current segment file path (computed from session + counter)
-    // Note: _segmentCounter is incremented in resume() before _startRecording()
-    // is called, so this path is always correct at _startRecording() time.
-    // The actual path used for recording is snapshotted via recordProcess.capturedSegmentPath.
-    readonly property string _currentSegmentPath: {
-        if (_sessionId === "") return "";
-        return `${_tempDir}/session_${_sessionId}_segment_${_segmentCounter}.wav`;
-    }
+    // Auto-hide delay constraints (ms)
+    readonly property int _minAutoHideDelay: 500
+    readonly property int _maxAutoHideDelay: 10000
 
     // ─────────────────────────────────────────────────────────────────────────
     // Orchestrator commands
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Toggle: start if idle, submit if active, retry if error.
-    function toggle(lang: string): void {
+    /// Toggle: start if idle, submit if recording, retry if most recent is error.
+    function toggle(): void {
         const now = Date.now();
         if (now - _lastToggleTime < _toggleDebounceMs) {
             console.log("[STT:D19] toggle() DEBOUNCED | elapsed:", now - _lastToggleTime, "ms");
             return;
         }
-        console.log("[STT:D19] toggle() | state:", _state,
-            "| keepDrawerOpen:", _keepDrawerOpen, "| lang:", lang);
+        Logger.log("qml", "stt", "toggle | activeRecording=" + (_activeRecording !== null) + " jobs=" + _jobs.length);
 
-        if (_state === "idle" || !_keepDrawerOpen) {
-            _lastToggleTime = now;
-            start(lang);
-        } else if (_state === "recording" || _state === "paused") {
+        if (_activeRecording) {
             _lastToggleTime = now;
             stop();
-        } else if (_state === "error") {
+        } else if (_jobs.length === 0) {
             _lastToggleTime = now;
-            retry();
+            start();
+        } else {
+            // Jobs exist but none recording — check for errors
+            const errorJob = _mostRecentErrorJob();
+            if (errorJob) {
+                _lastToggleTime = now;
+                errorJob.retry();
+                actionTriggered(errorJob.sessionId, "retry");
+            } else if (_jobs.length < _maxJobs) {
+                _lastToggleTime = now;
+                start();
+            }
         }
-        // Processing/success: no-op — don't update debounce timestamp
     }
 
-    /// Start recording with optional language code.
-    function start(lang: string): void {
-        if (_state === "recording" || _state === "paused" || _state === "processing") {
-            console.warn("[STT] start() called while already active — ignoring");
+    /// Start a new recording job.
+    function start(): void {
+        if (_activeRecording) {
+            console.warn("[STT] start() called while already recording — ignoring");
             return;
         }
-        console.log("[STT:D18] start() called | lang:", lang,
-            "| currentState:", _state,
-            "| deliveryMode:", _deliveryMode);
+        if (_jobs.length >= _maxJobs) {
+            Toaster.toast(
+                qsTr("STT: Max recordings reached"),
+                qsTr("Wait for a job to finish (max %1)").arg(_maxJobs),
+                "",
+                Toast.Warning
+            );
+            return;
+        }
+        Logger.log("qml", "stt", "start | delivery=" + _deliveryMode + " jobs=" + _jobs.length);
+
         // Check API key before starting
         if (_resolvedApiKey === "") {
-            _keepDrawerOpen = true;
-            _setErrorState("config", "API key not configured",
+            // Create a temporary job just to show the error in a card
+            const errorJob = _createJob();
+            errorJob._setErrorState("config", "API key not configured",
                 "Set OPENAI_API_KEY env var or stt.apiKey in shell.json");
+            _jobs = [errorJob, ..._jobs];
             return;
         }
 
-        const safeLang = _sanitizeLanguage(lang);
+        const job = _createJob();
 
-        // Clear stale terminal states
-        if (_state === "error" || _state === "success") {
-            _clearErrorState();
-            _transcribedText = "";
-        }
+        // Capture target window and resolve agent data synchronously.
+        job._captureTargetWindow();
+        job._resolveAgentTarget();
+        Logger.log("qml", "stt", "session | id=" + job.sessionId + " target=" + job._targetWindowAddress + " class=" + job._targetWindowClass);
 
-        _keepDrawerOpen = true;
-        if (safeLang) _currentLanguage = safeLang;
+        _activeRecording = job;
+        job._state = "recording";
 
-        // Initialize session
-        _sessionId = Date.now().toString();
-        _segmentCounter = 0;
-        _segmentFiles = [];
-        _currentAudioFile = "";
-        _recordingStartTime = Date.now();
-        _accumulatedSeconds = 0;
-        _currentElapsed = 0;
-        _pendingRecordAction = "";
-
-        // Capture target window and start async Neovim socket query.
-        // The user just pressed the STT keybind from their focused terminal,
-        // so has_focus=true is valid. The ~300ms socket query runs concurrently
-        // with recording — by the time the user submits, data is cached.
-        // stop() will re-capture only if the target window PID changed.
-        _captureTargetWindow();
-        _captureTargetNvimSocket();
-        console.log("[STT:D18] session initialized | id:", _sessionId,
-            "| eagerTarget:", _targetWindowAddress, "class:", _targetWindowClass);
+        // Add to _jobs AFTER state is "recording" so Repeater delegates
+        // see FadeTransitions as visible from the first frame.
+        _jobs = [job, ..._jobs];
 
         // Ensure temp dir exists, then start recording
-        tempDirProcess.running = true;
+        if (_tempDirReady) {
+            job._startRecording();
+        } else {
+            tempDirProcess.running = true;
+        }
     }
 
-    /// Stop recording and submit for transcription.
+    /// Stop the active recording and submit for transcription.
     function stop(): void {
-        if (_state !== "recording" && _state !== "paused") return;
-        console.log("[STT:D01] stop() called | state:", _state,
-            "| deliveryMode:", _deliveryMode,
-            "| askChoice:", _activeDeliveryChoice,
-            "| sessionId:", _sessionId,
-            "| segments:", _segmentFiles.length);
-        actionTriggered("stop");
-        // Re-capture target window; only re-query Neovim socket if PID changed
-        // (common case: same window → reuse start-time cache, instant)
-        const prevPid = _targetWindowPid;
-        _captureTargetWindow();
-        if (_targetWindowPid !== prevPid && _targetWindowPid > 0) {
-            _captureTargetNvimSocket();
-        }
-        console.log("[STT:D02] after _captureTargetWindow() | address:", _targetWindowAddress,
-            "| class:", _targetWindowClass,
-            "| pidChanged:", _targetWindowPid !== prevPid);
-
-        if (_state === "paused") {
-            // Already paused — no active recording, go straight to processing.
-            // If PID changed, socketCaptureProcess was re-started above and races
-            // transcription, but will finish (~1s timeout) before the API returns (2-10s).
-            console.log("[STT:D03] paused path → direct _submitForTranscription()");
-            _submitForTranscription();
-            return;
-        }
-
-        // Stop recording first, then submit on exit
-        console.log("[STT:D03] recording path → SIGTERM pw-record, pending submit");
-        _pendingRecordAction = "submit";
-        levelMonitorProcess.running = false;
-        recordProcess.running = false;  // SIGTERM → pw-record finalizes WAV
+        if (!_activeRecording) return;
+        actionTriggered(_activeRecording.sessionId, "stop");
+        // Snapshot session hints onto the job before clearing service-level state.
+        // The recording→stop path is async (recordProcess.onExited calls
+        // _startTranscription later), so _sessionVocabHints would be empty
+        // by the time transcription starts without this snapshot.
+        _activeRecording._snapshotVocabHints = _sessionVocabHints.slice();
+        _activeRecording.stop();
+        _activeRecording = null;
+        _sessionVocabHints = [];
+        vocabHintsVisible = false;
     }
 
-    /// Toggle pause: pause if recording, resume if paused.
+    /// Toggle pause on the active recording.
     function pause(): void {
-        if (_state === "recording") {
-            actionTriggered("pause");
-            _pendingRecordAction = "pause";
-            levelMonitorProcess.running = false;
-            recordProcess.running = false;  // SIGTERM → finalize current segment
-        } else if (_state === "paused") {
-            actionTriggered("resume");
-            resume();
+        if (!_activeRecording) return;
+        if (_activeRecording._state === "recording") {
+            actionTriggered(_activeRecording.sessionId, "pause");
+            _activeRecording.pause();
+        } else if (_activeRecording._state === "paused") {
+            actionTriggered(_activeRecording.sessionId, "resume");
+            _activeRecording.resume();
         }
     }
 
-    /// Resume from pause. Starts a new segment.
+    /// Resume the active recording.
     function resume(): void {
-        if (_state !== "paused") return;
-        _segmentCounter++;
-        _startRecording();
-        _recordingStartTime = Date.now();
-        _state = "recording";
+        if (!_activeRecording) return;
+        _activeRecording.resume();
     }
 
-    /// Cancel recording: kill processes, discard audio, close drawer.
+    /// Cancel the active recording (discard audio).
     function cancel(): void {
-        actionTriggered("cancel");
-        _cancelInternal();
+        const sid = _activeRecording?.sessionId ?? "";
+        actionTriggered(sid, "cancel");
+        if (_activeRecording) {
+            const job = _activeRecording;
+            _activeRecording = null;
+            _sessionVocabHints = [];
+            vocabHintsVisible = false;
+            job.cancel();
+        }
     }
 
-    /// Restart: cancel + re-start recording with same language.
+    /// Restart: cancel active recording + start a new one.
+    /// No-op if there is no active recording.
     function restart(): void {
-        actionTriggered("restart");
-        const savedLang = _currentLanguage || _pendingRestartLang || "";
+        if (!_activeRecording) return;
+        actionTriggered(_activeRecording.sessionId, "restart");
         restartDelayTimer.stop();
-        _cancelInternal();
-        _pendingRestartLang = savedLang;
+        const job = _activeRecording;
+        _activeRecording = null;
+        _sessionVocabHints = [];
+        vocabHintsVisible = false;
+        job.cancel();
         restartDelayTimer.start();
     }
 
-    /// Retry failed transcription with the same audio file.
+    /// Retry the most recent errored job.
     function retry(): void {
-        if (_state !== "error") return;
-        actionTriggered("retry");
-        console.log("[STT:D21] retry() | audioFile:", _currentAudioFile,
-            "| targetAddr:", _targetWindowAddress, "| targetClass:", _targetWindowClass);
-
-        if (_currentAudioFile === "") {
-            _setErrorState("internal", "No audio file to retry", "Start a new recording");
-            return;
-        }
-
-        _clearErrorState();
-        _transcribedText = "";
-        _state = "processing";
-        _startTranscription(_currentAudioFile);
+        const errorJob = _mostRecentErrorJob();
+        if (!errorJob) return;
+        actionTriggered(errorJob.sessionId, "retry");
+        errorJob.retry();
     }
 
     /// Switch the runtime delivery choice (only effective in "ask" mode).
+    /// Applies to the active recording job.
     function setDeliveryChoice(mode: string): void {
         if (_deliveryMode !== "ask") {
             console.debug("[STT] setDeliveryChoice() ignored: deliveryMode is", _deliveryMode, "(not ask)");
             return;
         }
         if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
-        if (_activeDeliveryChoice === mode) return;
-        _activeDeliveryChoice = mode;
-        actionTriggered("mode-" + mode);
+        if (_lastDeliveryChoice === mode) return;
+        _lastDeliveryChoice = mode;
+        if (_activeRecording)
+            _activeRecording._activeDeliveryChoice = mode;
+        actionTriggered(_activeRecording?.sessionId ?? "", "mode-" + mode);
+    }
+
+    /// Add a per-session vocabulary hint (shown as chip in the widget).
+    function addSessionHint(word: string): void {
+        const trimmed = word.trim();
+        if (trimmed === "") return;
+        if (_sessionVocabHints.some(h => h.toLowerCase() === trimmed.toLowerCase())) return;
+        _sessionVocabHints = [..._sessionVocabHints, trimmed];
+    }
+
+    /// Remove a per-session vocabulary hint by index.
+    function removeSessionHint(index: int): void {
+        _sessionVocabHints = _sessionVocabHints.filter((_, i) => i !== index);
+    }
+
+    /// Toggle the vocabulary hints widget (only during active recording).
+    function toggleVocabHints(): void {
+        if (!_activeRecording) return;
+        vocabHintsVisible = !vocabHintsVisible;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Internal helpers
+    // Internal helpers (service-level)
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _sanitizeLanguage(lang: string): string {
-        if (!lang) return "";
-        const sanitized = lang.replace(/[^a-zA-Z-]/g, "");
-        if (sanitized.length < 2 || sanitized.length > 5) {
-            console.warn("[STT] Invalid language code:", lang);
-            return "";
+    function _mostRecentErrorJob(): SttJob {
+        for (const job of _jobs) {
+            if (job._state === "error" && job.errorSource !== "config") return job;
         }
-        return sanitized;
+        return null;
     }
 
-    function _setErrorState(source: string, detail: string, hint: string): void {
-        _errorSource = source;
-        _errorDetail = detail;
-        _errorHint = hint;
-        _state = "error";
-        // Clean up temp segment files on error. The combined/single audio file
-        // (_currentAudioFile) is preserved for retry; only raw segments are cleaned.
-        if (_sessionId !== "" && _segmentFiles.length > 0 && _currentAudioFile !== "") {
-            // Delete individual segments but keep the combined file for retry
-            for (const seg of _segmentFiles) {
-                if (seg !== _currentAudioFile) {
-                    Quickshell.execDetached(["rm", "-f", seg]);
-                }
-            }
-        }
+    // ─────────────────────────────────────────────────────────────────────────
+    // Job lifecycle
+    // ─────────────────────────────────────────────────────────────────────────
+
+    Component { id: jobComponent; SttJob {} }
+
+    function _createJob(): SttJob {
+        const job = jobComponent.createObject(root, {
+            sessionId: Date.now().toString(),
+            _activeDeliveryChoice: _lastDeliveryChoice
+        });
+
+        job.finished.connect(() => _onJobFinished(job));
+        job.readyForDelivery.connect(() => _enqueueForDelivery(job));
+
+        // Caller must add to _jobs AFTER setting job state, so that
+        // Repeater delegates see the correct state at creation time.
+        return job;
     }
 
-    function _clearErrorState(): void {
-        _errorSource = "";
-        _errorDetail = "";
-        _errorHint = "";
-        _errorRaw = "";
+    function _removeJob(job: SttJob): void {
+        job.closing = true;  // triggers slide-up animation in delegate
+        job._removalTimer.start();  // per-job timer, avoids overwrite race
     }
 
-    /// Capture the currently active window for inject delivery.
-    /// Called at both start() and stop() — start() captures an eager fallback,
-    /// stop() overwrites with a fresher value if a toplevel is available.
-    /// In ask mode, we capture regardless of _activeDeliveryChoice because
-    /// the user may switch to inject/submit before delivery completes.
-    function _captureTargetWindow(): void {
-        if (_deliveryMode === "clipboard") {
-            console.log("[STT:D04] _captureTargetWindow() skipped — deliveryMode is clipboard");
-            return;
-        }
-        const toplevel = Hypr.activeToplevel;
-        if (toplevel) {
-            const prevAddr = _targetWindowAddress;
-            // .address lacks "0x" prefix; sendshortcut needs it
-            _targetWindowAddress = `0x${toplevel.address}`;
-            _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
-            _targetWindowPid = toplevel.lastIpcObject?.pid ?? -1;
-            _targetWorkspaceId = toplevel.workspace?.id ?? -1;
-            console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
-                "| class:", _targetWindowClass, "| pid:", _targetWindowPid,
-                "| workspace:", _targetWorkspaceId,
-                "| prevAddress:", prevAddr,
-                "| changed:", prevAddr !== _targetWindowAddress);
-        } else {
-            console.warn("[STT:D04] _captureTargetWindow() — NO activeToplevel! Keeping fallback:",
-                _targetWindowAddress, "class:", _targetWindowClass);
-        }
-        // If no toplevel, preserve any previously captured value (start-time fallback)
+    function _onJobFinished(job: SttJob): void {
+        // Job reported success and its successTimer fired — remove it
+        _removeJob(job);
     }
 
-    /// Capture the Neovim socket for STT injection.
-    /// Called at start() (primary) and conditionally at stop() (if PID changed).
-    ///
-    /// At start-time, the user just activated the keybind from their focused
-    /// terminal, so has_focus=true is valid. The ~300ms query runs concurrently
-    /// with recording — by submit time, data is already cached.
-    ///
-    /// At stop-time, only re-runs if the target window PID changed (user switched
-    /// windows during recording). Clears title/cwd to prevent stale start-time
-    /// data from persisting during re-capture. Note: _targetWorkspaceId is
-    /// refreshed synchronously by the preceding _captureTargetWindow() call.
-    ///
-    /// Passes the target window PID to stt-select-socket.sh for PID-scoped
-    /// socket discovery. The script also verifies has_focus=true.
-    ///
-    /// Timing: queries each candidate socket with a 1s timeout.
-    /// If socket capture hasn't completed when clipboardProcess.onExited fires,
-    /// _targetNvimSocket will be empty and stt-inject.sh falls back to sendshortcut.
-    function _captureTargetNvimSocket(): void {
-        // Always clear stale data first, regardless of delivery mode
-        _targetNvimSocket = "";
-        _targetNvimActiveBuf = -1;
-        _targetInstanceTitle = "";
-        _targetInstanceCwd = "";
-        if (_deliveryMode === "clipboard") return;
-        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
-        const pid = _targetWindowPid > 0 ? _targetWindowPid.toString() : "0";
-        socketCaptureProcess.command = [_selectSocketScript, pid];
-        socketCaptureProcess.running = true;
+    function _finalizeRemoval(job: SttJob): void {
+        _jobs = _jobs.filter(j => j !== job);
+        job.destroy();
     }
 
-    /// Categorize API errors from stt-transcribe.sh stderr output.
-    /// Format: ERROR:<http_code>:<message>
-    function _categorizeApiError(stderrText: string): void {
-        _errorRaw = stderrText;
+    // ─────────────────────────────────────────────────────────────────────────
+    // FIFO delivery
+    // ─────────────────────────────────────────────────────────────────────────
 
-        const patterns = [
-            { re: /ERROR:401/,     detail: "Authentication failed",   hint: "Check your API key" },
-            { re: /ERROR:429/,     detail: "Quota exceeded",          hint: "Check your API plan limits" },
-            { re: /ERROR:5\d\d/,   detail: "API server error",        hint: "Try again later" },
-            { re: /Network error/, detail: "Network error",           hint: "Check your connection" },
-            { re: /timed out/i,    detail: "Connection timed out",    hint: "Check your network" },
-            { re: /Missing/,       detail: "Configuration error",     hint: "Check STT settings" },
-        ];
-
-        for (const p of patterns) {
-            if (p.re.test(stderrText)) {
-                _errorDetail = p.detail;
-                _errorHint = p.hint;
-                return;
-            }
-        }
-
-        _errorDetail = "Transcription failed";
-        _errorHint = "Check logs for details";
+    function _enqueueForDelivery(job: SttJob): void {
+        const key = job._targetWindowAddress || "__clipboard__";
+        const queues = _deliveryQueues;
+        if (!queues[key]) queues[key] = [];
+        queues[key].push(job);
+        _deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
+        _tryDeliverNext(key);
     }
 
-    function _cancelInternal(): void {
-        // Set before SIGKILL so recordProcess.onExited (fires async) sees "cancel"
-        // and returns early. Cleared at the end of this function after sync work.
-        _pendingRecordAction = "cancel";
-        _stopAllTimers();
+    function _tryDeliverNext(key: string): void {
+        const queues = _deliveryQueues;
+        const queue = queues[key];
+        if (!queue || queue.length === 0) return;
 
-        // Kill active processes (signal(9) = SIGKILL; Process.kill() is not exposed to QML)
-        if (recordProcess.running) recordProcess.signal(9);
-        if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (transcribeProcess.running) transcribeProcess.signal(9);
-        if (concatProcess.running) concatProcess.signal(9);
-        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
-        if (tempDirProcess.running) tempDirProcess.running = false;
+        const front = queue[0];
+        if (front._state !== "transcribed") return;  // not ready or already delivering
 
-        // clipboardProcess and injectProcess are intentionally not interrupted —
-        // if delivery is already in flight, completing silently is acceptable
-        // (clipboard always has the text as fallback).
-
-        // Clean up temp files
-        _cleanupTempFiles();
-
-        // Reset all state
-        _keepDrawerOpen = false;
-        _state = "idle";
-        _currentLanguage = "";
-        _pendingRestartLang = "";
-        _recordingStartTime = 0;
-        _accumulatedSeconds = 0;
-        _currentElapsed = 0;
-        _audioLevel = 0.0;
-        _transcribedText = "";
-        _segmentFiles = [];
-        _currentAudioFile = "";
-        _targetWindowAddress = "";
-        _targetWindowClass = "";
-        _targetWindowPid = -1;
-        _targetNvimSocket = "";
-        _targetNvimActiveBuf = -1;
-        _targetInstanceTitle = "";
-        _targetInstanceCwd = "";
-        _targetWorkspaceId = -1;
-        _sessionId = "";
-        _pendingRecordAction = "";
-        _clearErrorState();
+        front._startDeliveryChain();
     }
 
-    function _stopAllTimers(): void {
-        successTimer.stop();
-        restartDelayTimer.stop();
-        processingTimeoutTimer.stop();
-    }
-
-    /// Spawn pw-record for the current segment and start level monitor.
-    function _startRecording(): void {
-        const segmentPath = _currentSegmentPath;
-        const sampleRate = Config.stt?.recording?.sampleRate ?? 16000;
-        const channels = Config.stt?.recording?.channels ?? 1;
-
-        // Capture segment path on the process so onExited reads the correct
-        // path even if _segmentCounter is incremented before the exit fires.
-        recordProcess.capturedSegmentPath = segmentPath;
-        recordProcess.command = [
-            "pw-record",
-            "--format=s16",
-            `--rate=${sampleRate}`,
-            `--channels=${channels}`,
-            segmentPath
-        ];
-        recordProcess.running = true;
-        levelMonitorProcess.running = true;
-    }
-
-    /// Proceed to transcription after recording is complete.
-    function _submitForTranscription(): void {
-        console.log("[STT:D05] _submitForTranscription() | segments:", _segmentFiles.length,
-            "| files:", JSON.stringify(_segmentFiles));
-        if (_segmentFiles.length === 0) {
-            console.error("[STT:D05] NO segments — aborting");
-            _setErrorState("internal", "No audio segments", "Recording may have failed");
-            return;
-        }
-
-        _state = "processing";
-
-        if (_segmentFiles.length === 1) {
-            // Single segment — use directly
-            _currentAudioFile = _segmentFiles[0];
-            console.log("[STT:D06] single segment → transcribing:", _currentAudioFile);
-            _startTranscription(_currentAudioFile);
-        } else {
-            // Multiple segments — concatenate with ffmpeg
-            console.log("[STT:D06] multi-segment → ffmpeg concat, count:", _segmentFiles.length);
-            const outputPath = `${_tempDir}/session_${_sessionId}_combined.wav`;
-            _currentAudioFile = outputPath;
-
-            const n = _segmentFiles.length;
-            const args = ["ffmpeg"];
-            for (const f of _segmentFiles) {
-                args.push("-i");
-                args.push(f);
-            }
-            let filterInputs = "";
-            for (let i = 0; i < n; i++) filterInputs += `[${i}:a]`;
-            args.push("-filter_complex", `${filterInputs}concat=n=${n}:v=0:a=1[out]`,
-                      "-map", "[out]", "-y", outputPath);
-
-            concatProcess.command = args;
-            concatProcess.running = true;
-        }
-    }
-
-    /// Spawn the transcription helper script.
-    function _startTranscription(audioFile: string): void {
-        processingTimeoutTimer.start();
-        const model = Config.stt?.model ?? "gpt-4o-transcribe";
-        const lang = _currentLanguage || "en";
-        console.log("[STT:D07] _startTranscription() | file:", audioFile,
-            "| model:", model, "| lang:", lang,
-            "| timeoutMs:", processingTimeoutTimer.interval);
-
-        // Pass API key via environment to avoid exposure in /proc/<pid>/cmdline
-        transcribeProcess.environment = ({ STT_API_KEY: _resolvedApiKey });
-        transcribeProcess.command = [
-            _transcribeScript, audioFile, lang, model
-        ];
-        transcribeProcess.running = true;
-    }
-
-    /// Delete temp files for the current session.
-    function _cleanupTempFiles(): void {
-        if (_sessionId !== "") {
-            Quickshell.execDetached(["find", _tempDir, "-maxdepth", "1",
-                "-name", `session_${_sessionId}_*`, "-delete"]);
+    function _onDeliveryComplete(job: SttJob): void {
+        const key = job._targetWindowAddress || "__clipboard__";
+        const queues = _deliveryQueues;
+        const queue = queues[key];
+        if (queue && queue.length > 0 && queue[0] === job) {
+            queue.shift();
+            _deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
+            _tryDeliverNext(key);  // pump next
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Timers
+    // Service-level timers & processes
     // ─────────────────────────────────────────────────────────────────────────
-
-    // Update _currentElapsed during recording
-    Timer {
-        id: elapsedTimer
-        interval: root._elapsedTimerInterval
-        repeat: true
-        running: root.recording
-        onTriggered: {
-            if (root._recordingStartTime > 0)
-                root._currentElapsed = root._accumulatedSeconds + (Date.now() - root._recordingStartTime) / 1000;
-        }
-    }
-
-    // Auto-hide after success state
-    Timer {
-        id: successTimer
-        interval: {
-            const delay = Config.stt?.autoHideDelay ?? 1500;
-            return Math.max(root._minAutoHideDelay, Math.min(root._maxAutoHideDelay, delay));
-        }
-        onTriggered: {
-            console.log("[STT:D17] successTimer fired | state:", root._state,
-                "| delay was:", interval, "ms");
-            if (root._state === "success") {
-                console.log("[STT:D17] → auto-hiding (idle)");
-                root._keepDrawerOpen = false;
-                root._state = "idle";
-            }
-        }
-    }
-
-    // Detect stuck processing (API timeout or network hang)
-    Timer {
-        id: processingTimeoutTimer
-        interval: Config.stt?.processingTimeout ?? 120000
-        onTriggered: {
-            console.error("[STT] Processing timed out");
-            if (transcribeProcess.running) transcribeProcess.signal(9);
-            root._setErrorState("timeout", "Processing timed out", "Check your network connection");
-        }
-    }
 
     // Delayed start after cancel (used by restart)
     Timer {
         id: restartDelayTimer
         interval: 500
-        onTriggered: {
-            if (root._pendingRestartLang !== "") {
-                const lang = root._pendingRestartLang;
-                root._pendingRestartLang = "";
-                root.start(lang);
-            }
-        }
+        onTriggered: root.start()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Processes
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // Ensure temp directory exists before recording
+    // Ensure temp directory exists before first recording
     Process {
         id: tempDirProcess
         command: ["mkdir", "-p", root._tempDir]
         onExited: (code, status) => {
-            // Guard: if cancel fired while mkdir was running, don't start recording
-            if (root._state === "idle") return;
             if (code !== 0) {
                 console.error("[STT] Failed to create temp directory:", root._tempDir);
-                root._setErrorState("internal", "Failed to create temp directory", "Check permissions");
+                if (root._activeRecording)
+                    root._activeRecording._setErrorState("internal", "Failed to create temp directory", "Check permissions");
                 return;
             }
-            root._startRecording();
-            root._state = "recording";
-        }
-    }
-
-    // pw-record: captures audio to WAV file (command set dynamically)
-    Process {
-        id: recordProcess
-        // Captured at _startRecording() time so onExited reads the path that was
-        // active when this invocation began, not the post-resume counter value.
-        property string capturedSegmentPath: ""
-        onExited: (code, status) => {
-            const action = root._pendingRecordAction;
-            root._pendingRecordAction = "";
-            console.log("[STT:D08] recordProcess.onExited | code:", code,
-                "| action:", action || "(none)",
-                "| segPath:", capturedSegmentPath,
-                "| state:", root._state);
-
-            // Cancel already handled everything
-            if (action === "cancel") {
-                console.log("[STT:D08] action=cancel → returning early");
-                return;
-            }
-
-            // Register completed segment file
-            const segPath = capturedSegmentPath;
-            if (segPath !== "") {
-                const files = root._segmentFiles.slice();
-                files.push(segPath);
-                root._segmentFiles = files;
-                console.log("[STT:D09] segment registered:", segPath, "| total segments:", files.length);
-            } else {
-                console.warn("[STT:D09] capturedSegmentPath is EMPTY — no segment registered");
-            }
-
-            if (action === "pause") {
-                // Accumulate elapsed time from this segment
-                if (root._recordingStartTime > 0) {
-                    root._accumulatedSeconds += (Date.now() - root._recordingStartTime) / 1000;
-                    root._recordingStartTime = 0;
-                }
-                root._audioLevel = 0.0;
-                root._state = "paused";
-                console.log("[STT:D08] → paused, accumulated:", root._accumulatedSeconds.toFixed(1), "s");
-            } else if (action === "submit") {
-                // Accumulate final elapsed time
-                if (root._recordingStartTime > 0) {
-                    root._accumulatedSeconds += (Date.now() - root._recordingStartTime) / 1000;
-                    root._currentElapsed = root._accumulatedSeconds;
-                    root._recordingStartTime = 0;
-                }
-                root._audioLevel = 0.0;
-                console.log("[STT:D08] → submit path, elapsed:", root._accumulatedSeconds.toFixed(1), "s, calling _submitForTranscription()");
-                root._submitForTranscription();
-            } else if (code !== 0 && root._state === "recording") {
-                // Unexpected exit during recording
-                console.error("[STT:D08] pw-record exited unexpectedly (code", code + ")");
-                root._setErrorState("recording", "Recording failed", "Check audio device");
-            } else {
-                console.log("[STT:D08] no matching action, code:", code, "state:", root._state, "— no-op");
-            }
-        }
-    }
-
-    // Audio level monitor (separate pw-record → od → awk pipeline, ~10Hz output)
-    Process {
-        id: levelMonitorProcess
-        command: [root._levelMonitorScript]
-        stdout: SplitParser {
-            onRead: data => {
-                const level = parseFloat(data.trim());
-                if (!isNaN(level) && isFinite(level))
-                    root._audioLevel = Math.min(1.0, Math.max(0.0, level));
-            }
-        }
-    }
-
-    // ffmpeg: concatenate multi-segment recordings (command set dynamically)
-    Process {
-        id: concatProcess
-        onExited: (code, status) => {
-            console.log("[STT:D20] concatProcess.onExited | code:", code, "| state:", root._state);
-            // Ignore exit if cancel already reset state
-            if (root._state !== "processing") {
-                console.log("[STT:D20] state is not processing — ignoring");
-                return;
-            }
-
-            if (code !== 0) {
-                console.error("[STT:D20] ffmpeg concat FAILED (exit", code + ")");
-                // Fallback: use last segment only
-                if (root._segmentFiles.length > 0) {
-                    root._currentAudioFile = root._segmentFiles[root._segmentFiles.length - 1];
-                    console.warn("[STT:D20] falling back to last segment:", root._currentAudioFile);
-                    root._startTranscription(root._currentAudioFile);
-                } else {
-                    root._setErrorState("concat", "Failed to combine segments", "Is ffmpeg installed?");
-                }
-                return;
-            }
-            console.log("[STT:D20] concat OK → transcribing combined file:", root._currentAudioFile);
-            root._startTranscription(root._currentAudioFile);
-        }
-    }
-
-    // Transcription via stt-transcribe.sh (command set dynamically)
-    Process {
-        id: transcribeProcess
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const result = text.trim();
-                if (result !== "")
-                    root._transcribedText = result;
-            }
-        }
-        stderr: StdioCollector {
-            onStreamFinished: {
-                const errText = text.trim();
-                if (errText !== "")
-                    root._categorizeApiError(errText);
-            }
-        }
-        onExited: (code, status) => {
-            processingTimeoutTimer.stop();
-            // Guard: if cancel already reset state, don't overwrite with error
-            if (root._state !== "processing") {
-                console.log("[STT:D10] transcribeProcess.onExited — state is not processing (" + root._state + "), ignoring");
-                return;
-            }
-            console.log("[STT:D10] transcribeProcess.onExited | code:", code,
-                "| textLength:", root._transcribedText.length,
-                "| textPreview:", root._transcribedText.substring(0, 80),
-                "| errorDetail:", root._errorDetail);
-            if (code === 0 && root._transcribedText !== "") {
-                root._state = "success";
-                console.log("[STT:D11] → success, chaining wl-copy | textLength:", root._transcribedText.length);
-                // Copy to clipboard
-                clipboardProcess.capturedSessionId = root._sessionId;
-                clipboardProcess.command = ["wl-copy", root._transcribedText];
-                clipboardProcess.running = true;
-                // Clean up temp files on success
-                if (Config.stt?.cache?.deleteOnSuccess ?? true)
-                    root._cleanupTempFiles();
-            } else {
-                console.error("[STT:D10] → error path | code:", code,
-                    "| hasText:", root._transcribedText !== "",
-                    "| errorDetail:", root._errorDetail,
-                    "| errorRaw:", root._errorRaw);
-                // Error — categorization already happened in stderr collector
-                if (root._errorDetail === "")
-                    root._setErrorState("api", "Transcription failed", "Check logs for details");
-                else {
-                    root._errorSource = "api";
-                    root._state = "error";
-                }
-            }
-        }
-    }
-
-    // Clipboard delivery via wl-copy
-    Process {
-        id: clipboardProcess
-        property string capturedSessionId: ""
-        onExited: (code, status) => {
-            console.log("[STT:D12] clipboardProcess.onExited | code:", code,
-                "| deliveryMode:", root._deliveryMode,
-                "| askChoice:", root._activeDeliveryChoice,
-                "| targetAddr:", root._targetWindowAddress,
-                "| targetClass:", root._targetWindowClass);
-            if (code !== 0) {
-                console.error("[STT:D12] wl-copy FAILED (exit", code + ") — clearing target, aborting inject chain");
-                root._targetWindowAddress = "";
-                root._targetWindowClass = "";
-                return;
-            }
-            if (clipboardProcess.capturedSessionId !== root._sessionId) {
-                console.warn("[STT:D12] session changed — discarding stale injection");
-                return;
-            }
-            // Resolve effective delivery mode ("ask" → runtime choice)
-            const effectiveMode = root._deliveryMode === "ask"
-                ? root._activeDeliveryChoice
-                : root._deliveryMode;
-            console.log("[STT:D13] effectiveMode resolved:", effectiveMode,
-                "| from:", root._deliveryMode === "ask" ? "ask→" + root._activeDeliveryChoice : root._deliveryMode);
-            // Chain window injection after successful clipboard write
-            if (effectiveMode !== "clipboard" && root._targetWindowAddress !== "") {
-                if (root._targetWindowClass === "")
-                    console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
-                if (socketCaptureProcess.running) {
-                    console.warn("[STT:D15] socketCaptureProcess still running at inject time — socket may be empty");
-                }
-                const cmd = [root._injectScript, root._targetWindowAddress, root._targetWindowClass];
-                if (effectiveMode === "submit") cmd.push("submit");
-                console.log("[STT:D15] → launching inject | cmd:", JSON.stringify(cmd));
-                // Pass expected text, pre-determined Neovim socket + buffer (captured at stop-time)
-                injectProcess.environment = ({
-                    STT_EXPECTED_TEXT: root._transcribedText,
-                    STT_NVIM_SOCKET: root._targetNvimSocket,
-                    STT_NVIM_ACTIVE_BUF: root._targetNvimActiveBuf.toString()
-                });
-                injectProcess.command = cmd;
-                injectProcess.running = true;
-            } else {
-                console.log("[STT:D14] inject SKIPPED | reason:",
-                    effectiveMode === "clipboard" ? "effectiveMode=clipboard" :
-                    root._targetWindowAddress === "" ? "no targetWindowAddress" : "unknown");
-            }
-        }
-    }
-
-    // Window injection via stt-inject.sh (best-effort, non-fatal)
-    Process {
-        id: injectProcess
-        stderr: SplitParser {
-            onRead: data => {
-                console.log("[STT:D16:stderr]", data.trim());
-            }
-        }
-        onExited: (code, status) => {
-            console.log("[STT:D16] injectProcess.onExited | code:", code,
-                "| targetAddr:", root._targetWindowAddress,
-                "| targetClass:", root._targetWindowClass);
-            if (code !== 0)
-                console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal, clipboard still has text");
-            else
-                console.log("[STT:D16] inject completed successfully");
-        }
-    }
-
-    // Neovim socket capture (runs stt-select-socket.sh at start-time; re-runs at stop-time if PID changed)
-    // Output format: "<socket_path>\t<last_active_buf>\t<title>\t<cwd>" (tab-delimited) or empty
-    Process {
-        id: socketCaptureProcess
-        stdout: SplitParser {
-            onRead: data => {
-                // Guard: discard stale output if cancel already reset state
-                if (root._state === "idle") return;
-                const parts = data.trim().split("\t");
-                const socket = parts[0] || "";
-                const activeBuf = parseInt(parts[1]);
-                const title = parts[2] || "";
-                const cwd = parts[3] || "";
-                if (socket !== "") {
-                    root._targetNvimSocket = socket;
-                    root._targetNvimActiveBuf = isNaN(activeBuf) ? -1 : activeBuf;
-                    root._targetInstanceTitle = title;
-                    root._targetInstanceCwd = cwd;
-                    console.log("[STT:D04a] captured Neovim socket:", socket,
-                        "activeBuf:", root._targetNvimActiveBuf,
-                        "title:", root._targetInstanceTitle,
-                        "cwd:", root._targetInstanceCwd);
-                }
-            }
-        }
-        onExited: (code, status) => {
-            console.log("[STT:D04a] socketCaptureProcess.onExited | code:", code,
-                "| socket:", root._targetNvimSocket, "| activeBuf:", root._targetNvimActiveBuf);
+            root._tempDirReady = true;
+            if (root._activeRecording && root._activeRecording._state === "recording")
+                root._activeRecording._startRecording();
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // State change handlers
+    // Cleanup
     // ─────────────────────────────────────────────────────────────────────────
-
-    onStateChanged: {
-        if (_state === "recording") {
-            processingTimeoutTimer.stop();
-            if (_recordingStartTime === 0) {
-                _recordingStartTime = Date.now();
-                _currentElapsed = _accumulatedSeconds;
-            }
-        } else if (_state === "processing") {
-            _recordingStartTime = 0;
-        }
-
-        if (_state === "success") {
-            successTimer.start();
-        } else {
-            successTimer.stop();
-        }
-
-        if (_state === "idle") {
-            _recordingStartTime = 0;
-            _accumulatedSeconds = 0;
-            _currentElapsed = 0;
-            _currentLanguage = "";
-            // Clear display fields for UI responsiveness.
-            // _targetWindowAddress/Pid/Class are cleared by _cancelInternal()
-            // and overwritten by _captureTargetWindow() on next start().
-            _targetInstanceTitle = "";
-            _targetInstanceCwd = "";
-            _targetWorkspaceId = -1;
-        }
-    }
-
-    onRecordingChanged: {
-        if (!recording)
-            _audioLevel = 0.0;
-    }
 
     Component.onDestruction: {
-        _stopAllTimers();
-        if (recordProcess.running) recordProcess.signal(9);
-        if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (transcribeProcess.running) transcribeProcess.signal(9);
-        if (concatProcess.running) concatProcess.signal(9);
-        if (socketCaptureProcess.running) socketCaptureProcess.running = false;
-        if (clipboardProcess.running) clipboardProcess.running = false;
-        if (injectProcess.running) injectProcess.running = false;
+        restartDelayTimer.stop();
+        for (const job of _jobs) {
+            job._destroyCleanup();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SttJob component — per-session state, processes, timers, and methods
+    // ─────────────────────────────────────────────────────────────────────────
+
+    component SttJob: QtObject {
+        id: job
+
+        // ── Public properties ──────────────────────────────────────────────
+
+        /// Current state: "recording", "paused", "processing", "transcribed",
+        ///   "delivering", "error", "success"
+        readonly property string state: _state
+
+        /// Audio level (0.0-1.0) during recording
+        readonly property real audioLevel: _audioLevel
+
+        /// Whether currently recording
+        readonly property bool recording: _state === "recording"
+
+        /// Elapsed recording time in seconds
+        readonly property real elapsedSeconds: _currentElapsed
+
+        /// Error detail properties
+        readonly property string errorDetail: _errorDetail
+        readonly property string errorHint: _errorHint
+        readonly property string errorRaw: _errorRaw
+        readonly property string errorSource: _errorSource
+
+        /// Transcribed text result
+        readonly property string transcribedText: _transcribedText
+
+        /// The user's runtime delivery choice for this job
+        readonly property string activeDeliveryChoice: _activeDeliveryChoice
+
+        /// Injection delivery path
+        readonly property string injectionPath: _injectionPath
+
+        /// Whether submit was downgraded
+        readonly property bool injectionDowngraded: _injectionDowngraded
+
+        /// Whether RPC confirmed Enter was sent
+        readonly property bool injectionSubmitted: _injectionSubmitted
+
+        /// Whether this job is currently in an auto-retry cycle
+        readonly property bool autoRetrying: _autoRetryCount > 0 && _state === "processing"
+
+        /// Whether the job is closing (triggers fade animation)
+        property bool closing: false
+
+        /// Session identifier
+        property string sessionId: ""
+
+        // ── Signals ────────────────────────────────────────────────────────
+
+        /// Emitted when job is done and should be removed after success delay
+        signal finished()
+
+        /// Emitted when transcription succeeds and job is ready for delivery
+        signal readyForDelivery()
+
+        // ── Internal state ─────────────────────────────────────────────────
+
+        property string _state: "idle"
+        property real _audioLevel: 0.0
+        property string _transcribedText: ""
+
+        // Error detail properties
+        property string _errorDetail: ""
+        property string _errorHint: ""
+        property string _errorSource: ""
+        property string _errorRaw: ""
+
+        // Auto-retry for transient errors (network, 5xx, timeout)
+        property int _autoRetryCount: 0
+        readonly property int _maxAutoRetries: 2
+        readonly property int _autoRetryDelayMs: 2000  // backoff before retrying transient failures
+
+        // Elapsed time tracking
+        property real _currentElapsed: 0
+        property real _recordingStartTime: 0
+        property real _accumulatedSeconds: 0
+
+        // Segment management
+        property int _segmentCounter: 0
+        property var _segmentFiles: []
+        property string _currentAudioFile: ""
+
+        // Target window for inject delivery (captured at start-time)
+        property string _targetWindowAddress: ""
+        property string _targetWindowClass: ""
+        property int _targetWindowPid: -1
+        // Target Neovim socket (resolved from AgentService at start-time)
+        property string _targetNvimSocket: ""
+        property int _targetNvimActiveBuf: -1
+
+        // Pending action for recordProcess.onExited callback
+        property string _pendingRecordAction: ""
+        // Set to true when processingTimeoutTimer kills transcribeProcess,
+        // so transcribeProcess.onExited can skip duplicate error handling.
+        property bool _pendingTimeoutKill: false
+
+        // Vocabulary hints snapshot: populated by SttService.stop() before
+        // clearing _sessionVocabHints, so the async recordProcess.onExited
+        // path still has access to the hints at transcription time.
+        property var _snapshotVocabHints: []
+
+        // Runtime delivery choice for "ask" mode (inherited from service, locked on submit)
+        property string _activeDeliveryChoice: "clipboard"
+
+        // Injection result feedback
+        property string _injectionPath: ""
+        property bool _injectionDowngraded: false
+        property bool _injectionSubmitted: false
+
+        // Current segment file path
+        readonly property string _currentSegmentPath: {
+            if (sessionId === "") return "";
+            return `${root._tempDir}/session_${sessionId}_segment_${_segmentCounter}.wav`;
+        }
+
+        // ── Public methods ─────────────────────────────────────────────────
+
+        /// Stop recording and submit for transcription.
+        function stop(): void {
+            if (_state !== "recording" && _state !== "paused") return;
+            Logger.log("qml", "stt", "job.stop | id=" + sessionId + " segments=" + _segmentFiles.length);
+
+            console.log("[STT:D02] job.stop() | target:", _targetWindowAddress,
+                "| class:", _targetWindowClass,
+                "| nvimSocket:", _targetNvimSocket,
+                "| buf:", _targetNvimActiveBuf);
+
+            if (_state === "paused") {
+                console.log("[STT:D03] paused path → direct _submitForTranscription()");
+                _submitForTranscription();
+                return;
+            }
+
+            // Stop recording first, then submit on exit
+            console.log("[STT:D03] recording path → SIGTERM pw-record, pending submit");
+            _pendingRecordAction = "submit";
+            levelMonitorProcess.running = false;
+            recordProcess.running = false;
+        }
+
+        /// Pause if recording.
+        function pause(): void {
+            if (_state !== "recording") return;
+            _pendingRecordAction = "pause";
+            levelMonitorProcess.running = false;
+            recordProcess.running = false;
+        }
+
+        /// Resume from pause.
+        function resume(): void {
+            if (_state !== "paused") return;
+            _segmentCounter++;
+            _startRecording();
+            // Assign _state last so on_StateChanged fires with _recordingStartTime
+            // still 0, matching the start() path. The handler initializes it.
+            _state = "recording";
+        }
+
+        /// Cancel: kill processes, discard audio, remove from queue.
+        function cancel(): void {
+            _pendingRecordAction = "cancel";
+            _stopAllTimers();
+
+            if (recordProcess.running) recordProcess.signal(9);
+            if (levelMonitorProcess.running) levelMonitorProcess.running = false;
+            if (transcribeProcess.running) transcribeProcess.signal(9);
+            if (concatProcess.running) concatProcess.signal(9);
+
+            _cleanupTempFiles();
+            _clearSttTargetIfOwned();
+
+            // Clear activeRecording if this job is the active one
+            if (root._activeRecording === job)
+                root._activeRecording = null;
+
+            // Remove from delivery queue if enqueued
+            const key = _targetWindowAddress || "__clipboard__";
+            const queues = root._deliveryQueues;
+            const queue = queues[key];
+            if (queue) {
+                const idx = queue.indexOf(job);
+                if (idx >= 0) {
+                    const wasDelivering = _state === "delivering";
+                    queue.splice(idx, 1);
+                    root._deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
+                    if (wasDelivering) root._tryDeliverNext(key);
+                }
+            }
+
+            // Remove from jobs list (via _removeJob so hide animation plays)
+            root._removeJob(job);
+        }
+
+        /// Retry failed transcription with the same audio file.
+        function retry(): void {
+            if (_state !== "error") return;
+            Logger.log("qml", "stt", "job.retry | id=" + sessionId);
+
+            if (_currentAudioFile === "") {
+                _setErrorState("internal", "No audio file to retry", "Start a new recording");
+                return;
+            }
+
+            autoRetryTimer.stop();
+            _autoRetryCount = 0;  // manual retry resets the auto-retry budget
+            _clearErrorState();
+            _transcribedText = "";
+            _state = "processing";
+            _startTranscription(_currentAudioFile);
+        }
+
+        /// Switch the delivery choice (only meaningful in "ask" mode during recording).
+        function setDeliveryChoice(mode: string): void {
+            if (root._deliveryMode !== "ask") return;
+            if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
+            if (_activeDeliveryChoice === mode) return;
+            _activeDeliveryChoice = mode;
+            root._lastDeliveryChoice = mode;
+        }
+
+        // ── Internal methods ───────────────────────────────────────────────
+
+        function _setErrorState(source: string, detail: string, hint: string): void {
+            _errorSource = source;
+            _errorDetail = detail;
+            _errorHint = hint;
+            _state = "error";
+            if (sessionId !== "" && _segmentFiles.length > 0 && _currentAudioFile !== "") {
+                for (const seg of _segmentFiles) {
+                    if (seg !== _currentAudioFile)
+                        Quickshell.execDetached(["rm", "-f", seg]);
+                }
+            }
+        }
+
+        function _clearErrorState(): void {
+            _errorSource = "";
+            _errorDetail = "";
+            _errorHint = "";
+            _errorRaw = "";
+        }
+
+        /// Capture the currently active window for inject delivery.
+        function _captureTargetWindow(): void {
+            if (root._deliveryMode === "clipboard") {
+                console.log("[STT:D04] _captureTargetWindow() skipped — deliveryMode is clipboard");
+                return;
+            }
+            const toplevel = Hypr.activeToplevel;
+            if (toplevel) {
+                _targetWindowAddress = `0x${toplevel.address}`;
+                _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
+                _targetWindowPid = toplevel.lastIpcObject?.pid ?? -1;
+                console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
+                    "| class:", _targetWindowClass, "| pid:", _targetWindowPid);
+            } else {
+                console.warn("[STT:D04] _captureTargetWindow() — NO activeToplevel!");
+            }
+        }
+
+        /// Clear the AgentService STT target highlight if this job is the current owner.
+        function _clearSttTargetIfOwned(): void {
+            if (_targetWindowPid > 0 &&
+                AgentService.sttTargetTerminalPid === _targetWindowPid &&
+                AgentService.sttTargetBufId === _targetNvimActiveBuf) {
+                AgentService.clearSttTarget();
+            }
+        }
+
+        /// Resolve agent data from AgentService using captured terminal PID.
+        function _resolveAgentTarget(): void {
+            _targetNvimSocket = "";
+            _targetNvimActiveBuf = -1;
+
+            if (!AgentService.bridgeRunning) return;
+
+            const agent = AgentService.activeAgentForTerminal(_targetWindowPid);
+            if (!agent) return;
+
+            _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
+            _targetNvimActiveBuf = agent.buf ?? -1;
+            Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket);
+
+            const effectiveMode = root._deliveryMode === "ask" ? _activeDeliveryChoice : root._deliveryMode;
+            if (effectiveMode !== "clipboard") {
+                AgentService.setSttTarget(_targetWindowPid, agent.buf ?? -1);
+            }
+        }
+
+        /// Categorize API errors from stt-transcribe.sh stderr output.
+        function _categorizeApiError(stderrText: string): void {
+            _errorRaw = stderrText;
+
+            const patterns = [
+                { re: /ERROR:401/,     detail: "Authentication failed",   hint: "Check your API key" },
+                { re: /ERROR:429/,     detail: "Quota exceeded",          hint: "Check your API plan limits" },
+                { re: /ERROR:5\d\d/,   detail: "API server error",        hint: "Try again later" },
+                { re: /Network error/, detail: "Network error",           hint: "Check your connection" },
+                { re: /timed out/i,    detail: "Connection timed out",    hint: "Check your network" },
+                { re: /Missing/,       detail: "Configuration error",     hint: "Check STT settings" },
+            ];
+
+            for (const p of patterns) {
+                if (p.re.test(stderrText)) {
+                    _errorDetail = p.detail;
+                    _errorHint = p.hint;
+                    return;
+                }
+            }
+
+            _errorDetail = "Transcription failed";
+            _errorHint = "Check logs for details";
+        }
+
+        /// Whether the current error is transient and safe to auto-retry.
+        function _isTransientError(): bool {
+            if (_errorSource === "timeout") return true;
+            if (_errorSource !== "api") return false;
+            // Network failures, server errors, and generic failures are transient.
+            // Auth (401) and quota (429) are permanent — user must fix config/plan.
+            return _errorDetail !== "Authentication failed"
+                && _errorDetail !== "Quota exceeded"
+                && _errorDetail !== "Configuration error";
+        }
+
+        /// Attempt auto-retry if the error is transient and retries remain.
+        /// Returns true if an auto-retry was scheduled, false otherwise.
+        function _tryAutoRetry(): bool {
+            if (_autoRetryCount >= _maxAutoRetries) return false;
+            if (!_isTransientError()) return false;
+            if (_currentAudioFile === "") return false;
+
+            _autoRetryCount++;
+            Logger.log("qml", "stt", "auto-retry | id=" + sessionId
+                + " attempt=" + _autoRetryCount + "/" + _maxAutoRetries
+                + " detail=" + _errorDetail);
+
+            // Return to processing state immediately so the UI doesn't flash error
+            _clearErrorState();
+            _transcribedText = "";
+            _state = "processing";
+            autoRetryTimer.start();
+            return true;
+        }
+
+        /// Spawn pw-record for the current segment and start level monitor.
+        function _startRecording(): void {
+            const segmentPath = _currentSegmentPath;
+            const sampleRate = Config.stt?.recording?.sampleRate ?? 16000;
+            const channels = Config.stt?.recording?.channels ?? 1;
+
+            recordProcess.capturedSegmentPath = segmentPath;
+            recordProcess.command = [
+                "pw-record",
+                "--format=s16",
+                `--rate=${sampleRate}`,
+                `--channels=${channels}`,
+                segmentPath
+            ];
+            recordProcess.running = true;
+            levelMonitorProcess.running = true;
+        }
+
+        /// Proceed to transcription after recording is complete.
+        function _submitForTranscription(): void {
+            Logger.log("qml", "stt", "transcribe | id=" + sessionId + " segments=" + _segmentFiles.length);
+            if (_segmentFiles.length === 0) {
+                console.error("[STT:D05] NO segments — aborting");
+                _setErrorState("internal", "No audio segments", "Recording may have failed");
+                return;
+            }
+
+            _state = "processing";
+
+            if (_segmentFiles.length === 1) {
+                _currentAudioFile = _segmentFiles[0];
+                console.log("[STT:D06] single segment → transcribing:", _currentAudioFile);
+                _startTranscription(_currentAudioFile);
+            } else {
+                console.log("[STT:D06] multi-segment → ffmpeg concat, count:", _segmentFiles.length);
+                const outputPath = `${root._tempDir}/session_${sessionId}_combined.wav`;
+                _currentAudioFile = outputPath;
+
+                const n = _segmentFiles.length;
+                const args = ["ffmpeg"];
+                for (const f of _segmentFiles) {
+                    args.push("-i");
+                    args.push(f);
+                }
+                let filterInputs = "";
+                for (let i = 0; i < n; i++) filterInputs += `[${i}:a]`;
+                args.push("-filter_complex", `${filterInputs}concat=n=${n}:v=0:a=1[out]`,
+                          "-map", "[out]", "-y", outputPath);
+
+                concatProcess.command = args;
+                concatProcess.running = true;
+            }
+        }
+
+        /// Spawn the transcription helper script.
+        function _startTranscription(audioFile: string): void {
+            processingTimeoutTimer.restart();
+            const model = Config.stt?.model ?? "gpt-4o-transcribe";
+            Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile);
+
+            // Merge persistent config hints with per-session hints (deduplicated).
+            // Use _snapshotVocabHints (captured at stop-time) rather than
+            // root._sessionVocabHints, which is cleared before this async call fires.
+            const persistentHints = Config.stt?.vocabularyHints ?? [];
+            const sessionHints = job._snapshotVocabHints;
+            const allHints = [...new Set([...persistentHints, ...sessionHints])];
+
+            transcribeProcess.environment = ({
+                STT_API_KEY: root._resolvedApiKey,
+                STT_VOCABULARY_HINTS: allHints.join(", ")
+            });
+            transcribeProcess.command = [
+                root._transcribeScript, audioFile, model
+            ];
+            transcribeProcess.running = true;
+        }
+
+        /// Start the clipboard → inject delivery chain.
+        function _startDeliveryChain(): void {
+            _state = "delivering";
+            console.log("[STT:D11] → delivering, chaining wl-copy | id:", sessionId, "textLength:", _transcribedText.length);
+            clipboardProcess.command = ["wl-copy", _transcribedText];
+            clipboardProcess.running = true;
+        }
+
+        /// Delete temp files for this session.
+        function _cleanupTempFiles(): void {
+            if (sessionId !== "") {
+                Quickshell.execDetached(["find", root._tempDir, "-maxdepth", "1",
+                    "-name", `session_${sessionId}_*`, "-delete"]);
+            }
+        }
+
+        function _stopAllTimers(): void {
+            elapsedTimer.stop();
+            successTimer.stop();
+            processingTimeoutTimer.stop();
+            autoRetryTimer.stop();
+            _removalTimer.stop();
+        }
+
+        /// Cleanup for Component.onDestruction (called by service shutdown)
+        function _destroyCleanup(): void {
+            _stopAllTimers();
+            if (sessionId !== "") _cleanupTempFiles();
+            if (recordProcess.running) recordProcess.signal(9);
+            if (levelMonitorProcess.running) levelMonitorProcess.running = false;
+            if (transcribeProcess.running) transcribeProcess.signal(9);
+            if (concatProcess.running) concatProcess.signal(9);
+            if (clipboardProcess.running) clipboardProcess.running = false;
+            if (injectProcess.running) injectProcess.running = false;
+        }
+
+        // ── State change handlers ──────────────────────────────────────────
+
+        on_StateChanged: {
+            if (_state === "recording") {
+                processingTimeoutTimer.stop();
+                if (_recordingStartTime === 0) {
+                    _recordingStartTime = Date.now();
+                    _currentElapsed = _accumulatedSeconds;
+                }
+            } else if (_state === "processing") {
+                // Defensive: should already be 0 via recordProcess.onExited,
+                // but guard against any future code path that forgets.
+                _recordingStartTime = 0;
+            }
+
+            if (_state === "success" || _state === "error") {
+                _clearSttTargetIfOwned();
+            }
+
+            if (_state === "success") {
+                successTimer.start();
+            } else {
+                successTimer.stop();
+            }
+        }
+
+        onRecordingChanged: {
+            if (!recording)
+                _audioLevel = 0.0;
+        }
+
+        // Toggle red border when user switches delivery choice in "ask" mode
+        on_ActiveDeliveryChoiceChanged: {
+            if (root._deliveryMode !== "ask" || _state === "idle") return;
+            if (_activeDeliveryChoice === "clipboard") {
+                AgentService.clearSttTarget();
+            } else if (_targetWindowPid > 0 && _targetNvimActiveBuf >= 0) {
+                AgentService.setSttTarget(_targetWindowPid, _targetNvimActiveBuf);
+            }
+        }
+
+        // ── Timers ─────────────────────────────────────────────────────────
+
+        // Update _currentElapsed during recording
+        readonly property Timer elapsedTimer: Timer {
+            interval: 250
+            repeat: true
+            running: job.recording
+            onTriggered: {
+                if (job._recordingStartTime > 0)
+                    job._currentElapsed = job._accumulatedSeconds + (Date.now() - job._recordingStartTime) / 1000;
+            }
+        }
+
+        // Auto-hide after success state
+        readonly property Timer successTimer: Timer {
+            interval: {
+                const delay = Config.stt?.autoHideDelay ?? 1500;
+                return Math.max(root._minAutoHideDelay, Math.min(root._maxAutoHideDelay, delay));
+            }
+            onTriggered: {
+                if (job._state === "success") {
+                    Logger.log("qml", "stt", "auto-hide | id=" + job.sessionId);
+                    job.finished();
+                }
+            }
+        }
+
+        // Animated removal delay — per-job to avoid overwrite races
+        readonly property Timer _removalTimer: Timer {
+            // Must outlast the delegate hideAnim in Wrapper.qml (Anim {} = durations.normal)
+            interval: Appearance.anim.durations.normal + 50
+            onTriggered: root._finalizeRemoval(job)
+        }
+
+        // Detect stuck processing (API timeout or network hang)
+        readonly property Timer processingTimeoutTimer: Timer {
+            interval: Config.stt?.processingTimeout ?? 120000
+            onTriggered: {
+                Logger.log("qml", "stt", "timeout | id=" + job.sessionId);
+                if (job.transcribeProcess.running) {
+                    job._pendingTimeoutKill = true;
+                    job.transcribeProcess.signal(9);
+                }
+                job._setErrorState("timeout", "Processing timed out", "Check your network connection");
+                job._tryAutoRetry();
+            }
+        }
+
+        // Delay before automatic retry (gives transient issues time to clear)
+        readonly property Timer autoRetryTimer: Timer {
+            interval: job._autoRetryDelayMs
+            onTriggered: {
+                Logger.log("qml", "stt", "auto-retry-fire | id=" + job.sessionId);
+                job._startTranscription(job._currentAudioFile);
+            }
+        }
+
+        // ── Processes ──────────────────────────────────────────────────────
+
+        // pw-record: captures audio to WAV file
+        readonly property Process recordProcess: Process {
+            property string capturedSegmentPath: ""
+            onExited: (code, status) => {
+                const action = job._pendingRecordAction;
+                job._pendingRecordAction = "";
+                console.log("[STT:D08] recordProcess.onExited | id:", job.sessionId,
+                    "| code:", code, "| action:", action || "(none)",
+                    "| segPath:", capturedSegmentPath);
+
+                if (action === "cancel") return;
+
+                // Register completed segment file
+                const segPath = capturedSegmentPath;
+                if (segPath !== "") {
+                    const files = job._segmentFiles.slice();
+                    files.push(segPath);
+                    job._segmentFiles = files;
+                    console.log("[STT:D09] segment registered:", segPath, "| total:", files.length);
+                } else {
+                    console.warn("[STT:D09] capturedSegmentPath is EMPTY");
+                }
+
+                if (action === "pause") {
+                    if (job._recordingStartTime > 0) {
+                        job._accumulatedSeconds += (Date.now() - job._recordingStartTime) / 1000;
+                        job._recordingStartTime = 0;
+                    }
+                    job._audioLevel = 0.0;
+                    job._state = "paused";
+                    console.log("[STT:D08] → paused, accumulated:", job._accumulatedSeconds.toFixed(1), "s");
+                } else if (action === "submit") {
+                    if (job._recordingStartTime > 0) {
+                        job._accumulatedSeconds += (Date.now() - job._recordingStartTime) / 1000;
+                        job._currentElapsed = job._accumulatedSeconds;
+                        job._recordingStartTime = 0;
+                    }
+                    job._audioLevel = 0.0;
+                    console.log("[STT:D08] → submit, elapsed:", job._accumulatedSeconds.toFixed(1), "s");
+                    job._submitForTranscription();
+                } else if (code !== 0 && job._state === "recording") {
+                    console.error("[STT:D08] pw-record exited unexpectedly (code", code + ")");
+                    job._setErrorState("recording", "Recording failed", "Check audio device");
+                }
+            }
+        }
+
+        // Audio level monitor
+        readonly property Process levelMonitorProcess: Process {
+            command: [root._levelMonitorScript]
+            stdout: SplitParser {
+                onRead: data => {
+                    const level = parseFloat(data.trim());
+                    if (!isNaN(level) && isFinite(level))
+                        job._audioLevel = Math.min(1.0, Math.max(0.0, level));
+                }
+            }
+        }
+
+        // ffmpeg: concatenate multi-segment recordings
+        readonly property Process concatProcess: Process {
+            onExited: (code, status) => {
+                console.log("[STT:D20] concatProcess.onExited | id:", job.sessionId, "| code:", code);
+                if (job._state !== "processing") return;
+
+                if (code !== 0) {
+                    console.error("[STT:D20] ffmpeg concat FAILED (exit", code + ")");
+                    if (job._segmentFiles.length > 0) {
+                        job._currentAudioFile = job._segmentFiles[job._segmentFiles.length - 1];
+                        console.warn("[STT:D20] falling back to last segment:", job._currentAudioFile);
+                        job._startTranscription(job._currentAudioFile);
+                    } else {
+                        job._setErrorState("concat", "Failed to combine segments", "Is ffmpeg installed?");
+                    }
+                    return;
+                }
+
+                console.log("[STT:D20] concat OK → transcribing:", job._currentAudioFile);
+                job._startTranscription(job._currentAudioFile);
+            }
+        }
+
+        // Transcription via stt-transcribe.sh
+        readonly property Process transcribeProcess: Process {
+            stdout: StdioCollector {
+                onStreamFinished: {
+                    const result = text.trim();
+                    if (result !== "")
+                        job._transcribedText = result;
+                }
+            }
+            stderr: StdioCollector {
+                onStreamFinished: {
+                    const errText = text.trim();
+                    if (errText !== "")
+                        job._categorizeApiError(errText);
+                }
+            }
+            onExited: (code, status) => {
+                job.processingTimeoutTimer.stop();
+                if (job._pendingTimeoutKill) {
+                    job._pendingTimeoutKill = false;
+                    console.log("[STT:D10] transcribeProcess.onExited — killed by timeout handler, ignoring");
+                    return;
+                }
+                if (job._state !== "processing") {
+                    console.log("[STT:D10] transcribeProcess.onExited — state is", job._state, ", ignoring");
+                    return;
+                }
+                Logger.log("qml", "stt", "transcribe-result | id=" + job.sessionId + " code=" + code + " textLen=" + job._transcribedText.length);
+                if (code === 0 && job._transcribedText !== "") {
+                    // Mark as transcribed and signal readiness for FIFO delivery
+                    job._state = "transcribed";
+                    if (Config.stt?.cache?.deleteOnSuccess ?? true)
+                        job._cleanupTempFiles();
+                    job.readyForDelivery();
+                } else {
+                    Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail + " raw=" + job._errorRaw);
+                    if (job._errorDetail === "") {
+                        job._errorDetail = "Transcription failed";
+                        job._errorHint = "Check logs for details";
+                    }
+                    job._setErrorState("api", job._errorDetail, job._errorHint);
+                    job._tryAutoRetry();
+                }
+            }
+        }
+
+        // Clipboard delivery via wl-copy
+        readonly property Process clipboardProcess: Process {
+            onExited: (code, status) => {
+                Logger.log("qml", "stt", "clipboard-done | id=" + job.sessionId + " code=" + code);
+                if (code !== 0) {
+                    console.error("[STT:D12] wl-copy FAILED (exit", code + ")");
+                    job._state = "success";
+                    root._onDeliveryComplete(job);
+                    return;
+                }
+
+                // Resolve effective delivery mode
+                const effectiveMode = root._deliveryMode === "ask"
+                    ? job._activeDeliveryChoice
+                    : root._deliveryMode;
+                Logger.log("qml", "stt", "delivery | id=" + job.sessionId + " mode=" + effectiveMode);
+
+                if (effectiveMode !== "clipboard" && job._targetWindowAddress !== "") {
+                    if (job._targetWindowClass === "")
+                        console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
+                    const cmd = [root._injectScript, job._targetWindowAddress, job._targetWindowClass];
+                    if (effectiveMode === "submit") cmd.push("submit");
+                    Logger.log("qml", "stt", "inject-start | id=" + job.sessionId + " target=" + job._targetWindowAddress);
+                    injectProcess.environment = ({
+                        STT_EXPECTED_TEXT: job._transcribedText,
+                        STT_NVIM_SOCKET: job._targetNvimSocket,
+                        STT_NVIM_ACTIVE_BUF: job._targetNvimActiveBuf.toString()
+                    });
+                    injectProcess.command = cmd;
+                    injectProcess.running = true;
+                } else {
+                    console.log("[STT:D14] inject SKIPPED | id:", job.sessionId);
+                    job._injectionPath = "";
+                    job._injectionDowngraded = false;
+                    job._injectionSubmitted = false;
+                    job._state = "success";
+                    root._onDeliveryComplete(job);
+                }
+            }
+        }
+
+        // Window injection via stt-inject.sh
+        readonly property Process injectProcess: Process {
+            stdout: SplitParser {
+                onRead: data => {
+                    const line = data.trim();
+                    if (!line.startsWith("{")) return;
+                    try {
+                        const result = JSON.parse(line);
+                        job._injectionPath = result.path ?? "";
+                        job._injectionDowngraded = result.downgraded ?? false;
+                        job._injectionSubmitted = result.submitted ?? false;
+
+                        if (result.downgraded) {
+                            Toaster.toast(
+                                qsTr("STT: Submit downgraded"),
+                                qsTr("Agent RPC unavailable — text pasted but not submitted"),
+                                "",
+                                Toast.Warning
+                            );
+                        } else if (result.path === "rpc" && !result.submitted) {
+                            const userRequestedSubmit = root._deliveryMode === "submit" ||
+                                (root._deliveryMode === "ask" && job._activeDeliveryChoice === "submit");
+                            if (userRequestedSubmit) {
+                                Toaster.toast(
+                                    qsTr("STT: Submit unconfirmed"),
+                                    qsTr("Text injected but Enter delivery could not be confirmed"),
+                                    "",
+                                    Toast.Warning
+                                );
+                            }
+                        }
+                        Logger.log("qml", "stt", "inject-result | id=" + job.sessionId + " " + JSON.stringify(result));
+                    } catch (e) {
+                        console.warn("[STT:D16] failed to parse inject stdout:", line);
+                    }
+                }
+            }
+            stderr: SplitParser {
+                onRead: data => {
+                    console.log("[STT:D16:stderr]", data.trim());
+                }
+            }
+            onExited: (code, status) => {
+                console.log("[STT:D16] injectProcess.onExited | id:", job.sessionId,
+                    "| code:", code, "| path:", job._injectionPath);
+                if (code !== 0)
+                    console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal, clipboard still has text");
+                job._state = "success";
+                root._onDeliveryComplete(job);
+            }
+        }
     }
 }

@@ -206,7 +206,11 @@ Item {
                 Layout.topMargin: Appearance.spacing.normal
                 Layout.bottomMargin: Appearance.spacing.small
 
-                color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+                readonly property var searchPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+                color: searchPill.background
+                border.color: searchPill.border
+                border.width: 1
                 radius: Appearance.rounding.full
 
                 implicitHeight: Math.max(searchIcon.implicitHeight, searchField.implicitHeight, clearIcon.implicitHeight)
@@ -312,8 +316,11 @@ Item {
                         width: parent ? parent.width : 0
 
                         readonly property bool isSelected: root.selectedApp === modelData
+                        readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
 
-                        color: isSelected ? Colours.layer(Colours.palette.m3surfaceContainer, 2) : "transparent"
+                        color: isSelected ? activePill.background : "transparent"
+                        border.color: isSelected ? activePill.border : "transparent"
+                        border.width: isSelected ? 1 : 0
                         radius: Appearance.rounding.normal
 
                         opacity: 0

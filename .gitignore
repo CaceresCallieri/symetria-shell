@@ -3,3 +3,5 @@
 /.qmlls.ini
 build/
 .cache/
+__pycache__/
+node_modules/

@@ -9,6 +9,8 @@ import QtQuick
 /// Root component for native speech-to-text drawer.
 ///
 /// Auto-shows the drawer on all screens when SttService becomes active.
+/// When AgentService.mergeActive is true, the bar center embed handles
+/// display instead — drawer visibility is suppressed.
 /// Exposes IPC handler for control (start, stop, pause, cancel, etc.).
 Scope {
     Connections {
@@ -18,26 +20,38 @@ Scope {
             if (!Config.stt.enabled)
                 return;
 
-            if (SttService.active) {
-                for (const [_, visibilities] of Visibilities.screens) {
-                    visibilities.stt = true;
-                }
-            } else {
-                for (const [_, visibilities] of Visibilities.screens) {
-                    visibilities.stt = false;
-                }
-            }
+            // Bar embed handles display when merge mode is active
+            if (AgentService.mergeActive)
+                return;
+
+            for (const [_, visibilities] of Visibilities.screens)
+                visibilities.stt = SttService.active;
+        }
+    }
+
+    // Handle merge mode toggling mid-recording.
+    // When merge activates: close drawer (bar embed takes over).
+    // When merge deactivates: open drawer (bar embed disappears).
+    Connections {
+        target: AgentService
+
+        function onMergeActiveChanged(): void {
+            if (!Config.stt.enabled || !SttService.active)
+                return;
+
+            for (const [_, visibilities] of Visibilities.screens)
+                visibilities.stt = !AgentService.mergeActive;
         }
     }
 
     IpcHandler {
         target: "stt"
 
-        function toggle(lang: string): void {
-            SttService.toggle(lang);
+        function toggle(): void {
+            SttService.toggle();
         }
-        function start(lang: string): void {
-            SttService.start(lang);
+        function start(): void {
+            SttService.start();
         }
         function stop(): void {
             SttService.stop();
@@ -59,6 +73,9 @@ Scope {
         }
         function mode(choice: string): void {
             SttService.setDeliveryChoice(choice);
+        }
+        function hints(): void {
+            SttService.toggleVocabHints();
         }
     }
 }

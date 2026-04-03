@@ -92,7 +92,12 @@ Item {
 
                                 Layout.fillWidth: true
 
-                                color: Audio.sink?.id === modelData.id ? Colours.layer(Colours.palette.m3surfaceContainer, 2) : "transparent"
+                                readonly property bool isActive: Audio.sink?.id === modelData.id
+                                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+                                color: isActive ? activePill.background : "transparent"
+                                border.color: isActive ? activePill.border : "transparent"
+                                border.width: isActive ? 1 : 0
                                 radius: Appearance.rounding.normal
 
                                 StateLayer {
@@ -170,7 +175,12 @@ Item {
 
                                 Layout.fillWidth: true
 
-                                color: Audio.source?.id === modelData.id ? Colours.layer(Colours.palette.m3surfaceContainer, 2) : "transparent"
+                                readonly property bool isActive: Audio.source?.id === modelData.id
+                                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+
+                                color: isActive ? activePill.background : "transparent"
+                                border.color: isActive ? activePill.border : "transparent"
+                                border.width: isActive ? 1 : 0
                                 radius: Appearance.rounding.normal
 
                                 StateLayer {
