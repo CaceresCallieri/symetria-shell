@@ -381,10 +381,7 @@ Item {
             target: SttService
 
             function onActiveChanged(): void {
-                if (SttService.active)
-                    sttCenterContainer._showEmbed = true;
-                else
-                    sttCenterContainer._showEmbed = false;
+                sttCenterContainer._showEmbed = SttService.active;
             }
 
             function onVocabHintsVisibleChanged(): void {
