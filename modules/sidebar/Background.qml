@@ -7,7 +7,7 @@ import QtQuick.Shapes
 ShapePath {
     id: root
 
-    required property Wrapper wrapper
+    required property Item wrapper
     required property var panels
 
     readonly property real rounding: Config.border.rounding
