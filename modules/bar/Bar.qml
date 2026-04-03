@@ -329,10 +329,23 @@ Item {
     // STT bar embed — shown in center when merge mode is active and recording.
     // Clip-reveals from center outward: container grows horizontally while
     // content stays centered, so the middle portion appears first.
+    //
+    // Animation is decoupled from SttService.active (which lingers ~450ms
+    // for the drawer hide animation) — instead, the job's `closing` signal
+    // triggers the reverse clip animation immediately on cancel/restart.
     Item {
         id: sttCenterContainer
 
-        readonly property bool _shouldBeActive: AgentService.mergeActive && SttService.active
+        // Manually managed show state: set true when STT starts recording,
+        // set false immediately when the job's closing signal fires.
+        property bool _showEmbed: false
+        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
+
+        // Track the latest job to watch its closing signal
+        readonly property SttService.SttJob _latestJob: {
+            const jobs = SttService.jobs;
+            return jobs.length > 0 ? jobs[jobs.length - 1] : null;
+        }
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
@@ -361,11 +374,18 @@ Item {
             }
         }
 
-        // Programmatically open/close the STT popout for Alt+W (vocab hints).
-        // When vocabHintsVisible becomes true, show the popout without hover.
-        // When it becomes false, close only if the popout is still the "stt" one.
+        // Show embed when STT becomes active; closing signal handles hide.
+        // The fallback to false on !active is a safety net for edge cases
+        // where closing might not fire (e.g., service teardown).
         Connections {
             target: SttService
+
+            function onActiveChanged(): void {
+                if (SttService.active)
+                    sttCenterContainer._showEmbed = true;
+                else
+                    sttCenterContainer._showEmbed = false;
+            }
 
             function onVocabHintsVisibleChanged(): void {
                 if (!sttCenterContainer._shouldBeActive) return;
@@ -379,6 +399,19 @@ Item {
                 } else if (root.popouts.currentName === "stt") {
                     root.popouts.hasCurrent = false;
                 }
+            }
+        }
+
+        // Immediate close animation: react to job.closing rather than
+        // waiting for the job to be removed from the jobs array (~450ms).
+        // For restart: close starts at T=0, new job opens at T=500ms —
+        // producing a clean close → gap → open sequence.
+        Connections {
+            target: sttCenterContainer._latestJob
+
+            function onClosingChanged(): void {
+                if (sttCenterContainer._latestJob?.closing)
+                    sttCenterContainer._showEmbed = false;
             }
         }
     }
