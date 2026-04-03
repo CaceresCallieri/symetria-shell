@@ -20,8 +20,9 @@ Item {
     required property PersistentProperties visibilities
     required property var panels
 
-    visible: height > 0
-    implicitHeight: mainColumn.implicitHeight
+    // Hidden when merge mode is active — bar embed (SttBarEmbed) takes over.
+    visible: height > 0 && !AgentService.mergeActive
+    implicitHeight: AgentService.mergeActive ? 0 : mainColumn.implicitHeight
     implicitWidth: mainColumn.implicitWidth
 
     Column {

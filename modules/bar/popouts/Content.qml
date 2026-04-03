@@ -135,6 +135,11 @@ Item {
             sourceComponent: Ram {}
         }
 
+        Popout {
+            name: "stt"
+            sourceComponent: SttActions {}
+        }
+
         Repeater {
             model: ScriptModel {
                 values: [...SystemTray.items.values]

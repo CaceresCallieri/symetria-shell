@@ -76,108 +76,11 @@ Item {
         root.job.setDeliveryChoice(next);
     }
 
-    // Audio visualization tuning constants
-    // Adjust smoothing/gain if bars feel laggy or jittery.
-    readonly property QtObject audioConfig: QtObject {
-        readonly property real smoothing: 0.35    // 0.2=laggy, 0.5=jittery, 0.35=balanced
-        readonly property real noiseFloor: 0.025  // just below ambient (~0.03), silence ≈ 0
-        readonly property real gain: 15.0         // clips at ~0.09 RMS (speech ceiling)
-        readonly property real powerCurve: 0.5    // sqrt curve: boosts mids
-        readonly property real waveVariation: 0.30
-        readonly property real waveSpeed: 0.08
-        readonly property real waveFrequency: 0.8
-        readonly property real minBarHeight: 2
-        readonly property real maxBarHeight: 20
-    }
-
-    // Paused state visual configuration
-    readonly property color pausedBarColor: "#C9B458"
-    readonly property real pausedDimOpacity: 0.55
-
-    // Processing wave effect configuration
-    readonly property QtObject processingConfig: QtObject {
-        readonly property real waveSpeed: 0.12
-        readonly property real baseHeightBoost: 0.70
-        readonly property real harmonicStrength: 0.12
-        readonly property real opacityMin: 0.75
-        readonly property real opacityRange: 0.25
-    }
-
     function formatElapsedTime(seconds: real): string {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
     }
-
-    // Audio level from service (exposed for Repeater delegates under ComponentBehavior: Bound)
-    readonly property real audioLevel: root.serviceAudioLevel
-
-    // Animation time for audio bar oscillation
-    property real animationTime: 0
-
-    NumberAnimation on animationTime {
-        running: (root.serviceState === "recording" || root.serviceState === "processing") && root.visibilities.stt
-        from: 0
-        to: 6000
-        duration: 100000
-        loops: Animation.Infinite
-    }
-
-    // Cached bar gradient colors - invalidated only on theme change
-    property var barColors: []
-
-    function updateBarColors() {
-        const colors = [];
-        for (let i = 0; i < barCount; i++) {
-            const t = i / barCount;
-            colors.push(Qt.tint(Colours.palette.m3primary,
-                Qt.rgba(Colours.palette.m3tertiary.r,
-                        Colours.palette.m3tertiary.g,
-                        Colours.palette.m3tertiary.b,
-                        t * 0.5)));
-        }
-        barColors = colors;
-    }
-
-    Component.onCompleted: updateBarColors()
-
-    Connections {
-        target: Colours.palette
-        function onM3primaryChanged() { root.updateBarColors(); }
-        function onM3tertiaryChanged() { root.updateBarColors(); }
-    }
-
-    // Pre-calculated wave offsets - computed once per frame instead of per-bar
-    readonly property var waveOffsets: {
-        if (root.serviceState !== "recording") return [];
-        const cfg = audioConfig;
-        const offsets = [];
-        for (let i = 0; i < barCount; i++) {
-            const baseline = 1 - cfg.waveVariation;
-            offsets.push(Math.sin(i * cfg.waveFrequency + animationTime * cfg.waveSpeed) * cfg.waveVariation + baseline);
-        }
-        return offsets;
-    }
-
-    // Processing wave data - computes both offsets and opacities in single pass
-    readonly property var processingWaveData: {
-        if (root.serviceState !== "processing") return { offsets: [], opacities: [] };
-        const cfg = processingConfig;
-        const offsets = [];
-        const opacities = [];
-        for (let i = 0; i < barCount; i++) {
-            const spatialPhase = (i / (barCount - 1)) * 2 * Math.PI;
-            const wavePos = spatialPhase + animationTime * cfg.waveSpeed;
-            const primaryWave = 0.5 + 0.5 * Math.sin(wavePos);
-            const harmonic = cfg.harmonicStrength * Math.sin(wavePos * 2);
-            offsets.push(Math.max(0, primaryWave + harmonic));
-            opacities.push(cfg.opacityMin + cfg.opacityRange * primaryWave);
-        }
-        return { offsets, opacities };
-    }
-
-    readonly property var processingWaveOffsets: processingWaveData.offsets
-    readonly property var processingWaveOpacities: processingWaveData.opacities
 
     // State configuration map
     readonly property var stateMap: ({
@@ -441,7 +344,7 @@ Item {
 
                     // Elapsed timer
                     StyledText {
-                        opacity: root.serviceState === "paused" ? root.pausedDimOpacity : 1.0
+                        opacity: root.serviceState === "paused" ? 0.55 : 1.0
                         text: root.formatElapsedTime(root.serviceElapsedSeconds)
                         font.pointSize: Appearance.font.size.small * 0.88
                         font.family: Appearance.font.family.mono
@@ -458,80 +361,15 @@ Item {
                     }
 
                     // Audio level bars (compact)
-                    Item {
-                        Layout.preferredWidth: audioLevelRow.implicitWidth
+                    SttWaveform {
+                        Layout.preferredWidth: implicitWidth
                         Layout.preferredHeight: root.audioBarContainerHeight
 
-                        Row {
-                            id: audioLevelRow
-
-                            anchors.centerIn: parent
-                            spacing: 3
-
-                            Repeater {
-                                model: root.barCount
-
-                                Rectangle {
-                                    id: bar
-
-                                    required property int index
-
-                                    readonly property real positionFactor: {
-                                        const center = root.barCount / 2;
-                                        const distance = Math.abs(index - center) / center;
-                                        return 1 - distance * 0.5;
-                                    }
-
-                                    readonly property real targetHeight: {
-                                        const cfg = root.audioConfig;
-
-                                        if (root.serviceState === "processing") {
-                                            const procCfg = root.processingConfig;
-                                            const waveMultiplier = root.processingWaveOffsets[index] ?? 1.0;
-                                            const boostedHeight = procCfg.baseHeightBoost * (cfg.maxBarHeight - cfg.minBarHeight);
-                                            const rawHeight = cfg.minBarHeight + boostedHeight * waveMultiplier * positionFactor;
-                                            return Math.max(cfg.minBarHeight, Math.min(cfg.maxBarHeight, rawHeight));
-                                        }
-
-                                        const rawLevel = root.audioLevel;
-                                        let effectiveLevel = 0;
-                                        if (rawLevel > cfg.noiseFloor) {
-                                            effectiveLevel = (rawLevel - cfg.noiseFloor) / (1.0 - cfg.noiseFloor);
-                                            effectiveLevel = Math.min(1.0, effectiveLevel * cfg.gain);
-                                            effectiveLevel = Math.pow(effectiveLevel, cfg.powerCurve);
-                                        }
-
-                                        const waveOffset = root.waveOffsets[index] ?? 1.0;
-                                        return cfg.minBarHeight + effectiveLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor * waveOffset;
-                                    }
-
-                                    readonly property real waveOpacity: {
-                                        if (root.serviceState === "processing") {
-                                            const opacity = root.processingWaveOpacities[index];
-                                            if (opacity !== undefined) return opacity;
-                                        }
-                                        if (root.serviceState === "paused")
-                                            return root.pausedDimOpacity;
-                                        return 1.0;
-                                    }
-
-                                    property real smoothedHeight: root.audioConfig.minBarHeight
-
-                                    onTargetHeightChanged: {
-                                        smoothedHeight = smoothedHeight + (targetHeight - smoothedHeight) * root.audioConfig.smoothing;
-                                    }
-
-                                    // Row doesn't support Layout.*, so y is calculated manually for vertical centering
-                                    width: 4
-                                    height: smoothedHeight
-                                    y: parent ? (parent.height - height) / 2 : 0
-
-                                    radius: 2
-                                    color: root.serviceState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)
-                                    opacity: waveOpacity
-                                }
-                            }
-                        }
+                        audioLevel: root.serviceAudioLevel
+                        sttState: root.serviceState
+                        barCount: root.barCount
+                        containerHeight: root.audioBarContainerHeight
+                        active: root.visibilities.stt
                     }
 
                     // Separator before mode icon (hidden when no mode icon)

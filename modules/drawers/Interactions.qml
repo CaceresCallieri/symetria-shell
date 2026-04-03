@@ -198,7 +198,9 @@ CustomMouseArea {
         // Show popouts on hover
         if (y < bar.implicitHeight) {
             bar.checkPopout(x);
-        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !inTopPanel(panels.popouts, x, y)) {
+        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
+                   && !inTopPanel(panels.popouts, x, y)
+                   && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
             popouts.hasCurrent = false;
             bar.closeTray();
         }

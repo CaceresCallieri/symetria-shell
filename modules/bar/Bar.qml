@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
+import qs.modules.stt as SttModule
 import "popouts" as BarPopouts
 import "components"
 import "components/workspaces"
@@ -178,6 +179,18 @@ Item {
             closeTray();
 
         if (!target) {
+            // Check STT center embed (not in left/right sections)
+            if (sttCenterContainer.visible) {
+                const localPos = mapToItem(sttCenterContainer, x, 0);
+                if (localPos.x >= 0 && localPos.x <= sttCenterContainer.width) {
+                    popouts.currentName = "stt";
+                    popouts.currentCenter = Qt.binding(
+                        () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
+                    );
+                    popouts.hasCurrent = true;
+                    return;
+                }
+            }
             popouts.hasCurrent = false;
             return;
         }
@@ -310,6 +323,63 @@ Item {
 
         Behavior on opacity {
             Anim {}
+        }
+    }
+
+    // STT bar embed — shown in center when merge mode is active and recording.
+    // Clip-reveals from center outward: container grows horizontally while
+    // content stays centered, so the middle portion appears first.
+    Item {
+        id: sttCenterContainer
+
+        readonly property bool _shouldBeActive: AgentService.mergeActive && SttService.active
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        clip: true
+
+        // visible must be true BEFORE width > 0 so children compute
+        // layout sizes (Qt Quick Layouts defer when ancestors are invisible).
+        // clip: true + width: 0 naturally hides content until the reveal animation.
+        visible: _shouldBeActive || width > 0
+        implicitWidth: _shouldBeActive ? sttEmbed.implicitWidth : 0
+        implicitHeight: sttEmbed.implicitHeight
+        width: implicitWidth
+        height: implicitHeight
+
+        SttModule.SttBarEmbed {
+            id: sttEmbed
+
+            x: (sttCenterContainer.width - implicitWidth) / 2
+            width: implicitWidth
+        }
+
+        Behavior on implicitWidth {
+            Anim {
+                duration: Appearance.anim.durations.expressiveDefaultSpatial
+                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            }
+        }
+
+        // Programmatically open/close the STT popout for Alt+W (vocab hints).
+        // When vocabHintsVisible becomes true, show the popout without hover.
+        // When it becomes false, close only if the popout is still the "stt" one.
+        Connections {
+            target: SttService
+
+            function onVocabHintsVisibleChanged(): void {
+                if (!sttCenterContainer._shouldBeActive) return;
+
+                if (SttService.vocabHintsVisible) {
+                    root.popouts.currentName = "stt";
+                    root.popouts.currentCenter = Qt.binding(
+                        () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
+                    );
+                    root.popouts.hasCurrent = true;
+                } else if (root.popouts.currentName === "stt") {
+                    root.popouts.hasCurrent = false;
+                }
+            }
         }
     }
 
