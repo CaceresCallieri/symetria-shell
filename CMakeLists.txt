@@ -60,9 +60,22 @@ if("plugin" IN_LIST ENABLE_MODULES)
 endif()
 
 if("shell" IN_LIST ENABLE_MODULES)
-    foreach(dir assets components config modules services utils)
-        install(DIRECTORY ${dir} DESTINATION "${INSTALL_QSCONFDIR}")
+    # Install core shared code (the actual files)
+    install(DIRECTORY core DESTINATION "${INSTALL_QSCONFDIR}")
+
+    # Install modules (not in core)
+    install(DIRECTORY modules DESTINATION "${INSTALL_QSCONFDIR}")
+
+    # Create symlinks for qs.* import resolution (components → core/components, etc.)
+    foreach(link assets components config services utils scripts)
+        install(CODE "
+            execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+                core/${link}
+                \${CMAKE_INSTALL_PREFIX}/${INSTALL_QSCONFDIR}/${link}
+            )
+        ")
     endforeach()
+
     install(FILES shell.qml LICENSE DESTINATION "${INSTALL_QSCONFDIR}")
 endif()
 
