@@ -181,7 +181,7 @@ Item {
         if (!target) {
             // Check STT center embed (not in left/right sections)
             if (sttCenterContainer.visible) {
-                const localPos = mapToItem(sttCenterContainer, x, 0);
+                const localPos = mapToItem(sttCenterContainer, x, sttCenterContainer.height / 2);
                 if (localPos.x >= 0 && localPos.x <= sttCenterContainer.width) {
                     popouts.currentName = "stt";
                     popouts.currentCenter = Qt.binding(

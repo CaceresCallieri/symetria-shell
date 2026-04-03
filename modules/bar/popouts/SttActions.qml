@@ -22,6 +22,7 @@ ColumnLayout {
     }
 
     spacing: Appearance.spacing.normal
+    // 280px fits four PillButtons + vocab chip row comfortably; adjust if chip content grows.
     implicitWidth: 280
 
     // ── Action buttons (hover only, hidden during Alt+W vocab mode) ──

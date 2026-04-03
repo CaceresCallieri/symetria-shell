@@ -81,7 +81,8 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) {
+            if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
+                    && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
                 popouts.hasCurrent = false;
                 bar.closeTray();
             }
