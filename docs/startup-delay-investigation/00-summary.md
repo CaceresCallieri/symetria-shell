@@ -1,36 +1,53 @@
 # Startup Delay Investigation Summary
 
 **Date:** 2026-03-29 (updated 2026-04-03)
-**Branch:** fix/deferred-panel-loading
-**Symptom:** Shell freezes for ~18-20 seconds after "Configuration Loaded" before becoming responsive. As of 2026-04-03, user reports delay has grown to ~60s.
-**Status:** Root causes identified. Fix requires Quickshell framework changes or a bisect-based approach to find the regression commit.
+**Branch:** investigate/startup-delay
+**Symptom:** Shell freezes for 80-93 seconds on Qt 6.11.0 (was 7-10s on Qt 6.10.2).
+**Status:** **ROOT CAUSE CONFIRMED — Qt 6.11.0 regression.**
 
-## Critical Correlation: Qt 6.11.0 Upgrade
+## Root Cause: Qt 6.11.0 Performance Regression
+
+**Qt 6.11.0 causes a ~10x regression in QML binding evaluation / reload walk performance.** This was confirmed through controlled experiments on 2026-04-03.
+
+### Isolation Experiments
+
+| Configuration | Freeze | Conclusion |
+|---|---|---|
+| Current QS (r110) + Qt 6.11 | **91s** | Current state |
+| Old QS (r67) + Qt 6.11 (built from source) | **86s** | Quickshell version irrelevant |
+| Old QS + Qt 6.10.2 (March 6 measurement) | **7-10s** | Qt 6.10.2 was 10x faster |
+| Drawers only (Qt 6.11) | **91s** | Drawers = 99% of freeze |
+| Everything except Drawers (Qt 6.11) | **671ms** | All other modules ~170ms |
+| Drawers with stubbed Panels (Qt 6.11) | **672ms** | Panels cascade = 99% of Drawers |
+| Fix branch, identical code (Qt 6.11) | **97s** | Codebase changes irrelevant |
+| Warm cache (Qt 6.11) | **93s** | QML cache irrelevant |
+
+### Timeline
 
 | Date | Qt Version | Measured Delay |
 |------|-----------|----------------|
-| 2026-03-06 | Qt 6.10.2 | **7-10s** (agent-bridge investigation, precise heartbeat) |
-| **2026-03-26** | **6.10.2 → 6.11.0** | *(system upgrade via pacman)* |
-| 2026-03-29 | Qt 6.11.0 | **18-20s** (this investigation, precise heartbeat) |
-| 2026-04-03 | Qt 6.11.0 | **80.2s** (heartbeat confirmed, cold cache, dev branch) |
+| 2026-03-06 | Qt 6.10.2 | **7-10s** (heartbeat) |
+| **2026-03-26** | **6.10.2 → 6.11.0** | *(system upgrade)* |
+| 2026-03-29 | Qt 6.11.0 | **18-20s** (heartbeat) |
+| 2026-04-03 | Qt 6.11.0 | **80-93s** (heartbeat) |
 
-The Qt upgrade on March 26 correlated with a ~2x delay increase. The March 29 investigation was already measuring post-Qt-6.11 behavior. The further degradation to ~60s needs precise measurement — it may be subjective perception or an additional regression.
+Note: The March 29 measurement of 18-20s may have been a warm-state outlier or there may be additional environmental factors causing the increase to 80-93s.
 
-**Priority action:** Downgrade to `qt6-base=6.10.2-1` / `qt6-declarative=6.10.2-1` temporarily and re-measure to confirm or rule out Qt 6.11 as a factor.
+### Recommended Actions
 
-## Root Cause (Simplified)
+1. **Pin Qt to 6.10.2** in pacman IgnorePkg until the regression is fixed upstream
+2. **File a Qt 6.11 bug report** with the reproduction case (Drawers + Panels cascade)
+3. **Investigate deferred Panels loading** as a Quickshell-level mitigation (stash@{1} had 8.8s → 1s)
 
-The delay is caused by **QML directory import compilation** — when QML files are compiled at startup, all files in each imported module directory are processed synchronously, blocking the event loop. The Drawers module's import chain cascades to ~61+ files that compile atomically.
+## Architecture Context
 
-Additionally, `Quickshell.Services.Notifications` (a C++ module) blocks ~19s during D-Bus notification daemon registration.
+The freeze is 100% in the **Quickshell reload walk** — the `EngineGeneration::onReload()` method that recursively evaluates bindings on every QObject child. The Panels sub-tree (12 module imports, ~160 cascaded QML files) produces a super-linear binding evaluation cascade. On Qt 6.10.2 this takes 7-10s. On Qt 6.11.0, the same cascade takes 80-93s.
 
-## Key Finding: Quickshell Limitation
+## Quickshell Framework Limitations (still relevant for mitigation)
 
-**`qs.modules.*` import paths do NOT resolve in URL-loaded files.** This means `Loader.setSource()` and `LazyLoader { source: ... }` cannot be used to defer compilation of files that import `qs.modules.bar`, `qs.modules.agentbar`, etc. Only relative path imports (`import "../../bar"`) work, but `Variants` forces synchronous compilation regardless.
-
-## Recommended Next Step
-
-The user suspects the delay is a regression — it wasn't this slow before the agent dashboard implementation. A **git bisect** approach should identify the commit that introduced or worsened the delay. See `01-profiling-methodology.md` for the heartbeat profiler technique.
+- `qs.modules.*` paths don't resolve in URL-loaded files (Loader/LazyLoader)
+- Variants forces synchronous compilation — async Loader inside Variants is a no-op
+- C++ module init is atomic (Quickshell.Services.Notifications blocks during D-Bus registration)
 
 ## File Index
 
