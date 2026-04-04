@@ -1,46 +1,67 @@
 # Startup Delay Investigation Summary
 
-**Date:** 2026-03-29 (updated 2026-04-03)
-**Branch:** fix/deferred-panel-loading
-**Symptom:** Shell freezes for ~18-20 seconds after "Configuration Loaded" before becoming responsive. As of 2026-04-03, user reports delay has grown to ~60s.
-**Status:** Root causes identified. Fix requires Quickshell framework changes or a bisect-based approach to find the regression commit.
+**Date:** 2026-03-29 (confirmed 2026-04-04)
+**Branch:** investigate/startup-delay
+**Status:** **ROOT CAUSE CONFIRMED — Qt 6.11.0 performance regression**
 
-## Critical Correlation: Qt 6.11.0 Upgrade
+## Root Cause: Qt 6.11.0
 
-| Date | Qt Version | Measured Delay |
-|------|-----------|----------------|
-| 2026-03-06 | Qt 6.10.2 | **7-10s** (agent-bridge investigation, precise heartbeat) |
-| **2026-03-26** | **6.10.2 → 6.11.0** | *(system upgrade via pacman)* |
-| 2026-03-29 | Qt 6.11.0 | **18-20s** (this investigation, precise heartbeat) |
-| 2026-04-03 | Qt 6.11.0 | **80.2s** (heartbeat confirmed, cold cache, dev branch) |
+Qt 6.11.0 causes a **~4x regression** in QML binding evaluation during Quickshell's reload walk. This was confirmed by downgrading Qt to 6.10.2 on the same system, same code, same day:
 
-The Qt upgrade on March 26 correlated with a ~2x delay increase. The March 29 investigation was already measuring post-Qt-6.11 behavior. The further degradation to ~60s needs precise measurement — it may be subjective perception or an additional regression.
+| Qt Version | Quickshell | Freeze | Notes |
+|---|---|---|---|
+| Qt 6.10.2 | r67 (March 6 measurement) | **7-10s** | Original baseline |
+| Qt 6.11.0 | r110 | **91s** | Current installed version |
+| Qt 6.11.0 | r67 (built from source) | **86s** | Quickshell version NOT a factor |
+| **Qt 6.10.2** | **r125 (rebuilt from AUR)** | **22s** | **Confirmed: Qt is the cause** |
 
-**Priority action:** Downgrade to `qt6-base=6.10.2-1` / `qt6-declarative=6.10.2-1` temporarily and re-measure to confirm or rule out Qt 6.11 as a factor.
+### Why 22s and not 7-10s?
 
-## Root Cause (Simplified)
+The 22s on Qt 6.10.2 (April 4) vs 7-10s (March 6) is because Quickshell itself went from r67 → r125 (58 new commits). So there IS some Quickshell growth contribution (~2-3x), but the **dominant factor** is Qt 6.11 (4x regression on top of that).
 
-The delay is caused by **QML directory import compilation** — when QML files are compiled at startup, all files in each imported module directory are processed synchronously, blocking the event loop. The Drawers module's import chain cascades to ~61+ files that compile atomically.
+### Isolation Experiments (2026-04-03/04)
 
-Additionally, `Quickshell.Services.Notifications` (a C++ module) blocks ~19s during D-Bus notification daemon registration.
+| Test | Freeze | Conclusion |
+|---|---|---|
+| Bare Quickshell (no modules) | 504ms | Framework baseline |
+| All imports, zero instantiation | 508ms | Imports are free |
+| All modules EXCEPT Drawers | 671ms | Other modules = ~170ms total |
+| Drawers only | **91s** | Drawers = 99% of freeze |
+| Drawers with Panels stubbed | 672ms | Panels = 99% of Drawers |
+| fix/deferred-panel-loading branch | 97s | Code changes NOT a factor |
+| Warm cache (no cache clear) | 93s | QML cache NOT a factor |
+| Full shell minus notifications | 93s | D-Bus blocker fully overlapped |
 
-## Key Finding: Quickshell Limitation
+### Distribution Status (April 2026)
 
-**`qs.modules.*` import paths do NOT resolve in URL-loaded files.** This means `Loader.setSource()` and `LazyLoader { source: ... }` cannot be used to defer compilation of files that import `qs.modules.bar`, `qs.modules.agentbar`, etc. Only relative path imports (`import "../../bar"`) work, but `Variants` forces synchronous compilation regardless.
+**Arch Linux is the only major distro shipping Qt 6.11.0.** Caelestia's userbase is ~70% NixOS (Qt ~6.10.1). This is why no one else has reported the issue yet.
 
-## Recommended Next Step
+### Suspected Qt 6.11 Changes
 
-The user suspects the delay is a regression — it wasn't this slow before the agent dashboard implementation. A **git bisect** approach should identify the commit that introduced or worsened the delay. See `01-profiling-methodology.md` for the heartbeat profiler technique.
+1. **"Do not store type references for properties"** — `QQmlPropertyCache` internal change enabling cyclic type references. May make property resolution more expensive during binding cascades.
+2. **Property shadowing runtime enforcement** — new `virtual`/`override`/`final` keywords add runtime checking. Our logs show `qt.qml.propertyCache.append: Member ... overrides a member of the base object` warnings.
+
+### Workaround Applied
+
+Qt pinned to 6.10.2 via `IgnorePkg` in `/etc/pacman.conf`. Quickshell and Symmetria C++ plugin rebuilt from source against 6.10.2.
+
+### Recommended Actions
+
+1. **File Quickshell issue** — outfoxxed can reproduce on Arch and create a targeted Qt reproduction
+2. **File Qt bug** — draft at `qt-bug-report-draft.md` with all data
+3. **Implement deferred Panels loading** — proven approach (8.8s → 1.0s) that sidesteps the reload walk bottleneck regardless of Qt version
+4. **Architecture rewrite** — long-term plan at `docs/architecture-rewrite-plan.md`
 
 ## File Index
 
 | File | Contents |
 |------|----------|
-| `00-summary.md` | This file — overview and status |
+| `00-summary.md` | This file — overview and confirmed root cause |
 | `01-profiling-methodology.md` | How to measure startup timing (heartbeat technique) |
 | `02-root-cause-analysis.md` | Deep analysis of what causes the delay |
 | `03-import-cascade-map.md` | Complete map of which files cascade from which imports |
 | `04-attempted-fixes.md` | Every fix attempted and why it did/didn't work |
 | `05-quickshell-limitations.md` | Documented Quickshell/Qt framework limitations |
 | `06-test-results.md` | Raw test results from all configurations tested |
-| `07-bisect-guide.md` | Guide for the git bisect approach |
+| `07-bisect-guide.md` | Guide for the git bisect approach (superseded by Qt confirmation) |
+| `qt-bug-report-draft.md` | Draft bug report for bugreports.qt.io |
