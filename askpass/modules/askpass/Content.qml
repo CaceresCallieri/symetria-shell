@@ -14,6 +14,9 @@ import QtQuick.Layouts
 Item {
     id: root
 
+    // When true, dialog background is transparent (painted by TopHangingBackground shape)
+    property bool embedded: false
+
     property bool _ready: false
     Component.onCompleted: _ready = true
 
@@ -39,7 +42,7 @@ Item {
         implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
         radius: Appearance.rounding.normal
-        color: Colours.tPalette.m3surfaceContainer
+        color: root.embedded ? "transparent" : Colours.tPalette.m3surfaceContainer
 
         readonly property bool showButtons: dialogHover.hovered
 
