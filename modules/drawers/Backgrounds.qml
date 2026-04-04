@@ -7,7 +7,6 @@ import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
-import qs.modules.askpass as Askpass
 import qs.modules.stt as SttModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
@@ -83,13 +82,6 @@ Item {
             // The BL union arc curves into negative x territory, blending with the shell border
             startX: -rounding
             startY: shape.height
-        }
-
-        Askpass.AskpassBackground {
-            wrapper: root.panels.askpass
-
-            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
-            startY: 0  // Start at top-left (clockwise path like bar popouts)
         }
 
         SttModule.SttBackground {

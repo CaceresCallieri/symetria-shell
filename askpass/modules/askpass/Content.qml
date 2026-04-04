@@ -14,8 +14,8 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    required property ShellScreen screen
-    required property PersistentProperties visibilities
+    property bool _ready: false
+    Component.onCompleted: _ready = true
 
     readonly property int padding: Appearance.padding.large
 
@@ -23,7 +23,7 @@ Item {
     implicitHeight: dialog.implicitHeight + padding
 
     FocusManager {
-        active: root.visibilities.askpass
+        active: root._ready
         target: dialog
     }
 
@@ -39,7 +39,7 @@ Item {
         implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
         radius: Appearance.rounding.normal
-        color: "transparent"
+        color: Colours.tPalette.m3surfaceContainer
 
         readonly property bool showButtons: dialogHover.hovered
 

@@ -10,7 +10,6 @@ import "modules/areapicker"
 import "modules/osd" as OsdModule
 import "modules/notifications" as NotifsModule
 import "modules/lock"
-import "modules/askpass"
 import "modules/stt"
 import "modules/keycaster"
 import "modules/keychords"
@@ -32,7 +31,6 @@ ShellRoot {
     AreaPicker {}
     OsdModule.OsdOverlay {}
     NotifsModule.NotificationsOverlay {}
-    Askpass {}
     Stt {}
     Keycaster {}
     KeyChords {}

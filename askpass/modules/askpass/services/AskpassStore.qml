@@ -1,6 +1,5 @@
 pragma Singleton
 
-import qs.services
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -8,41 +7,15 @@ import QtQuick
 Singleton {
     id: root
 
-    // Prompt state - set by IPC handler, read by Content
+    // Prompt state — set by shell.qml from environment variables
     property string promptMessage: ""
     property string fifoPath: ""
     property string passwordBuffer: ""
     property string commandInfo: ""
 
-    function show(message: string, fifo: string, command: string): void {
-        // Clear sensitive data FIRST, before dialog becomes visible
-        root.passwordBuffer = "";
-        root.promptMessage = message || "Password:";
-        root.fifoPath = fifo;
-        root.commandInfo = command || "";
-
-        // Toggle visibility on all screens
-        for (const [_, visibilities] of Visibilities.screens) {
-            visibilities.askpass = true;
-        }
-
-        console.log("Askpass: Dialog shown for FIFO:", fifo);
-    }
-
-    function hide(): void {
-        // Hide on all screens
-        for (const [_, visibilities] of Visibilities.screens) {
-            visibilities.askpass = false;
-        }
-
-        root.promptMessage = "";
-        root.fifoPath = "";
-        root.commandInfo = "";
-    }
-
     function submitPassword(password: string): void {
         if (!root.fifoPath) {
-            root.hide();
+            Qt.quit();
             return;
         }
 
@@ -52,12 +25,11 @@ Singleton {
     }
 
     function cancel(): void {
-        // Write empty string to unblock the reading process
         if (root.fifoPath) {
             cancelProcess.fifoPath = root.fifoPath;
             cancelProcess.running = true;
         } else {
-            root.hide();
+            Qt.quit();
         }
     }
 
@@ -67,7 +39,6 @@ Singleton {
         property string fifoPath: ""
         property string password: ""
 
-        // Use printf with shell-escaped password to safely write to FIFO
         // printf '%s' avoids adding a trailing newline which would break password
         command: ["sh", "-c", "printf '%s' \"$1\" > \"$2\"", "--", password, fifoPath]
 
@@ -83,17 +54,17 @@ Singleton {
             } else {
                 console.log("Askpass: Password submitted successfully");
             }
-            root.hide();
+            Qt.quit();
         }
     }
 
     Timer {
         id: writeTimeout
-        interval: 5000  // 5 second timeout
+        interval: 5000
         onTriggered: {
             console.error("Askpass: Write timeout - forcing close");
             writeProcess.signal(9);
-            root.hide();
+            Qt.quit();
         }
     }
 
@@ -102,7 +73,6 @@ Singleton {
 
         property string fifoPath: ""
 
-        // Write sentinel value to signal cancellation
         command: ["sh", "-c", "printf '%s' '__CANCELLED__' > \"$1\"", "--", fifoPath]
 
         onRunningChanged: {
@@ -117,17 +87,17 @@ Singleton {
             } else {
                 console.log("Askpass: Cancellation sent");
             }
-            root.hide();
+            Qt.quit();
         }
     }
 
     Timer {
         id: cancelTimeout
-        interval: 5000  // 5 second timeout
+        interval: 5000
         onTriggered: {
             console.error("Askpass: Cancel timeout - forcing close");
             cancelProcess.signal(9);
-            root.hide();
+            Qt.quit();
         }
     }
 }
