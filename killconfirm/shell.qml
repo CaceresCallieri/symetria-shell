@@ -41,7 +41,11 @@ ShellRoot {
     Process {
         id: killProcess
         command: ["kill", "-9", root.windowPid]
-        onExited: Qt.quit()
+        onExited: (code, status) => {
+            if (code !== 0)
+                console.warn("KillConfirm: kill -9 exited with code", code, "(process may have already exited)");
+            Qt.quit();
+        }
     }
 
     // Brief defer to let Config's async FileView load user overrides
