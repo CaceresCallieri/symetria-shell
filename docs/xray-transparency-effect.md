@@ -1,4 +1,4 @@
-# Phantom Glass Effect — Hyprland Xray Layer Transparency
+# Xray Layer Transparency — Phantom Glass Effect
 
 **Discovered:** 2026-04-04 during askpass satellite extraction
 **Status:** Documented for future use

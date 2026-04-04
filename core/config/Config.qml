@@ -27,7 +27,6 @@ Singleton {
     property alias services: adapter.services
     property alias paths: adapter.paths
     property alias clipboard: adapter.clipboard
-    property alias askpass: adapter.askpass
     property alias stt: adapter.stt
     property alias keycaster: adapter.keycaster
     property alias calculator: adapter.calculator
@@ -105,7 +104,6 @@ Singleton {
             services: serializeServices(),
             paths: serializePaths(),
             clipboard: serializeClipboard(),
-            askpass: serializeAskpass(),
             stt: serializeStt(),
             keycaster: serializeKeycaster(),
             calculator: serializeCalculator(),
@@ -461,12 +459,6 @@ Singleton {
         };
     }
 
-    function serializeAskpass(): var {
-        return {
-            enabled: askpass.enabled
-        };
-    }
-
     function serializeStt(): var {
         return {
             enabled: stt.enabled,
@@ -602,7 +594,6 @@ Singleton {
             property ServiceConfig services: ServiceConfig {}
             property UserPaths paths: UserPaths {}
             property ClipboardConfig clipboard: ClipboardConfig {}
-            property AskpassConfig askpass: AskpassConfig {}
             property SttConfig stt: SttConfig {}
             property KeycasterConfig keycaster: KeycasterConfig {}
             property CalculatorConfig calculator: CalculatorConfig {}

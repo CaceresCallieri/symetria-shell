@@ -18,6 +18,8 @@ Singleton {
             Qt.quit();
             return;
         }
+        // Guard against double-submit (e.g. button double-click or Enter + button)
+        if (writeProcess.running) return;
 
         writeProcess.fifoPath = root.fifoPath;
         writeProcess.password = password;
@@ -26,6 +28,8 @@ Singleton {
 
     function cancel(): void {
         if (root.fifoPath) {
+            // Guard against double-cancel
+            if (cancelProcess.running) return;
             cancelProcess.fifoPath = root.fifoPath;
             cancelProcess.running = true;
         } else {
@@ -40,6 +44,7 @@ Singleton {
         property string password: ""
 
         // printf '%s' avoids adding a trailing newline which would break password
+        // Sentinel for cancel: '__CANCELLED__' — must match symmetria-askpass.sh:65
         command: ["sh", "-c", "printf '%s' \"$1\" > \"$2\"", "--", password, fifoPath]
 
         onRunningChanged: {
@@ -73,6 +78,7 @@ Singleton {
 
         property string fifoPath: ""
 
+        // Sentinel '__CANCELLED__' must match symmetria-askpass.sh:65
         command: ["sh", "-c", "printf '%s' '__CANCELLED__' > \"$1\"", "--", fifoPath]
 
         onRunningChanged: {

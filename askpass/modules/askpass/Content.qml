@@ -17,8 +17,8 @@ Item {
     // When true, dialog background is transparent (painted by TopHangingBackground shape)
     property bool embedded: false
 
-    property bool _ready: false
-    Component.onCompleted: _ready = true
+    property bool contentReady: false
+    Component.onCompleted: contentReady = true
 
     readonly property int padding: Appearance.padding.large
 
@@ -26,7 +26,7 @@ Item {
     implicitHeight: dialog.implicitHeight + padding
 
     FocusManager {
-        active: root._ready
+        active: root.contentReady
         target: dialog
     }
 

@@ -22,7 +22,7 @@ ShellRoot {
         id: shellCheck
         command: ["qs", "ipc", "--any-display", "-c", "symmetria", "call", "agentbar", "status"]
         running: true
-        onExited: (code, status) => { root.shellRunning = (code === 0) }
+        onExited: (code) => { root.shellRunning = (code === 0) }
     }
 
     // Bar height computation (mirrors BarWrapper.qml formula)
@@ -118,7 +118,6 @@ ShellRoot {
 
             Content {
                 visible: !root.shellRunning
-                embedded: false
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
                 anchors.topMargin: parent.height * 0.3
@@ -135,6 +134,24 @@ ShellRoot {
                 anchors.topMargin: root.barHeight - Config.border.thickness
                 anchors.leftMargin: Config.border.thickness
                 anchors.rightMargin: Config.border.thickness
+
+                // Background shape — single-shape, no overlap, so direct alpha is safe
+                Shape {
+                    id: bgShape
+
+                    anchors.fill: parent
+                    preferredRendererType: Shape.CurveRenderer
+
+                    TopHangingBackground {
+                        wrapper: animWrapper
+                        startX: (bgShape.width - animWrapper.width) / 2 - rounding
+                        startY: 0
+                        customFillColor: Qt.alpha(
+                            Colours.generalBackgroundOpaque,
+                            Colours.generalBackgroundAlpha * (Colours.transparency.enabled ? Colours.transparency.base : 1)
+                        )
+                    }
+                }
 
                 // Animated wrapper — slides down from bar like the old Wrapper.qml
                 Item {
@@ -170,24 +187,6 @@ ShellRoot {
                         embedded: true
                         anchors.bottom: parent.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                }
-
-                // Background shape — single-shape, no overlap, so direct alpha is safe
-                Shape {
-                    id: bgShape
-
-                    anchors.fill: parent
-                    preferredRendererType: Shape.CurveRenderer
-
-                    TopHangingBackground {
-                        wrapper: animWrapper
-                        startX: (bgShape.width - animWrapper.width) / 2 - rounding
-                        startY: 0
-                        customFillColor: Qt.alpha(
-                            Colours.generalBackgroundOpaque,
-                            Colours.generalBackgroundAlpha * (Colours.transparency.enabled ? Colours.transparency.base : 1)
-                        )
                     }
                 }
             }
