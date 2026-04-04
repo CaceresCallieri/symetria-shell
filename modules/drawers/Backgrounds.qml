@@ -2,7 +2,6 @@ import qs.services
 import qs.config
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
-import qs.modules.dashboard as Dashboard
 import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
 import qs.modules.sidebar as Sidebar
@@ -74,15 +73,6 @@ Item {
                     y -= root.panels.clipboard.height + Appearance.spacing.large;
                 return y;
             }
-        }
-
-        Dashboard.Background {
-            wrapper: root.panels.dashboard
-
-            // Left-aligned panel: startX = wrapper.x - rounding so visible left edge aligns with wrapper
-            // The BL union arc curves into negative x territory, blending with the shell border
-            startX: -rounding
-            startY: shape.height
         }
 
         Askpass.AskpassBackground {

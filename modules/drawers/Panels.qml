@@ -2,7 +2,6 @@ import qs.components
 import qs.config
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
-import qs.modules.dashboard as Dashboard
 import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
 import qs.modules.utilities.toasts as Toasts
@@ -26,7 +25,7 @@ Item {
     readonly property alias osd: osd
     readonly property alias session: session
     readonly property alias launcher: launcher
-    readonly property alias dashboard: dashboard
+    readonly property Item dashboard: Item {}
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
     readonly property alias toasts: toasts
@@ -116,18 +115,6 @@ Item {
                 margin += clipboard.height + Appearance.spacing.large;
             return margin;
         }
-    }
-
-    // DISABLED: Dashboard panel is disabled and slated for removal.
-    // Some sub-features (weather/forecast) may be extracted and reimplemented elsewhere.
-    // The component is kept instantiated but gated by Config.dashboard.enabled (set to false).
-    Dashboard.Wrapper {
-        id: dashboard
-
-        visibilities: root.visibilities
-
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
     }
 
     Askpass.Wrapper {

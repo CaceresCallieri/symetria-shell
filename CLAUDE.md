@@ -14,6 +14,8 @@ rm -rf ~/.cache/quickshell/qmlcache
 # Let the user restart manually
 ```
 
+**Process management:** The QuickShell binary is `qs`, NOT `quickshell`. To kill: `pkill qs`. To check: `pgrep -fa qs | grep -v grep | grep -v zsh | grep -v python | grep -v claude`. Using `pkill quickshell` or `pgrep quickshell` does NOTHING — the process name is `qs`.
+
 ## Build & Run
 
 **QML / SVG / Asset changes** — no compilation needed:

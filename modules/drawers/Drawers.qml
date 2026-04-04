@@ -51,7 +51,6 @@ Variants {
                 || (visibilities.askpass && Config.askpass.enabled)
                 || (visibilities.calculator && Config.calculator.enabled)
                 || (visibilities.packages && Config.packages.enabled)
-                || (!Config.dashboard.showOnHover && visibilities.dashboard && Config.dashboard.enabled)
                 || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
                 || SttService.vocabHintsVisible
 
@@ -65,7 +64,7 @@ Variants {
                     return 0;
 
                 const thresholds = [];
-                for (const panel of ["dashboard", "launcher", "session", "sidebar"])
+                for (const panel of ["launcher", "session", "sidebar"])
                     if (Config[panel].enabled)
                         thresholds.push(Config[panel].dragThreshold);
                 return Math.max(...thresholds);
@@ -74,7 +73,6 @@ Variants {
             onHasFullscreenChanged: {
                 visibilities.launcher = false;
                 visibilities.session = false;
-                visibilities.dashboard = false;
                 visibilities.clipboard = false;
                 visibilities.calculator = false;
                 visibilities.packages = false;
@@ -125,7 +123,6 @@ Variants {
                     visibilities.launcher = false;
                     visibilities.session = false;
                     visibilities.sidebar = false;
-                    visibilities.dashboard = false;
                     visibilities.clipboard = false;
                     visibilities.calculator = false;
                     visibilities.packages = false;
