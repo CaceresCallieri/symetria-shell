@@ -91,9 +91,13 @@ Singleton {
         path: `${Paths.state}/notifs.json`
         onLoaded: {
             const data = JSON.parse(text());
+            // Build array locally to avoid O(n²) binding cascade:
+            // each push() triggers list change → notClosed/popups filters re-evaluate
+            const loaded = [];
             for (const notif of data)
-                root.list.push(notifComp.createObject(root, notif));
-            root.list.sort((a, b) => b.time - a.time);
+                loaded.push(notifComp.createObject(root, notif));
+            loaded.sort((a, b) => b.time - a.time);
+            root.list = loaded; // Single assignment, single change notification
             root.loaded = true;
         }
         onLoadFailed: err => {

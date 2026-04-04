@@ -1,17 +1,33 @@
-# Root Cause Bisection — The Symmetria C++ Plugin Regression
+# Root Cause Bisection — O(n²) Notification Deserialization
 
-**Date:** 2026-04-04 (evening session, post-reboot)
+**Date:** 2026-04-04 (evening session, post-reboot), updated 2026-04-04 (night session)
 **System:** Arch Linux, kernel 6.19.10-zen1-1-zen, Qt 6.10.2, Quickshell r125 (854088c)
 **Branch:** `fix/deferred-panels-v2` (from `main`)
 
 ---
 
-## ROOT CAUSE IDENTIFIED
+## ROOT CAUSE IDENTIFIED (CORRECTED)
 
-**Commit `0fbdbed` — "refactor: rebrand Caelestia to Symmetria"** introduced the entire
-23-second startup regression. This commit changed `import Caelestia` → `import Symmetria`
-throughout the codebase. The regression is caused by the **Symmetria C++ plugin** having
-a pathological initialization issue that the Caelestia C++ plugin does not have.
+**The 23-second startup freeze is caused by O(n²) notification deserialization in
+`services/Notifs.qml`.** With 6,890 accumulated notifications in `~/.local/state/symmetria/notifs.json`
+(2.2MB), the `onLoaded` handler creates QML objects in a loop using `root.list.push()`, triggering
+a binding cascade on every push.
+
+### Why the bisection pointed to the rebrand commit
+
+The git bisection correctly identified commit `0fbdbed` ("rebrand Caelestia to Symmetria") as
+the boundary. But the real reason is that this commit changed `Paths.state` from
+`~/.local/state/caelestia` to `~/.local/state/symmetria`. The caelestia state path doesn't exist
+(broken symlink), so pre-rebrand commits load zero notifications. Post-rebrand commits find the
+real `notifs.json` with 6,890 entries.
+
+**The C++ plugin hypothesis was WRONG.** Both plugins are functionally identical. The original
+analysis failed to account for the state file path change hidden inside the rebrand.
+
+### Previous (incorrect) conclusion
+
+~~The regression is caused by the Symmetria C++ plugin having a pathological initialization
+issue that the Caelestia C++ plugin does not have.~~
 
 ```
 GOOD (0.65s):  b96b3fd  style(bar): apply glassmorphism pill effect to Workspaces
@@ -449,6 +465,30 @@ sudo chown -R $USER:$USER ~/.config/quickshell/symmetria
 14. **Git bisection:** 410 commits → narrowed to 7 → narrowed to 1: commit `0fbdbed`
 15. **Root cause:** The `Caelestia.*` → `Symmetria.*` plugin namespace change
 
+### Session 3 (night, same day — CORRECTED ROOT CAUSE)
+
+16. **Re-validation:** Confirmed bisection data (GOOD=698ms, BAD=24.0s)
+17. **Discovery:** Both worktrees have identical Symmetria imports after patching
+18. **Discovery:** The ONLY non-namespace difference is `Paths.*` pointing to `caelestia/` vs `symmetria/`
+19. **Test: empty JSON config** → 670ms (NOT the config file)
+20. **Test: full config + fake state dir** → 686ms (NOT the config file)
+21. **Test: rename notifs.json** → 704ms — **FOUND THE FILE**
+22. **Test: restore notifs.json** → 24.5s — **CONFIRMED**
+23. **Analysis:** 6,890 notifications, each `push()` triggers O(n) filter on `notClosed`/`popups` = O(n²)
+24. **Fix:** `root.list = loaded` (batch assignment) → **976ms** (23.6x improvement)
+
+### Scaling data (notifications vs. freeze time)
+
+| Notifications | Freeze | Per-notif cost |
+|--------------|--------|---------------|
+| 0 | 670ms | — |
+| 100 | 716ms | 0.5ms |
+| 500 | 772ms | 0.2ms |
+| 1000 | 1,032ms | 0.4ms |
+| 6890 | 24,000ms | 3.4ms |
+
+The super-linear growth (0.2ms → 3.4ms per notification) confirms O(n²) behavior.
+
 ### Key learnings
 
 - Single measurements are unreliable (±2s variance). Always 3+ runs.
@@ -460,3 +500,51 @@ sudo chown -R $USER:$USER ~/.config/quickshell/symmetria
 - Binding count ≠ cost. 1.26x bindings caused 38x time = cascade amplification.
 - The upstream (caelestia) is the ground truth for "this architecture CAN be fast."
 - Git bisection with worktrees is the most reliable way to find regressions.
+- **When a bisection points to a refactor/rename commit, check RUNTIME SIDE EFFECTS (state paths, config paths) not just the code changes.**
+- **QML list property mutation (push/splice) in loops is O(n²) when computed properties bind to the list.** Always batch-build and assign once.
+
+---
+
+## THE FIX
+
+### `services/Notifs.qml` — Batch notification loading
+
+**Before (O(n²)):**
+```qml
+onLoaded: {
+    const data = JSON.parse(text());
+    for (const notif of data)
+        root.list.push(notifComp.createObject(root, notif));  // ← triggers bindings per push
+    root.list.sort((a, b) => b.time - a.time);
+    root.loaded = true;
+}
+```
+
+**After (O(n)):**
+```qml
+onLoaded: {
+    const data = JSON.parse(text());
+    const loaded = [];
+    for (const notif of data)
+        loaded.push(notifComp.createObject(root, notif));  // ← local array, no bindings
+    loaded.sort((a, b) => b.time - a.time);
+    root.list = loaded;  // ← single assignment, single binding evaluation
+    root.loaded = true;
+}
+```
+
+**Result:** 23,000ms → 976ms (6,890 notifications)
+
+### Why push() was O(n²)
+
+Two computed properties bind to `list`:
+```qml
+readonly property list<Notif> notClosed: list.filter(n => !n.closed)
+readonly property list<Notif> popups: list.filter(n => n.popup)
+```
+
+Each `root.list.push()` triggers a change notification on `list`, which causes both
+`notClosed` and `popups` to re-evaluate their filter expressions over the entire list.
+For n pushes: n × filter(1..n items) = n²/2 filter operations per property.
+
+With 6,890 notifications: 2 × (6,890² / 2) ≈ **47.5 million** filter iterations.

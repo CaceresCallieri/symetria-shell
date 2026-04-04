@@ -20,21 +20,6 @@ import Quickshell
 import QtQuick
 
 ShellRoot {
-    // ── Startup profiler (temporary) ──────────────────────────────
-    // Measures event loop freeze duration. Beat #1 at +500ms = instant.
-    // Beat #1 at +Ns = event loop was frozen for (N - 500)ms.
-    // Remove after measurement session.
-    Component.onCompleted: console.log("[BOOT] ShellRoot @ " + Date.now())
-    Timer {
-        interval: 500; running: true; repeat: true; property int b: 0
-        onTriggered: {
-            b++;
-            console.log("[BOOT:HB] #" + b + " @ " + Date.now());
-            if (b >= 20) running = false;
-        }
-    }
-    // ──────────────────────────────────────────────────────────────
-
     // Disable hot reload - deferred to avoid "Non-existent attached object" error
     Timer {
         interval: 0
