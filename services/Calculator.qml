@@ -146,13 +146,15 @@ Singleton {
         onLoaded: {
             try {
                 const data = JSON.parse(text());
+                const loaded = [];
                 for (const item of data) {
-                    root.history.push(historyEntryComp.createObject(root, {
+                    loaded.push(historyEntryComp.createObject(root, {
                         expression: item.expression,
                         result: item.result,
                         timestamp: new Date(item.timestamp)
                     }));
                 }
+                root.history = loaded;
             } catch (e) {
                 console.warn("[Calculator] Failed to parse history:", e);
             }

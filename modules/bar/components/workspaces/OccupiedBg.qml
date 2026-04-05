@@ -19,23 +19,27 @@ Item {
         let count = 0;
         const start = groupOffset;
         const end = start + Config.bar.workspaces.shown;
+        const temp = [...pills];
         for (const [ws, occ] of Object.entries(occupied)) {
             if (ws > start && ws <= end && occ) {
                 if (!occupied[ws - 1]) {
-                    if (pills[count])
-                        pills[count].start = ws;
+                    if (temp[count])
+                        temp[count].start = ws;
                     else
-                        pills.push(pillComp.createObject(root, {
+                        temp.push(pillComp.createObject(root, {
                             start: ws
                         }));
                     count++;
                 }
                 if (!occupied[ws + 1])
-                    pills[count - 1].end = ws;
+                    temp[count - 1].end = ws;
             }
         }
-        if (pills.length > count)
-            pills.splice(count, pills.length - count).forEach(p => p.destroy());
+        if (temp.length > count) {
+            const excess = temp.splice(count, temp.length - count);
+            excess.forEach(p => p.destroy());
+        }
+        pills = temp;
     }
 
     Repeater {
