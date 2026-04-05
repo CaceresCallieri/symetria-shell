@@ -638,6 +638,7 @@ Singleton {
             _errorDetail = detail;
             _errorHint = hint;
             _state = "error";
+            Toaster.toast(qsTr("STT: %1").arg(detail), hint, "error", Toast.Error);
             if (sessionId !== "" && _segmentFiles.length > 0 && _currentAudioFile !== "") {
                 for (const seg of _segmentFiles) {
                     if (seg !== _currentAudioFile)
