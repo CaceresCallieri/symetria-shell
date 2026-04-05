@@ -176,3 +176,31 @@ QML Rendering Pipeline (per frame):
 **Related pitfall — model item state timing:** Setting `_array = [newItem, ..._array]` triggers a Repeater to create delegates synchronously. If the item's state isn't fully configured before the array assignment, delegates see stale state. Always set item properties BEFORE adding to model arrays.
 
 → Full investigation: [`stt-drawer-animation.md`](stt-drawer-animation.md)
+
+## List Property Mutation in Loops — O(n²) Binding Cascade
+
+**Never mutate a QML list property inside a loop** when computed properties bind to it. Each mutation triggers every binding that reads the list.
+
+```qml
+// BAD — O(n²): each push triggers notClosed.filter() + popups.filter()
+property list<Item> list: []
+readonly property list<Item> notClosed: list.filter(n => !n.closed)
+readonly property list<Item> popups: list.filter(n => n.popup)
+
+for (const item of data)
+    root.list.push(createItem(item));  // 6,890 pushes = 47M filter ops = 23s freeze
+
+// GOOD — O(n): build locally, assign once
+const temp = [];
+for (const item of data)
+    temp.push(createItem(item));
+root.list = temp;  // 1 assignment = 2 filter evaluations
+```
+
+**Why it's invisible:** The code looks like normal JavaScript. The O(n²) cost comes from QML's reactive system — `push()` fires a change signal, which triggers bindings, which iterate the list. There's no syntax or warning that indicates this.
+
+**Scaling:** With 100 items: +46ms (unnoticeable). With 6,890 items: +23,000ms (catastrophic). The cost is super-linear because each filter runs over a growing list.
+
+**Check for this pattern in:** Any service that loads persisted data into a list property — notifications, clipboard history, calculator history, app databases.
+
+→ Full investigation: [`startup-delay-investigation/11-postmortem-and-learnings.md`](startup-delay-investigation/11-postmortem-and-learnings.md)

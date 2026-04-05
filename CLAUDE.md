@@ -109,6 +109,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **STT target locking** — Window and agent targets are captured once at `start()` and never re-resolved. Re-resolving at stop-time or delivery-time causes wrong-agent delivery because `activeAgentForTerminal()` is identity-unstable. → `docs/stt-design-decisions.md`
 
+**List mutation in loops is O(n²)** — Never `push()` to a QML list property in a loop when computed properties (`.filter()`, `.map()`) bind to it. Each push triggers all bindings. Build a local array, assign once: `root.list = temp`. This caused a 23s startup freeze with 6,890 notifications. → `docs/qml-pitfalls.md`
+
 **Qt HTTP/2 protocol errors** — Qt 6's `QNetworkAccessManager` enables HTTP/2 by default. Some servers (notably `ipinfo.io`) cause silent protocol errors that break the entire weather init chain. Disable per-request with `Http2AllowedAttribute = false`. → `docs/qt-http2-pitfall.md`
 
 ## Deep Dives
