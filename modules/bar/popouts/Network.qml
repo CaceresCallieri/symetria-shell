@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.components.controls
+import qs.components.containers
 import qs.services
 import qs.config
 import qs.utils
@@ -14,6 +15,8 @@ ColumnLayout {
 
     required property Item wrapper
 
+    // Maximum list height before scrolling kicks in (~8 items at typical item height)
+    property real maxNetworkListHeight: 350
     property string connectingToSsid: ""
     property string view: "wireless" // "wireless" or "ethernet"
     property var passwordNetwork: null
@@ -50,44 +53,33 @@ ColumnLayout {
         font.pointSize: Appearance.font.size.small
     }
 
-    Repeater {
+    StyledListView {
+        id: networkList
+
         visible: root.view === "wireless"
+        Layout.preferredHeight: root.view === "wireless" ? Math.min(contentHeight, root.maxNetworkListHeight) : 0
+        Layout.fillWidth: true
+
         model: ScriptModel {
             values: [...Nmcli.networks].sort((a, b) => {
                 if (a.active !== b.active)
                     return b.active - a.active;
                 return b.strength - a.strength;
-            }).slice(0, 8)
+            })
         }
+        clip: true
+        spacing: Appearance.spacing.small
+        rightMargin: Appearance.padding.small
 
-        RowLayout {
+        delegate: RowLayout {
             id: networkItem
 
             required property Nmcli.AccessPoint modelData
             readonly property bool isConnecting: root.connectingToSsid === modelData.ssid
             readonly property bool loading: networkItem.isConnecting
 
-            visible: root.view === "wireless"
-            Layout.preferredHeight: visible ? implicitHeight : 0
-            Layout.fillWidth: true
-            Layout.rightMargin: Appearance.padding.small
+            width: networkList.width - networkList.rightMargin
             spacing: Appearance.spacing.small
-
-            opacity: 0
-            scale: 0.7
-
-            Component.onCompleted: {
-                opacity = 1;
-                scale = 1;
-            }
-
-            Behavior on opacity {
-                Anim {}
-            }
-
-            Behavior on scale {
-                Anim {}
-            }
 
             MaterialIcon {
                 text: Icons.getNetworkIcon(networkItem.modelData.strength)
@@ -135,15 +127,11 @@ ColumnLayout {
                                 networkItem.modelData,
                                 null,
                                 (network) => {
-                                    // Password is required - show password dialog
                                     root.passwordNetwork = network;
                                     root.showPasswordDialog = true;
                                     root.wrapper.currentName = "wirelesspassword";
                                 }
                             );
-                            
-                            // Clear connecting state if connection succeeds immediately (saved profile)
-                            // This is handled by the onActiveChanged connection below
                         }
                     }
                 }
@@ -163,6 +151,10 @@ ColumnLayout {
                     }
                 }
             }
+        }
+
+        StyledScrollBar.vertical: StyledScrollBar {
+            flickable: networkList
         }
     }
 
@@ -241,43 +233,33 @@ ColumnLayout {
         font.pointSize: Appearance.font.size.small
     }
 
-    Repeater {
+    StyledListView {
+        id: ethernetList
+
         visible: root.view === "ethernet"
+        Layout.preferredHeight: root.view === "ethernet" ? Math.min(contentHeight, root.maxNetworkListHeight) : 0
+        Layout.fillWidth: true
+
         model: ScriptModel {
             values: [...Nmcli.ethernetDevices].sort((a, b) => {
                 if (a.connected !== b.connected)
                     return b.connected - a.connected;
                 return (a.interface || "").localeCompare(b.interface || "");
-            }).slice(0, 8)
+            })
         }
+        clip: true
+        spacing: Appearance.spacing.small
+        rightMargin: Appearance.padding.small
 
-        RowLayout {
+        delegate: RowLayout {
             id: ethernetItem
 
             required property var modelData
+            // Ethernet connect is instantaneous — no async loading state
             readonly property bool loading: false
 
-            visible: root.view === "ethernet"
-            Layout.preferredHeight: visible ? implicitHeight : 0
-            Layout.fillWidth: true
-            Layout.rightMargin: Appearance.padding.small
+            width: ethernetList.width - ethernetList.rightMargin
             spacing: Appearance.spacing.small
-
-            opacity: 0
-            scale: 0.7
-
-            Component.onCompleted: {
-                opacity = 1;
-                scale = 1;
-            }
-
-            Behavior on opacity {
-                Anim {}
-            }
-
-            Behavior on scale {
-                Anim {}
-            }
 
             MaterialIcon {
                 text: "cable"
@@ -334,6 +316,10 @@ ColumnLayout {
                     }
                 }
             }
+        }
+
+        StyledScrollBar.vertical: StyledScrollBar {
+            flickable: ethernetList
         }
     }
 
