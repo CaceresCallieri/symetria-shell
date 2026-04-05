@@ -5,3 +5,10 @@ build/
 .cache/
 __pycache__/
 node_modules/
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12

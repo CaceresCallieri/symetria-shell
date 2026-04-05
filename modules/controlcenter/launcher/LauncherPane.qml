@@ -55,7 +55,7 @@ Item {
         }
     }
 
-    function saveHiddenApps(isHidden) {
+    function saveHiddenApps(isHidden: bool): void {
         if (!root.selectedApp) {
             return;
         }

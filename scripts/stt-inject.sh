@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Best-effort paste injection for Symmetria STT
 # Pastes clipboard content into the target window via hyprctl sendshortcut.
 # Assumes clipboard already contains the transcription (wl-copy ran first).

@@ -11,7 +11,7 @@
 #   1 - Conflicts detected (lists them)
 #   2 - Script error
 
-set -eo pipefail
+set -euo pipefail
 
 SHELL_QML="${1:-shell.qml}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

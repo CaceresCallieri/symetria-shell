@@ -98,7 +98,7 @@ Item {
      * @param nameResolver - Function(child) => string|null that returns popout name for a child
      * @returns true if popout was activated, false otherwise
      */
-    function detectChildPopout(container: Item, x: real, nameResolver): bool {
+    function detectChildPopout(container: Item, x: real, nameResolver: var): bool {
         if (!container) return false;
 
         const childX = mapToItem(container, x, 0).x;
@@ -139,7 +139,7 @@ Item {
      * Finds the index of a child element in a Repeater.
      * Used to generate tray popout names like "traymenu0", "traymenu1", etc.
      */
-    function findRepeaterIndex(repeater, child: Item): int {
+    function findRepeaterIndex(repeater: Repeater, child: Item): int {
         if (!repeater) return -1;
 
         for (let i = 0; i < repeater.count; i++) {

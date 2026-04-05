@@ -120,7 +120,7 @@ Item {
         _appendTextEntries(Config.clipboard.maxDisplayed);
     }
 
-    function _appendTextEntries(count): void {
+    function _appendTextEntries(count: int): void {
         const start = _textModel.count;
         const end = Math.min(start + count, allTextEntries.length);
         for (let i = start; i < end; i++)

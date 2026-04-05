@@ -313,7 +313,7 @@ Singleton {
         }
 
         // Validate that a path has a supported image extension
-        function isValidImagePath(path) {
+        function isValidImagePath(path: string): bool {
             if (!path) return false;
             const validExts = [".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif"];
             const lower = path.toLowerCase().split('?')[0].split('#')[0];  // Strip query params

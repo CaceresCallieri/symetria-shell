@@ -64,7 +64,7 @@ Item {
         }
     }
 
-    function saveConfig(entryIndex, entryEnabled) {
+    function saveConfig(entryIndex: int, entryEnabled: bool): void {
         Config.bar.clock.showIcon = root.clockShowIcon;
         Config.bar.persistent = root.persistent;
         Config.bar.showOnHover = root.showOnHover;

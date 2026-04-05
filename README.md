@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/0840f496-575c-4ca6-83a8-87bb01a85c5f
 > package. Instead, follow the instructions in the [manual installation section](#manual-installation).
 
 The shell is available from the AUR as `symmetria-shell`. You can install it with an AUR helper
-like [`yay`](https://github.com/Jguer/yay) or manually downloading the PKGBUILD and running `makepkg -si`.
+like [`paru`](https://github.com/Morganamilo/paru) or manually downloading the PKGBUILD and running `makepkg -si`.
 
 A package following the latest commit also exists as `symmetria-shell-git`. This is bleeding edge
 and likely to be unstable/have bugs. Regular users are recommended to use the stable package

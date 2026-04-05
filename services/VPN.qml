@@ -35,7 +35,7 @@ Singleton {
         return defaults;
     }
 
-    function getBuiltinDefaults(name, iface) {
+    function getBuiltinDefaults(name: string, iface: string): var {
         const builtins = {
             "wireguard": {
                 connectCmd: ["pkexec", "wg-quick", "up", iface],

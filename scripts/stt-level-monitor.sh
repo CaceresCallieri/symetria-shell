@@ -1,4 +1,5 @@
 #!/bin/sh
+set -eu
 # Audio level monitor for Symmetria STT
 # Reads 16kHz mono s16le from pw-record, computes RMS per 100ms chunk (~10Hz)
 # Output: float 0.0-1.0 on stdout (one value per line)
