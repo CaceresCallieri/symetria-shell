@@ -17,7 +17,7 @@
         "clock": "JetBrainsMono Nerd Font Propo"
       },
       "size": {
-        "scale": 0.9
+        "scale": 0.85
       }
     },
     "anim": {
@@ -162,14 +162,15 @@
       "showIcon": true
     },
     "sizes": {
-      "innerWidth": 34,
+      "innerWidth": 28,
+      "iconSize": 16,
       "trayMenuWidth": 300,
       "batteryWidth": 250,
       "networkWidth": 320
     }
   },
   "border": {
-    "thickness": 10,
+    "thickness": 7,
     "rounding": 25
   },
   "dashboard": {
@@ -571,7 +572,7 @@
   "agentbar": {
     "enabled": true,
     "sizes": {
-      "innerHeight": 24
+      "innerHeight": 18
     }
   }
 }
