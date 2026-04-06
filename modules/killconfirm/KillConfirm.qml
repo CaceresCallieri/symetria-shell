@@ -8,7 +8,7 @@ import Quickshell.Io
 ///
 /// When triggered, captures the focused window's title/class BEFORE the overlay
 /// maps (which steals focus via WlrKeyboardFocus.Exclusive, nullifying activeToplevel).
-/// On confirm, dispatches `forcekillactive` back to Hyprland.
+/// On confirm, dispatches `killwindow` with the captured address to Hyprland.
 Scope {
     id: root
 
@@ -19,6 +19,7 @@ Scope {
     /// even after exclusive keyboard focus shifts away from the original window.
     property string windowTitle: ""
     property string windowClass: ""
+    property string windowAddress: ""
 
     /// The monitor that was focused when the prompt was triggered.
     property var targetMonitor: null
@@ -37,12 +38,14 @@ Scope {
 
         windowTitle = toplevel.title ?? "";
         windowClass = toplevel.lastIpcObject?.class ?? "";
+        windowAddress = toplevel.lastIpcObject?.address ?? "";
         targetMonitor = Hypr.focusedMonitor;
         active = true;
     }
 
     function confirm(): void {
-        Hypr.dispatch("forcekillactive");
+        if (windowAddress)
+            Hypr.dispatch(`killwindow address:${windowAddress}`);
         dismiss();
     }
 
@@ -50,6 +53,7 @@ Scope {
         active = false;
         windowTitle = "";
         windowClass = "";
+        windowAddress = "";
         targetMonitor = null;
     }
 

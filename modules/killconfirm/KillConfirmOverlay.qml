@@ -211,7 +211,7 @@ Scope {
                         StyledText {
                             Layout.alignment: Qt.AlignHCenter
                             text: qsTr("Enter to confirm · Escape to cancel")
-                            font.pointSize: Appearance.font.size.smallest
+                            font.pointSize: Appearance.font.size.small
                             color: Colours.palette.m3outline
                         }
                     }
