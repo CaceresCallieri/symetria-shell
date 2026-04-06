@@ -50,8 +50,7 @@ Item {
             property int startY
 
             function closeAll(): void {
-                for (const n of Notifs.notClosed.filter(n => n.appName === modelData))
-                    n.close();
+                Notifs.closeGroup(modelData);
             }
 
             y: {

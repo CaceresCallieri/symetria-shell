@@ -56,8 +56,7 @@ Item {
         anchors.margins: Appearance.padding.large
         anchors.bottomMargin: 0
 
-        active: true
-        Component.onCompleted: active = Qt.binding(() => (root.visibilities.sidebar && Config.sidebar.enabled) || root.visible)
+        active: Config.sidebar.enabled
 
         sourceComponent: Content {
             implicitWidth: Config.sidebar.sizes.width - Appearance.padding.large * 2

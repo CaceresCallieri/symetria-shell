@@ -8,6 +8,7 @@ JsonObject {
     property bool actionOnClick: false
     property int groupPreviewNum: 3
     property bool openExpanded: false // Show the notifichation in expanded state when opening
+    property int maxStored: 1000 // Maximum notifications to keep in memory and on disk
     property Sizes sizes: Sizes {}
 
     component Sizes: JsonObject {

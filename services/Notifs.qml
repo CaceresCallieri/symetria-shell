@@ -81,7 +81,19 @@ Singleton {
                 popup: !props.dnd && ![...Visibilities.screens.values()].some(v => v.sidebar),
                 notification: notif
             });
-            root.list = [comp, ...root.list];
+
+            const max = Config.notifs.maxStored;
+            if (root.list.length >= max) {
+                // Evict oldest beyond cap
+                const kept = root.list.slice(0, max - 1);
+                for (let i = max - 1; i < root.list.length; i++) {
+                    root.list[i].notification?.dismiss();
+                    root.list[i].destroy();
+                }
+                root.list = [comp, ...kept];
+            } else {
+                root.list = [comp, ...root.list];
+            }
         }
     }
 
@@ -97,6 +109,13 @@ Singleton {
             for (const notif of data)
                 loaded.push(notifComp.createObject(root, notif));
             loaded.sort((a, b) => b.time - a.time);
+            // Apply cap — discard oldest beyond maxStored
+            const max = Config.notifs.maxStored;
+            if (loaded.length > max) {
+                for (let i = max; i < loaded.length; i++)
+                    loaded[i].destroy();
+                loaded.length = max;
+            }
             root.list = loaded; // Single assignment, single change notification
             root.loaded = true;
         }
@@ -108,21 +127,62 @@ Singleton {
         }
     }
 
+    // Batch close all notifications for a specific app group.
+    // Avoids O(n²) by: (1) NOT setting closed=true on items to destroy
+    // (each closed=true triggers notClosed re-eval over entire list),
+    // and (2) single list reassignment at the end.
+    function closeGroup(appName: string): void {
+        const remaining = [];
+        const toDestroy = [];
+        for (const n of root.list) {
+            if (n.appName === appName && !n.closed) {
+                if (n.locks.size === 0) {
+                    n.notification?.dismiss();
+                    toDestroy.push(n);
+                } else {
+                    n.closed = true;
+                    remaining.push(n);
+                }
+            } else {
+                remaining.push(n);
+            }
+        }
+        root.list = remaining;
+        for (const n of toDestroy)
+            n.destroy();
+    }
+
+    // Batch close ALL notifications.
+    // Same O(n²) avoidance: only set closed on locked items (rare),
+    // destroy the rest after a single list reassignment.
+    function clearAll(): void {
+        const remaining = [];
+        const toDestroy = [];
+        for (const n of root.list) {
+            if (n.locks.size === 0) {
+                n.notification?.dismiss();
+                toDestroy.push(n);
+            } else {
+                n.closed = true;
+                remaining.push(n);
+            }
+        }
+        root.list = remaining;
+        for (const n of toDestroy)
+            n.destroy();
+    }
+
     CustomShortcut {
         name: "clearNotifs"
         description: "Clear all notifications"
-        onPressed: {
-            for (const notif of root.list.slice())
-                notif.close();
-        }
+        onPressed: root.clearAll()
     }
 
     IpcHandler {
         target: "notifs"
 
         function clear(): void {
-            for (const notif of root.list.slice())
-                notif.close();
+            root.clearAll();
         }
 
         function isDndEnabled(): bool {
