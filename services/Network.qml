@@ -163,45 +163,42 @@ Singleton {
     function syncNetworksFromNmcli(): void {
         const rNetworks = root.networks;
         const nNetworks = Nmcli.networks;
-        
+
         // Build a map of existing networks by key
         const existingMap = new Map();
         for (const rn of rNetworks) {
             const key = `${rn.frequency}:${rn.ssid}:${rn.bssid}`;
             existingMap.set(key, rn);
         }
-        
-        // Build a map of new networks by key
-        const newMap = new Map();
+
+        // Build result array in one pass, reusing existing objects where possible
+        const result = [];
+        const keptKeys = new Set();
         for (const nn of nNetworks) {
             const key = `${nn.frequency}:${nn.ssid}:${nn.bssid}`;
-            newMap.set(key, nn);
-        }
-        
-        // Remove networks that no longer exist
-        for (const [key, network] of existingMap) {
-            if (!newMap.has(key)) {
-                const index = rNetworks.indexOf(network);
-                if (index >= 0) {
-                    rNetworks.splice(index, 1);
-                    network.destroy();
-                }
-            }
-        }
-        
-        // Add or update networks from Nmcli
-        for (const [key, nNetwork] of newMap) {
             const existing = existingMap.get(key);
             if (existing) {
                 // Update existing network's lastIpcObject
-                existing.lastIpcObject = nNetwork.lastIpcObject;
+                existing.lastIpcObject = nn.lastIpcObject;
+                result.push(existing);
             } else {
                 // Create new AccessPoint from Nmcli's data
-                rNetworks.push(apComp.createObject(root, {
-                    lastIpcObject: nNetwork.lastIpcObject
+                result.push(apComp.createObject(root, {
+                    lastIpcObject: nn.lastIpcObject
                 }));
             }
+            keptKeys.add(key);
         }
+
+        // Destroy removed networks after building the new list
+        for (const [key, network] of existingMap) {
+            if (!keptKeys.has(key)) {
+                network.destroy();
+            }
+        }
+
+        // Single assignment — O(1) binding trigger
+        root.networks = result;
     }
 
     component AccessPoint: QtObject {
