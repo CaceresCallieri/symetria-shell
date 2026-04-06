@@ -162,7 +162,7 @@ Scope {
                 // transparency + shadow, inner layer renders shapes at full opacity.
                 Item {
                     anchors.fill: parent
-                    layer.enabled: true
+                    layer.enabled: osdContent.visible
                     opacity: Colours.transparency.enabled ? Colours.transparency.base : 1
                     layer.effect: MultiEffect {
                         shadowEnabled: true
@@ -172,7 +172,7 @@ Scope {
 
                     Item {
                         anchors.fill: parent
-                        layer.enabled: true
+                        layer.enabled: osdContent.visible
                         opacity: Colours.generalBackgroundAlpha
 
                         Rectangle {

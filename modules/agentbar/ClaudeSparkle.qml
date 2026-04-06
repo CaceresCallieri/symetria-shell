@@ -88,7 +88,7 @@ Item {
         height: root._size * root._frameCount
         y: -root._currentFrame * root._size
 
-        layer.enabled: true
+        layer.enabled: root.visible
         layer.effect: Colouriser {
             sourceColor: "black"
             colorizationColor: root.color

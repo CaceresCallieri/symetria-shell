@@ -25,7 +25,7 @@ Item {
         sourceSize.width: width
         sourceSize.height: height
 
-        layer.enabled: true
+        layer.enabled: status === Image.Ready
         layer.effect: OpacityMask {
             maskSource: mask
         }

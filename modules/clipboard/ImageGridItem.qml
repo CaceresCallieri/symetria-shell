@@ -72,7 +72,7 @@ Item {
             smooth: true
             cache: true
 
-            layer.enabled: true
+            layer.enabled: root.imagePath !== ""
             layer.effect: OpacityMask {
                 maskSource: thumbnailMask
             }
