@@ -42,8 +42,8 @@ QtObject {
             return;
         }
 
-        if (Nmcli.active && Nmcli.active.ssid !== network.ssid) {
-            Nmcli.disconnectFromNetwork();
+        if (NmcliWifi.active && NmcliWifi.active.ssid !== network.ssid) {
+            NmcliWifi.disconnectFromNetwork();
             Qt.callLater(() => {
                 root.connectToNetwork(network, session, onPasswordNeeded);
             });
@@ -67,23 +67,23 @@ QtObject {
         }
 
         if (network.isSecure) {
-            const hasSavedProfile = Nmcli.hasSavedProfile(network.ssid);
+            const hasSavedProfile = NmcliWifi.hasSavedProfile(network.ssid);
 
             if (hasSavedProfile) {
-                Nmcli.connectToNetwork(network.ssid, "", network.bssid, null);
+                NmcliWifi.connectToNetwork(network.ssid, "", network.bssid, null);
             } else {
                 // Use password check with callback
-                Nmcli.connectToNetworkWithPasswordCheck(
+                NmcliWifi.connectToNetworkWithPasswordCheck(
                     network.ssid,
                     network.isSecure,
                     (result) => {
                         if (result.needsPassword) {
                             // Clear pending connection if exists
-                            if (Nmcli.pendingConnection) {
-                                Nmcli.connectionCheckTimer.stop();
-                                Nmcli.immediateCheckTimer.stop();
-                                Nmcli.immediateCheckTimer.checkCount = 0;
-                                Nmcli.pendingConnection = null;
+                            if (NmcliWifi.pendingConnection) {
+                                NmcliWifi.connectionCheckTimer.stop();
+                                NmcliWifi.immediateCheckTimer.stop();
+                                NmcliWifi.immediateCheckTimer.checkCount = 0;
+                                NmcliWifi.pendingConnection = null;
                             }
                             
                             // Handle password dialog - use session if available, otherwise use callback
@@ -99,7 +99,7 @@ QtObject {
                 );
             }
         } else {
-            Nmcli.connectToNetwork(network.ssid, "", network.bssid, null);
+            NmcliWifi.connectToNetwork(network.ssid, "", network.bssid, null);
         }
     }
 
@@ -116,7 +116,7 @@ QtObject {
             return;
         }
 
-        Nmcli.connectToNetwork(network.ssid, password || "", network.bssid || "", onResult || null);
+        NmcliWifi.connectToNetwork(network.ssid, password || "", network.bssid || "", onResult || null);
     }
 }
 

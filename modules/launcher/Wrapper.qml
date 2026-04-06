@@ -1,68 +1,29 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
+import qs.components.containers
 import qs.config
 import Quickshell
 import QtQuick
 
-Item {
+DrawerVertical {
     id: root
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property var panels
 
-    readonly property bool shouldBeActive: visibilities.launcher && Config.launcher.enabled
-    property int contentHeight
+    shouldBeActive: visibilities.launcher && Config.launcher.enabled
 
     // Dashboard moved to bottom-left corner, no longer vertically constrains launcher
-    readonly property real maxHeight: screen.height - Config.border.thickness * 2 - Appearance.spacing.large
+    maxHeight: screen.height - Config.border.thickness * 2 - Appearance.spacing.large
 
-    onMaxHeightChanged: timer.start()
+    contentComponent: Component {
+        Content {
+            visibilities: root.visibilities
+            panels: root.panels
+            maxHeight: root.maxHeight
 
-    visible: height > 0
-    implicitHeight: 0
-    implicitWidth: content.implicitWidth
-
-    onShouldBeActiveChanged: {
-        if (shouldBeActive) {
-            timer.stop();
-            hideAnim.stop();
-            showAnim.start();
-        } else {
-            showAnim.stop();
-            hideAnim.start();
-        }
-    }
-
-    SequentialAnimation {
-        id: showAnim
-
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: root.contentHeight
-            duration: Appearance.anim.durations.expressiveDefaultSpatial
-            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-        }
-        ScriptAction {
-            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
-        }
-    }
-
-    SequentialAnimation {
-        id: hideAnim
-
-        ScriptAction {
-            // Break the binding established by showAnim to prevent binding loops
-            // during the hide animation. Assigns current value without reactive binding.
-            script: root.implicitHeight = root.implicitHeight
-        }
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: 0
-            easing.bezierCurve: Appearance.anim.curves.emphasized
+            Component.onCompleted: root.contentHeight = implicitHeight
         }
     }
 
@@ -70,11 +31,11 @@ Item {
         target: Config.launcher
 
         function onEnabledChanged(): void {
-            timer.start();
+            root.configChanged();
         }
 
         function onMaxShownChanged(): void {
-            timer.start();
+            root.configChanged();
         }
     }
 
@@ -83,53 +44,14 @@ Item {
 
         function onValuesChanged(): void {
             if (DesktopEntries.applications.values.length < Config.launcher.maxShown)
-                timer.start();
+                root.configChanged();
         }
     }
 
-    Timer {
-        id: timer
-
-        interval: Appearance.anim.durations.extraLarge
-        onRunningChanged: {
-            if (running && !root.shouldBeActive) {
-                content.visible = false;
-                content.active = true;
-            } else {
-                root.contentHeight = Math.min(root.maxHeight, content.implicitHeight);
-                content.active = Qt.binding(() => root.shouldBeActive || root.visible);
-                content.visible = true;
-                if (showAnim.running) {
-                    showAnim.stop();
-                    showAnim.start();
-                }
-            }
-        }
-    }
-
-    Loader {
-        id: content
-
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        visible: false
-        active: false
-        Component.onCompleted: timer.start()
-
-        // Restore focus when Content is recreated while launcher is active
-        // (Timer-based recreation can destroy/recreate Content mid-typing)
-        onItemChanged: {
-            if (item && root.shouldBeActive && typeof item.focusSearch === "function")
-                item.focusSearch();
-        }
-
-        sourceComponent: Content {
-            visibilities: root.visibilities
-            panels: root.panels
-            maxHeight: root.maxHeight
-
-            Component.onCompleted: root.contentHeight = implicitHeight
-        }
+    // Restore focus when Content is recreated while launcher is active
+    // (Timer-based recreation can destroy/recreate Content mid-typing)
+    onContentItemChanged: {
+        if (contentItem && shouldBeActive && typeof contentItem.focusSearch === "function")
+            contentItem.focusSearch();
     }
 }

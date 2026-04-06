@@ -21,15 +21,15 @@ DeviceDetails {
 
     Component.onCompleted: {
         if (ethernetDevice && ethernetDevice.interface) {
-            Nmcli.getEthernetDeviceDetails(ethernetDevice.interface, () => {});
+            NmcliEthernet.getEthernetDeviceDetails(ethernetDevice.interface, () => {});
         }
     }
 
     onEthernetDeviceChanged: {
         if (ethernetDevice && ethernetDevice.interface) {
-            Nmcli.getEthernetDeviceDetails(ethernetDevice.interface, () => {});
+            NmcliEthernet.getEthernetDeviceDetails(ethernetDevice.interface, () => {});
         } else {
-            Nmcli.ethernetDeviceDetails = null;
+            NmcliEthernet.ethernetDeviceDetails = null;
         }
     }
 
@@ -56,10 +56,10 @@ DeviceDetails {
                         checked: root.ethernetDevice?.connected ?? false
                         toggle.onToggled: {
                             if (checked) {
-                                Nmcli.connectEthernet(root.ethernetDevice?.connection || "", root.ethernetDevice?.interface || "", () => {});
+                                NmcliEthernet.connectEthernet(root.ethernetDevice?.connection || "", root.ethernetDevice?.interface || "", () => {});
                             } else {
                                 if (root.ethernetDevice?.connection) {
-                                    Nmcli.disconnectEthernet(root.ethernetDevice.connection, () => {});
+                                    NmcliEthernet.disconnectEthernet(root.ethernetDevice.connection, () => {});
                                 }
                             }
                         }
@@ -109,7 +109,7 @@ DeviceDetails {
 
                 SectionContainer {
                     ConnectionInfoSection {
-                        deviceDetails: Nmcli.ethernetDeviceDetails
+                        deviceDetails: NmcliEthernet.ethernetDeviceDetails
                     }
                 }
             }

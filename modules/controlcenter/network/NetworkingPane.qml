@@ -60,7 +60,7 @@ Item {
                         }
 
                         ToggleButton {
-                            toggled: Nmcli.wifiEnabled
+                            toggled: NmcliWifi.wifiEnabled
                             icon: "wifi"
                             accent: "Tertiary"
                             iconSize: Appearance.font.size.normal
@@ -69,12 +69,12 @@ Item {
                             tooltip: qsTr("Toggle WiFi")
 
                             onClicked: {
-                                Nmcli.toggleWifi(null);
+                                NmcliWifi.toggleWifi(null);
                             }
                         }
 
                         ToggleButton {
-                            toggled: Nmcli.scanning
+                            toggled: NmcliWifi.scanning
                             icon: "wifi_find"
                             accent: "Secondary"
                             iconSize: Appearance.font.size.normal
@@ -83,7 +83,7 @@ Item {
                             tooltip: qsTr("Scan for networks")
 
                             onClicked: {
-                                Nmcli.rescanWifi();
+                                NmcliWifi.rescanWifi();
                             }
                         }
 
@@ -101,10 +101,10 @@ Item {
                                     root.session.ethernet.active = null;
                                     root.session.network.active = null;
                                 } else {
-                                    if (Nmcli.ethernetDevices.length > 0) {
-                                        root.session.ethernet.active = Nmcli.ethernetDevices[0];
-                                    } else if (Nmcli.networks.length > 0) {
-                                        root.session.network.active = Nmcli.networks[0];
+                                    if (NmcliEthernet.ethernetDevices.length > 0) {
+                                        root.session.ethernet.active = NmcliEthernet.ethernetDevices[0];
+                                    } else if (NmcliWifi.networks.length > 0) {
+                                        root.session.network.active = NmcliWifi.networks[0];
                                     }
                                 }
                             }

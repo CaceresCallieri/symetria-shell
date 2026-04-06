@@ -1,70 +1,30 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
+import qs.components.containers
 import qs.config
 import Quickshell
 import QtQuick
 
-Item {
+DrawerVertical {
     id: root
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property var panels
 
-    readonly property bool shouldBeActive: visibilities.packages && Config.packages.enabled
-    property int contentHeight
+    shouldBeActive: visibilities.packages && Config.packages.enabled
 
-    readonly property real maxHeight: {
-        let max = screen.height - Config.border.thickness * 2 - Appearance.spacing.large;
-        return max;
-    }
+    maxHeight: screen.height - Config.border.thickness * 2 - Appearance.spacing.large
 
-    onMaxHeightChanged: timer.start()
+    // Anchor content to bottom so it reveals top-down from the top edge
+    anchorToTop: false
 
-    visible: height > 0
-    implicitHeight: 0
-    implicitWidth: content.implicitWidth
+    contentComponent: Component {
+        Content {
+            visibilities: root.visibilities
+            maxHeight: root.maxHeight
 
-    onShouldBeActiveChanged: {
-        if (shouldBeActive) {
-            timer.stop();
-            hideAnim.stop();
-            showAnim.start();
-        } else {
-            showAnim.stop();
-            hideAnim.start();
-        }
-    }
-
-    SequentialAnimation {
-        id: showAnim
-
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: root.contentHeight
-            duration: Appearance.anim.durations.expressiveDefaultSpatial
-            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-        }
-        ScriptAction {
-            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
-        }
-    }
-
-    SequentialAnimation {
-        id: hideAnim
-
-        ScriptAction {
-            // Break the binding established by showAnim to prevent binding loops
-            // during the hide animation. Assigns current value without reactive binding.
-            script: root.implicitHeight = root.implicitHeight
-        }
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: 0
-            easing.bezierCurve: Appearance.anim.curves.emphasized
+            Component.onCompleted: root.contentHeight = implicitHeight
         }
     }
 
@@ -72,52 +32,13 @@ Item {
         target: Config.packages
 
         function onEnabledChanged(): void {
-            timer.start();
+            root.configChanged();
         }
     }
 
-    Timer {
-        id: timer
-
-        interval: Appearance.anim.durations.extraLarge
-        onRunningChanged: {
-            if (running && !root.shouldBeActive) {
-                content.visible = false;
-                content.active = true;
-            } else {
-                root.contentHeight = Math.min(root.maxHeight, content.implicitHeight);
-                content.active = Qt.binding(() => root.shouldBeActive || root.visible);
-                content.visible = true;
-                if (showAnim.running) {
-                    showAnim.stop();
-                    showAnim.start();
-                }
-            }
-        }
-    }
-
-    Loader {
-        id: content
-
-        // For top-sliding drawer: anchor content to BOTTOM of wrapper
-        // so it reveals from top-down as wrapper height grows
-        anchors.bottom: parent.bottom
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        visible: false
-        active: false
-        Component.onCompleted: timer.start()
-
-        onItemChanged: {
-            if (item && root.shouldBeActive && typeof item.focusSearch === "function")
-                item.focusSearch();
-        }
-
-        sourceComponent: Content {
-            visibilities: root.visibilities
-            maxHeight: root.maxHeight
-
-            Component.onCompleted: root.contentHeight = implicitHeight
-        }
+    // Restore focus when Content is recreated while packages is active
+    onContentItemChanged: {
+        if (contentItem && shouldBeActive && typeof contentItem.focusSearch === "function")
+            contentItem.focusSearch();
     }
 }

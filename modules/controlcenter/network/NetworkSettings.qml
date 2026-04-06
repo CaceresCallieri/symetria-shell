@@ -33,13 +33,13 @@ ColumnLayout {
 
         PropertyRow {
             label: qsTr("Total devices")
-            value: qsTr("%1").arg(Nmcli.ethernetDevices.length)
+            value: qsTr("%1").arg(NmcliEthernet.ethernetDevices.length)
         }
 
         PropertyRow {
             showTopMargin: true
             label: qsTr("Connected devices")
-            value: qsTr("%1").arg(Nmcli.ethernetDevices.filter(d => d.connected).length)
+            value: qsTr("%1").arg(NmcliEthernet.ethernetDevices.filter(d => d.connected).length)
         }
     }
 
@@ -52,9 +52,9 @@ ColumnLayout {
     SectionContainer {
         ToggleRow {
             label: qsTr("WiFi enabled")
-            checked: Nmcli.wifiEnabled
+            checked: NmcliWifi.wifiEnabled
             toggle.onToggled: {
-                Nmcli.enableWifi(checked);
+                NmcliWifi.enableWifi(checked);
             }
         }
     }
@@ -70,28 +70,28 @@ ColumnLayout {
 
         PropertyRow {
             label: qsTr("Network")
-            value: Nmcli.active ? Nmcli.active.ssid : (Nmcli.activeEthernet ? Nmcli.activeEthernet.interface : qsTr("Not connected"))
+            value: NmcliWifi.active ? NmcliWifi.active.ssid : (NmcliEthernet.activeEthernet ? NmcliEthernet.activeEthernet.interface : qsTr("Not connected"))
         }
 
         PropertyRow {
             showTopMargin: true
-            visible: Nmcli.active !== null
+            visible: NmcliWifi.active !== null
             label: qsTr("Signal strength")
-            value: Nmcli.active ? qsTr("%1%").arg(Nmcli.active.strength) : qsTr("N/A")
+            value: NmcliWifi.active ? qsTr("%1%").arg(NmcliWifi.active.strength) : qsTr("N/A")
         }
 
         PropertyRow {
             showTopMargin: true
-            visible: Nmcli.active !== null
+            visible: NmcliWifi.active !== null
             label: qsTr("Security")
-            value: Nmcli.active ? (Nmcli.active.isSecure ? qsTr("Secured") : qsTr("Open")) : qsTr("N/A")
+            value: NmcliWifi.active ? (NmcliWifi.active.isSecure ? qsTr("Secured") : qsTr("Open")) : qsTr("N/A")
         }
 
         PropertyRow {
             showTopMargin: true
-            visible: Nmcli.active !== null
+            visible: NmcliWifi.active !== null
             label: qsTr("Frequency")
-            value: Nmcli.active ? qsTr("%1 MHz").arg(Nmcli.active.frequency) : qsTr("N/A")
+            value: NmcliWifi.active ? qsTr("%1 MHz").arg(NmcliWifi.active.frequency) : qsTr("N/A")
         }
     }
 }

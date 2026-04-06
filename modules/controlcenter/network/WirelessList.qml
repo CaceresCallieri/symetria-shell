@@ -19,13 +19,13 @@ DeviceList {
 
     required property Session session
 
-    title: qsTr("Networks (%1)").arg(Nmcli.networks.length)
+    title: qsTr("Networks (%1)").arg(NmcliWifi.networks.length)
     description: qsTr("All available WiFi networks")
     activeItem: session.network.active
     
     titleSuffix: Component {
         StyledText {
-            visible: Nmcli.scanning
+            visible: NmcliWifi.scanning
             text: qsTr("Scanning...")
             color: Colours.palette.m3primary
             font.pointSize: Appearance.font.size.small
@@ -33,7 +33,7 @@ DeviceList {
     }
 
     model: ScriptModel {
-        values: [...Nmcli.networks].sort((a, b) => {
+        values: [...NmcliWifi.networks].sort((a, b) => {
             if (a.active !== b.active)
                 return b.active - a.active;
             return b.strength - a.strength;
@@ -55,7 +55,7 @@ DeviceList {
             }
 
             ToggleButton {
-                toggled: Nmcli.wifiEnabled
+                toggled: NmcliWifi.wifiEnabled
                 icon: "wifi"
                 accent: "Tertiary"
                 iconSize: Appearance.font.size.normal
@@ -63,12 +63,12 @@ DeviceList {
                 verticalPadding: Appearance.padding.smaller
 
                 onClicked: {
-                    Nmcli.toggleWifi(null);
+                    NmcliWifi.toggleWifi(null);
                 }
             }
 
             ToggleButton {
-                toggled: Nmcli.scanning
+                toggled: NmcliWifi.scanning
                 icon: "wifi_find"
                 accent: "Secondary"
                 iconSize: Appearance.font.size.normal
@@ -76,7 +76,7 @@ DeviceList {
                 verticalPadding: Appearance.padding.smaller
 
                 onClicked: {
-                    Nmcli.rescanWifi();
+                    NmcliWifi.rescanWifi();
                 }
             }
 
@@ -194,7 +194,7 @@ DeviceList {
                     StateLayer {
                         function onClicked(): void {
                             if (modelData.active) {
-                                Nmcli.disconnectFromNetwork();
+                                NmcliWifi.disconnectFromNetwork();
                             } else {
                                 NetworkConnection.handleConnect(modelData, root.session, null);
                             }
@@ -224,7 +224,7 @@ DeviceList {
 
     function checkSavedProfileForNetwork(ssid: string): void {
         if (ssid && ssid.length > 0) {
-            Nmcli.loadSavedConnections(() => {});
+            NmcliWifi.loadSavedConnections(() => {});
         }
     }
 }

@@ -39,8 +39,8 @@ ColumnLayout {
         visible: root.view === "wireless"
         Layout.preferredHeight: visible ? implicitHeight : 0
         label: qsTr("Enabled")
-        checked: Nmcli.wifiEnabled
-        toggle.onToggled: Nmcli.enableWifi(checked)
+        checked: NmcliWifi.wifiEnabled
+        toggle.onToggled: NmcliWifi.enableWifi(checked)
     }
 
     StyledText {
@@ -48,7 +48,7 @@ ColumnLayout {
         Layout.preferredHeight: visible ? implicitHeight : 0
         Layout.topMargin: visible ? Appearance.spacing.small : 0
         Layout.rightMargin: Appearance.padding.small
-        text: qsTr("%1 networks available").arg(Nmcli.networks.length)
+        text: qsTr("%1 networks available").arg(NmcliWifi.networks.length)
         color: Colours.palette.m3onSurfaceVariant
         font.pointSize: Appearance.font.size.small
     }
@@ -61,7 +61,7 @@ ColumnLayout {
         Layout.fillWidth: true
 
         model: ScriptModel {
-            values: [...Nmcli.networks].sort((a, b) => {
+            values: [...NmcliWifi.networks].sort((a, b) => {
                 if (a.active !== b.active)
                     return b.active - a.active;
                 return b.strength - a.strength;
@@ -74,7 +74,7 @@ ColumnLayout {
         delegate: RowLayout {
             id: networkItem
 
-            required property Nmcli.AccessPoint modelData
+            required property NmcliWifi.AccessPoint modelData
             readonly property bool isConnecting: root.connectingToSsid === modelData.ssid
             readonly property bool loading: networkItem.isConnecting
 
@@ -116,11 +116,11 @@ ColumnLayout {
 
                 StateLayer {
                     color: networkItem.modelData.active ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                    disabled: networkItem.loading || !Nmcli.wifiEnabled
+                    disabled: networkItem.loading || !NmcliWifi.wifiEnabled
 
                     function onClicked(): void {
                         if (networkItem.modelData.active) {
-                            Nmcli.disconnectFromNetwork();
+                            NmcliWifi.disconnectFromNetwork();
                         } else {
                             root.connectingToSsid = networkItem.modelData.ssid;
                             NetworkConnection.handleConnect(
@@ -170,10 +170,10 @@ ColumnLayout {
 
         StateLayer {
             color: Colours.palette.m3onPrimaryContainer
-            disabled: Nmcli.scanning || !Nmcli.wifiEnabled
+            disabled: NmcliWifi.scanning || !NmcliWifi.wifiEnabled
 
             function onClicked(): void {
-                Nmcli.rescanWifi();
+                NmcliWifi.rescanWifi();
             }
         }
 
@@ -182,7 +182,7 @@ ColumnLayout {
 
             anchors.centerIn: parent
             spacing: Appearance.spacing.small
-            opacity: Nmcli.scanning ? 0 : 1
+            opacity: NmcliWifi.scanning ? 0 : 1
 
             MaterialIcon {
                 id: scanIcon
@@ -209,7 +209,7 @@ ColumnLayout {
             strokeWidth: Appearance.padding.small / 2
             bgColour: "transparent"
             implicitHeight: parent.implicitHeight - Appearance.padding.smaller * 2
-            running: Nmcli.scanning
+            running: NmcliWifi.scanning
         }
     }
 
@@ -228,7 +228,7 @@ ColumnLayout {
         Layout.preferredHeight: visible ? implicitHeight : 0
         Layout.topMargin: visible ? Appearance.spacing.small : 0
         Layout.rightMargin: Appearance.padding.small
-        text: qsTr("%1 devices available").arg(Nmcli.ethernetDevices.length)
+        text: qsTr("%1 devices available").arg(NmcliEthernet.ethernetDevices.length)
         color: Colours.palette.m3onSurfaceVariant
         font.pointSize: Appearance.font.size.small
     }
@@ -241,7 +241,7 @@ ColumnLayout {
         Layout.fillWidth: true
 
         model: ScriptModel {
-            values: [...Nmcli.ethernetDevices].sort((a, b) => {
+            values: [...NmcliEthernet.ethernetDevices].sort((a, b) => {
                 if (a.connected !== b.connected)
                     return b.connected - a.connected;
                 return (a.interface || "").localeCompare(b.interface || "");
@@ -294,9 +294,9 @@ ColumnLayout {
 
                     function onClicked(): void {
                         if (ethernetItem.modelData.connected && ethernetItem.modelData.connection) {
-                            Nmcli.disconnectEthernet(ethernetItem.modelData.connection, () => {});
+                            NmcliEthernet.disconnectEthernet(ethernetItem.modelData.connection, () => {});
                         } else {
-                            Nmcli.connectEthernet(ethernetItem.modelData.connection || "", ethernetItem.modelData.interface || "", () => {});
+                            NmcliEthernet.connectEthernet(ethernetItem.modelData.connection || "", ethernetItem.modelData.interface || "", () => {});
                         }
                     }
                 }
@@ -324,13 +324,13 @@ ColumnLayout {
     }
 
     Connections {
-        target: Nmcli
+        target: NmcliWifi
 
         function onActiveChanged(): void {
-            if (Nmcli.active && root.connectingToSsid === Nmcli.active.ssid) {
+            if (NmcliWifi.active && root.connectingToSsid === NmcliWifi.active.ssid) {
                 root.connectingToSsid = "";
                 // Close password dialog if we successfully connected
-                if (root.showPasswordDialog && root.passwordNetwork && Nmcli.active.ssid === root.passwordNetwork.ssid) {
+                if (root.showPasswordDialog && root.passwordNetwork && NmcliWifi.active.ssid === root.passwordNetwork.ssid) {
                     root.showPasswordDialog = false;
                     root.passwordNetwork = null;
                     if (root.wrapper.currentName === "wirelesspassword") {
@@ -341,7 +341,7 @@ ColumnLayout {
         }
 
         function onScanningChanged(): void {
-            if (!Nmcli.scanning)
+            if (!NmcliWifi.scanning)
                 scanIcon.rotation = 0;
         }
     }

@@ -1,6 +1,6 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
+import qs.components.containers
 import qs.config
 import Quickshell
 import QtQuick
@@ -8,18 +8,17 @@ import QtQuick
 /// Calculator drawer wrapper handling lifecycle, animations, and pre-loading.
 ///
 /// Positioned at bottom-center of the screen, rising upward when visible.
-/// Uses the same animation pattern as clipboard/launcher drawers.
-Item {
+/// Uses the DrawerVertical base component for shared animation logic.
+DrawerVertical {
     id: root
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
     required property var panels
 
-    readonly property bool shouldBeActive: visibilities.calculator && Config.calculator.enabled
-    property int contentHeight
+    shouldBeActive: visibilities.calculator && Config.calculator.enabled
 
-    readonly property real maxHeight: {
+    maxHeight: {
         let max = screen.height - Config.border.thickness * 2 - Appearance.spacing.large;
         // Account for launcher if open (mutual exclusion means this shouldn't happen often)
         if (visibilities.launcher)
@@ -30,51 +29,13 @@ Item {
         return max;
     }
 
-    onMaxHeightChanged: timer.start()
+    contentComponent: Component {
+        Content {
+            visibilities: root.visibilities
+            panels: root.panels
+            maxHeight: root.maxHeight
 
-    visible: height > 0
-    implicitHeight: 0
-    implicitWidth: content.implicitWidth
-
-    onShouldBeActiveChanged: {
-        if (shouldBeActive) {
-            timer.stop();
-            hideAnim.stop();
-            showAnim.start();
-        } else {
-            showAnim.stop();
-            hideAnim.start();
-        }
-    }
-
-    SequentialAnimation {
-        id: showAnim
-
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: root.contentHeight
-            duration: Appearance.anim.durations.expressiveDefaultSpatial
-            easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-        }
-        ScriptAction {
-            script: root.implicitHeight = Qt.binding(() => content.implicitHeight)
-        }
-    }
-
-    SequentialAnimation {
-        id: hideAnim
-
-        ScriptAction {
-            // Break the binding established by showAnim to prevent binding loops
-            // during the hide animation. Assigns current value without reactive binding.
-            script: root.implicitHeight = root.implicitHeight
-        }
-        Anim {
-            target: root
-            property: "implicitHeight"
-            to: 0
-            easing.bezierCurve: Appearance.anim.curves.emphasized
+            Component.onCompleted: root.contentHeight = implicitHeight
         }
     }
 
@@ -82,50 +43,11 @@ Item {
         target: Config.calculator
 
         function onEnabledChanged(): void {
-            timer.start();
+            root.configChanged();
         }
 
         function onMaxHistoryChanged(): void {
-            timer.start();
-        }
-    }
-
-    Timer {
-        id: timer
-
-        interval: Appearance.anim.durations.extraLarge
-        onRunningChanged: {
-            if (running && !root.shouldBeActive) {
-                content.visible = false;
-                content.active = true;
-            } else {
-                root.contentHeight = Math.min(root.maxHeight, content.implicitHeight);
-                content.active = Qt.binding(() => root.shouldBeActive || root.visible);
-                content.visible = true;
-                if (showAnim.running) {
-                    showAnim.stop();
-                    showAnim.start();
-                }
-            }
-        }
-    }
-
-    Loader {
-        id: content
-
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        visible: false
-        active: false
-        Component.onCompleted: timer.start()
-
-        sourceComponent: Content {
-            visibilities: root.visibilities
-            panels: root.panels
-            maxHeight: root.maxHeight
-
-            Component.onCompleted: root.contentHeight = implicitHeight
+            root.configChanged();
         }
     }
 }

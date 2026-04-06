@@ -395,7 +395,7 @@ Item {
                                 text = qsTr("Connect");
                                 passwordContainer.passwordBuffer = "";
                                 if (root.network && root.network.ssid) {
-                                    Nmcli.forgetNetwork(root.network.ssid);
+                                    NmcliWifi.forgetNetwork(root.network.ssid);
                                 }
                             } else {
                                 connectionMonitor.stop();
@@ -405,7 +405,7 @@ Item {
                                 text = qsTr("Connect");
                                 passwordContainer.passwordBuffer = "";
                                 if (root.network && root.network.ssid) {
-                                    Nmcli.forgetNetwork(root.network.ssid);
+                                    NmcliWifi.forgetNetwork(root.network.ssid);
                                 }
                             }
                         });
@@ -422,14 +422,14 @@ Item {
             return;
         }
 
-        const isConnected = root.network && Nmcli.active && Nmcli.active.ssid && Nmcli.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
+        const isConnected = root.network && NmcliWifi.active && NmcliWifi.active.ssid && NmcliWifi.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
 
         if (isConnected) {
             connectionSuccessTimer.start();
             return;
         }
 
-        if (Nmcli.pendingConnection === null && connectButton.connecting) {
+        if (NmcliWifi.pendingConnection === null && connectButton.connecting) {
             if (connectionMonitor.repeatCount > 10) {
                 connectionMonitor.stop();
                 connectButton.connecting = false;
@@ -438,7 +438,7 @@ Item {
                 connectButton.text = qsTr("Connect");
                 passwordContainer.passwordBuffer = "";
                 if (root.network && root.network.ssid) {
-                    Nmcli.forgetNetwork(root.network.ssid);
+                    NmcliWifi.forgetNetwork(root.network.ssid);
                 }
             }
         }
@@ -467,8 +467,8 @@ Item {
         id: connectionSuccessTimer
         interval: 500
         onTriggered: {
-            if (root.visible && Nmcli.active && Nmcli.active.ssid) {
-                const stillConnected = Nmcli.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
+            if (root.visible && NmcliWifi.active && NmcliWifi.active.ssid) {
+                const stillConnected = NmcliWifi.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
                 if (stillConnected) {
                     connectionMonitor.stop();
                     connectButton.connecting = false;
@@ -480,7 +480,7 @@ Item {
     }
 
     Connections {
-        target: Nmcli
+        target: NmcliWifi
         function onActiveChanged() {
             if (root.visible) {
                 checkConnectionStatus();
@@ -494,7 +494,7 @@ Item {
                 connectButton.enabled = true;
                 connectButton.text = qsTr("Connect");
                 passwordContainer.passwordBuffer = "";
-                Nmcli.forgetNetwork(ssid);
+                NmcliWifi.forgetNetwork(ssid);
             }
         }
     }
