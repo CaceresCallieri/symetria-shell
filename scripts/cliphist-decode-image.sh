@@ -13,6 +13,13 @@
 
 set -euo pipefail
 
+for cmd in cliphist python3; do
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "Error: required command '$cmd' not found" >&2
+        exit 1
+    }
+done
+
 if [[ $# -ne 2 ]]; then
     echo "Usage: $0 <entry_id> <output_path>" >&2
     exit 1

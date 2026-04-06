@@ -1,5 +1,13 @@
 #!/bin/bash
 set -euo pipefail
+
+for cmd in hyprctl wl-paste; do
+    command -v "$cmd" >/dev/null 2>&1 || {
+        echo "Error: required command '$cmd' not found" >&2
+        exit 1
+    }
+done
+
 # Best-effort paste injection for Symmetria STT
 # Pastes clipboard content into the target window via hyprctl sendshortcut.
 # Assumes clipboard already contains the transcription (wl-copy ran first).
