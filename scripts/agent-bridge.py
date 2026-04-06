@@ -21,7 +21,10 @@ import sys
 import time
 from pathlib import Path
 
-SOCKET_PATH = Path(f"/run/user/{os.getuid()}/symmetria-agents.sock")
+SOCKET_PATH = Path(os.environ.get(
+    "SYMMETRIA_AGENT_SOCKET",
+    f"/run/user/{os.getuid()}/symmetria-agents.sock",
+))
 
 # Seconds before an orphaned activity entry (no live orchestrator connection)
 # is reaped. Registered agents are never reaped by timeout.
@@ -56,6 +59,8 @@ class AgentBridge:
         self._clients: dict[int, dict[int, dict]] = {}
         # {nvim_pid: terminal_pid} — cached terminal PID per Neovim instance
         self._terminal_pids: dict[int, int] = {}
+        # nvim_pids from remote machines (PID doesn't exist in local /proc)
+        self._remote_clients: set[int] = set()
         # {agent_id: {"state": str, "tool": str, "ts": float, "in_plan_mode": bool}} — activity state from hook scripts
         self._activities: dict[str, dict] = {}
         # Emit coalescing: leading-edge + trailing-edge with 50ms cooldown.
@@ -92,6 +97,11 @@ class AgentBridge:
         log.debug("_resolve_terminal_pid: %d → no terminal found", nvim_pid)
         return 0
 
+    @staticmethod
+    def _is_remote_pid(nvim_pid: int) -> bool:
+        """Check if nvim_pid is from a remote machine (process doesn't exist locally)."""
+        return not Path(f"/proc/{nvim_pid}").exists()
+
     def _emit(self) -> None:
         """Write consolidated state to stdout (consumed by QML SplitParser)."""
         agents = []
@@ -114,6 +124,7 @@ class AgentBridge:
                     "active": inst.get("active", False),
                     "spawn_type": inst.get("spawn_type", "fresh"),
                     "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
+                    "remote": nvim_pid in self._remote_clients,
                     "activity_state": activity.get("state", ""),
                     "activity_tool": activity.get("tool", ""),
                     "in_plan_mode": activity.get("in_plan_mode", False),
@@ -223,11 +234,16 @@ class AgentBridge:
 
         if msg_type == "hello":
             self._clients.setdefault(nvim_pid, {})
+            # Detect remote clients (PID doesn't exist in local /proc — tunneled via SSH)
+            if self._is_remote_pid(nvim_pid):
+                self._remote_clients.add(nvim_pid)
+                log.info("  hello: remote client detected (pid %s not in /proc)", nvim_pid)
             # Resolve terminal PID on first contact (stable for session lifetime)
             if nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
-            log.debug("  hello: registered client %s (terminal_pid=%d, total clients: %d)",
-                       nvim_pid, self._terminal_pids.get(nvim_pid, 0), len(self._clients))
+            log.debug("  hello: registered client %s (terminal_pid=%d, remote=%s, total clients: %d)",
+                       nvim_pid, self._terminal_pids.get(nvim_pid, 0),
+                       nvim_pid in self._remote_clients, len(self._clients))
             # Don't emit: hello registers the client slot but carries no agent data.
             # The subsequent "sync" message will emit with the full initial state.
 
@@ -238,6 +254,9 @@ class AgentBridge:
                 if buf is not None:
                     instances[buf] = inst
             self._clients[nvim_pid] = instances
+            # Detect remote on sync too (covers reconnect after bridge restart)
+            if self._is_remote_pid(nvim_pid):
+                self._remote_clients.add(nvim_pid)
             # Re-resolve terminal PID on sync (covers reconnect after bridge restart)
             if nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
@@ -301,6 +320,7 @@ class AgentBridge:
                     self._activities.pop(f"{nvim_pid}_{buf}", None)
                 del self._clients[nvim_pid]
                 self._terminal_pids.pop(nvim_pid, None)
+                self._remote_clients.discard(nvim_pid)
                 log.debug("  goodbye: removed client %s (remaining: %d)", nvim_pid, len(self._clients))
                 self._schedule_emit()
         else:
@@ -317,6 +337,7 @@ class AgentBridge:
                 self._activities.pop(f"{nvim_pid}_{buf}", None)
             del self._clients[nvim_pid]
             self._terminal_pids.pop(nvim_pid, None)
+            self._remote_clients.discard(nvim_pid)
             self._schedule_emit()
         else:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)

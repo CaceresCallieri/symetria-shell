@@ -156,22 +156,28 @@ Singleton {
     }
 
     /// Group agents by workspace ID for the merged bar.
-    /// Returns { byWorkspace: { [wsId]: agent[] }, orphans: agent[] }
+    /// Returns { byWorkspace: { [wsId]: agent[] }, orphans: agent[], remote: agent[] }
+    /// Remote agents (tunneled via SSH) are separated from orphans for distinct display.
     /// Depends on _agents and _workspaceMap so callers get reactive updates.
     function agentsByWorkspace(): var {
         const byWs = {};
         const orphans = [];
+        const remote = [];
         for (const agent of root._agents) {
-            const ws = root._workspaceMap[agent.terminal_pid];
-            if (ws) {
-                const id = ws.id;
-                if (!byWs[id]) byWs[id] = [];
-                byWs[id].push(agent);
+            if (agent.remote) {
+                remote.push(agent);
             } else {
-                orphans.push(agent);
+                const ws = root._workspaceMap[agent.terminal_pid];
+                if (ws) {
+                    const id = ws.id;
+                    if (!byWs[id]) byWs[id] = [];
+                    byWs[id].push(agent);
+                } else {
+                    orphans.push(agent);
+                }
             }
         }
-        return { byWorkspace: byWs, orphans };
+        return { byWorkspace: byWs, orphans, remote };
     }
 
     /// Resolve workspace to display icon, matching the workspace bar's chain:

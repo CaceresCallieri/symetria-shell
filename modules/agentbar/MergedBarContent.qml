@@ -132,6 +132,25 @@ Item {
     readonly property var orphanAgents: _agentGrouping.orphans
     readonly property bool hasOrphans: orphanAgents.length > 0
 
+    // Remote agents (tunneled via SSH, no local Hyprland window)
+    readonly property var remoteAgents: _agentGrouping.remote
+    readonly property bool hasRemote: remoteAgents.length > 0
+
+    // Group remote agents by project for display: [{project: "foo", agents: [...]}]
+    readonly property var _remoteProjectGroups: {
+        const groups = {};
+        const order = [];
+        for (const agent of root.remoteAgents) {
+            const p = agent.project ?? "unknown";
+            if (!groups[p]) {
+                groups[p] = [];
+                order.push(p);
+            }
+            groups[p].push(agent);
+        }
+        return order.map(p => ({ project: p, agents: groups[p] }));
+    }
+
     // Glass style for the outer container (matches top bar workspace pill)
     readonly property var glassStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
@@ -181,6 +200,66 @@ Item {
                     Behavior on Layout.preferredWidth { Anim {} }
                     Behavior on Layout.leftMargin { Anim {} }
                     Behavior on Layout.rightMargin { Anim {} }
+                }
+            }
+
+            // Remote agents (tunneled via SSH) — dedicated slot with cloud icon
+            Item {
+                visible: root.hasRemote
+                Layout.alignment: Qt.AlignVCenter
+                implicitHeight: parent.height
+                implicitWidth: remoteSlotLayout.implicitWidth
+
+                RowLayout {
+                    id: remoteSlotLayout
+
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Appearance.spacing.smaller
+
+                    // Cloud icon identifying this as a remote slot
+                    MaterialIcon {
+                        text: "cloud_queue"
+                        color: Colours.palette.m3onSurfaceVariant
+                        font.pointSize: Appearance.font.size.small
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    // Per-project groups: project name + agent chips
+                    Repeater {
+                        model: root._remoteProjectGroups
+
+                        RowLayout {
+                            required property var modelData
+                            // Alias to avoid shadowing by inner Repeater's modelData
+                            readonly property var groupData: modelData
+
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: Appearance.spacing.smaller
+
+                            StyledText {
+                                Layout.alignment: Qt.AlignVCenter
+                                text: groupData.project
+                                color: Colours.palette.m3primary
+                                font.weight: Font.Bold
+                                font.pointSize: Appearance.font.size.small
+                            }
+
+                            Repeater {
+                                model: groupData.agents
+
+                                AgentChip {
+                                    required property var modelData
+
+                                    Layout.alignment: Qt.AlignVCenter
+
+                                    active: modelData.active ?? false
+                                    activityState: modelData.activity_state ?? ""
+                                    activityTool: modelData.activity_tool ?? ""
+                                    isSttTarget: AgentService.isAgentSttTarget(modelData)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

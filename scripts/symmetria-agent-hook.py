@@ -17,7 +17,10 @@ import os
 import socket
 import sys
 
-SOCKET_PATH = f"/run/user/{os.getuid()}/symmetria-agents.sock"
+SOCKET_PATH = os.environ.get(
+    "SYMMETRIA_AGENT_SOCKET",
+    f"/run/user/{os.getuid()}/symmetria-agents.sock",
+)
 
 # Hook event → activity state mapping
 EVENT_STATE_MAP = {

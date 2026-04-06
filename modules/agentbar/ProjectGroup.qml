@@ -14,14 +14,18 @@ StyledRect {
     required property string project
     required property var agents  // Array of agent objects for this project
 
+    // Remote detection: true when any agent in this group is tunneled via SSH
+    readonly property bool isRemote: agents.some(a => a.remote === true)
+
     // Workspace badge: pick representative workspace for this group
     readonly property var wsInfo: AgentService.workspaceForAgents(agents)
     readonly property string wsIcon: wsInfo ? AgentService.workspaceIconForWsId(wsInfo.id) : ""
     readonly property var parsedWsIcon: wsIcon ? Icons.parseIcon(wsIcon) : null
-    readonly property bool hasWsBadge: parsedWsIcon !== null && parsedWsIcon.iconText !== ""
+    readonly property bool hasWsBadge: (parsedWsIcon !== null && parsedWsIcon.iconText !== "") || isRemote
 
     // Active when this group's workspace matches the focused workspace
-    readonly property bool isCurrentProject: wsInfo !== null && wsInfo.id === Hypr.activeWsId
+    // Remote projects are never "current" (no local Hyprland window)
+    readonly property bool isCurrentProject: !isRemote && wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
     // True when any agent in this group needs permission approval
     readonly property bool hasPermissionNeeded:
@@ -147,13 +151,24 @@ StyledRect {
             implicitHeight: 1
         }
 
-        // Workspace badge (Roman numeral or Material icon)
+        // Workspace badge (Roman numeral, Material icon, or cloud for remote)
         Loader {
             id: wsBadge
 
             active: root.hasWsBadge
             Layout.alignment: Qt.AlignVCenter
-            sourceComponent: root.parsedWsIcon?.useMaterial ? wsMatIcon : wsTextIcon
+            sourceComponent: root.isRemote ? wsRemoteIcon
+                : (root.parsedWsIcon?.useMaterial ? wsMatIcon : wsTextIcon)
+
+            Component {
+                id: wsRemoteIcon
+
+                MaterialIcon {
+                    text: "cloud_queue"
+                    color: Colours.palette.m3onSurfaceVariant
+                    font.pointSize: Appearance.font.size.small - 2
+                }
+            }
 
             Component {
                 id: wsMatIcon
