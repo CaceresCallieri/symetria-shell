@@ -74,6 +74,26 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
 - **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords)
 
+
+## Remote Agents (SSH Tunnel)
+
+Symmetria can display agents from remote machines that tunnel their orchestrator socket over SSH. Detection is automatic: the bridge (`scripts/agent-bridge.py`) checks whether each connecting client's `nvim_pid` exists in local `/proc`. If it doesn't, the agent is marked `remote: true` and routed to a separate cloud-icon slot in the merged bar (or shown with a cloud badge in the non-merged bar).
+
+**Setup on the remote machine:**
+
+1. Forward the bridge socket over SSH:
+   ```bash
+   ssh -R /run/user/$UID/symmetria-agents-remote.sock:/run/user/$UID/symmetria-agents.sock user@host
+   ```
+   Or add to `~/.ssh/config` as `RemoteForward`.
+
+2. Set `SYMMETRIA_AGENT_SOCKET` in the remote shell environment so hook scripts find the forwarded socket:
+   ```bash
+   export SYMMETRIA_AGENT_SOCKET=/run/user/$UID/symmetria-agents-remote.sock
+   ```
+
+**Known limitation:** If a remote client's `nvim_pid` coincidentally matches a running local process, the bridge will treat it as a local agent (false-negative). This is negligible in practice given the large Linux PID space, but means the remote cloud badge won't appear for that agent.
+
 ## Configuration
 
 | Layer | Location | Purpose |

@@ -99,8 +99,26 @@ class AgentBridge:
 
     @staticmethod
     def _is_remote_pid(nvim_pid: int) -> bool:
-        """Check if nvim_pid is from a remote machine (process doesn't exist locally)."""
-        return not Path(f"/proc/{nvim_pid}").exists()
+        """Check if nvim_pid is from a remote machine (process doesn't exist locally).
+
+        Casts nvim_pid to int before path construction so a float JSON value (e.g.
+        1234.0) doesn't produce a bogus path like /proc/1234.0 that never exists.
+
+        Known false-negative: if a remote PID coincidentally matches a running local
+        /proc entry, the client is treated as local. Negligible in practice given the
+        large Linux PID space.
+        """
+        return not Path(f"/proc/{int(nvim_pid)}").exists()
+
+    def _ensure_remote_detected(self, nvim_pid: int) -> None:
+        """Add nvim_pid to _remote_clients if it doesn't exist in local /proc.
+
+        Called on both hello and sync to handle normal connect and reconnect-after-
+        bridge-restart paths (where hello may not have fired in the new session).
+        """
+        if self._is_remote_pid(nvim_pid):
+            self._remote_clients.add(nvim_pid)
+            log.info("  remote client detected (pid %s not in /proc)", nvim_pid)
 
     def _emit(self) -> None:
         """Write consolidated state to stdout (consumed by QML SplitParser)."""
@@ -235,9 +253,7 @@ class AgentBridge:
         if msg_type == "hello":
             self._clients.setdefault(nvim_pid, {})
             # Detect remote clients (PID doesn't exist in local /proc — tunneled via SSH)
-            if self._is_remote_pid(nvim_pid):
-                self._remote_clients.add(nvim_pid)
-                log.info("  hello: remote client detected (pid %s not in /proc)", nvim_pid)
+            self._ensure_remote_detected(nvim_pid)
             # Resolve terminal PID on first contact (stable for session lifetime)
             if nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
@@ -255,8 +271,7 @@ class AgentBridge:
                     instances[buf] = inst
             self._clients[nvim_pid] = instances
             # Detect remote on sync too (covers reconnect after bridge restart)
-            if self._is_remote_pid(nvim_pid):
-                self._remote_clients.add(nvim_pid)
+            self._ensure_remote_detected(nvim_pid)
             # Re-resolve terminal PID on sync (covers reconnect after bridge restart)
             if nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)

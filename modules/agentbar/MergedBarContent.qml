@@ -205,9 +205,10 @@ Item {
 
             // Remote agents (tunneled via SSH) — dedicated slot with cloud icon
             Item {
+                id: remoteSlot
+
                 visible: root.hasRemote
                 Layout.alignment: Qt.AlignVCenter
-                implicitHeight: parent.height
                 implicitWidth: remoteSlotLayout.implicitWidth
 
                 RowLayout {
