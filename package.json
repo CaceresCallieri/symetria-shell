@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "description": "Build dependencies for Symmetria Shell scripts",
+  "scripts": {
+    "generate-stt-morph-sprite": "node scripts/generate-stt-morph-sprite.mjs"
+  },
+  "dependencies": {
+    "flubber": "^0.4.2"
+  }
+}
