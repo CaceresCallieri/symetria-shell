@@ -9,6 +9,11 @@
 
 set -e
 
+command -v curl >/dev/null 2>&1 || {
+    echo "Error: required command 'curl' not found" >&2
+    exit 1
+}
+
 AUDIO_FILE="$1"
 MODEL="$2"
 API_KEY="${STT_API_KEY:-}"
@@ -66,13 +71,13 @@ HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
     --max-time 110 \
     -X POST "https://api.openai.com/v1/audio/transcriptions" \
-    -H "Authorization: Bearer $API_KEY" \
+    -H @- \
     -F "file=@$AUDIO_FILE" \
     -F "model=$MODEL" \
     -F "response_format=text" \
     -F "prompt=$VERBATIM_PROMPT" \
     -F "temperature=0" \
-    2>"$CURL_ERR") || {
+    2>"$CURL_ERR" <<< "Authorization: Bearer $API_KEY") || {
         CURL_DETAIL=$(head -c 200 "$CURL_ERR" 2>/dev/null)
         rm -f "$CURL_ERR"
         stt_log "transcribe" "curl-failed | ${CURL_DETAIL:-unknown}"
