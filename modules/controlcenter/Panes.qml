@@ -24,7 +24,6 @@ ClippingRectangle {
     readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
 
     color: contentPill.background
-    clip: true
     focus: false
     activeFocusOnTab: false
 

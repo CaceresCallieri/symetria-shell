@@ -49,7 +49,6 @@ StyledRect {
     anchors.right: parent?.right
     implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
-    clip: true
     radius: Appearance.rounding.normal
     color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
 

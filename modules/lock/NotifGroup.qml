@@ -25,9 +25,13 @@ StyledRect {
 
     anchors.left: parent?.left
     anchors.right: parent?.right
-    implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
-    clip: true
+    readonly property real targetHeight: content.implicitHeight + Appearance.padding.normal * 2
+    implicitHeight: targetHeight
+
+    // Dynamic clip: only allocate QSGClipNode during height animation
+    // (expand/collapse of notification group → clip hides overflow)
+    clip: implicitHeight !== targetHeight
     radius: Appearance.rounding.normal
     color: root.urgency === "critical" ? Colours.palette.m3secondaryContainer : Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
 

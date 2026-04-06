@@ -126,7 +126,9 @@ Item {
             radius: Appearance.rounding.normal
             color: Qt.alpha(Colours.tPalette.m3surfaceContainerHighest, GridView.isCurrentItem ? Colours.tPalette.m3surfaceContainerHighest.a : 0)
             z: GridView.isCurrentItem || implicitHeight !== nonAnimHeight ? 1 : 0
-            clip: true
+            // Dynamic clip: only allocate QSGClipNode during height animation
+            // (selected item text wraps → height expands → clip hides overflow)
+            clip: implicitHeight !== nonAnimHeight
 
             StateLayer {
                 onDoubleClicked: {
