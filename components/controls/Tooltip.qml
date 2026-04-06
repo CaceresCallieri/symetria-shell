@@ -142,7 +142,6 @@ Popup {
 
         color: Colours.palette.m3surfaceContainerHighest
         radius: Appearance.rounding.small
-        antialiasing: true
 
         // Add elevation for depth
         Elevation {

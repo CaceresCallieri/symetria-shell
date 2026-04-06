@@ -64,7 +64,6 @@ GridView {
                 anchors.bottomMargin: itemMargin
                 color: root.placeholderPill.background
                 radius: itemRadius
-                antialiasing: true
                 layer.enabled: true
                 layer.smooth: true
 
@@ -76,7 +75,6 @@ GridView {
                     fillMode: Image.PreserveAspectCrop
                     cache: true
                     visible: opacity > 0
-                    antialiasing: true
                     smooth: true
                     sourceSize: Qt.size(width, height)
 
@@ -100,7 +98,6 @@ GridView {
                     fillMode: Image.PreserveAspectCrop
                     cache: true
                     visible: opacity > 0
-                    antialiasing: true
                     smooth: true
                     sourceSize: Qt.size(width, height)
 
