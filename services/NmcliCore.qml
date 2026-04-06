@@ -14,16 +14,13 @@ Singleton {
     id: root
 
     // --- Shared state ---
-    property var deviceStatus: null
-    property bool isConnected: false
-    property string activeInterface: ""
-    property string activeConnection: ""
 
-    property list<var> activeProcesses: []
+    property var activeProcesses: []
 
     // --- Constants ---
     readonly property string deviceTypeWifi: "wifi"
     readonly property string deviceTypeEthernet: "ethernet"
+    readonly property string deviceTypeAll: "both"
     readonly property string connectionTypeWireless: "802-11-wireless"
     readonly property string nmcliCommandDevice: "device"
     readonly property string nmcliCommandConnection: "connection"
@@ -92,8 +89,6 @@ Singleton {
                 if (filterType === root.deviceTypeWifi && deviceType === root.deviceTypeWifi) {
                     shouldInclude = true;
                 } else if (filterType === root.deviceTypeEthernet && deviceType === root.deviceTypeEthernet) {
-                    shouldInclude = true;
-                } else if (filterType === "both" && (deviceType === root.deviceTypeWifi || deviceType === root.deviceTypeEthernet)) {
                     shouldInclude = true;
                 }
 
@@ -188,48 +183,9 @@ Singleton {
 
     // --- Device status queries ---
 
-    function getDeviceStatus(callback: var): void {
-        executeCommand(["-t", "-f", root.deviceStatusFields, root.nmcliCommandDevice, "status"], result => {
-            if (callback)
-                callback(result.output);
-        });
-    }
-
-    function getAllInterfaces(callback: var): void {
-        executeCommand(["-t", "-f", root.deviceStatusFields, root.nmcliCommandDevice, "status"], result => {
-            const interfaces = parseDeviceStatusOutput(result.output, "both");
-            if (callback)
-                callback(interfaces);
-        });
-    }
-
-    function isInterfaceConnected(interfaceName: string, callback: var): void {
-        executeCommand([root.nmcliCommandDevice, "status"], result => {
-            const lines = result.output.trim().split("\n");
-            for (const line of lines) {
-                const parts = line.split(/\s+/);
-                if (parts.length >= 3 && parts[0] === interfaceName) {
-                    const connected = isConnectedState(parts[2]);
-                    if (callback)
-                        callback(connected);
-                    return;
-                }
-            }
-            if (callback)
-                callback(false);
-        });
-    }
-
-    function getDeviceDetails(interfaceName: string, callback: var): void {
-        executeCommand([root.nmcliCommandDevice, "show", interfaceName], result => {
-            if (callback)
-                callback(result.output);
-        });
-    }
-
     function refreshStatus(callback: var): void {
-        getDeviceStatus(output => {
-            const lines = output.trim().split("\n");
+        executeCommand(["-t", "-f", root.deviceStatusFields, root.nmcliCommandDevice, "status"], result => {
+            const lines = result.output.trim().split("\n");
             let connected = false;
             let activeIf = "";
             let activeConn = "";
@@ -247,10 +203,6 @@ Singleton {
                 }
             }
 
-            root.isConnected = connected;
-            root.activeInterface = activeIf;
-            root.activeConnection = activeConn;
-
             if (callback)
                 callback({
                     connected,
@@ -260,43 +212,13 @@ Singleton {
         });
     }
 
-    function bringInterfaceUp(interfaceName: string, callback: var): void {
-        if (interfaceName && interfaceName.length > 0) {
-            executeCommand([root.nmcliCommandDevice, "connect", interfaceName], result => {
-                if (callback) {
-                    callback(result);
-                }
-            });
-        } else {
-            if (callback)
-                callback({
-                    success: false,
-                    output: "",
-                    error: "No interface specified",
-                    exitCode: -1
-                });
-        }
-    }
-
-    function bringInterfaceDown(interfaceName: string, callback: var): void {
-        if (interfaceName && interfaceName.length > 0) {
-            executeCommand([root.nmcliCommandDevice, "disconnect", interfaceName], result => {
-                if (callback) {
-                    callback(result);
-                }
-            });
-        } else {
-            if (callback)
-                callback({
-                    success: false,
-                    output: "",
-                    error: "No interface specified",
-                    exitCode: -1
-                });
-        }
-    }
-
     // --- CommandProcess component ---
+    // NOTE: Intentional layer inversion — CommandProcess references NmcliWifi
+    // for password detection (handlePasswordRequired, detectPasswordRequired,
+    // pendingConnection, connectionFailed). This coupling exists because password
+    // errors arrive via stderr on ANY nmcli process, and the detection must happen
+    // at the process level before the generic callback fires. Refactoring to a
+    // signal-based approach risks breaking the delicate password detection flow.
 
     component CommandProcess: Process {
         id: proc

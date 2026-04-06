@@ -29,7 +29,6 @@ Item {
 
     // --- Read-only output ---
     readonly property Item contentItem: content.item
-    readonly property bool contentActive: content.active
 
     // --- Signals ---
     /// Emit from consumer when config changes that affect content size

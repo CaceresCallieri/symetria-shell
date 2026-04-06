@@ -22,7 +22,7 @@ Singleton {
         NmcliWifi.getWifiStatus((enabled) => {
             root.wifiEnabled = enabled;
         });
-        // Sync networks from Nmcli on startup
+        // Sync networks from NmcliWifi on startup
         Qt.callLater(() => {
             syncNetworksFromNmcli();
         }, 100);
@@ -182,7 +182,7 @@ Singleton {
                 existing.lastIpcObject = nn.lastIpcObject;
                 result.push(existing);
             } else {
-                // Create new AccessPoint from Nmcli's data
+                // Create new AccessPoint from NmcliWifi's data
                 result.push(apComp.createObject(root, {
                     lastIpcObject: nn.lastIpcObject
                 }));
@@ -218,7 +218,7 @@ Singleton {
     }
 
     function hasSavedProfile(ssid: string): bool {
-        // Use Nmcli's hasSavedProfile which has the same logic
+        // Use NmcliWifi.hasSavedProfile which has the same logic
         return NmcliWifi.hasSavedProfile(ssid);
     }
 
@@ -273,28 +273,10 @@ Singleton {
 
     function updateWirelessDeviceDetails(): void {
         // Find the wireless interface by looking for wifi devices
-        // Pass empty string to let Nmcli find the active interface automatically
+        // Pass empty string to let NmcliWifi find the active interface automatically
         NmcliWifi.getWirelessDeviceDetails("", (details) => {
             root.wirelessDeviceDetails = details;
         });
-    }
-
-    function cidrToSubnetMask(cidr: string): string {
-        // Convert CIDR notation (e.g., "24") to subnet mask (e.g., "255.255.255.0")
-        const cidrNum = parseInt(cidr);
-        if (isNaN(cidrNum) || cidrNum < 0 || cidrNum > 32) {
-            return "";
-        }
-
-        const mask = (0xffffffff << (32 - cidrNum)) >>> 0;
-        const octets = [
-            (mask >>> 24) & 0xff,
-            (mask >>> 16) & 0xff,
-            (mask >>> 8) & 0xff,
-            mask & 0xff
-        ];
-
-        return octets.join(".");
     }
 
     Process {

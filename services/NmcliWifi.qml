@@ -36,7 +36,17 @@ Singleton {
             return false;
         }
 
-        return (error.includes("Secrets were required") || error.includes("Secrets were required, but not provided") || error.includes("No secrets provided") || error.includes("802-11-wireless-security.psk") || error.includes("password for") || (error.includes("password") && !error.includes("Connection activated") && !error.includes("successfully")) || (error.includes("Secrets") && !error.includes("Connection activated") && !error.includes("successfully")) || (error.includes("802.11") && !error.includes("Connection activated") && !error.includes("successfully"))) && !error.includes("Connection activated") && !error.includes("successfully");
+        const notSuccess = !error.includes("Connection activated") && !error.includes("successfully");
+        const hasSecretKeyword = error.includes("Secrets were required")
+            || error.includes("Secrets were required, but not provided")
+            || error.includes("No secrets provided")
+            || error.includes("802-11-wireless-security.psk")
+            || error.includes("password for");
+        const hasPasswordWord = error.includes("password") && notSuccess;
+        const hasSecretsWord = error.includes("Secrets") && notSuccess;
+        const has80211Word = error.includes("802.11") && notSuccess;
+
+        return notSuccess && (hasSecretKeyword || hasPasswordWord || hasSecretsWord || has80211Word);
     }
 
     // --- Network parsing ---
@@ -320,8 +330,7 @@ Singleton {
         }
         NmcliCore.executeCommand(cmd, result => {
             if (result.needsPassword && callback) {
-                if (callback)
-                    callback(result);
+                callback(result);
                 return;
             }
 
@@ -330,7 +339,13 @@ Singleton {
                 Qt.callLater(() => {
                     connectWireless(ssid, password, bssid, callback, retries + 1);
                 }, 1000);
-            } else if (!result.success && root.pendingConnection) {} else if (result.success && callback) {} else if (!result.success && !root.pendingConnection) {
+            } else if (!result.success && root.pendingConnection) {
+                // Pending connection timers (connectionCheckTimer/immediateCheckTimer) handle
+                // the failure — no explicit callback here, they will call it on timeout.
+            } else if (result.success && callback) {
+                // Success is also handled by the pending connection timers which detect
+                // the active network change and call the callback with success: true.
+            } else if (!result.success && !root.pendingConnection) {
                 if (callback)
                     callback(result);
             }
@@ -568,7 +583,7 @@ Singleton {
             }
         }
 
-        NmcliCore.executeCommand(["device", "show", interfaceName], result => {
+        NmcliCore.executeCommand([NmcliCore.nmcliCommandDevice, "show", interfaceName], result => {
             if (!result.success || !result.output) {
                 root.wirelessDeviceDetails = null;
                 if (callback)

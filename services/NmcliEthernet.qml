@@ -133,7 +133,7 @@ Singleton {
             }
         }
 
-        NmcliCore.executeCommand(["device", "show", interfaceName], result => {
+        NmcliCore.executeCommand([NmcliCore.nmcliCommandDevice, "show", interfaceName], result => {
             if (!result.success || !result.output) {
                 root.ethernetDeviceDetails = null;
                 if (callback)
