@@ -56,6 +56,8 @@ Item {
         anchors.margins: Appearance.padding.large
         anchors.bottomMargin: 0
 
+        // Keep resident while sidebar is enabled — visibility is managed via the State machine above.
+        // Avoids recreate/destroy lag on every open/close cycle.
         active: Config.sidebar.enabled
 
         sourceComponent: Content {

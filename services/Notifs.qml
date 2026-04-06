@@ -83,16 +83,14 @@ Singleton {
             });
 
             const max = Config.notifs.maxStored;
-            if (root.list.length >= max) {
-                // Evict oldest beyond cap
-                const kept = root.list.slice(0, max - 1);
-                for (let i = max - 1; i < root.list.length; i++) {
-                    root.list[i].notification?.dismiss();
-                    root.list[i].destroy();
-                }
-                root.list = [comp, ...kept];
-            } else {
-                root.list = [comp, ...root.list];
+            // Assign new list first so that dismiss()→onClosed→close() won't find
+            // evicted items in root.list and trigger a redundant list.filter() pass.
+            const base = root.list.length >= max ? root.list.slice(0, max - 1) : root.list;
+            const evicted = root.list.slice(base.length);
+            root.list = [comp, ...base];
+            for (const n of evicted) {
+                n.notification?.dismiss();
+                n.destroy();
             }
         }
     }
@@ -102,7 +100,14 @@ Singleton {
 
         path: `${Paths.state}/notifs.json`
         onLoaded: {
-            const data = JSON.parse(text());
+            let data;
+            try {
+                data = JSON.parse(text());
+            } catch (e) {
+                console.warn("Notifs: failed to parse notifs.json, starting fresh:", e);
+                root.loaded = true;
+                return;
+            }
             // Build array locally to avoid O(n²) binding cascade:
             // each push() triggers list change → notClosed/popups filters re-evaluate
             const loaded = [];

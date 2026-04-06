@@ -29,9 +29,9 @@ Item {
 
         model: ScriptModel {
             values: {
+                // Use Notifs.list only — notClosed is always a subset of list for app names,
+                // so the notClosed loop was redundant and added a second binding dependency.
                 const map = new Map();
-                for (const n of Notifs.notClosed)
-                    map.set(n.appName, null);
                 for (const n of Notifs.list)
                     map.set(n.appName, null);
                 return [...map.keys()];
