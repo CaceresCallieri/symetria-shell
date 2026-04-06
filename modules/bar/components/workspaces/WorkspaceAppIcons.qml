@@ -8,9 +8,8 @@ import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 
-// Container for workspace app icons
-// Handles filtering swallowed windows, grouping, and position-based sorting
-// Uses Quickshell's reactive Hyprland data with event-based updates
+// Container for workspace app icons.
+// Delegates window processing to AppIconsProcessor; handles event-driven updates.
 Row {
     id: root
 
@@ -20,87 +19,22 @@ Row {
     visible: cachedModel.length > 0
     height: Config.bar.sizes.indicatorHeight
 
-    // Events that affect window positions or lifecycle (Set for O(1) lookup)
-    // Explicitly excludes: fullscreen, activewindow, activewindowv2 (don't affect layout)
+    // Events that affect window positions, lifecycle, or grouping (Set for O(1) lookup)
+    // activewindowv2 included because Hyprland 0.54+ doesn't emit togglegroup events;
+    // focus changes are the closest proxy. modelsEqual() prevents unnecessary rerenders.
     readonly property var windowLayoutEvents: new Set([
         "openwindow", "closewindow",
         "movewindow", "movewindowv2",
-        "togglegroup", "moveintogroup", "moveoutofgroup"
+        "togglegroup", "moveintogroup", "moveoutofgroup",
+        "activewindowv2", "changegroupactive"
     ])
 
-    // Cached structured model: array of {isGroup: bool, clients: []}
     property var cachedModel: []
 
-    // Process clients and build structured model with grouped/ungrouped separation
-    function updateClients() {
-        try {
-            const clients = Hypr.toplevels.values.filter(c => c.workspace?.id === root.workspaceId);
-
-            // Build set of swallowed window addresses to filter out
-            const swallowedAddresses = new Set();
-            for (const c of clients) {
-                const swallowing = c.lastIpcObject?.swallowing;
-                if (typeof swallowing === "string" && swallowing && swallowing !== "0x0") {
-                    swallowedAddresses.add(swallowing);
-                }
-            }
-
-            // Filter out swallowed windows (with explicit null check)
-            const filtered = clients.filter(c => {
-                const addr = c.lastIpcObject?.address;
-                return addr && !swallowedAddresses.has(addr);
-            });
-
-            // Separate grouped and ungrouped clients (like AGS)
-            // Use Map for O(n) group detection - key is sorted addresses joined
-            const groupMap = new Map();
-            const ungrouped = [];
-
-            for (const client of filtered) {
-                const groupedArr = client.lastIpcObject?.grouped ?? [];
-                if (groupedArr.length > 0) {
-                    // Create stable group key from sorted addresses (handles any group member order)
-                    const groupKey = [...groupedArr].sort().join(',');
-                    if (!groupMap.has(groupKey)) {
-                        groupMap.set(groupKey, { canonicalOrder: groupedArr, clients: [] });
-                    }
-                    groupMap.get(groupKey).clients.push(client);
-                } else {
-                    ungrouped.push({ isGroup: false, clients: [client] });
-                }
-            }
-
-            // Convert groups map to array, sorting each group's clients by canonical tab order
-            const groups = Array.from(groupMap.values()).map(group => {
-                const { canonicalOrder, clients: groupClients } = group;
-                // Sort by index in canonical order (the grouped array from first window)
-                groupClients.sort((a, b) => {
-                    const aIdx = canonicalOrder.indexOf(a.lastIpcObject?.address);
-                    const bIdx = canonicalOrder.indexOf(b.lastIpcObject?.address);
-                    if (aIdx === -1 || bIdx === -1) return 0;
-                    return aIdx - bIdx;
-                });
-                return { isGroup: true, clients: groupClients };
-            });
-
-            // Combine and sort by first client's position (X, then Y)
-            const combined = [...groups, ...ungrouped];
-            combined.sort((a, b) => {
-                const aClient = a.clients[0];
-                const bClient = b.clients[0];
-                const ax = aClient?.lastIpcObject?.at?.[0] ?? 0;
-                const bx = bClient?.lastIpcObject?.at?.[0] ?? 0;
-                if (ax !== bx) return ax - bx;
-                const ay = aClient?.lastIpcObject?.at?.[1] ?? 0;
-                const by = bClient?.lastIpcObject?.at?.[1] ?? 0;
-                return ay - by;
-            });
-
-            root.cachedModel = combined;
-        } catch (e) {
-            console.error("WorkspaceAppIcons: Failed to update clients:", e);
-            root.cachedModel = [];
-        }
+    function updateClients(): void {
+        const result = AppIconsProcessor.processClients(root.workspaceId, Hypr.toplevels.values);
+        if (!AppIconsProcessor.modelsEqual(result, root.cachedModel))
+            root.cachedModel = result;
     }
 
     // Use debounce for all initialization paths to prevent race conditions
