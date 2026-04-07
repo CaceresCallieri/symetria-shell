@@ -31,7 +31,7 @@ Singleton {
     readonly property bool active: _jobs.length > 0
 
     /// The job list — newest first. Bound by Wrapper's Repeater.
-    // intentional var: JS array rebuilt atomically with spread operator for O(1) binding triggers
+    // intentional var: aliases _jobs which must remain var for spread/filter reassignment
     readonly property var jobs: _jobs
 
     /// The currently recording job (at most one), or null

@@ -16,6 +16,7 @@ Singleton {
     // --- Shared state ---
 
     // intentional var: JS array with in-place mutations (.push(), .splice(), .indexOf())
+    //   — mutations are silent (no change signal); this is an internal registry, not a reactive model
     property var activeProcesses: []
 
     // --- Constants ---
