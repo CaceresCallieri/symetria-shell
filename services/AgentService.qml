@@ -22,7 +22,9 @@ Singleton {
     id: root
 
     // Public read-only state
+    // intentional var: agents are heterogeneous JS objects from bridge JSON
     readonly property var agents: _agents
+    // intentional var: JS array — used with .filter()/.sort()/.find() in _sortProjectsByWorkspace
     readonly property var projects: _projects
     readonly property int agentCount: _agents.length
 
@@ -43,6 +45,7 @@ Singleton {
 
     /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
     /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
+    // intentional var: JS array from [...projects].sort() — spread + sort requires JS array semantics
     readonly property var sortedProjects: _sortProjectsByWorkspace(_projects, _agents, _workspaceMap)
 
     /// Whether the bridge process is alive (does NOT mean the socket is ready —
@@ -57,7 +60,9 @@ Singleton {
 
     // Internal state — always reassigned (never mutated in-place) so QML
     // bindings on agents/agentCount fire correctly. Do not use .push()/.splice().
+    // intentional var: heterogeneous JS objects from bridge JSON
     property var _agents: []
+    // intentional var: JS array — used with .filter()/.sort()/.find() downstream
     property var _projects: []
     property int _restartCount: 0
     readonly property int _maxRestartDelay: 30000
@@ -65,6 +70,7 @@ Singleton {
     // State-update throttling: leading edge fires immediately, then 100ms cooldown.
     // During cooldown, only the latest update is buffered (intermediate states are
     // skipped since the next emission always contains the full consolidated state).
+    // intentional var: nullable JSON object from bridge stdout — no concrete QML type
     property var _pendingUpdate: null
     property bool _throttleActive: false
 
@@ -73,7 +79,7 @@ Singleton {
     readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace(/^file:\/\//, "")
 
     // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
-    readonly property var palette: [
+    readonly property list<color> palette: [
         Colours.palette.m3primary,
         Colours.palette.m3secondary,
         Colours.palette.m3tertiary,
@@ -96,6 +102,7 @@ Singleton {
     property int _sttTargetBufId: -1
 
     /// terminal_pid → {id: int, name: string}
+    // intentional var: JS object used as hash map (pid → workspace info)
     property var _workspaceMap: ({})
 
     on_AgentsChanged: wsRebuildDebounce.restart()
@@ -353,6 +360,7 @@ Singleton {
     }
 
     // Events that affect window-to-workspace mapping (Set for O(1) lookup)
+    // intentional var: JS Set — no QML equivalent for O(1) .has() lookups
     readonly property var _wsLayoutEvents: new Set([
         "movewindow", "movewindowv2", "openwindow", "closewindow", "activespecial",
         "renameworkspace"

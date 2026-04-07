@@ -30,7 +30,10 @@ Singleton {
     property bool showPreview
     property string scheme
     property string flavour
-    property var _paletteKeys: []
+    property list<string> _paletteKeys: []
+
+    // Absolute path to the bundled default scheme (used to seed state file on first launch)
+    readonly property string _defaultSchemePath: Qt.resolvedUrl("../config/color-scheme.json").toString().replace(/^file:\/\//, "")
     readonly property bool light: showPreview ? previewLight : currentLight
     property bool currentLight
     property bool previewLight
@@ -229,11 +232,27 @@ Singleton {
         Quickshell.execDetached(["symmetria", "scheme", "set", "--notify", "-m", mode]);
     }
 
+    // Read scheme from state directory (where the CLI writes).
+    // On first launch, _initScheme copies the bundled default here.
     FileView {
-        path: Qt.resolvedUrl("../config/color-scheme.json")
+        id: _schemeView
+
+        path: `${Paths.state}/scheme.json`
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root.load(text(), false)
+    }
+
+    // Ensure state scheme file exists — copies bundled default on first launch.
+    // Subsequent launches find the file already present and this is a no-op.
+    // onExited triggers reload() to handle the first-launch race where the
+    // FileView binds before the file is created.
+    Process {
+        id: _initScheme
+
+        running: true
+        command: ["bash", "-c", `mkdir -p '${Paths.state}' && [ ! -f '${Paths.state}/scheme.json' ] && cp '${root._defaultSchemePath}' '${Paths.state}/scheme.json' || true`]
+        onExited: _schemeView.reload()
     }
 
     IpcHandler {

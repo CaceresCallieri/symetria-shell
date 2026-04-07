@@ -117,7 +117,7 @@ Symmetria can display agents from remote machines that tunnel their orchestrator
 - Wallpapers: `~/Pictures/Wallpapers/` (configurable via `paths.wallpaperDir`)
 - Hyprland user config: `~/.config/symmetria/hypr-user.conf`
 
-**Color scheme deviation from upstream:** QML reads from `config/color-scheme.json` (version-controlled). The CLI writes to `~/.local/state/symmetria/scheme.json` (not connected). CLI commands like `symmetria scheme set` won't affect the shell.
+**Color scheme:** QML reads from `~/.local/state/symmetria/scheme.json` (the same file the CLI writes to). On first launch, `Colours.qml` copies the bundled default from `config/color-scheme.json` to the state path. The version-controlled file serves only as the initial seed template.
 
 ## Critical Pitfalls
 

@@ -21,8 +21,10 @@ Item {
 
     required property int wsId
     required property int visualActiveWsId
-    required property var agents       // Array of agent objects on this workspace
-    required property var occupied     // { [wsId]: bool } map
+    // intentional var: heterogeneous JS objects from AgentService bridge JSON
+    required property var agents
+    // intentional var: JS object used as hash map ({ [wsId]: bool })
+    required property var occupied
 
     // ActiveIndicator contract — matches Workspace.qml's interface
     readonly property bool isWorkspace: true
@@ -36,6 +38,7 @@ Item {
     readonly property bool isOccupied: occupied[ws] ?? false
 
     // Special workspace detection
+    // intentional var: Hyprland workspace proxy from .find() — nullable, identity-unstable
     readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
     readonly property string currentWorkspaceName: currentWorkspace?.name ?? ""  // "" when workspace not yet reported by Hyprland
     readonly property bool isSpecial: currentWorkspaceName.startsWith("special:")
@@ -43,12 +46,14 @@ Item {
     // Icon resolution: special → getSpecialWsIcon, named → getNamedWsIcon, numbered → romanize
     // Uses AgentService.workspaceIconForWsId() which already handles all three cases.
     readonly property string rawIcon: AgentService.workspaceIconForWsId(root.ws)
+    // intentional var: JS object { useMaterial: bool, iconText: string } from Icons.parseIcon()
     readonly property var parsedIcon: Icons.parseIcon(rawIcon)
 
     // Color: active uses onSurface, inactive uses muted variant
     readonly property color labelColor: isActive ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
 
     // Group agents by project for display: [{project: "foo", agents: [...]}]
+    // intentional var: JS array of heterogeneous objects built with .map()
     readonly property var _projectGroups: {
         const groups = {};
         const order = [];
@@ -107,6 +112,7 @@ Item {
             model: root._projectGroups
 
             RowLayout {
+                // intentional var: JS object { project: string, agents: [] } from _projectGroups
                 required property var modelData
 
                 Layout.alignment: Qt.AlignVCenter
@@ -129,6 +135,7 @@ Item {
                     model: modelData.agents
 
                     AgentChip {
+                        // intentional var: heterogeneous agent JS object from bridge JSON
                         required property var modelData
 
                         Layout.alignment: Qt.AlignVCenter
