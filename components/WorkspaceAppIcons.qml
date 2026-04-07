@@ -15,8 +15,9 @@ Row {
 
     required property int workspaceId
 
-    /// Whether grouped-window pill containers animate their width.
-    /// Bar sets true (self-animated); agentbar sets false (outer pill animates).
+    /// Whether grouped-window pill containers animate their own implicitWidth.
+    /// Set false when an outer container already animates the total width (e.g.,
+    /// agentbar's MergedBarContent Layout.preferredWidth Behavior), to avoid double-easing.
     property bool animateGroupWidth: true
 
     spacing: Appearance.padding.small
@@ -80,6 +81,11 @@ Row {
 
         // Delegate: conditionally render grouped container or single icon
         Loader {
+            // NOTE: `required property var` is correct here — NOT `required modelData`.
+            // Loader has no inherited modelData property; the Repeater injects it as a
+            // context property. With ComponentBehavior: Bound, inner Components can only
+            // access real properties, not context properties. Declaring the property makes
+            // it real and accessible to sourceComponent children. (See docs/qml-pitfalls.md)
             required property var modelData
 
             anchors.verticalCenter: parent.verticalCenter

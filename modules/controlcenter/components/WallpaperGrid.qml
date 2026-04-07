@@ -181,8 +181,7 @@ GridView {
                 radius: itemRadius + border.width
                 border.width: isCurrent ? 2 : 0
                 border.color: Colours.palette.m3primary
-                antialiasing: isCurrent // only smooth rounded border when visible
-                smooth: isCurrent
+                antialiasing: isCurrent // only pay rounding cost when border is visible
 
                 Behavior on border.width {
                     NumberAnimation {

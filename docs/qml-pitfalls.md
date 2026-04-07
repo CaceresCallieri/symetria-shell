@@ -45,6 +45,30 @@ MyComponent {
 
 **Reference:** `modules/keycaster/Content.qml` uses `required mouseButton` (Option A) correctly.
 
+### Exception: Model-Injected Properties on Generic Delegates
+
+The shadowing rule above applies when the delegate **extends a type that already has the property**. For generic delegates like `Loader`, `Item`, or `Rectangle` that have **no** existing `modelData` property, you **must** use `required property var modelData` to create a real property:
+
+```qml
+Repeater {
+    model: myModel
+    Loader {
+        required property var modelData  // CORRECT — creates property for Repeater to populate
+        // required modelData             // WRONG  — Loader has no modelData to reuse
+        sourceComponent: MyComponent {
+            // With ComponentBehavior: Bound, inner Components can only access real
+            // properties on their declaration scope, not Repeater context properties.
+            // The `required property var` makes it a real, accessible property.
+            value: modelData.someField
+        }
+    }
+}
+```
+
+**Rule of thumb:** Use `required foo` when the base type already has `foo`. Use `required property var foo` when it doesn't (model-injected roles on generic containers).
+
+**Reference:** `components/WorkspaceAppIcons.qml` uses `required property var modelData` on both Loader and inner ClientAppIcon delegates. Changing to `required modelData` caused a regression (icons disappeared) because neither type has an inherited `modelData` property.
+
 ---
 
 ## QML Type Naming Collisions

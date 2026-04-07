@@ -145,10 +145,10 @@ Item {
         // App icons (active workspace only).
         // visible must track active so the RowLayout collapses the slot to zero width.
         // Special workspaces use a separate config flag (showWindowsOnSpecialWorkspaces).
-        // Note: WorkspaceAppIcons must NOT animate its own group width — the outer
-        // Layout.preferredWidth Behavior in MergedBarContent.qml is the canonical width
-        // animator. Inner width animations would double-ease (same as Workspace.qml's
-        // animateWindowsWidth: false guard).
+        // Note: animateGroupWidth: false — the outer Layout.preferredWidth Behavior in
+        // MergedBarContent.qml is the canonical width animator for the pill. Inner group
+        // animations would double-ease (same rationale as WorkspaceContent.qml's
+        // animateWindowsWidth: false for the bar).
         Loader {
             Layout.alignment: Qt.AlignVCenter
             active: root.isActive && root.isOccupied
