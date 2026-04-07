@@ -16,7 +16,9 @@ Item {
     required property Component rightDetailsComponent
     required property Component rightSettingsComponent
     
+    // intentional var: nullable polymorphic active item (bluetooth device, network interface, etc.)
     property var activeItem: null
+    // intentional var: JS function reference for generating pane transition IDs
     property var paneIdGenerator: function(item) { return item ? String(item) : ""; }
     
     property Component overlayComponent: null
@@ -32,6 +34,7 @@ Item {
         Item {
             id: rightPaneItem
             
+            // intentional var: nullable polymorphic — mirrors root.activeItem
             property var pane: root.activeItem
             property string paneId: root.paneIdGenerator(pane)
             property Component targetComponent: root.rightSettingsComponent

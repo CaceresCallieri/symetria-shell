@@ -134,6 +134,7 @@ Item {
 
             StyledFlickable {
                 id: sidebarFlickable
+                // intentional var: duck-typed AppearancePane reference propagated to sections (custom properties like animDurationsScale)
                 readonly property var rootPane: root
                 flickableDirection: Flickable.VerticalFlick
                 contentHeight: sidebarLayout.height
@@ -149,6 +150,7 @@ Item {
                     anchors.right: parent.right
                     spacing: Appearance.spacing.small
                     
+                    // intentional var: propagation of duck-typed AppearancePane reference
                     readonly property var rootPane: sidebarFlickable.rootPane
 
                     readonly property bool allSectionsExpanded: 

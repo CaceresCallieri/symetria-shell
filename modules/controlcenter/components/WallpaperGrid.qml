@@ -15,6 +15,7 @@ GridView {
 
     required property Session session
 
+    // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
     readonly property var placeholderPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
     readonly property int minCellWidth: 200 + Appearance.spacing.normal
     readonly property int columnsCount: Math.max(1, Math.floor(width / minCellWidth))
@@ -31,6 +32,7 @@ GridView {
     }
 
     delegate: Item {
+        // intentional var: heterogeneous JS object from FileSystemModel (path, name, type, ...)
         required property var modelData
         required property int index
 

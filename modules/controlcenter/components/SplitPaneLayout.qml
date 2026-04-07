@@ -13,16 +13,16 @@ RowLayout {
 
     spacing: 0
 
-    readonly property var dividerPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
-    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
+    readonly property var dividerPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
+    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1) // intentional var: heterogeneous JS { background, border }
 
     property Component leftContent: null
     property Component rightContent: null
     
     property real leftWidthRatio: 0.4
     property int leftMinimumWidth: 420
-    property var leftLoaderProperties: ({})
-    property var rightLoaderProperties: ({})
+    property var leftLoaderProperties: ({}) // intentional var: JS hash map for dynamic Loader properties
+    property var rightLoaderProperties: ({}) // intentional var: JS hash map for dynamic Loader properties
     
     property alias leftLoader: leftLoader
     property alias rightLoader: rightLoader

@@ -13,6 +13,7 @@ import QtQuick.Layouts
 CollapsibleSection {
     id: root
 
+    // intentional var: duck-typed AppearancePane reference (accesses custom properties like transparencyEnabled, transparencyBase)
     required property var rootPane
 
     title: qsTr("Transparency")

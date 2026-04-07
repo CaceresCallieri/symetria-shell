@@ -13,6 +13,7 @@ import QtQuick.Layouts
 CollapsibleSection {
     id: root
 
+    // intentional var: duck-typed AppearancePane reference (accesses custom properties like fontFamilySans, fontSizeScale)
     required property var rootPane
 
     title: qsTr("Fonts")
@@ -51,6 +52,7 @@ CollapsibleSection {
                     width: ListView.view.width
 
                     readonly property bool isCurrent: modelData === rootPane.fontFamilyMaterial
+                    // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
                     readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
                     color: isCurrent ? activePill.background : "transparent"
                     radius: Appearance.rounding.normal
@@ -133,6 +135,7 @@ CollapsibleSection {
                     width: ListView.view.width
 
                     readonly property bool isCurrent: modelData === rootPane.fontFamilyMono
+                    // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
                     readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
                     color: isCurrent ? activePill.background : "transparent"
                     radius: Appearance.rounding.normal
@@ -215,6 +218,7 @@ CollapsibleSection {
                     width: ListView.view.width
 
                     readonly property bool isCurrent: modelData === rootPane.fontFamilySans
+                    // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
                     readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
                     color: isCurrent ? activePill.background : "transparent"
                     radius: Appearance.rounding.normal

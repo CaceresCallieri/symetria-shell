@@ -13,6 +13,7 @@ import QtQuick.Layouts
 CollapsibleSection {
     id: root
 
+    // intentional var: duck-typed AppearancePane reference (accesses custom properties like paddingScale, roundingScale)
     required property var rootPane
 
     title: qsTr("Scales")

@@ -24,10 +24,12 @@ CollapsibleSection {
             model: M3Variants.list
 
             delegate: StyledRect {
+                // intentional var: heterogeneous JS object from M3Variants.list ({ variant, ... })
                 required property var modelData
 
                 Layout.fillWidth: true
 
+                // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
                 readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
 
                 color: modelData.variant === Schemes.currentVariant ? activePill.background : "transparent"

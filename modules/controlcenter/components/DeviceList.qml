@@ -14,11 +14,13 @@ ColumnLayout {
     id: root
 
     property Session session: null
+    // intentional var: polymorphic model (ListModel, JS array, or C++ model — varies per consumer)
     property var model: null
     property Component delegate: null
     
     property string title: ""
     property string description: ""
+    // intentional var: nullable polymorphic active item (bluetooth device, network interface, etc.)
     property var activeItem: null
     property Component headerComponent: null
     property Component titleSuffix: null

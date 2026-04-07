@@ -24,12 +24,14 @@ CollapsibleSection {
             model: Schemes.list
 
             delegate: StyledRect {
+                // intentional var: heterogeneous JS object from Schemes.list ({ name, flavour, ... })
                 required property var modelData
 
                 Layout.fillWidth: true
 
                 readonly property string schemeKey: `${modelData.name} ${modelData.flavour}`
                 readonly property bool isCurrent: schemeKey === Schemes.currentScheme
+                // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
                 readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
 
                 color: isCurrent ? activePill.background : "transparent"

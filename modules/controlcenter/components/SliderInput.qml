@@ -16,11 +16,12 @@ ColumnLayout {
     property real from: 0
     property real to: 100
     property real stepSize: 0
+    // intentional var: nullable Qt validator (IntValidator/DoubleValidator — no common QML base type)
     property var validator: null
     property string suffix: "" // Optional suffix text (e.g., "×", "px")
     property int decimals: 1 // Number of decimal places to show (default: 1)
-    property var formatValueFunction: null // Optional custom format function
-    property var parseValueFunction: null // Optional custom parse function
+    property var formatValueFunction: null // intentional var: nullable JS function reference
+    property var parseValueFunction: null // intentional var: nullable JS function reference
     
     function formatValue(val: real): string {
         if (formatValueFunction) {

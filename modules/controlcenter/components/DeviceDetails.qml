@@ -13,6 +13,7 @@ Item {
     id: root
 
     property Session session
+    // intentional var: nullable polymorphic device object (bluetooth, network, audio — different types per pane)
     property var device: null
     
     property Component headerComponent: null
