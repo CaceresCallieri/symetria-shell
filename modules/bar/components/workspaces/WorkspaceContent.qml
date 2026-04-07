@@ -33,6 +33,7 @@ RowLayout {
         Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
         Layout.preferredWidth: Config.bar.sizes.indicatorHeight
 
+        // intentional var: JS object { useMaterial: bool, iconText: string } from Icons.parseIcon()
         readonly property var parsedIcon: Icons.parseIcon(root.icon)
         readonly property bool useMaterialIcon: parsedIcon.useMaterial
         readonly property string iconText: parsedIcon.iconText

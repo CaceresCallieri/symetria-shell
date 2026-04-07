@@ -23,6 +23,7 @@ Item {
 
     // Split entries into left, center, right sections based on workspaces position
     // Single-pass processing for efficiency
+    // intentional var: heterogeneous JS object { left: [], center: object|null, right: [] }
     readonly property var _splitEntries: {
         const entries = Config.bar.entries;
         const left = [];
@@ -61,8 +62,11 @@ Item {
         };
     }
 
+    // intentional var: JS array of heterogeneous config entry objects from _splitEntries
     readonly property var leftEntries: _splitEntries.left
+    // intentional var: nullable JS config entry object from _splitEntries
     readonly property var centerEntry: _splitEntries.center
+    // intentional var: JS array of heterogeneous config entry objects from _splitEntries
     readonly property var rightEntries: _splitEntries.right
 
     function closeTray(): void {
@@ -291,6 +295,7 @@ Item {
             model: root.leftEntries
 
             BarLoader {
+                // intentional var: heterogeneous config entry JS object ({ id, enabled, ... })
                 required property var modelData
                 required property int index
 
@@ -426,6 +431,7 @@ Item {
             model: root.rightEntries
 
             BarLoader {
+                // intentional var: heterogeneous config entry JS object ({ id, enabled, ... })
                 required property var modelData
                 required property int index
 

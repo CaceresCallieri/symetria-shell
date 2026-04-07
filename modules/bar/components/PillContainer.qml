@@ -37,6 +37,7 @@ StyledRect {
 
     // Glassmorphism styling (subtle intensity for background containers).
     // Centralized here - changes apply to all pills automatically.
+    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
     readonly property var glassStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
         Colours.glass.subtle

@@ -27,6 +27,7 @@ Column {
 
     // PID→workspace cache: rebuilt every 3s (same cadence as ProcessMemory updates).
     // Inverts the O(n×m) lookup (50 processes × all toplevels per call) to O(m) build + O(1) lookups.
+    // intentional var: JS object used as hash map ({ [pid]: { id: int, name: string } })
     property var _pidWorkspaceCache: ({})
 
     // Subscribe to ProcessMemory for top process data
@@ -103,7 +104,9 @@ Column {
             spacing: Appearance.spacing.smaller
 
             StyledText {
+                // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
                 readonly property var memUsed: SystemUsage.formatKib(SystemUsage.memUsed)
+                // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
                 readonly property var memTotal: SystemUsage.formatKib(SystemUsage.memTotal)
 
                 text: `${memUsed.value.toFixed(1)} ${memUsed.unit} / ${memTotal.value.toFixed(1)} ${memTotal.unit}`
@@ -155,6 +158,7 @@ Column {
             reuseItems: true  // Essential: recycles delegates for 50-item list performance
 
             delegate: ProcessRow {
+                // intentional var: heterogeneous JS object from ProcessMemory model
                 required property var modelData
                 required property int index
 
@@ -189,6 +193,7 @@ Column {
         required property string name
         required property int pid
         required property int memoryKib
+        // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
         required property var memoryFormatted
 
         // --- Computed properties ---
@@ -197,8 +202,10 @@ Column {
             : 0
 
         // Workspace lookup and icon resolution
+        // intentional var: nullable JS object { id: int, name: string } from PID→workspace cache
         readonly property var workspace: root.getWorkspaceForPid(pid)
         readonly property string workspaceIcon: root.getWorkspaceIcon(workspace)
+        // intentional var: JS object { useMaterial: bool, iconText: string } from Icons.parseIcon()
         readonly property var parsedIcon: Utils.Icons.parseIcon(workspaceIcon)
         readonly property bool useMaterialIcon: parsedIcon.useMaterial
 

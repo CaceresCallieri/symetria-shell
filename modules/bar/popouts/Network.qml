@@ -19,6 +19,7 @@ ColumnLayout {
     property real maxNetworkListHeight: 350
     property string connectingToSsid: ""
     property string view: "wireless" // "wireless" or "ethernet"
+    // intentional var: nullable JS object from network scan data ({ ssid, bssid, security, ... })
     property var passwordNetwork: null
     property bool showPasswordDialog: false
 
@@ -254,6 +255,7 @@ ColumnLayout {
         delegate: RowLayout {
             id: ethernetItem
 
+            // intentional var: heterogeneous JS object from NmcliEthernet device data
             required property var modelData
             // Ethernet connect is instantaneous — no async loading state
             readonly property bool loading: false

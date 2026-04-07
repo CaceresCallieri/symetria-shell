@@ -20,8 +20,8 @@ import QtQuick.Layouts
 Scope {
     id: root
 
-    /// Reference to the KillConfirm IPC handler — set from shell.qml via the id.
-    required property KillConfirm handler
+    /// Reference to the kill-confirm IPC handler — set from shell.qml via the id.
+    required property Wrapper handler
 
     Variants {
         model: Quickshell.screens

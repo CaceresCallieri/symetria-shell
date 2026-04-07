@@ -11,6 +11,7 @@ Item {
 
     required property int wsId
     required property int activeWsId
+    // intentional var: JS object used as hash map ({ [wsId]: bool })
     required property var occupied
 
     readonly property bool isWorkspace: true // Flag for finding workspace children
@@ -34,6 +35,7 @@ Item {
     readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && isActive
 
     // Cached workspace reference to avoid repeated find() lookups
+    // intentional var: Hyprland workspace proxy from .find() — nullable, identity-unstable
     readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
 
     // Icon resolution: named workspace icon → first letter → roman numeral

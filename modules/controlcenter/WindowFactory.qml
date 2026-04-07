@@ -42,7 +42,7 @@ Singleton {
 
             title: qsTr("Symmetria Settings - %1").arg(cc.active.slice(0, 1).toUpperCase() + cc.active.slice(1))
 
-            ControlCenter {
+            Wrapper {
                 id: cc
 
                 anchors.fill: parent

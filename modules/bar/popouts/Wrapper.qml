@@ -3,8 +3,8 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
-import qs.modules.windowinfo
-import qs.modules.controlcenter
+import qs.modules.windowinfo as WindowInfoModule
+import qs.modules.controlcenter as ControlCenterModule
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -31,7 +31,7 @@ Item {
     property list<real> animCurve: Appearance.anim.curves.emphasized
 
     // When true, the Wrapper fills its parent and disables all Behaviors so
-    // detached panels (ControlCenter, WindowInfo) can center + scale/fade
+    // detached panels (controlcenter, windowinfo) can center + scale/fade
     // without interference from the bar-popout size/position animation system.
     readonly property bool _detachedFull: isDetached || _closingFromDetached
     // Briefly true during open/close transitions to prevent Behaviors from
@@ -171,7 +171,7 @@ Item {
         asynchronous: true
         anchors.centerIn: parent
 
-        sourceComponent: WindowInfo {
+        sourceComponent: WindowInfoModule.Wrapper {
             screen: root.screen
             client: Hypr.activeToplevel
         }
@@ -182,7 +182,7 @@ Item {
         asynchronous: true
         anchors.centerIn: parent
 
-        sourceComponent: ControlCenter {
+        sourceComponent: ControlCenterModule.Wrapper {
             screen: root.screen
             active: root.queuedMode
 

@@ -20,13 +20,14 @@ Item {
     readonly property bool multiMonitor: Quickshell.screens.length > 1
     readonly property bool isMonitorFocused: multiMonitor && (Hypr.monitorFor(screen)?.focused ?? false)
 
+    // intentional var: JS object used as hash map ({ [wsId]: bool }) built via .reduce()
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
         acc[curr.id] = curr.lastIpcObject.windows > 0;
         return acc;
     }, {})
     readonly property int groupOffset: Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown
 
-    readonly property var displayedWorkspaces: {
+    readonly property list<int> displayedWorkspaces: {
         if (!Config.bar.workspaces.showOnlyOccupied) {
             // Legacy fixed mode - return array [1, 2, ..., shown]
             return Array.from({length: Config.bar.workspaces.shown}, (_, i) => groupOffset + i + 1)
@@ -59,6 +60,7 @@ Item {
     property real blur: onSpecial ? 1 : 0
 
     // Pill styling (matching other bar pills like Tray, TimePill, SystemPill)
+    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
     readonly property var glassStyle: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
         Colours.glass.subtle

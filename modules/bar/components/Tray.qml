@@ -21,6 +21,7 @@ StyledRect {
 
     // Pill styling (subtle intensity for background containers,
     // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
+    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
     readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     // Width calculation: In non-compact mode, Row's implicitWidth includes

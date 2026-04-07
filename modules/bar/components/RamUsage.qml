@@ -16,7 +16,9 @@ MouseArea {
     readonly property real unitFontScale: 0.67
 
     // Computed values for display and tooltip (avoids duplicate calculations)
+    // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
     readonly property var memUsedFormatted: SystemUsage.formatKib(SystemUsage.memUsed)
+    // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
     readonly property var memTotalFormatted: SystemUsage.formatKib(SystemUsage.memTotal)
     readonly property int memUsagePercent: Math.round(SystemUsage.memPerc * 100)
 

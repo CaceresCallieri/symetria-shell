@@ -9,6 +9,7 @@ import QtQuick
 Item {
     id: root
 
+    // intentional var: duck-typed reference to parent bar with custom properties (hPadding, spacing)
     required property var bar
     required property Brightness.Monitor monitor
     property color colour: Colours.palette.m3primary

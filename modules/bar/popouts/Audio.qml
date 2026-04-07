@@ -14,7 +14,7 @@ import "../../controlcenter/network"
 Item {
     id: root
 
-    required property var wrapper
+    required property Item wrapper
 
     implicitWidth: layout.implicitWidth + Appearance.padding.normal * 2
     implicitHeight: layout.implicitHeight + Appearance.padding.normal * 2

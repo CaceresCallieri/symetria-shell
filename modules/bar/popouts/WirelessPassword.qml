@@ -13,6 +13,7 @@ ColumnLayout {
     id: root
 
     required property Item wrapper
+    // intentional var: nullable JS object from network scan data ({ ssid, bssid, security, ... })
     property var network: null
     property bool isClosing: false
 

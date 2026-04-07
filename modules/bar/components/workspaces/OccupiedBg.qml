@@ -10,6 +10,7 @@ Item {
     id: root
 
     required property Repeater workspaces
+    // intentional var: JS object used as hash map ({ [wsId]: bool })
     required property var occupied
     required property int groupOffset
 
@@ -50,12 +51,14 @@ Item {
         StyledRect {
             id: rect
 
+            // intentional var: Pill QtObject from ScriptModel over JS array
             required property var modelData
 
             readonly property Workspace start: root.workspaces.itemAt(getWsIdx(modelData.start)) ?? null
             readonly property Workspace end: root.workspaces.itemAt(getWsIdx(modelData.end)) ?? null
 
             // Pill styling (subtle intensity for background pill)
+            // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
             readonly property var glassStyle: Colours.pillStyle(
                 Colours.palette.m3surfaceContainerHigh,
                 Colours.glass.subtle

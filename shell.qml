@@ -4,18 +4,17 @@
 //@ pragma Env QT_QPA_PLATFORM=wayland
 
 import "modules"
-import "modules/drawers"
-import "modules/background"
-import "modules/areapicker"
+import "modules/drawers" as DrawersModule
+import "modules/background" as BackgroundModule
+import "modules/areapicker" as AreaPickerModule
 import "modules/osd" as OsdModule
 import "modules/notifications" as NotifsModule
 import "modules/lock"
 import "modules/askpass"
 import "modules/stt"
 import "modules/keycaster"
-import "modules/keychords"
 import "modules/keychords" as KeyChordsModule
-import "modules/killconfirm"
+import "modules/killconfirm" as KillConfirmModule
 import Quickshell
 import QtQuick
 
@@ -27,20 +26,20 @@ ShellRoot {
         onTriggered: Quickshell.watchFiles = false
     }
 
-    Background {}
-    Drawers {}
-    AreaPicker {}
+    BackgroundModule.Wrapper {}
+    DrawersModule.Wrapper {}
+    AreaPickerModule.Wrapper {}
     OsdModule.OsdOverlay {}
     NotifsModule.NotificationsOverlay {}
     Askpass {}
     Stt {}
     Keycaster {}
-    KeyChords {}
+    KeyChordsModule.Wrapper {}
     KeyChordsModule.KeyChordsOverlay {}
-    KillConfirm {
+    KillConfirmModule.Wrapper {
         id: killConfirm
     }
-    KillConfirmOverlay {
+    KillConfirmModule.KillConfirmOverlay {
         handler: killConfirm
     }
     Lock {
