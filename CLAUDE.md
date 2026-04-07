@@ -141,6 +141,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Qt HTTP/2 protocol errors** — Qt 6's `QNetworkAccessManager` enables HTTP/2 by default. Some servers (notably `ipinfo.io`) cause silent protocol errors that break the entire weather init chain. Disable per-request with `Http2AllowedAttribute = false`. → `docs/qt-http2-pitfall.md`
 
+**Hypr.activeToplevel null on fresh start** — The Wayland activation guard in `Hypr.qml` may filter out the active toplevel at shell startup before the `activated` protocol event arrives. Fall back to raw `Hyprland.activeToplevel` when you only need Hyprland window identity (address, class, PID) rather than confirmed Wayland activation. → `docs/qml-pitfalls.md`
+
 ## Deep Dives
 
 Detailed documentation in `docs/` — read on-demand when working on specific areas:

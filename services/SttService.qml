@@ -274,7 +274,7 @@ Singleton {
 
     function _mostRecentErrorJob(): SttJob {
         for (const job of _jobs) {
-            if (job._state === "error" && job.errorSource !== "config") return job;
+            if (job.state === "error" && job.errorSource !== "config") return job;
         }
         return null;
     }
@@ -301,7 +301,7 @@ Singleton {
 
     function _removeJob(job: SttJob): void {
         job.closing = true;  // triggers slide-up animation in delegate
-        job._removalTimer.start();  // per-job timer, avoids overwrite race
+        job.startRemoval();  // per-job timer, avoids overwrite race
     }
 
     function _onJobFinished(job: SttJob): void {
@@ -333,7 +333,7 @@ Singleton {
         if (!queue || queue.length === 0) return;
 
         const front = queue[0];
-        if (front._state !== "transcribed") return;  // not ready or already delivering
+        if (front.state !== "transcribed") return;  // not ready or already delivering
 
         front._startDeliveryChain();
     }

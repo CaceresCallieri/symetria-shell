@@ -489,6 +489,14 @@ QtObject {
         _removalTimer.stop();
     }
 
+    /// Trigger animated removal — called by SttService orchestrator.
+    /// Starts the per-job removal timer so the delegate slide-up animation plays
+    /// before the job is destroyed. Exposed as public to avoid SttService accessing
+    /// the private _removalTimer directly across the component boundary.
+    function startRemoval(): void {
+        _removalTimer.start();
+    }
+
     /// Cleanup for Component.onDestruction (called by service shutdown)
     function _destroyCleanup(): void {
         _stopAllTimers();

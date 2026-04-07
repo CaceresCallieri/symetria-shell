@@ -55,29 +55,6 @@ notify_failure() {
     notify-send -a "Symmetria STT" -u normal -i dialog-warning "$title" "$body" 2>/dev/null &
 }
 
-# Verify clipboard matches expected text. Returns 0 if OK, 1 if mismatch.
-verify_clipboard() {
-    local stage="$1"
-    if [ -z "$EXPECTED_TEXT" ]; then
-        echo "[STT:$stage] no expected text provided — skipping verification" >&2
-        return 0
-    fi
-    ACTUAL_TEXT=$(wl-paste --no-newline 2>/dev/null)
-    ACTUAL_LEN=${#ACTUAL_TEXT}
-    EXPECTED_LEN=${#EXPECTED_TEXT}
-    if [ "$ACTUAL_TEXT" = "$EXPECTED_TEXT" ]; then
-        echo "[STT:$stage] clipboard verified OK | len=$ACTUAL_LEN" >&2
-        return 0
-    else
-        ACTUAL_PREVIEW=$(printf '%.60s' "$ACTUAL_TEXT")
-        EXPECTED_PREVIEW=$(printf '%.60s' "$EXPECTED_TEXT")
-        echo "[STT:$stage] clipboard MISMATCH | expected_len=$EXPECTED_LEN actual_len=$ACTUAL_LEN" >&2
-        echo "[STT:$stage]   expected: $EXPECTED_PREVIEW" >&2
-        echo "[STT:$stage]   actual:   $ACTUAL_PREVIEW" >&2
-        return 1
-    fi
-}
-
 # ── Neovim RPC injection ─────────────────────────────────────────────────────
 # Injects text directly into a Claude Code terminal via Neovim's RPC socket
 # and the Orchestrator plugin. Bypasses clipboard entirely.
@@ -251,10 +228,9 @@ ACTIVE_ADDR=$(hyprctl activewindow -j 2>/dev/null | grep -o '"address": "[^"]*"'
 echo "[STT:INJ04] active window at inject time: $ACTIVE_ADDR | target: $ADDRESS" >&2
 
 # ── Pre-paste clipboard sanity check ─────────────────────────────────────────
-# Light check: only verify clipboard is non-empty (catches silent wl-copy failure).
-# Full text comparison is deferred to INJ09 (before Enter) where the async gap
-# makes it genuinely useful. Doing a full comparison here would false-positive
-# if the user legitimately copies something during the ~2-10s transcription window.
+# Only verify clipboard is non-empty (catches silent wl-copy failure).
+# A full text comparison would false-positive if the user legitimately copies
+# something during the ~2-10s transcription window.
 
 CLIP_CHECK=$(wl-paste --no-newline 2>/dev/null)
 if [ -z "$CLIP_CHECK" ]; then
