@@ -90,7 +90,7 @@ Item {
 
     property string searchText: ""
 
-    function filterApps(search: string): list<var> {
+    function filterApps(search: string): list<var> { // intentional var: heterogeneous list — DesktopEntry or JS app objects
         if (!search || search.trim() === "") {
             const apps = [];
             for (let i = 0; i < allAppsDb.apps.length; i++) {
@@ -124,7 +124,7 @@ Item {
             .map(r => r.obj._item);
     }
 
-    property list<var> filteredApps: []
+    property list<var> filteredApps: [] // intentional var: heterogeneous list — DesktopEntry or JS app objects (no common QML base type)
 
     function updateFilteredApps() {
         filteredApps = filterApps(searchText);
