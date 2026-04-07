@@ -22,6 +22,7 @@ Scope {
     property string windowAddress: ""
 
     /// The monitor that was focused when the prompt was triggered.
+    // intentional var: nullable HyprlandMonitor from Hypr.focusedMonitor — null until prompt()
     property var targetMonitor: null
 
     function prompt(): void {

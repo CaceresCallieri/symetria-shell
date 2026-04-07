@@ -53,6 +53,7 @@ Item {
         }
 
         StyledRect {
+            // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
             readonly property var navPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
             Layout.fillHeight: true

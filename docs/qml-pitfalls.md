@@ -88,9 +88,12 @@ Background {}  // Resolves to keycaster's Background, not wallpaper!
 
 | File Purpose | Naming Pattern | Example |
 |--------------|----------------|---------|
-| Root module entry | `ModuleName.qml` | `Keycaster.qml` |
+| Root module entry | `Wrapper.qml` (accessed via `import "modules/x" as XModule` → `XModule.Wrapper {}`) | `DrawersModule.Wrapper`, `BarModule.Wrapper` |
+| Modules that don't collide (no `Wrapper` needed) | `ModuleName.qml` | `Keycaster.qml`, `Stt.qml` |
 | Module-specific backgrounds | `ModuleNameBackground.qml` | `KeycasterBackground.qml` |
-| Internal components | `Wrapper.qml`, `Content.qml` | OK — not imported in shell.qml |
+| Internal components | `Content.qml`, other names | OK — never imported in shell.qml |
+
+**Note on `Wrapper.qml` conflicts:** Multiple modules now export `Wrapper.qml`. This is safe because all are imported via qualified aliases (`as XModule`), which bypass QML's last-import-wins collision. `check-qml-conflicts.sh` will show these as "warnings" (not "critical") because no unqualified `Wrapper {}` appears in shell.qml.
 
 **When Adding New Modules:**
 1. Check shell.qml for all directory imports

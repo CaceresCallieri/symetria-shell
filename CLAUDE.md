@@ -63,7 +63,7 @@ git fetch upstream           # Update base (tracks upstream/main)
 
 ## Architecture
 
-**Entry point:** `shell.qml` — loads Background, Drawers, AreaPicker, Askpass, Stt, Lock, Shortcuts, BatteryMonitor, IdleMonitors.
+**Entry point:** `shell.qml` — loads `BackgroundModule.Wrapper`, `DrawersModule.Wrapper`, `AreaPickerModule.Wrapper`, Askpass, Stt, Lock, Shortcuts, BatteryMonitor, IdleMonitors.
 
 | Directory | Purpose |
 |-----------|---------|
@@ -78,6 +78,7 @@ git fetch upstream           # Update base (tracks upstream/main)
 **Key patterns:**
 - **Singletons** — Services and Config are singletons: `import "services"` / `import "config"`
 - **Configuration** — All settings flow through `config/Config.qml` → `~/.config/symmetria/shell.json`
+- **Module entry points** — Each major module exposes `Wrapper.qml` as its entry point, imported via qualified alias: `import "modules/x" as XModule` → `XModule.Wrapper {}`. This avoids the last-import-wins collision pitfall. Modules without collision risk (e.g., `Stt`, `Keycaster`) keep their own name.
 - **Drawer system** — `modules/drawers/` manages slide-out panels with unified visibility and gestures
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
 - **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords)
