@@ -19,6 +19,11 @@ jobs:
       # (QuickShell types). Without import resolution, ~93% of files trigger
       # exit 255 with no output. We only fail on actual diagnostic output —
       # same logic as .githooks/pre-commit.
+      - name: Report tool versions
+        run: |
+          qmllint --version || true
+          shellcheck --version
+
       - name: Run qmllint
         run: |
           ERRORS=0

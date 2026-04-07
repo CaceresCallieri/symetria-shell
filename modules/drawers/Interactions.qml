@@ -84,6 +84,7 @@ CustomMouseArea {
 
             if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                     && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
+                _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
             }
@@ -205,6 +206,7 @@ CustomMouseArea {
         } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                    && !inTopPanel(panels.popouts, x, y)
                    && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
+            _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();
         }

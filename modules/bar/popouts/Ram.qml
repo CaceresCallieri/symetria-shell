@@ -47,6 +47,8 @@ Column {
         id: _cacheRebuildTimer
         interval: 3000
         repeat: true
+        // Stays stopped during the initial 3s fetch window when topProcesses is still empty.
+        // Once data arrives, triggeredOnStart fires immediately to populate the cache.
         running: ProcessMemory.topProcesses.length > 0
         triggeredOnStart: true
         onTriggered: {
