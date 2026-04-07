@@ -16,7 +16,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
 
-    readonly property SttService.SttJob job: {
+    readonly property SttJob job: {
         const jobs = SttService.jobs;
         return jobs.length > 0 ? jobs[jobs.length - 1] : null;
     }

@@ -21,7 +21,7 @@ Item {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
-    required property SttService.SttJob job
+    required property SttJob job
 
     /// When false, container size changes are instant (no animation).
     /// Wrapper sets this to true after its clip-reveal animation completes,

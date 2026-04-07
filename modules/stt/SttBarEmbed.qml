@@ -20,7 +20,7 @@ Item {
     // Use the latest job from the jobs array (not activeRecording, which
     // goes null when recording stops — we need the reference through
     // processing/success/error states).
-    readonly property SttService.SttJob job: {
+    readonly property SttJob job: {
         const jobs = SttService.jobs;
         return jobs.length > 0 ? jobs[jobs.length - 1] : null;
     }

@@ -30,7 +30,7 @@ done
 
 ADDRESS="$1"
 WINDOW_CLASS="$2"
-SUBMIT="$3"
+SUBMIT="${3:-}"
 EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
@@ -145,7 +145,9 @@ try_neovim_inject() {
     # Write text to temp file (avoids all shell/Lua escaping issues)
     local NVIM_TMPFILE
     NVIM_TMPFILE=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/stt-nvim-inject.XXXXXX")
-    trap 'rm -f "$NVIM_TMPFILE"' EXIT
+    # NOTE: No global EXIT trap here — NVIM_TMPFILE is local to this function,
+    # so a trap referencing it at script-exit scope would hit "unbound variable"
+    # under set -u. Cleanup is handled explicitly on both return paths below.
     if [ -z "$NVIM_TMPFILE" ]; then
         echo "[STT:INJ-NVIM] failed to create temp file" >&2
         return 1

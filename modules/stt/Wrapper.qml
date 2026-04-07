@@ -48,7 +48,7 @@ Item {
                 Item {
                     id: jobDelegate
 
-                    required property SttService.SttJob modelData
+                    required property SttJob modelData
                     required property int index
 
                     // Target height for the show animation.  Updated reactively

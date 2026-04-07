@@ -228,3 +228,29 @@ root.list = temp;  // 1 assignment = 2 filter evaluations
 **Check for this pattern in:** Any service that loads persisted data into a list property — notifications, clipboard history, calculator history, app databases.
 
 → Full investigation: [`startup-delay-investigation/11-postmortem-and-learnings.md`](startup-delay-investigation/11-postmortem-and-learnings.md)
+
+---
+
+## Hypr.activeToplevel is null in fresh shell instances
+
+**Symptom:** `Hypr.activeToplevel` returns `null` even though `Hypr.toplevels` contains 20+ windows and `Hypr.focusedMonitor` is valid. Switching workspaces or clicking a window "fixes" it.
+
+**Cause:** `Hypr.qml` wraps the raw toplevel with a Wayland activation guard:
+```qml
+// services/Hypr.qml
+readonly property HyprlandToplevel activeToplevel:
+    Hyprland.activeToplevel?.wayland?.activated ? Hyprland.activeToplevel : null
+```
+
+Hyprland reports the focused window via IPC immediately, but the Wayland `activated` protocol event arrives separately and may not have been received yet in a fresh shell instance. The guard filters out the toplevel until that event arrives.
+
+**When you need the raw toplevel:** If you only need window identity (address, class, PID) from Hyprland IPC — not Wayland activation state — use the raw `Hyprland.activeToplevel` as a fallback:
+```qml
+import Quickshell.Hyprland
+// ...
+const toplevel = Hypr.activeToplevel ?? Hyprland.activeToplevel;
+```
+
+**When you need the filtered version:** For UI features that depend on actual Wayland surface activation (cursor shapes, focus rings, input handling), continue using `Hypr.activeToplevel`.
+
+**Prevention:** When accessing `Hypr.activeToplevel`, consider whether your code needs Wayland activation or just Hyprland window identity. Document which one you're using and why.

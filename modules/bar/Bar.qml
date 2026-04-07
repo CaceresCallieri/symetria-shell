@@ -342,7 +342,7 @@ Item {
         readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 
         // Track the latest job to watch its closing signal
-        readonly property SttService.SttJob _latestJob: {
+        readonly property SttJob _latestJob: {
             const jobs = SttService.jobs;
             return jobs.length > 0 ? jobs[jobs.length - 1] : null;
         }
