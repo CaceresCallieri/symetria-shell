@@ -98,9 +98,8 @@ _try_rpc() {
         *' '*) echo "[STT:INJ-NVIM] tmpfile path contains spaces — aborting RPC" >&2; return 1 ;;
     esac
 
-    RESULT=$(timeout 3s nvim --server "$sock" --remote-expr \
-        "luaeval('require(\"orchestrator\").stt_inject(_A[1], _A[2], _A[3])', ['$tmpfile', v:$submit, $target_buf])" 2>/dev/null)
-    if [ $? -ne 0 ]; then
+    if ! RESULT=$(timeout 3s nvim --server "$sock" --remote-expr \
+        "luaeval('require(\"orchestrator\").stt_inject(_A[1], _A[2], _A[3])', ['$tmpfile', v:$submit, $target_buf])" 2>/dev/null); then
         echo "[STT:INJ-NVIM] RPC failed on $sock (target_buf=$target_buf)" >&2
         return 1
     fi

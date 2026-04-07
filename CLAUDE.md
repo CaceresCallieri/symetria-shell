@@ -39,6 +39,14 @@ cd ~/projects/symmetria-file-manager && ./build-plugin.sh
 ```
 If missing, Symmetria will fail to load components that browse the filesystem. See symmetria-file-manager's CLAUDE.md for build details.
 
+## Pre-commit Hooks
+
+Pre-commit hooks run `qmllint` on `.qml` files and `shellcheck` on `.sh` files. Setup (once per clone):
+```bash
+git config core.hooksPath .githooks
+```
+Requires: `qmllint` (ships with Qt) and `shellcheck` (`paru -S shellcheck`).
+
 ## Branch Structure
 
 | Branch | Purpose | Tracks |

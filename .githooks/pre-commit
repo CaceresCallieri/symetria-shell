@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Pre-commit hook: runs qmllint on staged .qml files and shellcheck on staged .sh files.
+#
+# Setup (once per clone):
+#   git config core.hooksPath .githooks
+#
+# To bypass temporarily:
+#   git commit --no-verify
+
+set -euo pipefail
+
+# Collect staged files (excludes deleted files)
+STAGED_QML=()
+STAGED_SH=()
+
+while IFS= read -r -d '' file; do
+    case "$file" in
+        *.qml) STAGED_QML+=("$file") ;;
+        *.sh)  STAGED_SH+=("$file") ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=d -z)
+
+# Nothing to lint
+if [[ ${#STAGED_QML[@]} -eq 0 && ${#STAGED_SH[@]} -eq 0 ]]; then
+    exit 0
+fi
+
+FAILED=0
+
+# --- qmllint ---
+# NOTE: qmllint v1.0 exits 255 silently for BOTH parse errors and unresolvable
+# QuickShell imports (Quickshell, Quickshell.Io, etc.). Without a build directory
+# and import resolution config, ~93% of files trigger exit 255 with no output.
+# We only block commits when qmllint produces actual diagnostic output — this
+# makes qmllint a no-op today but ready for when import resolution is configured.
+if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
+    if command -v qmllint >/dev/null 2>&1; then
+        QML_ERRORS=0
+        for file in "${STAGED_QML[@]}"; do
+            output=$(qmllint "$file" 2>&1)
+            if [[ $? -ne 0 && -n "$output" ]]; then
+                echo "$output" >&2
+                QML_ERRORS=$((QML_ERRORS + 1))
+            fi
+        done
+        if [[ $QML_ERRORS -gt 0 ]]; then
+            echo "qmllint: $QML_ERRORS file(s) failed" >&2
+            FAILED=1
+        fi
+    else
+        echo "pre-commit: qmllint not found, skipping QML lint" >&2
+    fi
+fi
+
+# --- shellcheck ---
+if [[ ${#STAGED_SH[@]} -gt 0 ]]; then
+    if command -v shellcheck >/dev/null 2>&1; then
+        SC_ERRORS=0
+        for file in "${STAGED_SH[@]}"; do
+            # -e SC2329: "function never invoked" false positive on dynamic dispatch
+            if ! shellcheck -e SC2329 "$file" 2>&1; then
+                SC_ERRORS=$((SC_ERRORS + 1))
+            fi
+        done
+        if [[ $SC_ERRORS -gt 0 ]]; then
+            echo "shellcheck: $SC_ERRORS file(s) failed" >&2
+            FAILED=1
+        fi
+    else
+        echo "pre-commit: shellcheck not found, skipping shell lint" >&2
+    fi
+fi
+
+if [[ $FAILED -ne 0 ]]; then
+    echo "" >&2
+    echo "Pre-commit lint failed. Fix the issues above or use 'git commit --no-verify' to bypass." >&2
+    exit 1
+fi

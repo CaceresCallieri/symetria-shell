@@ -523,6 +523,8 @@ test_output_format_tab_delimited() {
     # Verify no trailing newline in printf output
     local byte_count_with_newline
     local byte_count_without
+    # wc -c counts bytes; ${#} counts chars (differ on multibyte)
+    # shellcheck disable=SC2000
     byte_count_with_newline=$(echo "$LAST_STDOUT" | wc -c)
     byte_count_without=$(printf '%s' "$LAST_STDOUT" | wc -c)
     if [[ "$byte_count_with_newline" -ne $((byte_count_without + 1)) ]]; then
