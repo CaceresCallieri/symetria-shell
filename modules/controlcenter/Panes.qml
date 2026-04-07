@@ -21,6 +21,7 @@ ClippingRectangle {
 
     readonly property bool initialOpeningComplete: layout.initialOpeningComplete
 
+    // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
     readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
 
     color: contentPill.background

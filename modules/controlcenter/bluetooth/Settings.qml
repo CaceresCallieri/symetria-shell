@@ -16,7 +16,7 @@ ColumnLayout {
 
     required property Session session
 
-    readonly property var cardPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+    readonly property var cardPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
 
     spacing: Appearance.spacing.normal
 

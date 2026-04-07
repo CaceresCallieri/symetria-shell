@@ -135,6 +135,7 @@ Item {
         required property string icon
         required property string label
         readonly property bool active: root.session.active === label
+        // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
         readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.veryStrong)
 
         implicitWidth: background.implicitWidth

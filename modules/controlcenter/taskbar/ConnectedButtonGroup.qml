@@ -10,11 +10,11 @@ import QtQuick.Layouts
 StyledRect {
     id: root
 
-    property var options: [] // Array of {label: string, propertyName: string, onToggled: function}
-    property var rootItem: null // The root item that contains the properties we want to bind to
+    property var options: [] // intentional var: JS array of { label: string, propertyName: string, onToggled: function }
+    property var rootItem: null // intentional var: duck-typed root Item for dynamic property access (rootItem[propName])
     property string title: "" // Optional title text
 
-    readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+    readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium) // intentional var: heterogeneous JS { background, border }
 
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
@@ -53,7 +53,7 @@ StyledRect {
                 delegate: TextButton {
                     id: button
                     required property int index
-                    required property var modelData
+                    required property var modelData // intentional var: JS object { label, propertyName, onToggled } from options array
 
                     Layout.fillWidth: true
                     text: modelData.label

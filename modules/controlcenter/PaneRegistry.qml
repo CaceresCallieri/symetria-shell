@@ -46,7 +46,7 @@ QtObject {
 
     readonly property int count: panes.length
 
-    readonly property var labels: {
+    readonly property list<string> labels: {
         const result = [];
         for (let i = 0; i < panes.length; i++) {
             result.push(panes[i].label);

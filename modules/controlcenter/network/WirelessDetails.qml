@@ -17,6 +17,7 @@ DeviceDetails {
     id: root
 
     required property Session session
+    // intentional var: nullable — NmcliWifi network JS object from NetworkState.active
     readonly property var network: root.session.network.active
     
     device: network

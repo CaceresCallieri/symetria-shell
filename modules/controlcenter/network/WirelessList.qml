@@ -101,11 +101,11 @@ DeviceList {
 
     delegate: Component {
         StyledRect {
-            required property var modelData
+            required property var modelData // intentional var: heterogeneous JS object from NmcliWifi.networks ({ ssid, bssid, strength, security, ... })
 
             width: ListView.view ? ListView.view.width : undefined
 
-            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
             color: root.activeItem === modelData ? activePill.background : "transparent"
             border.color: root.activeItem === modelData ? activePill.border : "transparent"

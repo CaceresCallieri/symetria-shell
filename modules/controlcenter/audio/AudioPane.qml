@@ -88,12 +88,12 @@ Item {
                             model: Audio.sinks
 
                             delegate: StyledRect {
-                                required property var modelData
+                                required property var modelData // intentional var: PulseAudio sink object from Audio.sinks model
 
                                 Layout.fillWidth: true
 
                                 readonly property bool isActive: Audio.sink?.id === modelData.id
-                                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
                                 color: isActive ? activePill.background : "transparent"
                                 border.color: isActive ? activePill.border : "transparent"
@@ -171,12 +171,12 @@ Item {
                             model: Audio.sources
 
                             delegate: StyledRect {
-                                required property var modelData
+                                required property var modelData // intentional var: PulseAudio source object from Audio.sources model
 
                                 Layout.fillWidth: true
 
                                 readonly property bool isActive: Audio.source?.id === modelData.id
-                                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                                readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
                                 color: isActive ? activePill.background : "transparent"
                                 border.color: isActive ? activePill.border : "transparent"

@@ -139,7 +139,7 @@ DeviceList {
             width: ListView.view ? ListView.view.width : undefined
             implicitHeight: deviceInner.implicitHeight + Appearance.padding.normal * 2
 
-            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
             color: root.activeItem === modelData ? activePill.background : "transparent"
             border.color: root.activeItem === modelData ? activePill.border : "transparent"

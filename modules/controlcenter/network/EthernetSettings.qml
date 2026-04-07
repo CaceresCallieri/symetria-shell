@@ -39,7 +39,7 @@ ColumnLayout {
         implicitHeight: ethernetInfo.implicitHeight + Appearance.padding.large * 2
 
         radius: Appearance.rounding.normal
-        readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+        readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
 
         color: pill.background
         border.color: pill.border

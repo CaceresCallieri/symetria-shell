@@ -58,13 +58,13 @@ DeviceList {
         StyledRect {
             id: ethernetItem
 
-            required property var modelData
+            required property var modelData // intentional var: heterogeneous JS object from NmcliEthernet.ethernetDevices model
             readonly property bool isActive: root.activeItem && modelData && root.activeItem.interface === modelData.interface
 
             width: ListView.view ? ListView.view.width : undefined
             implicitHeight: rowLayout.implicitHeight + Appearance.padding.normal * 2
 
-            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+            readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
             color: ethernetItem.isActive ? activePill.background : "transparent"
             border.color: ethernetItem.isActive ? activePill.border : "transparent"

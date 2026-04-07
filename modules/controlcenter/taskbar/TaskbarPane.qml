@@ -19,9 +19,9 @@ Item {
 
     required property Session session
 
-    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1)
-    readonly property var settingsPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
-    readonly property var borderPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+    readonly property var contentPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.1) // intentional var: heterogeneous JS { background, border }
+    readonly property var settingsPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium) // intentional var: heterogeneous JS { background, border }
+    readonly property var borderPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
 
     property bool clockShowIcon: Config.bar.clock.showIcon ?? true
     property bool persistent: Config.bar.persistent ?? true

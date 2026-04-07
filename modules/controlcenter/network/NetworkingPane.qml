@@ -154,9 +154,9 @@ Item {
             Item {
                 id: rightPaneItem
                 
-                property var ethernetPane: root.session.ethernet.active
-                property var wirelessPane: root.session.network.active
-                property var pane: ethernetPane || wirelessPane
+                property var ethernetPane: root.session.ethernet.active // intentional var: nullable — NmcliCore ethernet object
+                property var wirelessPane: root.session.network.active // intentional var: nullable — NmcliWifi network JS object
+                property var pane: ethernetPane || wirelessPane // intentional var: nullable polymorphic — either ethernet or wireless object
                 property string paneId: ethernetPane ? ("eth:" + (ethernetPane.interface || "")) : (wirelessPane ? ("wifi:" + (wirelessPane.ssid || wirelessPane.bssid || "")) : "settings")
                 property Component targetComponent: settingsComponent
                 property Component nextComponent: settingsComponent

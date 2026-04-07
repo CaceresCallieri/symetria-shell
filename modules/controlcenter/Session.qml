@@ -5,6 +5,7 @@ import qs.modules.controlcenter
 QtObject {
     readonly property list<string> panes: PaneRegistry.labels
 
+    // intentional var: polymorphic root container (drawer Wrapper or floating Window — both expose close())
     required property var root
     property bool floating: false
     property string active: "network"

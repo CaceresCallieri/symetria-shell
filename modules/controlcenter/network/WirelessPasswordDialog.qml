@@ -18,6 +18,7 @@ Item {
 
     required property Session session
 
+    // intentional var: nullable JS object from nmcli scan/pending data ({ ssid, bssid, security, ... })
     readonly property var network: {
         if (session.network.pendingNetwork) {
             return session.network.pendingNetwork;
@@ -211,7 +212,7 @@ Item {
                 StyledRect {
                     anchors.fill: parent
                     radius: Appearance.rounding.normal
-                    readonly property var inputPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
+                    readonly property var inputPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium) // intentional var: heterogeneous JS { background, border }
 
                     color: passwordContainer.activeFocus ? Qt.lighter(inputPill.background, 1.05) : inputPill.background
                     border.width: passwordContainer.activeFocus || connectButton.hasError ? 4 : (root.visible ? 1 : 0)

@@ -72,7 +72,7 @@ StyledFlickable {
                             Layout.fillWidth: true
                             implicitHeight: deviceStatus.implicitHeight + Appearance.padding.large * 2
 
-                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
 
                             radius: Appearance.rounding.normal
                             color: pill.background
@@ -135,7 +135,7 @@ StyledFlickable {
                             Layout.fillWidth: true
                             implicitHeight: deviceProps.implicitHeight + Appearance.padding.large * 2
 
-                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
 
                             radius: Appearance.rounding.normal
                             color: pill.background
@@ -348,7 +348,7 @@ StyledFlickable {
                             Layout.fillWidth: true
                             implicitHeight: deviceInfo.implicitHeight + Appearance.padding.large * 2
 
-                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+                            readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle) // intentional var: heterogeneous JS { background, border }
 
                             radius: Appearance.rounding.normal
                             color: pill.background
@@ -482,7 +482,7 @@ StyledFlickable {
             StyledClippingRect {
                 id: fabMenuItem
 
-                required property var modelData
+                required property var modelData // intentional var: ListModel element { name, icon } from fab menu
                 required property int index
 
                 Layout.alignment: Qt.AlignRight

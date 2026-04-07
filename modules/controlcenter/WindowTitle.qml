@@ -10,6 +10,7 @@ StyledRect {
     required property ShellScreen screen
     required property Session session
 
+    // intentional var: heterogeneous JS object { background: color, border: color } from pillStyle()
     readonly property var pill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     implicitHeight: text.implicitHeight + Appearance.padding.normal

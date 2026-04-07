@@ -22,6 +22,7 @@ Item {
 
     required property Session session
 
+    // intentional var: nullable polymorphic — DesktopEntry or JS app object from LauncherState.active
     property var selectedApp: root.session.launcher.active
     property bool hideFromLauncherChecked: false
 
@@ -206,7 +207,7 @@ Item {
                 Layout.topMargin: Appearance.spacing.normal
                 Layout.bottomMargin: Appearance.spacing.small
 
-                readonly property var searchPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                readonly property var searchPill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
                 color: searchPill.background
                 border.color: searchPill.border
@@ -311,12 +312,12 @@ Item {
                     }
 
                     delegate: StyledRect {
-                        required property var modelData
+                        required property var modelData // intentional var: DesktopEntry or JS app object from filteredApps
 
                         width: parent ? parent.width : 0
 
                         readonly property bool isSelected: root.selectedApp === modelData
-                        readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong)
+                        readonly property var activePill: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
                         color: isSelected ? activePill.background : "transparent"
                         border.color: isSelected ? activePill.border : "transparent"
@@ -377,11 +378,11 @@ Item {
             Item {
                 id: rightLauncherPane
 
-                property var pane: root.session.launcher.active
+                property var pane: root.session.launcher.active // intentional var: nullable polymorphic — mirrors LauncherState.active
                 property string paneId: pane ? (pane.id || pane.entry?.id || "") : ""
                 property Component targetComponent: settings
                 property Component nextComponent: settings
-                property var displayedApp: null
+                property var displayedApp: null // intentional var: nullable polymorphic — delayed app reference for pane transitions
 
                 function getComponentForPane() {
                     return pane ? appDetails : settings;
@@ -407,7 +408,7 @@ Item {
                     sourceComponent: rightLauncherPane.targetComponent
                     active: true
 
-                    property var displayedApp: rightLauncherPane.displayedApp
+                    property var displayedApp: rightLauncherPane.displayedApp // intentional var: nullable — propagates displayed app to loaded component
 
                     onItemChanged: {
                         if (item && rightLauncherPane.pane && rightLauncherPane.displayedApp !== rightLauncherPane.pane) {
@@ -495,6 +496,7 @@ Item {
             id: appDetailsLayout
             anchors.fill: parent
 
+            // intentional var: nullable polymorphic — safe accessor for displayed app from parent Loader
             readonly property var displayedApp: parent && parent.displayedApp !== undefined ? parent.displayedApp : null
 
             spacing: Appearance.spacing.normal
