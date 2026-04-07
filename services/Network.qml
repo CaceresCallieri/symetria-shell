@@ -34,10 +34,13 @@ Singleton {
     readonly property bool scanning: NmcliWifi.scanning
 
     property list<var> ethernetDevices: []
+    // intentional var: nullable result from .find() over heterogeneous JS device objects
     readonly property var activeEthernet: ethernetDevices.find(d => d.connected) ?? null
     property int ethernetDeviceCount: 0
     property bool ethernetProcessRunning: false
+    // intentional var: nullable JS object from nmcli device-details parser
     property var ethernetDeviceDetails: null
+    // intentional var: nullable JS object from nmcli wireless-details parser
     property var wirelessDeviceDetails: null
 
     function enableWifi(enabled: bool): void {
@@ -66,6 +69,7 @@ Singleton {
         NmcliWifi.rescanWifi();
     }
 
+    // intentional var: nullable JS object with mixed types ({ ssid: string, bssid: string, callback: function })
     property var pendingConnection: null
     signal connectionFailed(string ssid)
 
@@ -202,6 +206,7 @@ Singleton {
     }
 
     component AccessPoint: QtObject {
+        // intentional var: heterogeneous JS object from nmcli network scan data
         required property var lastIpcObject
         readonly property string ssid: lastIpcObject.ssid
         readonly property string bssid: lastIpcObject.bssid

@@ -15,6 +15,7 @@ Singleton {
 
     // --- Shared state ---
 
+    // intentional var: JS array with in-place mutations (.push(), .splice(), .indexOf())
     property var activeProcesses: []
 
     // --- Constants ---
@@ -223,6 +224,7 @@ Singleton {
     component CommandProcess: Process {
         id: proc
 
+        // intentional var: nullable JS function reference (callback from executeCommand callers)
         property var callback: null
         property list<string> command: []
         property bool callbackCalled: false

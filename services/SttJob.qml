@@ -117,7 +117,7 @@ QtObject {
 
     // Segment management
     property int _segmentCounter: 0
-    property var _segmentFiles: []
+    property list<string> _segmentFiles: []
     property string _currentAudioFile: ""
 
     // Target window for inject delivery (captured at start-time)
@@ -137,7 +137,7 @@ QtObject {
     // Vocabulary hints snapshot: populated by SttService.stop() before
     // clearing _sessionVocabHints, so the async recordProcess.onExited
     // path still has access to the hints at transcription time.
-    property var _snapshotVocabHints: []
+    property list<string> _snapshotVocabHints: []
 
     // Runtime delivery choice for "ask" mode (inherited from service, locked on submit)
     property string _activeDeliveryChoice: "clipboard"

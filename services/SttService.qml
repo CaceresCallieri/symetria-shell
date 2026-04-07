@@ -31,6 +31,7 @@ Singleton {
     readonly property bool active: _jobs.length > 0
 
     /// The job list — newest first. Bound by Wrapper's Repeater.
+    // intentional var: JS array rebuilt atomically with spread operator for O(1) binding triggers
     readonly property var jobs: _jobs
 
     /// The currently recording job (at most one), or null
@@ -50,6 +51,7 @@ Singleton {
     // Shared state (service-level, not per-job)
     // ─────────────────────────────────────────────────────────────────────────
 
+    // intentional var: JS array with spread/filter reassignment — [job, ..._jobs] pattern
     property var _jobs: []
     property SttJob _activeRecording: null
     readonly property int _maxJobs: 3
@@ -66,13 +68,16 @@ Singleton {
     property bool _tempDirReady: false
 
     // FIFO delivery queues: windowAddress → [SttJob, ...]
+    // intentional var: JS object used as hash map ({ windowAddress: SttJob[] })
     property var _deliveryQueues: ({})
 
     // Per-session vocabulary hints (tag-chip widget).
     // Service-level so the widget and IPC can modify them without job reference.
     // Reset after each transcription completes (when _activeRecording → null).
+    // intentional var: JS array modified via spread/filter/some — requires JS array semantics
     property var _sessionVocabHints: []
     property bool vocabHintsVisible: false
+    // intentional var: public alias for JS array property above
     readonly property var sessionVocabHints: _sessionVocabHints
 
     // Directories
