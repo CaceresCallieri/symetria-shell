@@ -145,7 +145,7 @@ Item {
         // App icons (active workspace only).
         // visible must track active so the RowLayout collapses the slot to zero width.
         // Special workspaces use a separate config flag (showWindowsOnSpecialWorkspaces).
-        // Note: MergedAppIcons must NOT animate its own implicitWidth — the outer
+        // Note: WorkspaceAppIcons must NOT animate its own group width — the outer
         // Layout.preferredWidth Behavior in MergedBarContent.qml is the canonical width
         // animator. Inner width animations would double-ease (same as Workspace.qml's
         // animateWindowsWidth: false guard).
@@ -155,8 +155,9 @@ Item {
                 && (root.isSpecial ? Config.bar.workspaces.showWindowsOnSpecialWorkspaces : Config.bar.workspaces.showWindows)
             visible: active
 
-            sourceComponent: MergedAppIcons {
+            sourceComponent: WorkspaceAppIcons {
                 workspaceId: root.ws
+                animateGroupWidth: false
             }
         }
     }

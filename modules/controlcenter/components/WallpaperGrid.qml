@@ -64,8 +64,6 @@ GridView {
                 anchors.bottomMargin: itemMargin
                 color: root.placeholderPill.background
                 radius: itemRadius
-                layer.enabled: true
-                layer.smooth: true
 
                 CachingImage {
                     id: cachingImage
@@ -183,8 +181,8 @@ GridView {
                 radius: itemRadius + border.width
                 border.width: isCurrent ? 2 : 0
                 border.color: Colours.palette.m3primary
-                antialiasing: true
-                smooth: true
+                antialiasing: isCurrent // only smooth rounded border when visible
+                smooth: isCurrent
 
                 Behavior on border.width {
                     NumberAnimation {

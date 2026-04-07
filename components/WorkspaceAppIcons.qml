@@ -8,12 +8,16 @@ import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 
-// Container for workspace app icons.
-// Delegates window processing to AppIconsProcessor; handles event-driven updates.
+/// Shared workspace app icons for bar and agentbar.
+/// Delegates window processing to AppIconsProcessor; handles event-driven updates.
 Row {
     id: root
 
     required property int workspaceId
+
+    /// Whether grouped-window pill containers animate their width.
+    /// Bar sets true (self-animated); agentbar sets false (outer pill animates).
+    property bool animateGroupWidth: true
 
     spacing: Appearance.padding.small
     visible: cachedModel.length > 0
@@ -54,10 +58,9 @@ Row {
     Connections {
         target: Hyprland
 
-        function onRawEvent(event: HyprlandEvent) {
-            if (root.windowLayoutEvents.has(event.name)) {
+        function onRawEvent(event: HyprlandEvent): void {
+            if (root.windowLayoutEvents.has(event.name))
                 updateDebounce.restart();
-            }
         }
     }
 
@@ -111,8 +114,11 @@ Row {
                     border.width: 1
                     border.color: glassStyle.border
 
-                    // Smooth width animation when icons are added/removed
+                    // Smooth width animation when icons are added/removed.
+                    // Disabled when the outer container already animates width
+                    // (e.g., agentbar's MergedBarContent Layout.preferredWidth Behavior).
                     Behavior on implicitWidth {
+                        enabled: root.animateGroupWidth
                         Anim {}
                     }
 
