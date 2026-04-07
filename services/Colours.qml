@@ -33,6 +33,7 @@ Singleton {
     property list<string> _paletteKeys: []
 
     // Absolute path to the bundled default scheme (used to seed state file on first launch)
+    // string (not url): raw filesystem path passed to shell cp — not a QML source URL
     readonly property string _defaultSchemePath: Qt.resolvedUrl("../config/color-scheme.json").toString().replace(/^file:\/\//, "")
     readonly property bool light: showPreview ? previewLight : currentLight
     property bool currentLight
@@ -62,6 +63,7 @@ Singleton {
         return Qt.rgba(r, g, b, a);
     }
 
+    // intentional var: nullable — callers pass integers 0–3 and null (which defaults to 1 via ?? operator)
     function layer(c: color, layer: var): color {
         if (!transparency.enabled)
             return c;
@@ -241,18 +243,34 @@ Singleton {
         watchChanges: true
         onFileChanged: reload()
         onLoaded: root.load(text(), false)
+        // Silently ignore missing file on first launch — _initScheme creates it and calls reload()
+        onLoadFailed: err => {
+            if (err !== FileViewError.FileNotFound)
+                console.warn("[Colours] Failed to load scheme:", err);
+        }
     }
 
     // Ensure state scheme file exists — copies bundled default on first launch.
-    // Subsequent launches find the file already present and this is a no-op.
-    // onExited triggers reload() to handle the first-launch race where the
-    // FileView binds before the file is created.
+    // Subsequent launches find the file already present and exit 1 (no-op).
+    // onExited only calls reload() when exit code is 0 (file was actually created)
+    // to avoid a redundant double-load of 111 palette keys on every startup.
+    // Paths are passed as positional args ($1/$2) to avoid single-quote injection
+    // from XDG_STATE_HOME or other env-derived paths.
     Process {
         id: _initScheme
 
         running: true
-        command: ["bash", "-c", `mkdir -p '${Paths.state}' && [ ! -f '${Paths.state}/scheme.json' ] && cp '${root._defaultSchemePath}' '${Paths.state}/scheme.json' || true`]
-        onExited: _schemeView.reload()
+        command: [
+            "bash", "-c",
+            "mkdir -p \"$1\" && [ ! -f \"$1/scheme.json\" ] && cp \"$2\" \"$1/scheme.json\"",
+            "--", Paths.state, root._defaultSchemePath
+        ]
+        onExited: (code, status) => {
+            // code 0: file was created → reload so FileView picks it up
+            // code 1: file already exists, no-op → skip reload (FileView already loaded it)
+            if (code === 0)
+                _schemeView.reload();
+        }
     }
 
     IpcHandler {
