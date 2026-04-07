@@ -41,11 +41,11 @@ ColumnLayout {
 
     Timer {
         id: focusTimer
+        // PasswordField manages its own focus via isActive → _focusTimer (50ms).
+        // WirelessPassword only needs to ensure the outer ColumnLayout has focus
+        // so keyboard events route into the component tree.
         interval: 150
-        onTriggered: {
-            root.forceActiveFocus();
-            passwordField.forceActiveFocus();
-        }
+        onTriggered: root.forceActiveFocus()
     }
 
     spacing: Appearance.spacing.normal
@@ -264,29 +264,16 @@ ColumnLayout {
 
                         // Connect to network
                         NetworkConnection.connectWithPassword(root.network, password, result => {
-                            if (result && result.success)
-                            // Connection successful, monitor will handle the rest
-                            {} else if (result && result.needsPassword) {
-                                // Shouldn't happen since we provided password
-                                connectionMonitor.stop();
-                                connecting = false;
-                                hasError = true;
-                                enabled = true;
-                                text = qsTr("Connect");
-                                passwordField.password = "";
-                                // Delete the failed connection
-                                if (root.network && root.network.ssid) {
-                                    NmcliWifi.forgetNetwork(root.network.ssid);
-                                }
+                            if (result && result.success) {
+                                // Connection successful, monitor will handle the rest
                             } else {
-                                // Connection failed immediately - show error
+                                // Connection failed immediately (bad password or needsPassword) — show error
                                 connectionMonitor.stop();
                                 connecting = false;
                                 hasError = true;
                                 enabled = true;
                                 text = qsTr("Connect");
                                 passwordField.password = "";
-                                // Delete the failed connection
                                 if (root.network && root.network.ssid) {
                                     NmcliWifi.forgetNetwork(root.network.ssid);
                                 }

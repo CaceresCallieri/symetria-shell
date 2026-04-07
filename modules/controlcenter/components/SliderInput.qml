@@ -40,12 +40,9 @@ ColumnLayout {
         if (parseValueFunction) {
             return parseValueFunction(text);
         }
-        // Default parse function
-        if (validator && validator.bottom !== undefined) {
-            // Check if it's an integer validator
-            if (validator.top !== undefined && validator.top === Math.floor(validator.top)) {
-                return parseInt(text);
-            }
+        // Match formatValue logic: IntValidator has no 'decimals' property
+        if (validator && validator.decimals === undefined) {
+            return parseInt(text);
         }
         return parseFloat(text);
     }
@@ -87,9 +84,9 @@ ColumnLayout {
                 text = root.formatValue(root.value);
             }
             
-            onTextEdited: (text) => {
+            onTextEdited: (editedText) => {
                 if (hasFocus) {
-                    const val = root.parseValue(text);
+                    const val = root.parseValue(editedText);
                     if (!isNaN(val)) {
                         // Validate against validator bounds if available
                         let isValid = true;

@@ -53,14 +53,10 @@ FocusScope {
         }
     }
 
-    Connections {
-        target: root
-
-        function onIsActiveChanged(): void {
-            if (root.isActive) {
-                _focusTimer.start();
-                root.password = "";
-            }
+    onIsActiveChanged: {
+        if (isActive) {
+            _focusTimer.start();
+            password = "";
         }
     }
 

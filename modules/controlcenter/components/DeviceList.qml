@@ -40,7 +40,6 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: root.headerComponent ? 0 : 0
         spacing: Appearance.spacing.small
         visible: root.title !== "" || root.description !== ""
 

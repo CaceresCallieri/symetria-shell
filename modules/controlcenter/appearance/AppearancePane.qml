@@ -107,8 +107,7 @@ Item {
                     active: {
                         const isActive = root.session.activeIndex === 3;
                         const isAdjacent = Math.abs(root.session.activeIndex - 3) === 1;
-                        const splitLayout = root.children[0];
-                        const loader = splitLayout && splitLayout.rightLoader ? splitLayout.rightLoader : null;
+                        const loader = appearanceSplitLayout.rightLoader;
                         const shouldActivate = loader && loader.item !== null && (isActive || isAdjacent);
                         return shouldActivate;
                     }
@@ -128,6 +127,7 @@ Item {
     }
 
     SplitPaneLayout {
+        id: appearanceSplitLayout
         anchors.fill: parent
 
         leftContent: Component {
