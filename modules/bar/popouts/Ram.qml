@@ -25,32 +25,43 @@ Column {
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.updatesWidth
 
+    // PID→workspace cache: rebuilt every 3s (same cadence as ProcessMemory updates).
+    // Inverts the O(n×m) lookup (50 processes × all toplevels per call) to O(m) build + O(1) lookups.
+    property var _pidWorkspaceCache: ({})
+
     // Subscribe to ProcessMemory for top process data
     Ref {
         service: ProcessMemory
     }
 
-    /// Look up workspace for a process PID via Hyprland toplevels
+    /// Look up workspace for a process PID via cached toplevel data.
+    /// Cache is rebuilt by _cacheRebuildTimer every 3 seconds.
     /// @param pid Process ID to search for
     /// @returns {id, name} object or null for background processes
     function getWorkspaceForPid(pid: int): var {
         if (!pid) return null;
+        return _pidWorkspaceCache[pid] ?? null;
+    }
 
-        // Search all toplevels for matching PID
-        for (const toplevel of Hypr.toplevels.values) {
-            const ipc = toplevel.lastIpcObject;
-            if (ipc && ipc.pid === pid) {
-                // Return workspace info
-                const ws = ipc.workspace;
-                if (ws) {
-                    return {
-                        id: ws.id,
-                        name: ws.name
+    Timer {
+        id: _cacheRebuildTimer
+        interval: 3000
+        repeat: true
+        running: ProcessMemory.topProcesses.length > 0
+        triggeredOnStart: true
+        onTriggered: {
+            const cache = {};
+            for (const toplevel of Hypr.toplevels.values) {
+                const ipc = toplevel.lastIpcObject;
+                if (ipc?.pid && ipc?.workspace) {
+                    cache[ipc.pid] = {
+                        id: ipc.workspace.id,
+                        name: ipc.workspace.name
                     };
                 }
             }
+            root._pidWorkspaceCache = cache;
         }
-        return null;
     }
 
     /// Convert workspace to display icon (Roman numeral or Material icon)

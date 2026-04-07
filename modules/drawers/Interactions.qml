@@ -17,6 +17,7 @@ CustomMouseArea {
 
     property point dragStart
     property bool utilitiesShortcutActive
+    property real _pendingPopoutX
 
     function withinPanelHeight(panel: Item, x: real, y: real): bool {
         const panelY = Config.border.thickness + panel.y;
@@ -196,15 +197,25 @@ CustomMouseArea {
             utilitiesShortcutActive = false;
         }
 
-        // Show popouts on hover
+        // Show popouts on hover (throttled to ~60fps to avoid redundant childAt() work)
         if (y < bar.implicitHeight) {
-            bar.checkPopout(x);
+            _pendingPopoutX = x;
+            if (!_popoutThrottleTimer.running)
+                _popoutThrottleTimer.start();
         } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                    && !inTopPanel(panels.popouts, x, y)
                    && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
             popouts.hasCurrent = false;
             bar.closeTray();
         }
+    }
+
+    // Throttle checkPopout to ~60fps (16ms) — without this, every mouse movement
+    // event triggers childAt() traversals in Bar.qml, which is wasteful at 120+ Hz.
+    Timer {
+        id: _popoutThrottleTimer
+        interval: 16
+        onTriggered: root.bar.checkPopout(root._pendingPopoutX)
     }
 
     // Monitor individual visibility changes
