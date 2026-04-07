@@ -6,6 +6,9 @@
 #
 # To bypass temporarily:
 #   git commit --no-verify
+#
+# Note: this file has no .sh extension and is therefore not linted by the hook itself.
+# To lint manually: shellcheck -e SC2329 .githooks/pre-commit
 
 set -euo pipefail
 
@@ -33,12 +36,14 @@ FAILED=0
 # and import resolution config, ~93% of files trigger exit 255 with no output.
 # We only block commits when qmllint produces actual diagnostic output — this
 # makes qmllint a no-op today but ready for when import resolution is configured.
+#
+# IMPORTANT: capture output with "if ! output=$(cmd)" to prevent set -euo pipefail
+# from exiting on qmllint's non-zero exit code before the output check is reached.
 if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
     if command -v qmllint >/dev/null 2>&1; then
         QML_ERRORS=0
         for file in "${STAGED_QML[@]}"; do
-            output=$(qmllint "$file" 2>&1)
-            if [[ $? -ne 0 && -n "$output" ]]; then
+            if ! output=$(qmllint "$file" 2>&1) && [[ -n "$output" ]]; then
                 echo "$output" >&2
                 QML_ERRORS=$((QML_ERRORS + 1))
             fi
@@ -58,7 +63,7 @@ if [[ ${#STAGED_SH[@]} -gt 0 ]]; then
         SC_ERRORS=0
         for file in "${STAGED_SH[@]}"; do
             # -e SC2329: "function never invoked" false positive on dynamic dispatch
-            if ! shellcheck -e SC2329 "$file" 2>&1; then
+            if ! shellcheck -e SC2329 "$file"; then
                 SC_ERRORS=$((SC_ERRORS + 1))
             fi
         done
