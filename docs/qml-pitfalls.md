@@ -270,12 +270,13 @@ const toplevel = Hypr.activeToplevel ?? Hyprland.activeToplevel;
 
 `Behavior on height { NumberAnimation { duration: 100 } }` does **not** work when `height` is bound to a property that changes every animation frame (e.g., via `NumberAnimation on animationTime`).
 
-**The Problem:** Each frame, the binding produces a new value. The `Behavior` cancels its in-progress animation and starts a fresh 100ms animation from the current interpolated value to the new target. With ~16ms between frames, the animation only progresses ~16% of its first ease step before being cancelled. The net visible movement per frame is near-zero — bars appear frozen.
+**The Problem:** Each frame, the binding produces a new value. The `Behavior` cancels its in-progress animation and starts a fresh 100ms animation from the current interpolated value to the new target. With ~16ms between frames, the animation barely progresses before being cancelled — the net visible movement per frame is near-zero and bars appear frozen.
 
 **Also wrong:** `onTargetHeightChanged` with imperative lerp (`smoothed += (target - smoothed) * factor`). This only fires when new data arrives (~10Hz for audio level), leaving ~90ms static gaps between updates. Bars snap instead of gliding.
 
 **Correct approach:** `FrameAnimation` with continuous lerp:
 ```qml
+// Inside a Repeater delegate (id: bar) inside the AudioWaveform component
 property real smoothedHeight: targetHeight
 FrameAnimation {
     running: root.active

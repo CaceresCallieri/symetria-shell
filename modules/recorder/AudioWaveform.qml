@@ -42,6 +42,7 @@ Item {
         readonly property real waveFrequency: 0.8
         readonly property real minBarHeight: 2
         readonly property real maxBarHeight: 20
+        readonly property real smoothingFactor: 0.25  // per-frame decay at 60fps (framerate-independent via FrameAnimation.frameTime)
     }
 
     // Paused state visual configuration
@@ -178,7 +179,7 @@ Item {
                     return 1.0;
                 }
 
-                property real smoothedHeight: targetHeight
+                property real smoothedHeight: targetHeight  // start at target to avoid snap-from-zero on first render
 
                 // Continuous smoothing: lerp toward targetHeight every frame.
                 // audioLevel arrives at ~10Hz; this fills the gaps at render
@@ -192,11 +193,11 @@ Item {
                 // That only fires on data arrival (~10Hz), leaving 90ms static
                 // gaps between updates — bars snap instead of gliding.
                 FrameAnimation {
-                    running: root.active
+                    running: root.active && root.displayState !== "paused"
                     onTriggered: {
                         const delta = bar.targetHeight - bar.smoothedHeight;
                         if (Math.abs(delta) > 0.1)
-                            bar.smoothedHeight += delta * 0.25;
+                            bar.smoothedHeight += delta * (1 - Math.pow(1 - root.audioConfig.smoothingFactor, frameTime * 60));
                         else
                             bar.smoothedHeight = bar.targetHeight;
                     }
