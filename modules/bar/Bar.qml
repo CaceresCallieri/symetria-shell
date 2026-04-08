@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
-import qs.modules.stt as SttModule
 import qs.modules.recorder as RecorderModule
 import "popouts" as BarPopouts
 import "components"
@@ -184,19 +183,7 @@ Item {
             closeTray();
 
         if (!target) {
-            // Check STT center embed (not in left/right sections)
-            if (sttCenterContainer.visible) {
-                const localPos = mapToItem(sttCenterContainer, x, sttCenterContainer.height / 2);
-                if (localPos.x >= 0 && localPos.x <= sttCenterContainer.width) {
-                    popouts.currentName = "stt";
-                    popouts.currentCenter = Qt.binding(
-                        () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
-                    );
-                    popouts.hasCurrent = true;
-                    return;
-                }
-            }
-            // Check audio recording center embed
+            // Check recording center embed (not in left/right sections)
             if (recordingCenterContainer.visible) {
                 const localPos = mapToItem(recordingCenterContainer, x, recordingCenterContainer.height / 2);
                 if (localPos.x >= 0 && localPos.x <= recordingCenterContainer.width) {
@@ -344,25 +331,28 @@ Item {
         }
     }
 
-    // STT bar embed — shown in center when merge mode is active and recording.
+    // Recording bar embed — unified center embed for both STT and audio recording.
     // Clip-reveals from center outward: container grows horizontally while
     // content stays centered, so the middle portion appears first.
     //
-    // Animation is decoupled from SttService.active (which lingers ~450ms
+    // Animation is decoupled from service active states (which linger ~450ms
     // for the drawer hide animation) — instead, the job's `closing` signal
     // triggers the reverse clip animation immediately on cancel/restart.
     Item {
-        id: sttCenterContainer
+        id: recordingCenterContainer
 
-        // Manually managed show state: set true when STT starts recording,
-        // set false immediately when the job's closing signal fires.
         property bool _showEmbed: false
         readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 
-        // Track the latest job to watch its closing signal
-        readonly property SttJob _latestJob: {
-            const jobs = SttService.jobs;
-            return jobs.length > 0 ? jobs[jobs.length - 1] : null;
+        // Track the active job to watch its closing signal
+        readonly property var _activeJob: {
+            const mode = RecordingSessionManager.activeMode;
+            if (mode === "audio") return AudioRecorderService.job;
+            if (mode === "stt") {
+                const jobs = SttService.jobs;
+                return jobs.length > 0 ? jobs[jobs.length - 1] : null;
+            }
+            return null;
         }
 
         anchors.horizontalCenter: parent.horizontalCenter
@@ -372,81 +362,6 @@ Item {
         // visible must be true BEFORE width > 0 so children compute
         // layout sizes (Qt Quick Layouts defer when ancestors are invisible).
         // clip: true + width: 0 naturally hides content until the reveal animation.
-        visible: _shouldBeActive || width > 0
-        implicitWidth: _shouldBeActive ? sttEmbed.implicitWidth : 0
-        implicitHeight: sttEmbed.implicitHeight
-        width: implicitWidth
-        height: implicitHeight
-
-        SttModule.SttBarEmbed {
-            id: sttEmbed
-
-            x: (sttCenterContainer.width - implicitWidth) / 2
-            width: implicitWidth
-        }
-
-        Behavior on implicitWidth {
-            Anim {
-                duration: Appearance.anim.durations.expressiveDefaultSpatial
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-        }
-
-        // Show embed when STT becomes active; closing signal handles hide.
-        // The fallback to false on !active is a safety net for edge cases
-        // where closing might not fire (e.g., service teardown).
-        Connections {
-            target: SttService
-
-            function onActiveChanged(): void {
-                sttCenterContainer._showEmbed = SttService.active;
-            }
-
-            function onVocabHintsVisibleChanged(): void {
-                if (!sttCenterContainer._shouldBeActive) return;
-
-                if (SttService.vocabHintsVisible) {
-                    root.popouts.currentName = "stt";
-                    root.popouts.currentCenter = Qt.binding(
-                        () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
-                    );
-                    root.popouts.hasCurrent = true;
-                } else if (root.popouts.currentName === "stt") {
-                    root.popouts.hasCurrent = false;
-                }
-            }
-        }
-
-        // Immediate close animation: react to job.closing rather than
-        // waiting for the job to be removed from the jobs array (~450ms).
-        // For restart: close starts at T=0, new job opens at T=500ms —
-        // producing a clean close → gap → open sequence.
-        Connections {
-            target: sttCenterContainer._latestJob
-
-            function onClosingChanged(): void {
-                if (sttCenterContainer._latestJob?.closing)
-                    sttCenterContainer._showEmbed = false;
-            }
-        }
-    }
-
-    // Audio recorder bar embed — shown in center when merge mode is active
-    // and audio recording is active. Same clip-reveal pattern as STT embed.
-    // Mutual exclusivity (via RecordingSessionManager) ensures only one
-    // center embed is ever active at a time.
-    Item {
-        id: recordingCenterContainer
-
-        property bool _showEmbed: false
-        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
-
-        readonly property AudioRecorderJob _job: AudioRecorderService.job
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        clip: true
-
         visible: _shouldBeActive || width > 0
         implicitWidth: _shouldBeActive ? recordingEmbed.implicitWidth : 0
         implicitHeight: recordingEmbed.implicitHeight
@@ -467,19 +382,41 @@ Item {
             }
         }
 
+        // Show embed when any recording mode becomes active.
         Connections {
-            target: AudioRecorderService
+            target: RecordingSessionManager
 
             function onActiveChanged(): void {
-                recordingCenterContainer._showEmbed = AudioRecorderService.active;
+                recordingCenterContainer._showEmbed = RecordingSessionManager.active;
             }
         }
 
+        // Vocab hints popout trigger (STT mode only).
         Connections {
-            target: recordingCenterContainer._job
+            target: SttService
+
+            function onVocabHintsVisibleChanged(): void {
+                if (!recordingCenterContainer._shouldBeActive) return;
+
+                if (SttService.vocabHintsVisible) {
+                    root.popouts.currentName = "recording";
+                    root.popouts.currentCenter = Qt.binding(
+                        () => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x
+                    );
+                    root.popouts.hasCurrent = true;
+                } else if (root.popouts.currentName === "recording") {
+                    root.popouts.hasCurrent = false;
+                }
+            }
+        }
+
+        // Immediate close animation: react to job.closing rather than
+        // waiting for the job to be removed from the jobs array (~450ms).
+        Connections {
+            target: recordingCenterContainer._activeJob
 
             function onClosingChanged(): void {
-                if (recordingCenterContainer._job?.closing)
+                if (recordingCenterContainer._activeJob?.closing)
                     recordingCenterContainer._showEmbed = false;
             }
         }

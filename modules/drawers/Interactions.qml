@@ -83,7 +83,7 @@ CustomMouseArea {
                 visibilities.utilities = false;
 
             if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                    && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
+                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
                 _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -205,7 +205,7 @@ CustomMouseArea {
                 _popoutThrottleTimer.start();
         } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                    && !inTopPanel(panels.popouts, x, y)
-                   && !(popouts.currentName === "stt" && SttService.vocabHintsVisible)) {
+                   && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();

@@ -5,19 +5,19 @@ import qs.services
 import qs.config
 import QtQuick
 
-/// Reusable audio waveform visualization for STT recording.
+/// Reusable audio waveform visualization for recording sessions.
 ///
 /// Renders animated vertical bars that respond to live audio level
 /// during recording, show a sine wave pattern during processing,
 /// and dim to gold during pause. Used by both the drawer Content
-/// and the bar-embedded SttBarEmbed.
+/// and the bar-embedded RecordingBarEmbed.
 Item {
     id: root
 
-    /// Live audio RMS level (0.0–1.0) from SttJob.audioLevel.
+    /// Live audio RMS level (0.0–1.0) from job.audioLevel.
     property real audioLevel: 0
 
-    /// Current STT state: "recording", "paused", "processing".
+    /// Current recording state: "recording", "paused", "processing".
     property string sttState: "recording"
 
     /// Number of visualizer bars.

@@ -8,13 +8,14 @@ import QtQuick
 
 /// Root component for the unified recorder module.
 ///
-/// Handles two IPC targets:
+/// Handles three IPC targets:
 ///   - "audio": audio recorder specific (toggle/start/stop/pause/cancel)
+///   - "stt": speech-to-text specific (toggle/start/stop/pause/resume/cancel/restart/retry/mode/hints)
 ///   - "recorder": shared actions routed to whichever mode is active
 ///
 /// Manages drawer visibility across all screens with merge mode awareness:
 /// when AgentService.mergeActive is true, the bar embed takes over and the
-/// drawer hides (same handoff pattern as STT).
+/// drawer hides.
 ///
 /// Named RecorderRoot (not Recorder) to avoid type-name collision with
 /// services/Recorder.qml (the screen-recorder singleton). Both names
@@ -28,8 +29,6 @@ Scope {
         function onActiveChanged(): void {
             if (!Config.audioRecorder.enabled)
                 return;
-
-            // Bar embed handles display when merge mode is active
             if (AgentService.mergeActive)
                 return;
 
@@ -38,14 +37,31 @@ Scope {
         }
     }
 
-    // Handle merge mode toggling mid-recording.
+    // ── STT visibility sync ──────────────────────────────────────
+
+    Connections {
+        target: SttService
+
+        function onActiveChanged(): void {
+            if (!Config.stt.enabled)
+                return;
+            if (AgentService.mergeActive)
+                return;
+
+            for (const [_, visibilities] of Visibilities.screens)
+                visibilities.recorder = SttService.active;
+        }
+    }
+
+    // ── Merge mode handoff (unified for both modes) ──────────────
     // When merge activates: close drawer (bar embed takes over).
     // When merge deactivates: reopen drawer.
+
     Connections {
         target: AgentService
 
         function onMergeActiveChanged(): void {
-            if (!Config.audioRecorder.enabled || !AudioRecorderService.active)
+            if (!RecordingSessionManager.active)
                 return;
 
             for (const [_, visibilities] of Visibilities.screens)
@@ -78,6 +94,55 @@ Scope {
 
         function cancel(): void {
             AudioRecorderService.cancel();
+        }
+    }
+
+    // ── IPC: "stt" target (speech-to-text specific) ──────────────
+
+    IpcHandler {
+        target: "stt"
+
+        function toggle(): void {
+            if (!RecordingSessionManager.acquire("stt")) return;
+            SttService.toggle();
+        }
+
+        function start(): void {
+            if (!RecordingSessionManager.acquire("stt")) return;
+            SttService.start();
+        }
+
+        function stop(): void {
+            SttService.stop();
+        }
+
+        function pause(): void {
+            SttService.pause();
+        }
+
+        function resume(): void {
+            SttService.resume();
+        }
+
+        function cancel(): void {
+            SttService.cancel();
+        }
+
+        function restart(): void {
+            if (!RecordingSessionManager.acquire("stt")) return;
+            SttService.restart();
+        }
+
+        function retry(): void {
+            SttService.retry();
+        }
+
+        function mode(choice: string): void {
+            SttService.setDeliveryChoice(choice);
+        }
+
+        function hints(): void {
+            SttService.toggleVocabHints();
         }
     }
 

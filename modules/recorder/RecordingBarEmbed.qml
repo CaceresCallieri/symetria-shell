@@ -4,33 +4,58 @@ import qs.components
 import qs.components.controls
 import qs.services
 import qs.config
-import qs.modules.stt as SttModule
 import QtQuick
 import QtQuick.Layouts
 
-/// Compact audio recording indicator for the bar center.
+/// Compact recording indicator for the bar center (merge mode).
 ///
-/// Shown when AgentService.mergeActive is true (workspaces moved to bottom
-/// bar, leaving center empty). Falls back to the drawer when merge is off.
+/// Mode-aware: shows audio recording (mic icon) or STT (delivery mode
+/// icon) depending on RecordingSessionManager.activeMode. Falls back
+/// to the drawer when merge mode is off.
 ///
-/// Layout: [MM:SS] · [waveform bars] · [mic icon]
+/// Layout: [MM:SS] · [waveform bars] · [mode icon]
 /// On success/error: brief icon indicator with auto-dismiss.
 Item {
     id: root
 
-    readonly property AudioRecorderJob job: AudioRecorderService.job
+    readonly property string mode: RecordingSessionManager.activeMode
+
+    readonly property var job: {
+        if (mode === "audio") return AudioRecorderService.job;
+        if (mode === "stt") {
+            const jobs = SttService.jobs;
+            return jobs.length > 0 ? jobs[jobs.length - 1] : null;
+        }
+        return null;
+    }
 
     // Coalesce internal states to user-visible states
     readonly property string displayState: {
         if (!job) return "idle";
         const s = job.state;
-        if (s === "saving") return "processing";
+        if (mode === "audio" && s === "saving") return "processing";
+        if (mode === "stt" && (s === "transcribed" || s === "delivering")) return "processing";
         return s;
     }
 
     readonly property bool isRecordingPhase: displayState === "recording"
         || displayState === "paused"
         || displayState === "processing"
+
+    // STT delivery mode
+    readonly property bool isAskMode: mode === "stt" && SttService.isAskMode
+    readonly property var deliveryModeIcons: ({
+        "clipboard": "content_copy",
+        "inject": "input",
+        "submit": "send"
+    })
+
+    function cycleDeliveryMode(): void {
+        if (!job || mode !== "stt") return;
+        const modes = ["clipboard", "inject", "submit"];
+        const idx = modes.indexOf(job.activeDeliveryChoice ?? "clipboard");
+        job.setDeliveryChoice(modes[(idx + 1) % modes.length]);
+    }
 
     function formatElapsedTime(seconds: real): string {
         const mins = Math.floor(seconds / 60);
@@ -39,7 +64,6 @@ Item {
     }
 
     // Flat structure: only one child is visible at a time.
-    // Compute implicit size directly from the active child.
     implicitWidth: {
         if (compactRow.visible) return compactRow.implicitWidth;
         if (successIcon.visible) return successIcon.implicitWidth;
@@ -53,7 +77,7 @@ Item {
         return 0;
     }
 
-    // ── Compact row: [timer] · [waveform] · [mic icon] ─────
+    // ── Compact row: [timer] · [waveform] · [mode icon] ─────
     RowLayout {
         id: compactRow
 
@@ -75,7 +99,6 @@ Item {
             Behavior on opacity { Anim {} }
         }
 
-        // Separator
         StyledText {
             text: "\u00b7"
             font.pointSize: Appearance.font.size.small
@@ -83,7 +106,7 @@ Item {
         }
 
         // Audio level bars
-        SttModule.SttWaveform {
+        AudioWaveform {
             Layout.preferredWidth: implicitWidth
             Layout.preferredHeight: 24
 
@@ -93,18 +116,31 @@ Item {
             active: root.isRecordingPhase
         }
 
-        // Separator
+        // Separator before trailing icon (visible when icon is visible)
         StyledText {
+            visible: audioIcon.visible || sttModeIcon.visible
             text: "\u00b7"
             font.pointSize: Appearance.font.size.small
             color: Colours.palette.m3outlineVariant
         }
 
-        // Mic icon — indicates audio recording mode
+        // Audio mode: mic icon
         MaterialIcon {
+            id: audioIcon
+
+            visible: root.mode === "audio"
             text: "mic"
             color: root.displayState === "recording" ? Colours.palette.m3error : Colours.palette.m3onSurfaceVariant
             font.pointSize: Appearance.font.size.small
+        }
+
+        // STT mode: delivery mode icon (ask mode only)
+        PillButton {
+            id: sttModeIcon
+
+            visible: root.isAskMode
+            icon: root.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"
+            onClicked: root.cycleDeliveryMode()
         }
     }
 
@@ -114,7 +150,7 @@ Item {
 
         anchors.centerIn: parent
         visible: root.displayState === "success"
-        text: "audio_file"
+        text: root.mode === "audio" ? "audio_file" : "check_circle"
         color: Colours.palette.m3confirm
         font.pointSize: Appearance.font.size.large
         opacity: visible ? 1 : 0

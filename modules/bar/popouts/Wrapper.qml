@@ -146,7 +146,7 @@ Item {
     }
 
     Binding {
-        when: root.hasCurrent && root.currentName === "stt" && SttService.vocabHintsVisible
+        when: root.hasCurrent && root.currentName === "recording" && SttService.vocabHintsVisible
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"

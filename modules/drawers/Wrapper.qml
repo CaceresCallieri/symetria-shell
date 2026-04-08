@@ -179,7 +179,6 @@ Variants {
                 property bool sidebar
                 property bool clipboard
                 property bool askpass
-                property bool stt
                 property bool recorder
                 property bool keycaster
                 property bool calculator

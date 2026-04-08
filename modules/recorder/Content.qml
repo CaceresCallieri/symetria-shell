@@ -5,16 +5,20 @@ import qs.components.controls
 import qs.components.containers
 import qs.services
 import qs.config
-import qs.modules.stt as SttModule
 import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-/// Content UI for the recorder drawer card.
+/// Unified content UI for the recorder drawer card.
+///
+/// Shared base handles: container, hover debounce, compact row (timer +
+/// waveform), height transitions. Mode-specific sections (trailing icon,
+/// hover buttons, success/error, extras) are selected based on
+/// RecordingSessionManager.activeMode.
 ///
 /// Compact horizontal layout:
-/// - Default: [MM:SS] · [waveform] · [mic icon]
-/// - Hover: action buttons (pause, cancel, stop)
+/// - Default: [MM:SS] · [waveform] · [mode icon]
+/// - Hover: action buttons (pause, [restart], cancel, stop/submit)
 ///
 /// Terminal states (error, success) replace the compact row.
 Item {
@@ -22,10 +26,50 @@ Item {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
-    readonly property AudioRecorderJob job: AudioRecorderService.job
+
+    // ── Mode + job resolution ──────────────────────────────────────
+
+    readonly property string mode: RecordingSessionManager.activeMode
+
+    readonly property var job: {
+        if (mode === "audio") return AudioRecorderService.job;
+        if (mode === "stt") {
+            const jobs = SttService.jobs;
+            return jobs.length > 0 ? jobs[jobs.length - 1] : null;
+        }
+        return null;
+    }
+
+    // ── State mapping (mode-aware) ─────────────────────────────────
+
+    readonly property string displayState: {
+        const s = job?.state ?? "idle";
+        if (mode === "audio" && s === "saving") return "processing";
+        if (mode === "stt" && (s === "transcribed" || s === "delivering")) return "processing";
+        return s;
+    }
+
+    readonly property real audioLevel: job?.audioLevel ?? 0
+    readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
+
+    // ── STT-specific property aliases ──────────────────────────────
+
+    readonly property bool serviceIsAskMode: mode === "stt" && SttService.isAskMode
+    readonly property string serviceDeliveryChoice: job?.activeDeliveryChoice ?? "clipboard"
+    readonly property string serviceInjectionPath: job?.injectionPath ?? ""
+    readonly property bool serviceInjectionDowngraded: job?.injectionDowngraded ?? false
+    readonly property bool serviceInjectionSubmitted: job?.injectionSubmitted ?? false
+    readonly property bool serviceAutoRetrying: job?.autoRetrying ?? false
+    readonly property string serviceErrorRaw: job?.errorRaw ?? ""
+    readonly property string serviceErrorSource: job?.errorSource ?? ""
+
+    // ── Shared properties ──────────────────────────────────────────
 
     property bool enableHeightTransition: false
     property bool hovered: false
+
+    readonly property int barCount: 16
+    readonly property int audioBarContainerHeight: 24
 
     Timer {
         id: hoverDebounce
@@ -33,17 +77,21 @@ Item {
         onTriggered: root.hovered = false
     }
 
-    // Map "saving" → "processing" for waveform display
-    readonly property string displayState: {
-        const s = job?.state ?? "idle";
-        if (s === "saving") return "processing";
-        return s;
-    }
-    readonly property real audioLevel: job?.audioLevel ?? 0
-    readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
+    // ── Delivery mode cycling (STT only) ───────────────────────────
 
-    readonly property int barCount: 16
-    readonly property int audioBarContainerHeight: 24
+    readonly property var deliveryModes: ["clipboard", "inject", "submit"]
+    readonly property var deliveryModeIcons: ({
+        "clipboard": "content_copy",
+        "inject": "input",
+        "submit": "send"
+    })
+
+    function cycleDeliveryMode(): void {
+        if (!job) return;
+        const idx = deliveryModes.indexOf(serviceDeliveryChoice);
+        const next = deliveryModes[(idx + 1) % deliveryModes.length];
+        job.setDeliveryChoice(next);
+    }
 
     function formatElapsedTime(seconds: real): string {
         const mins = Math.floor(seconds / 60);
@@ -51,10 +99,12 @@ Item {
         return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
     }
 
+    // ── State configuration map (mode-aware icon colors) ───────────
+
     readonly property var stateMap: ({
         "recording": {
             icon: "mic",
-            iconColor: Colours.palette.m3error
+            iconColor: root.mode === "audio" ? Colours.palette.m3error : Colours.palette.m3primary
         },
         "paused": {
             icon: "pause",
@@ -69,8 +119,8 @@ Item {
             iconColor: Colours.palette.m3error
         },
         "success": {
-            icon: "check_circle",
-            iconColor: Colours.palette.m3confirm
+            icon: root.mode === "audio" ? "audio_file" : "check_circle",
+            iconColor: root.mode === "audio" ? Colours.palette.m3confirm : Colours.palette.m3primary
         },
         "idle": {
             icon: "mic",
@@ -80,24 +130,25 @@ Item {
 
     readonly property var stateConfig: stateMap[root.displayState] ?? stateMap["idle"]
 
-    // ── Success component ──────────────────────────────────────────
+    // ── Audio success component ────────────────────────────────────
+
     Component {
-        id: successComponent
+        id: audioSuccessComponent
 
         Item {
             implicitWidth: compactRow.implicitWidth
             implicitHeight: compactRow.implicitHeight
 
             StyledRect {
-                id: successPill
+                id: audioSuccessPill
 
                 anchors.verticalCenter: parent.verticalCenter
 
                 readonly property real targetIconSize: Appearance.font.size.large
                 readonly property real targetPadding: Appearance.padding.normal * 2
 
-                implicitWidth: successIcon.implicitWidth + targetPadding
-                implicitHeight: successIcon.implicitHeight + Appearance.padding.smaller * 2
+                implicitWidth: audioSuccessIcon.implicitWidth + targetPadding
+                implicitHeight: audioSuccessIcon.implicitHeight + Appearance.padding.smaller * 2
                 width: implicitWidth
                 height: implicitHeight
 
@@ -110,25 +161,25 @@ Item {
                 opacity: 0
 
                 MaterialIcon {
-                    id: successIcon
+                    id: audioSuccessIcon
 
                     anchors.centerIn: parent
                     text: "audio_file"
                     color: root.stateConfig.iconColor
-                    font.pointSize: successPill.targetIconSize
+                    font.pointSize: audioSuccessPill.targetIconSize
                 }
 
                 Component.onCompleted: {
                     x = (parent.width - width) / 2;
                     scale = 0.4;
-                    popAnim.start();
+                    audioPopAnim.start();
                 }
 
                 ParallelAnimation {
-                    id: popAnim
+                    id: audioPopAnim
 
                     NumberAnimation {
-                        target: successPill
+                        target: audioSuccessPill
                         property: "scale"
                         to: 1.0
                         duration: Appearance.anim.durations.expressiveDefaultSpatial
@@ -137,7 +188,7 @@ Item {
                     }
 
                     NumberAnimation {
-                        target: successPill
+                        target: audioSuccessPill
                         property: "opacity"
                         to: 1.0
                         duration: Appearance.anim.durations.small
@@ -149,9 +200,104 @@ Item {
         }
     }
 
-    // ── Error component ────────────────────────────────────────────
+    // ── STT success component ──────────────────────────────────────
+
     Component {
-        id: errorComponent
+        id: sttSuccessComponent
+
+        Item {
+            implicitWidth: compactRow.implicitWidth
+            implicitHeight: compactRow.implicitHeight
+
+            StyledRect {
+                id: sttSuccessPill
+
+                anchors.verticalCenter: parent.verticalCenter
+
+                readonly property real targetIconSize: Appearance.font.size.large
+                readonly property real targetPadding: Appearance.padding.normal * 2
+
+                implicitWidth: sttSuccessIcon.implicitWidth + targetPadding
+                implicitHeight: sttSuccessIcon.implicitHeight + Appearance.padding.smaller * 2
+                width: implicitWidth
+                height: implicitHeight
+
+                radius: Appearance.rounding.full
+                color: Colours.pillStyle(
+                    Colours.palette.m3surfaceContainerHigh,
+                    Colours.glass.subtle
+                ).background
+
+                opacity: 0
+
+                MaterialIcon {
+                    id: sttSuccessIcon
+
+                    anchors.centerIn: parent
+                    text: {
+                        if (root.serviceInjectionDowngraded) return "content_copy";
+                        switch (root.serviceInjectionPath) {
+                            case "rpc":
+                                return root.serviceInjectionSubmitted ? "send" : "input";
+                            case "paste": return "input";
+                            default: return "content_copy";
+                        }
+                    }
+                    color: root.serviceInjectionDowngraded
+                        ? Colours.palette.m3error
+                        : root.stateConfig.iconColor
+                    font.pointSize: sttSuccessPill.targetIconSize
+                }
+
+                Component.onCompleted: {
+                    if (root.serviceIsAskMode) {
+                        x = modeBtn.x + modeBtn.width / 2 - width / 2;
+                        scale = modeBtn.width / width;
+                    } else {
+                        x = (parent.width - width) / 2;
+                        scale = 0.4;
+                    }
+                    sttPopAnim.start();
+                }
+
+                ParallelAnimation {
+                    id: sttPopAnim
+
+                    NumberAnimation {
+                        target: sttSuccessPill
+                        property: "x"
+                        to: (sttSuccessPill.parent.width - sttSuccessPill.width) / 2
+                        duration: Appearance.anim.durations.expressiveDefaultSpatial
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                    }
+
+                    NumberAnimation {
+                        target: sttSuccessPill
+                        property: "scale"
+                        to: 1.0
+                        duration: Appearance.anim.durations.expressiveDefaultSpatial
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                    }
+
+                    NumberAnimation {
+                        target: sttSuccessPill
+                        property: "opacity"
+                        to: 1.0
+                        duration: Appearance.anim.durations.small
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Audio error component ──────────────────────────────────────
+
+    Component {
+        id: audioErrorComponent
 
         ColumnLayout {
             spacing: Appearance.spacing.small
@@ -182,7 +328,7 @@ Item {
                 spacing: Appearance.spacing.normal
 
                 PillButton {
-                    id: errorCancelBtn
+                    id: audioErrorCancelBtn
                     icon: "close"
                     iconColor: Colours.palette.m3error
                     onClicked: root.job.cancel()
@@ -190,19 +336,87 @@ Item {
             }
 
             Connections {
-                target: AudioRecorderService
+                target: root.mode === "audio" ? AudioRecorderService : null
                 function onActionTriggered(action: string): void {
                     if (root.displayState !== "error") return;
-                    if (action === "cancel") errorCancelBtn.triggerPress();
+                    if (action === "cancel") audioErrorCancelBtn.triggerPress();
                 }
             }
         }
     }
 
+    // ── STT error component ────────────────────────────────────────
+
+    Component {
+        id: sttErrorComponent
+
+        ColumnLayout {
+            spacing: Appearance.spacing.small
+
+            MaterialIcon {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.stateConfig.icon
+                color: root.stateConfig.iconColor
+                font.pointSize: Appearance.font.size.extraLarge
+            }
+
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.job?.errorDetail ?? qsTr("Transcription failed")
+                font.pointSize: Appearance.font.size.normal
+                color: Colours.palette.m3error
+            }
+
+            StyledText {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.job?.errorHint ?? qsTr("Check STT configuration")
+                font.pointSize: Appearance.font.size.small
+                color: Colours.palette.m3outline
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: Appearance.spacing.normal
+
+                PillButton {
+                    id: sttRetryBtn
+                    visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
+                    icon: "refresh"
+                    iconColor: Colours.palette.m3primary
+                    onClicked: root.job.retry()
+                }
+
+                PillButton {
+                    id: sttErrorCancelBtn
+                    icon: "close"
+                    iconColor: Colours.palette.m3error
+                    onClicked: root.job.cancel()
+                }
+
+                PillButton {
+                    visible: root.serviceErrorRaw !== ""
+                    icon: "content_copy"
+                    onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
+                }
+            }
+
+            Connections {
+                target: root.mode === "stt" ? SttService : null
+                function onActionTriggered(sessionId: string, action: string): void {
+                    if (sessionId !== "" && sessionId !== root.job?.sessionId) return;
+                    if (root.displayState !== "error") return;
+                    if (action === "retry") sttRetryBtn.triggerPress();
+                    else if (action === "cancel") sttErrorCancelBtn.triggerPress();
+                }
+            }
+        }
+    }
+
+    // ── Layout ─────────────────────────────────────────────────────
+
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + Appearance.padding.large
 
-    // Main container
     StyledRect {
         id: container
 
@@ -245,7 +459,7 @@ Item {
             anchors.centerIn: parent
             spacing: Appearance.spacing.small
 
-            // ── Compact row: [timer] · [waveform] · [state icon] ───
+            // ── Compact row: [timer] · [waveform] · [mode icon] ───
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing"
@@ -255,6 +469,7 @@ Item {
 
                     spacing: Appearance.spacing.small
 
+                    // Elapsed timer
                     StyledText {
                         opacity: root.displayState === "paused" ? 0.55 : 1.0
                         text: root.formatElapsedTime(root.elapsedSeconds)
@@ -271,8 +486,8 @@ Item {
                         color: Colours.palette.m3outlineVariant
                     }
 
-                    // Reused STT waveform component
-                    SttModule.SttWaveform {
+                    // Audio level waveform
+                    AudioWaveform {
                         Layout.preferredWidth: implicitWidth
                         Layout.preferredHeight: root.audioBarContainerHeight
 
@@ -283,22 +498,49 @@ Item {
                         active: root.visibilities.recorder
                     }
 
+                    // Separator before trailing icon
                     StyledText {
+                        visible: audioModeIcon.visible || modeBtn.visible
                         text: "·"
                         font.pointSize: Appearance.font.size.small
                         color: Colours.palette.m3outlineVariant
                     }
 
-                    // State indicator icon
+                    // ── Audio mode: static state icon ─────────────
                     MaterialIcon {
+                        id: audioModeIcon
+
+                        visible: root.mode === "audio"
                         text: root.stateConfig.icon
                         color: root.stateConfig.iconColor
                         font.pointSize: Appearance.font.size.small
                     }
+
+                    // ── STT mode: delivery mode button ────────────
+                    PillButton {
+                        id: modeBtn
+
+                        visible: root.mode === "stt" && root.serviceIsAskMode
+                        icon: root.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
+                        onClicked: root.cycleDeliveryMode()
+                    }
                 }
             }
 
-            // ── Hover-expanded action buttons ──────────────────────
+            // ── Auto-retry indicator (STT only) ───────────────────
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.mode === "stt" && root.serviceAutoRetrying
+
+                StyledText {
+                    text: "retrying…"
+                    font.pointSize: Appearance.font.size.small
+                    font.italic: true
+                    color: Colours.palette.m3outline
+                }
+            }
+
+            // ── Hover-expanded action buttons ─────────────────────
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 show: root.hovered
@@ -311,28 +553,109 @@ Item {
                         id: pauseBtn
                         icon: root.displayState === "paused" ? "play_arrow" : "pause"
                         iconColor: root.displayState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-                        onClicked: AudioRecorderService.pause()
+                        onClicked: {
+                            if (root.mode === "stt")
+                                root.job?.recording ? root.job.pause() : root.job.resume();
+                            else
+                                AudioRecorderService.pause();
+                        }
+                    }
+
+                    // Restart (STT only)
+                    PillButton {
+                        id: restartBtn
+                        visible: root.mode === "stt"
+                        icon: "restart_alt"
+                        onClicked: SttService.restart()
                     }
 
                     PillButton {
                         id: cancelBtn
                         icon: "close"
                         iconColor: Colours.palette.m3error
-                        onClicked: root.job.cancel()
+                        onClicked: root.job?.cancel()
                     }
 
                     PillButton {
                         id: submitBtn
                         icon: "check"
                         iconColor: Colours.palette.m3confirm
-                        onClicked: AudioRecorderService.stop()
+                        onClicked: {
+                            if (root.mode === "stt")
+                                root.job?.stop();
+                            else
+                                AudioRecorderService.stop();
+                        }
                     }
                 }
             }
 
-            // ── IPC action feedback ───────────────────────────────
+            // ── Vocabulary hint chips (STT only) ──────────────────
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.mode === "stt"
+                    && SttService.sessionVocabHints.length > 0
+                    && (root.displayState === "recording" || root.displayState === "paused")
+
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Appearance.spacing.smaller
+
+                    Repeater {
+                        model: SttService.sessionVocabHints
+
+                        StyledRect {
+                            id: hintChipBg
+
+                            required property string modelData
+                            required property int index
+
+                            implicitWidth: Math.max(chipText.implicitWidth, chipDeleteIcon.implicitWidth) + Appearance.padding.large * 2
+                            implicitHeight: chipText.implicitHeight + Appearance.padding.small * 2
+
+                            radius: Appearance.rounding.full
+                            color: Colours.pillStyle(
+                                Colours.palette.m3surfaceContainerHigh,
+                                Colours.glass.subtle
+                            ).background
+
+                            MouseArea {
+                                id: chipDeleteArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: SttService.removeSessionHint(index)
+                            }
+
+                            StyledText {
+                                id: chipText
+
+                                anchors.centerIn: parent
+                                visible: !chipDeleteArea.containsMouse
+                                text: modelData
+                                color: Colours.palette.m3onSurface
+                                font.pointSize: Appearance.font.size.small
+                            }
+
+                            MaterialIcon {
+                                id: chipDeleteIcon
+
+                                anchors.centerIn: parent
+                                visible: chipDeleteArea.containsMouse
+                                text: "delete"
+                                color: Colours.palette.m3error
+                                font.pointSize: Appearance.font.size.small
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Audio IPC action feedback ─────────────────────────
             Connections {
-                target: AudioRecorderService
+                target: root.mode === "audio" ? AudioRecorderService : null
+
                 function onActionTriggered(action: string): void {
                     switch (action) {
                         case "pause":
@@ -350,20 +673,47 @@ Item {
                 }
             }
 
-            // ── State indicator (success/error) ───────────────────
+            // ── STT IPC action feedback ───────────────────────────
+            Connections {
+                target: root.mode === "stt" ? SttService : null
+
+                function onActionTriggered(sessionId: string, action: string): void {
+                    if (sessionId !== "" && sessionId !== root.job?.sessionId) return;
+                    switch (action) {
+                        case "pause":
+                        case "resume":
+                            pauseBtn.triggerPress();
+                            break;
+                        case "restart":
+                            restartBtn.triggerPress();
+                            break;
+                        case "cancel":
+                            if (root.displayState !== "error")
+                                cancelBtn.triggerPress();
+                            break;
+                        case "stop":
+                            submitBtn.triggerPress();
+                            break;
+                        case "mode-clipboard":
+                        case "mode-inject":
+                        case "mode-submit":
+                            modeBtn.triggerPress();
+                            break;
+                    }
+                }
+            }
+
+            // ── Terminal state (success/error) ────────────────────
             Loader {
                 Layout.alignment: Qt.AlignHCenter
                 visible: sourceComponent !== null
 
                 sourceComponent: {
-                    switch (root.displayState) {
-                        case "success":
-                            return successComponent;
-                        case "error":
-                            return errorComponent;
-                        default:
-                            return null;
-                    }
+                    if (root.displayState === "success")
+                        return root.mode === "stt" ? sttSuccessComponent : audioSuccessComponent;
+                    if (root.displayState === "error")
+                        return root.mode === "stt" ? sttErrorComponent : audioErrorComponent;
+                    return null;
                 }
             }
         }

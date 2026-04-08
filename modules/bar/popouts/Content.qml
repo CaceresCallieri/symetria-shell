@@ -136,11 +136,6 @@ Item {
         }
 
         Popout {
-            name: "stt"
-            sourceComponent: SttActions {}
-        }
-
-        Popout {
             name: "recording"
             sourceComponent: RecordingActions {}
         }

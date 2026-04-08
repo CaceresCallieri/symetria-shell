@@ -11,7 +11,6 @@ import "modules/osd" as OsdModule
 import "modules/notifications" as NotifsModule
 import "modules/lock"
 import "modules/askpass"
-import "modules/stt"
 import "modules/recorder"
 import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
@@ -33,7 +32,6 @@ ShellRoot {
     OsdModule.OsdOverlay {}
     NotifsModule.NotificationsOverlay {}
     Askpass {}
-    Stt {}
     RecorderRoot {}
     Keycaster {}
     KeyChordsModule.Wrapper {}
