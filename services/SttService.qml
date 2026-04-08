@@ -113,8 +113,7 @@ Singleton {
             if (errorJob) {
                 errorJob.retry();
                 actionTriggered(errorJob.sessionId, "retry");
-            }
-            else {
+            } else {
                 // Job is processing/delivering — inform the user
                 Toaster.toast(
                     qsTr("STT is busy"),
