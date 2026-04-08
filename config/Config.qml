@@ -34,6 +34,7 @@ Singleton {
     property alias packages: adapter.packages
     property alias keychords: adapter.keychords
     property alias agentbar: adapter.agentbar
+    property alias audioRecorder: adapter.audioRecorder
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -611,6 +612,7 @@ Singleton {
             property PackagesConfig packages: PackagesConfig {}
             property KeyChordsConfig keychords: KeyChordsConfig {}
             property AgentBarConfig agentbar: AgentBarConfig {}
+            property AudioRecorderConfig audioRecorder: AudioRecorderConfig {}
         }
     }
 }

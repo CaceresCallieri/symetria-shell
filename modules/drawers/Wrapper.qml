@@ -180,6 +180,7 @@ Variants {
                 property bool clipboard
                 property bool askpass
                 property bool stt
+                property bool audioRecorder
                 property bool keycaster
                 property bool calculator
                 property bool packages

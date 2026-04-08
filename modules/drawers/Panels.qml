@@ -9,6 +9,7 @@ import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.stt as SttModule
+import qs.modules.audio as AudioModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
 import Quickshell
@@ -33,6 +34,7 @@ Item {
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
     readonly property alias stt: stt
+    readonly property alias audioRecorder: audioRecorder
     readonly property alias calculator: calculator
     readonly property alias packages: packages
 
@@ -130,6 +132,17 @@ Item {
 
     SttModule.Wrapper {
         id: stt
+
+        screen: root.screen
+        visibilities: root.visibilities
+        panels: root
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+    }
+
+    AudioModule.Wrapper {
+        id: audioRecorder
 
         screen: root.screen
         visibilities: root.visibilities

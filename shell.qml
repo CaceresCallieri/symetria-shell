@@ -12,6 +12,7 @@ import "modules/notifications" as NotifsModule
 import "modules/lock"
 import "modules/askpass"
 import "modules/stt"
+import "modules/audio"
 import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
 import "modules/killconfirm" as KillConfirmModule
@@ -33,6 +34,7 @@ ShellRoot {
     NotifsModule.NotificationsOverlay {}
     Askpass {}
     Stt {}
+    AudioRecorder {}
     Keycaster {}
     KeyChordsModule.Wrapper {}
     KeyChordsModule.KeyChordsOverlay {}
