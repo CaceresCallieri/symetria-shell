@@ -265,3 +265,31 @@ const toplevel = Hypr.activeToplevel ?? Hyprland.activeToplevel;
 **When you need the filtered version:** For UI features that depend on actual Wayland surface activation (cursor shapes, focus rings, input handling), continue using `Hypr.activeToplevel`.
 
 **Prevention:** When accessing `Hypr.activeToplevel`, consider whether your code needs Wayland activation or just Hyprland window identity. Document which one you're using and why.
+
+## Behavior on height Fails with Rapidly-Changing Bindings
+
+`Behavior on height { NumberAnimation { duration: 100 } }` does **not** work when `height` is bound to a property that changes every animation frame (e.g., via `NumberAnimation on animationTime`).
+
+**The Problem:** Each frame, the binding produces a new value. The `Behavior` cancels its in-progress animation and starts a fresh 100ms animation from the current interpolated value to the new target. With ~16ms between frames, the animation only progresses ~16% of its first ease step before being cancelled. The net visible movement per frame is near-zero — bars appear frozen.
+
+**Also wrong:** `onTargetHeightChanged` with imperative lerp (`smoothed += (target - smoothed) * factor`). This only fires when new data arrives (~10Hz for audio level), leaving ~90ms static gaps between updates. Bars snap instead of gliding.
+
+**Correct approach:** `FrameAnimation` with continuous lerp:
+```qml
+property real smoothedHeight: targetHeight
+FrameAnimation {
+    running: root.active
+    onTriggered: {
+        const delta = bar.targetHeight - bar.smoothedHeight;
+        if (Math.abs(delta) > 0.1)
+            bar.smoothedHeight += delta * 0.25;
+        else
+            bar.smoothedHeight = bar.targetHeight;
+    }
+}
+height: smoothedHeight
+```
+
+This runs at render framerate, interpolating between sparse data points and naturally tracking rapidly-changing computed targets.
+
+**Prevention:** Never use `Behavior on height` when the bound property changes every frame. Use `FrameAnimation` for continuous value tracking.

@@ -34,7 +34,6 @@ Item {
 
     // ── Audio visualization tuning ──────────────────────────────
     readonly property QtObject audioConfig: QtObject {
-        readonly property real smoothing: 0.35    // 0.2=laggy, 0.5=jittery, 0.35=balanced
         readonly property real noiseFloor: 0.025  // just below ambient (~0.03), silence ≈ 0
         readonly property real gain: 15.0         // clips at ~0.09 RMS (speech ceiling)
         readonly property real powerCurve: 0.5    // sqrt curve: boosts mids
@@ -179,10 +178,28 @@ Item {
                     return 1.0;
                 }
 
-                property real smoothedHeight: root.audioConfig.minBarHeight
+                property real smoothedHeight: targetHeight
 
-                onTargetHeightChanged: {
-                    smoothedHeight = smoothedHeight + (targetHeight - smoothedHeight) * root.audioConfig.smoothing;
+                // Continuous smoothing: lerp toward targetHeight every frame.
+                // audioLevel arrives at ~10Hz; this fills the gaps at render
+                // framerate so bars glide instead of snapping.
+                //
+                // DO NOT replace with Behavior on height { NumberAnimation }.
+                // targetHeight changes every frame (via animationTime in waveOffsets),
+                // which restarts the Behavior animation each frame — bars freeze
+                // because the animation never progresses past its first 16ms.
+                // DO NOT replace with onTargetHeightChanged imperative lerp.
+                // That only fires on data arrival (~10Hz), leaving 90ms static
+                // gaps between updates — bars snap instead of gliding.
+                FrameAnimation {
+                    running: root.active
+                    onTriggered: {
+                        const delta = bar.targetHeight - bar.smoothedHeight;
+                        if (Math.abs(delta) > 0.1)
+                            bar.smoothedHeight += delta * 0.25;
+                        else
+                            bar.smoothedHeight = bar.targetHeight;
+                    }
                 }
 
                 width: 4
