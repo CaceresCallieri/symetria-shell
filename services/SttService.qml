@@ -305,7 +305,7 @@ Singleton {
     }
 
     function _removeJob(job: SttJob): void {
-        job.closing = true;  // triggers slide-up animation in delegate
+        job.closing = true;  // triggers close animations (Wrapper.qml slide-up, Bar.qml embed clip)
         job.startRemoval();  // per-job timer, avoids overwrite race
     }
 
