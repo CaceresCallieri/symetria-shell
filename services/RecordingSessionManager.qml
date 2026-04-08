@@ -34,6 +34,13 @@ Singleton {
         "audio": qsTr("Audio Recorder")
     })
 
+    /// Shared icon names for STT delivery modes. Used by Content.qml and RecordingBarEmbed.qml.
+    readonly property var deliveryModeIcons: ({
+        "clipboard": "content_copy",
+        "inject": "input",
+        "submit": "send"
+    })
+
     // ── Public methods ─────────────────────────────────────────────
 
     /// Attempt to acquire the recording lock for a mode.

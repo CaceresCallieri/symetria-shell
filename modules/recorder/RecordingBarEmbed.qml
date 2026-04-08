@@ -44,11 +44,7 @@ Item {
 
     // STT delivery mode
     readonly property bool isAskMode: mode === "stt" && SttService.isAskMode
-    readonly property var deliveryModeIcons: ({
-        "clipboard": "content_copy",
-        "inject": "input",
-        "submit": "send"
-    })
+    readonly property var deliveryModeIcons: RecordingSessionManager.deliveryModeIcons
 
     function cycleDeliveryMode(): void {
         if (!job || mode !== "stt") return;
@@ -111,14 +107,14 @@ Item {
             Layout.preferredHeight: 24
 
             audioLevel: root.job?.audioLevel ?? 0
-            sttState: root.displayState
+            displayState: root.displayState
             containerHeight: 24
             active: root.isRecordingPhase
         }
 
         // Separator before trailing icon (visible when icon is visible)
         StyledText {
-            visible: audioIcon.visible || sttModeIcon.visible
+            visible: audioIcon.visible || deliveryModeBtn.visible
             text: "\u00b7"
             font.pointSize: Appearance.font.size.small
             color: Colours.palette.m3outlineVariant
@@ -136,7 +132,7 @@ Item {
 
         // STT mode: delivery mode icon (ask mode only)
         PillButton {
-            id: sttModeIcon
+            id: deliveryModeBtn
 
             visible: root.isAskMode
             icon: root.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"

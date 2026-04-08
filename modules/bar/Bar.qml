@@ -412,6 +412,8 @@ Item {
 
         // Immediate close animation: react to job.closing rather than
         // waiting for the job to be removed from the jobs array (~450ms).
+        // For STT restart: close starts at T=0, new job opens at T=500ms —
+        // producing a clean close → gap → open sequence.
         Connections {
             target: recordingCenterContainer._activeJob
 

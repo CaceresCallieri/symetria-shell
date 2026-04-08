@@ -18,7 +18,7 @@ Item {
     property real audioLevel: 0
 
     /// Current recording state: "recording", "paused", "processing".
-    property string sttState: "recording"
+    property string displayState: "recording"
 
     /// Number of visualizer bars.
     property int barCount: 16
@@ -62,7 +62,7 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: (root.sttState === "recording" || root.sttState === "processing") && root.active
+        running: (root.displayState === "recording" || root.displayState === "processing") && root.active
         from: 0
         to: 6000
         duration: 100000
@@ -95,7 +95,7 @@ Item {
 
     // ── Pre-calculated wave offsets (recording mode) ────────────
     readonly property var waveOffsets: {
-        if (root.sttState !== "recording") return [];
+        if (root.displayState !== "recording") return [];
         const cfg = audioConfig;
         const offsets = [];
         for (let i = 0; i < barCount; i++) {
@@ -107,7 +107,7 @@ Item {
 
     // ── Processing wave data (offsets + opacities) ──────────────
     readonly property var processingWaveData: {
-        if (root.sttState !== "processing") return { offsets: [], opacities: [] };
+        if (root.displayState !== "processing") return { offsets: [], opacities: [] };
         const cfg = processingConfig;
         const offsets = [];
         const opacities = [];
@@ -149,7 +149,7 @@ Item {
                 readonly property real targetHeight: {
                     const cfg = root.audioConfig;
 
-                    if (root.sttState === "processing") {
+                    if (root.displayState === "processing") {
                         const procCfg = root.processingConfig;
                         const waveMultiplier = root.processingWaveOffsets[index] ?? 1.0;
                         const boostedHeight = procCfg.baseHeightBoost * (cfg.maxBarHeight - cfg.minBarHeight);
@@ -170,11 +170,11 @@ Item {
                 }
 
                 readonly property real waveOpacity: {
-                    if (root.sttState === "processing") {
+                    if (root.displayState === "processing") {
                         const opacity = root.processingWaveOpacities[index];
                         if (opacity !== undefined) return opacity;
                     }
-                    if (root.sttState === "paused")
+                    if (root.displayState === "paused")
                         return root.pausedDimOpacity;
                     return 1.0;
                 }
@@ -190,7 +190,7 @@ Item {
                 y: parent ? (parent.height - height) / 2 : 0
 
                 radius: 2
-                color: root.sttState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)
+                color: root.displayState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)
                 opacity: waveOpacity
             }
         }

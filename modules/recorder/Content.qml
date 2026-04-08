@@ -65,7 +65,6 @@ Item {
 
     // ── Shared properties ──────────────────────────────────────────
 
-    property bool enableHeightTransition: false
     property bool hovered: false
 
     readonly property int barCount: 16
@@ -80,11 +79,7 @@ Item {
     // ── Delivery mode cycling (STT only) ───────────────────────────
 
     readonly property var deliveryModes: ["clipboard", "inject", "submit"]
-    readonly property var deliveryModeIcons: ({
-        "clipboard": "content_copy",
-        "inject": "input",
-        "submit": "send"
-    })
+    readonly property var deliveryModeIcons: RecordingSessionManager.deliveryModeIcons
 
     function cycleDeliveryMode(): void {
         if (!job) return;
@@ -331,7 +326,7 @@ Item {
                     id: audioErrorCancelBtn
                     icon: "close"
                     iconColor: Colours.palette.m3error
-                    onClicked: root.job.cancel()
+                    onClicked: root.job?.cancel()
                 }
             }
 
@@ -383,14 +378,14 @@ Item {
                     visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
                     icon: "refresh"
                     iconColor: Colours.palette.m3primary
-                    onClicked: root.job.retry()
+                    onClicked: root.job?.retry()
                 }
 
                 PillButton {
                     id: sttErrorCancelBtn
                     icon: "close"
                     iconColor: Colours.palette.m3error
-                    onClicked: root.job.cancel()
+                    onClicked: root.job?.cancel()
                 }
 
                 PillButton {
@@ -426,16 +421,6 @@ Item {
 
         implicitWidth: content.implicitWidth + Appearance.padding.large * 2
         implicitHeight: content.implicitHeight + Appearance.padding.large * 2
-
-        Behavior on implicitHeight {
-            enabled: root.enableHeightTransition
-            Anim {}
-        }
-
-        Behavior on implicitWidth {
-            enabled: root.enableHeightTransition
-            Anim {}
-        }
 
         radius: Appearance.rounding.normal
         color: "transparent"
@@ -492,7 +477,7 @@ Item {
                         Layout.preferredHeight: root.audioBarContainerHeight
 
                         audioLevel: root.audioLevel
-                        sttState: root.displayState
+                        displayState: root.displayState
                         barCount: root.barCount
                         containerHeight: root.audioBarContainerHeight
                         active: root.visibilities.recorder
@@ -597,59 +582,7 @@ Item {
                     && SttService.sessionVocabHints.length > 0
                     && (root.displayState === "recording" || root.displayState === "paused")
 
-                Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: Appearance.spacing.smaller
-
-                    Repeater {
-                        model: SttService.sessionVocabHints
-
-                        StyledRect {
-                            id: hintChipBg
-
-                            required property string modelData
-                            required property int index
-
-                            implicitWidth: Math.max(chipText.implicitWidth, chipDeleteIcon.implicitWidth) + Appearance.padding.large * 2
-                            implicitHeight: chipText.implicitHeight + Appearance.padding.small * 2
-
-                            radius: Appearance.rounding.full
-                            color: Colours.pillStyle(
-                                Colours.palette.m3surfaceContainerHigh,
-                                Colours.glass.subtle
-                            ).background
-
-                            MouseArea {
-                                id: chipDeleteArea
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: SttService.removeSessionHint(index)
-                            }
-
-                            StyledText {
-                                id: chipText
-
-                                anchors.centerIn: parent
-                                visible: !chipDeleteArea.containsMouse
-                                text: modelData
-                                color: Colours.palette.m3onSurface
-                                font.pointSize: Appearance.font.size.small
-                            }
-
-                            MaterialIcon {
-                                id: chipDeleteIcon
-
-                                anchors.centerIn: parent
-                                visible: chipDeleteArea.containsMouse
-                                text: "delete"
-                                color: Colours.palette.m3error
-                                font.pointSize: Appearance.font.size.small
-                            }
-                        }
-                    }
-                }
+                VocabHintChips {}
             }
 
             // ── Audio IPC action feedback ─────────────────────────
