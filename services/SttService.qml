@@ -8,12 +8,12 @@ import Quickshell.Io
 import Symmetria
 import QtQuick
 
-/// Native speech-to-text service with pipeline queue support.
+/// Native speech-to-text service — single job at a time.
 ///
-/// Orchestrates up to 3 concurrent SttJob instances. At most one job can be
-/// in "recording" state; the rest process in the background.
+/// Only one SttJob may exist at any time. A new recording cannot start until the
+/// current job completes (success animation finishes) or is cancelled.
 ///
-/// Pipeline per job: pw-record → WAV file → curl (OpenAI API) → wl-copy [→ sendshortcut inject]
+/// Pipeline: pw-record → WAV file → curl (OpenAI API) → wl-copy [→ sendshortcut inject]
 ///
 /// Job state machine (see SttJob.qml):
 ///   recording ⇄ paused → processing → transcribed → delivering → success → [removed]
@@ -43,8 +43,7 @@ Singleton {
 
     /// Emitted when an action is successfully dispatched.
     /// Used by Content.qml to animate the corresponding control button.
-    /// sessionId scopes the action to the correct job card in multi-job scenarios.
-    /// Empty sessionId means "broadcast to all" (used for service-level actions).
+    /// sessionId identifies the job; empty means service-level action.
     signal actionTriggered(string sessionId, string action)
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -54,7 +53,6 @@ Singleton {
     // intentional var: JS array with spread/filter reassignment — [job, ..._jobs] pattern
     property var _jobs: []
     property SttJob _activeRecording: null
-    readonly property int _maxJobs: 3
 
     // Toggle debouncing
     property real _lastToggleTime: 0
@@ -95,7 +93,7 @@ Singleton {
     // Orchestrator commands
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Toggle: start if idle, submit if recording, retry if most recent is error.
+    /// Toggle: start if idle, submit if recording, retry if errored.
     function toggle(): void {
         const now = Date.now();
         if (now - _lastToggleTime < _toggleDebounceMs) {
@@ -103,40 +101,50 @@ Singleton {
             return;
         }
         Logger.log("qml", "stt", "toggle | activeRecording=" + (_activeRecording !== null) + " jobs=" + _jobs.length);
+        _lastToggleTime = now;
 
         if (_activeRecording) {
-            _lastToggleTime = now;
             stop();
         } else if (_jobs.length === 0) {
-            _lastToggleTime = now;
             start();
         } else {
-            // Jobs exist but none recording — check for errors
+            // Job exists but not recording (processing/delivering) — check for error
             const errorJob = _mostRecentErrorJob();
             if (errorJob) {
-                _lastToggleTime = now;
                 errorJob.retry();
                 actionTriggered(errorJob.sessionId, "retry");
-            } else if (_jobs.length < _maxJobs) {
-                _lastToggleTime = now;
-                start();
+            }
+            else {
+                // Job is processing/delivering — inform the user
+                Toaster.toast(
+                    qsTr("STT is busy"),
+                    qsTr("Wait for the current job to finish"),
+                    "",
+                    Toast.Warning
+                );
             }
         }
     }
 
-    /// Start a new recording job.
+    /// Start a new recording job. Blocked if any job already exists.
     function start(): void {
-        if (_activeRecording) {
-            console.warn("[STT] start() called while already recording — ignoring");
-            return;
-        }
-        if (_jobs.length >= _maxJobs) {
+        if (_jobs.length > 0) {
             Toaster.toast(
-                qsTr("STT: Max recordings reached"),
-                qsTr("Wait for a job to finish (max %1)").arg(_maxJobs),
+                qsTr("STT is busy"),
+                qsTr("Wait for the current job to finish"),
                 "",
                 Toast.Warning
             );
+            return;
+        }
+        _startInternal();
+    }
+
+    /// Internal start — bypasses the single-job guard.
+    /// Used by restartDelayTimer where the old job may still be animating out.
+    function _startInternal(): void {
+        if (_activeRecording) {
+            console.warn("[STT] _startInternal() called while already recording — ignoring");
             return;
         }
         Logger.log("qml", "stt", "start | delivery=" + _deliveryMode + " jobs=" + _jobs.length);
@@ -362,7 +370,7 @@ Singleton {
     Timer {
         id: restartDelayTimer
         interval: 500
-        onTriggered: root.start()
+        onTriggered: root._startInternal()
     }
 
     // Ensure temp directory exists before first recording
