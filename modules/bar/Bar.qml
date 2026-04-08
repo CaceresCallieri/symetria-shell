@@ -345,12 +345,8 @@ Item {
         readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 
         // Track the active job to watch its closing signal
-        readonly property var _activeJob: {
-            const mode = RecordingSessionManager.activeMode;
-            if (mode === "audio") return AudioRecorderService.job;
-            if (mode === "stt") return SttService.job;
-            return null;
-        }
+        // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
+        readonly property var _activeJob: RecordingSessionManager.currentJob
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter

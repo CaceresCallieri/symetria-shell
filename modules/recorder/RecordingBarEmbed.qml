@@ -20,11 +20,8 @@ Item {
 
     readonly property string mode: RecordingSessionManager.activeMode
 
-    readonly property var job: {
-        if (mode === "audio") return AudioRecorderService.job;
-        if (mode === "stt") return SttService.job;
-        return null;
-    }
+    // intentional var: polymorphic job (SttJob | AudioRecorderJob | null)
+    readonly property var job: RecordingSessionManager.currentJob
 
     // Coalesce internal states to user-visible states
     readonly property string displayState: {
@@ -41,20 +38,6 @@ Item {
 
     // STT delivery mode
     readonly property bool isAskMode: mode === "stt" && SttService.isAskMode
-    readonly property var deliveryModeIcons: RecordingSessionManager.deliveryModeIcons
-
-    function cycleDeliveryMode(): void {
-        if (!job || mode !== "stt") return;
-        const modes = ["clipboard", "inject", "submit"];
-        const idx = modes.indexOf(job.activeDeliveryChoice ?? "clipboard");
-        job.setDeliveryChoice(modes[(idx + 1) % modes.length]);
-    }
-
-    function formatElapsedTime(seconds: real): string {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
-    }
 
     // Flat structure: only one child is visible at a time.
     implicitWidth: {
@@ -84,7 +67,7 @@ Item {
         // Elapsed timer
         StyledText {
             opacity: root.displayState === "paused" ? 0.55 : 1.0
-            text: root.job ? root.formatElapsedTime(root.job.elapsedSeconds) : "00:00"
+            text: root.job ? RecordingSessionManager.formatElapsedTime(root.job.elapsedSeconds) : "00:00"
             font.pointSize: Appearance.font.size.small * 0.88
             font.family: Appearance.font.family.mono
             color: Colours.palette.m3outline
@@ -132,8 +115,8 @@ Item {
             id: deliveryModeBtn
 
             visible: root.isAskMode
-            icon: root.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"
-            onClicked: root.cycleDeliveryMode()
+            icon: RecordingSessionManager.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"
+            onClicked: RecordingSessionManager.cycleDeliveryMode()
         }
     }
 

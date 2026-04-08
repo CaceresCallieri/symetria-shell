@@ -42,6 +42,35 @@ Singleton {
         "submit": "send"
     })
 
+    /// The current recording job (from whichever service is active), or null.
+    /// Centralizes mode→service→job resolution so consumers don't duplicate it.
+    // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
+    readonly property var currentJob: {
+        if (_activeMode === "stt") return SttService.job;
+        if (_activeMode === "audio") return AudioRecorderService.job;
+        return null;
+    }
+
+    /// Ordered delivery mode list for cycling (STT "ask" mode only).
+    // intentional var: JS string array used as constant lookup table
+    readonly property var deliveryModes: ["clipboard", "inject", "submit"]
+
+    /// Format seconds as MM:SS for elapsed time display.
+    function formatElapsedTime(seconds: real): string {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
+    }
+
+    /// Cycle the current job's delivery mode through clipboard → inject → submit.
+    /// Only effective in STT "ask" mode.
+    function cycleDeliveryMode(): void {
+        const job = currentJob;
+        if (!job || _activeMode !== "stt") return;
+        const idx = deliveryModes.indexOf(job.activeDeliveryChoice ?? "clipboard");
+        job.setDeliveryChoice(deliveryModes[(idx + 1) % deliveryModes.length]);
+    }
+
     // ── Public methods ─────────────────────────────────────────────
 
     /// Attempt to acquire the recording lock for a mode.

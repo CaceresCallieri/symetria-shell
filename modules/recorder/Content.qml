@@ -31,11 +31,8 @@ Item {
 
     readonly property string mode: RecordingSessionManager.activeMode
 
-    readonly property var job: {
-        if (mode === "audio") return AudioRecorderService.job;
-        if (mode === "stt") return SttService.job;
-        return null;
-    }
+    // intentional var: polymorphic job (SttJob | AudioRecorderJob | null)
+    readonly property var job: RecordingSessionManager.currentJob
 
     // ── State mapping (mode-aware) ─────────────────────────────────
 
@@ -73,24 +70,6 @@ Item {
         onTriggered: root.hovered = false
     }
 
-    // ── Delivery mode cycling (STT only) ───────────────────────────
-
-    readonly property var deliveryModes: ["clipboard", "inject", "submit"]
-    readonly property var deliveryModeIcons: RecordingSessionManager.deliveryModeIcons
-
-    function cycleDeliveryMode(): void {
-        if (!job) return;
-        const idx = deliveryModes.indexOf(serviceDeliveryChoice);
-        const next = deliveryModes[(idx + 1) % deliveryModes.length];
-        job.setDeliveryChoice(next);
-    }
-
-    function formatElapsedTime(seconds: real): string {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
-    }
-
     // ── State configuration map (mode-aware icon colors) ───────────
 
     readonly property var stateMap: ({
@@ -122,285 +101,51 @@ Item {
 
     readonly property var stateConfig: stateMap[root.displayState] ?? stateMap["idle"]
 
-    // ── Audio success component ────────────────────────────────────
+    // ── Terminal state components (extracted to dedicated files) ───
 
     Component {
         id: audioSuccessComponent
-
-        Item {
-            implicitWidth: compactRow.implicitWidth
-            implicitHeight: compactRow.implicitHeight
-
-            StyledRect {
-                id: audioSuccessPill
-
-                anchors.verticalCenter: parent.verticalCenter
-
-                readonly property real targetIconSize: Appearance.font.size.large
-                readonly property real targetPadding: Appearance.padding.normal * 2
-
-                implicitWidth: audioSuccessIcon.implicitWidth + targetPadding
-                implicitHeight: audioSuccessIcon.implicitHeight + Appearance.padding.smaller * 2
-                width: implicitWidth
-                height: implicitHeight
-
-                radius: Appearance.rounding.full
-                color: Colours.pillStyle(
-                    Colours.palette.m3surfaceContainerHigh,
-                    Colours.glass.subtle
-                ).background
-
-                opacity: 0
-
-                MaterialIcon {
-                    id: audioSuccessIcon
-
-                    anchors.centerIn: parent
-                    text: "audio_file"
-                    color: root.stateConfig.iconColor
-                    font.pointSize: audioSuccessPill.targetIconSize
-                }
-
-                Component.onCompleted: {
-                    x = (parent.width - width) / 2;
-                    scale = 0.4;
-                    audioPopAnim.start();
-                }
-
-                ParallelAnimation {
-                    id: audioPopAnim
-
-                    NumberAnimation {
-                        target: audioSuccessPill
-                        property: "scale"
-                        to: 1.0
-                        duration: Appearance.anim.durations.expressiveDefaultSpatial
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                    }
-
-                    NumberAnimation {
-                        target: audioSuccessPill
-                        property: "opacity"
-                        to: 1.0
-                        duration: Appearance.anim.durations.small
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
-                    }
-                }
-            }
+        AudioSuccessCard {
+            containerWidth: compactRow.implicitWidth
+            containerHeight: compactRow.implicitHeight
+            iconColor: root.stateConfig.iconColor
         }
     }
-
-    // ── STT success component ──────────────────────────────────────
 
     Component {
         id: sttSuccessComponent
-
-        Item {
-            implicitWidth: compactRow.implicitWidth
-            implicitHeight: compactRow.implicitHeight
-
-            StyledRect {
-                id: sttSuccessPill
-
-                anchors.verticalCenter: parent.verticalCenter
-
-                readonly property real targetIconSize: Appearance.font.size.large
-                readonly property real targetPadding: Appearance.padding.normal * 2
-
-                implicitWidth: sttSuccessIcon.implicitWidth + targetPadding
-                implicitHeight: sttSuccessIcon.implicitHeight + Appearance.padding.smaller * 2
-                width: implicitWidth
-                height: implicitHeight
-
-                radius: Appearance.rounding.full
-                color: Colours.pillStyle(
-                    Colours.palette.m3surfaceContainerHigh,
-                    Colours.glass.subtle
-                ).background
-
-                opacity: 0
-
-                MaterialIcon {
-                    id: sttSuccessIcon
-
-                    anchors.centerIn: parent
-                    text: {
-                        if (root.serviceInjectionDowngraded) return "content_copy";
-                        switch (root.serviceInjectionPath) {
-                            case "rpc":
-                                return root.serviceInjectionSubmitted ? "send" : "input";
-                            case "paste": return "input";
-                            default: return "content_copy";
-                        }
-                    }
-                    color: root.serviceInjectionDowngraded
-                        ? Colours.palette.m3error
-                        : root.stateConfig.iconColor
-                    font.pointSize: sttSuccessPill.targetIconSize
-                }
-
-                Component.onCompleted: {
-                    if (root.serviceIsAskMode) {
-                        x = modeBtn.x + modeBtn.width / 2 - width / 2;
-                        scale = modeBtn.width / width;
-                    } else {
-                        x = (parent.width - width) / 2;
-                        scale = 0.4;
-                    }
-                    sttPopAnim.start();
-                }
-
-                ParallelAnimation {
-                    id: sttPopAnim
-
-                    NumberAnimation {
-                        target: sttSuccessPill
-                        property: "x"
-                        to: (sttSuccessPill.parent.width - sttSuccessPill.width) / 2
-                        duration: Appearance.anim.durations.expressiveDefaultSpatial
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                    }
-
-                    NumberAnimation {
-                        target: sttSuccessPill
-                        property: "scale"
-                        to: 1.0
-                        duration: Appearance.anim.durations.expressiveDefaultSpatial
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                    }
-
-                    NumberAnimation {
-                        target: sttSuccessPill
-                        property: "opacity"
-                        to: 1.0
-                        duration: Appearance.anim.durations.small
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
-                    }
-                }
-            }
+        SttSuccessCard {
+            containerWidth: compactRow.implicitWidth
+            containerHeight: compactRow.implicitHeight
+            iconColor: root.stateConfig.iconColor
+            injectionDowngraded: root.serviceInjectionDowngraded
+            injectionPath: root.serviceInjectionPath
+            injectionSubmitted: root.serviceInjectionSubmitted
+            isAskMode: root.serviceIsAskMode
+            modeBtnX: modeBtn.x
+            modeBtnWidth: modeBtn.width
         }
     }
-
-    // ── Audio error component ──────────────────────────────────────
 
     Component {
         id: audioErrorComponent
-
-        ColumnLayout {
-            spacing: Appearance.spacing.small
-
-            MaterialIcon {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.stateConfig.icon
-                color: root.stateConfig.iconColor
-                font.pointSize: Appearance.font.size.extraLarge
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.job?.errorDetail ?? qsTr("Recording failed")
-                font.pointSize: Appearance.font.size.normal
-                color: Colours.palette.m3error
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.job?.errorHint ?? qsTr("Check audio configuration")
-                font.pointSize: Appearance.font.size.small
-                color: Colours.palette.m3outline
-            }
-
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: Appearance.spacing.normal
-
-                PillButton {
-                    id: audioErrorCancelBtn
-                    icon: "close"
-                    iconColor: Colours.palette.m3error
-                    onClicked: root.job?.cancel()
-                }
-            }
-
-            Connections {
-                target: root.mode === "audio" ? AudioRecorderService : null
-                function onActionTriggered(action: string): void {
-                    if (root.displayState !== "error") return;
-                    if (action === "cancel") audioErrorCancelBtn.triggerPress();
-                }
-            }
+        AudioErrorCard {
+            stateIcon: root.stateConfig.icon
+            stateIconColor: root.stateConfig.iconColor
+            job: root.job
+            displayState: root.displayState
         }
     }
 
-    // ── STT error component ────────────────────────────────────────
-
     Component {
         id: sttErrorComponent
-
-        ColumnLayout {
-            spacing: Appearance.spacing.small
-
-            MaterialIcon {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.stateConfig.icon
-                color: root.stateConfig.iconColor
-                font.pointSize: Appearance.font.size.extraLarge
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.job?.errorDetail ?? qsTr("Transcription failed")
-                font.pointSize: Appearance.font.size.normal
-                color: Colours.palette.m3error
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: root.job?.errorHint ?? qsTr("Check STT configuration")
-                font.pointSize: Appearance.font.size.small
-                color: Colours.palette.m3outline
-            }
-
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: Appearance.spacing.normal
-
-                PillButton {
-                    id: sttRetryBtn
-                    visible: root.serviceErrorSource === "api" || root.serviceErrorSource === "timeout"
-                    icon: "refresh"
-                    iconColor: Colours.palette.m3primary
-                    onClicked: root.job?.retry()
-                }
-
-                PillButton {
-                    id: sttErrorCancelBtn
-                    icon: "close"
-                    iconColor: Colours.palette.m3error
-                    onClicked: root.job?.cancel()
-                }
-
-                PillButton {
-                    visible: root.serviceErrorRaw !== ""
-                    icon: "content_copy"
-                    onClicked: Quickshell.execDetached(["wl-copy", root.serviceErrorRaw])
-                }
-            }
-
-            Connections {
-                target: root.mode === "stt" ? SttService : null
-                function onActionTriggered(sessionId: string, action: string): void {
-                    if (sessionId !== "" && sessionId !== root.job?.sessionId) return;
-                    if (root.displayState !== "error") return;
-                    if (action === "retry") sttRetryBtn.triggerPress();
-                    else if (action === "cancel") sttErrorCancelBtn.triggerPress();
-                }
-            }
+        SttErrorCard {
+            stateIcon: root.stateConfig.icon
+            stateIconColor: root.stateConfig.iconColor
+            job: root.job
+            displayState: root.displayState
+            errorSource: root.serviceErrorSource
+            errorRaw: root.serviceErrorRaw
         }
     }
 
@@ -454,7 +199,7 @@ Item {
                     // Elapsed timer
                     StyledText {
                         opacity: root.displayState === "paused" ? 0.55 : 1.0
-                        text: root.formatElapsedTime(root.elapsedSeconds)
+                        text: RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
                         font.pointSize: Appearance.font.size.small * 0.88
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
@@ -503,8 +248,8 @@ Item {
                         id: modeBtn
 
                         visible: root.mode === "stt" && root.serviceIsAskMode
-                        icon: root.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
-                        onClicked: root.cycleDeliveryMode()
+                        icon: RecordingSessionManager.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
+                        onClicked: RecordingSessionManager.cycleDeliveryMode()
                     }
                 }
             }

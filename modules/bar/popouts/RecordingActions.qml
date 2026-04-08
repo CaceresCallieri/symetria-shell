@@ -18,11 +18,8 @@ ColumnLayout {
 
     readonly property string mode: RecordingSessionManager.activeMode
 
-    readonly property var job: {
-        if (mode === "audio") return AudioRecorderService.job;
-        if (mode === "stt") return SttService.job;
-        return null;
-    }
+    // intentional var: polymorphic job (SttJob | AudioRecorderJob | null)
+    readonly property var job: RecordingSessionManager.currentJob
 
     spacing: Appearance.spacing.normal
     implicitWidth: 280
