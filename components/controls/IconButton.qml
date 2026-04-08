@@ -30,7 +30,7 @@ StyledRect {
     property color inactiveColour: {
         if (!toggle && type === IconButton.Filled)
             return Qt.lighter(Colours.pillStyle(Colours.palette.m3primary, Colours.glass.veryStrong).background, 1.5);
-        return type === IconButton.Filled ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background;
+        return Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background;
     }
     property color activeOnColour: type === IconButton.Text ? Colours.palette.m3primary : Colours.palette.m3onSurface
     property color inactiveOnColour: {

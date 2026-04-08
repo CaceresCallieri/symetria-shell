@@ -51,7 +51,7 @@ StyledRect {
                 color: selected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
 
                 StateLayer {
-                    color: place.selected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                    color: Colours.palette.m3onSurface
 
                     function onClicked(): void {
                         if (place.modelData === "Home")
@@ -90,7 +90,7 @@ StyledRect {
                                 return "video_library";
                             return "folder";
                         }
-                        color: place.selected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                         font.pointSize: Appearance.font.size.large
                         fill: place.selected ? 1 : 0
 
@@ -102,7 +102,7 @@ StyledRect {
                     StyledText {
                         Layout.fillWidth: true
                         text: place.modelData
-                        color: place.selected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                         font.pointSize: Appearance.font.size.normal
                         elide: Text.ElideRight
                     }

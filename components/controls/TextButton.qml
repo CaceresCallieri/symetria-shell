@@ -36,8 +36,6 @@ StyledRect {
         return Colours.palette.m3onSurface;
     }
     property color inactiveOnColour: {
-        if (!toggle && type === TextButton.Filled)
-            return Colours.palette.m3onSurface;
         if (type === TextButton.Text)
             return Colours.palette.m3primary;
         return Colours.palette.m3onSurface;
