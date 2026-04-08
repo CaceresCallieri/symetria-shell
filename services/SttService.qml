@@ -30,7 +30,7 @@ Singleton {
     /// Whether any jobs exist (controls drawer visibility)
     readonly property bool active: _jobs.length > 0
 
-    /// The job list — newest first. Bound by Wrapper's Repeater.
+    /// The job list — newest first. Read by recorder UI components to resolve the current job.
     // intentional var: aliases _jobs which must remain var for spread/filter reassignment
     readonly property var jobs: _jobs
 
@@ -166,8 +166,8 @@ Singleton {
         _activeRecording = job;
         job._state = "recording";
 
-        // Add to _jobs AFTER state is "recording" so Repeater delegates
-        // see FadeTransitions as visible from the first frame.
+        // Add to _jobs AFTER state is "recording" so the bar embed
+        // (which binds to _activeJob via jobs) sees the correct state immediately.
         _jobs = [job, ..._jobs];
 
         // Ensure temp dir exists, then start recording
@@ -241,7 +241,8 @@ Singleton {
     }
 
     /// Switch the runtime delivery choice (only effective in "ask" mode).
-    /// Applies to the active recording job.
+    /// This is the IPC entry point — emits actionTriggered for UI feedback.
+    /// For direct UI interaction, use SttJob.setDeliveryChoice (no signal).
     function setDeliveryChoice(mode: string): void {
         if (_deliveryMode !== "ask") {
             console.debug("[STT] setDeliveryChoice() ignored: deliveryMode is", _deliveryMode, "(not ask)");
@@ -302,12 +303,12 @@ Singleton {
         job.readyForDelivery.connect(() => _enqueueForDelivery(job));
 
         // Caller must add to _jobs AFTER setting job state, so that
-        // Repeater delegates see the correct state at creation time.
+        // UI consumers binding to jobs see the correct state immediately.
         return job;
     }
 
     function _removeJob(job: SttJob): void {
-        job.closing = true;  // triggers slide-up animation in delegate
+        job.closing = true;  // triggers bar-embed close animation via _activeJob.closing in Bar.qml
         job.startRemoval();  // per-job timer, avoids overwrite race
     }
 
