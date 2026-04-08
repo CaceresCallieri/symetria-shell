@@ -24,7 +24,7 @@ QtObject {
 
     // ── Public properties ──────────────────────────────────────────────
 
-    /// Current state: "recording", "paused", "processing", "transcribed",
+    /// Current state: "idle", "recording", "paused", "processing", "transcribed",
     ///   "delivering", "error", "success"
     readonly property string state: _state
 
@@ -237,7 +237,7 @@ QtObject {
         Logger.log("qml", "stt", "job.retry | id=" + sessionId);
 
         if (_currentAudioFile === "") {
-            _setErrorState("internal", "No audio file to retry", "Start a new recording");
+            _setErrorState("internal", "No audio file to retry", "Start a new recording", false);
             return;
         }
 
@@ -250,6 +250,8 @@ QtObject {
     }
 
     /// Switch the delivery choice (only meaningful in "ask" mode during recording).
+    /// Direct-UI entry point: does NOT emit actionTriggered.
+    /// For IPC callers, use SttService.setDeliveryChoice() which emits the signal.
     function setDeliveryChoice(mode: string): void {
         if (SttService._deliveryMode !== "ask") return;
         if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
@@ -260,17 +262,17 @@ QtObject {
 
     // ── Internal methods ───────────────────────────────────────────────
 
-    function _setErrorState(source: string, detail: string, hint: string): void {
+    function _setErrorState(source: string, detail: string, hint: string, silent: bool): void {
         _errorSource = source;
         _errorDetail = detail;
         _errorHint = hint;
         _state = "error";
-        Toaster.toast(qsTr("STT: %1").arg(detail), hint, "error", Toast.Error);
+        if (!silent)
+            Toaster.toast(qsTr("STT: %1").arg(detail), hint, "error", Toast.Error);
         if (sessionId !== "" && _segmentFiles.length > 0 && _currentAudioFile !== "") {
-            for (const seg of _segmentFiles) {
-                if (seg !== _currentAudioFile)
-                    Quickshell.execDetached(["rm", "-f", seg]);
-            }
+            const toRemove = _segmentFiles.filter(s => s !== _currentAudioFile);
+            if (toRemove.length > 0)
+                Quickshell.execDetached(["rm", "-f", ...toRemove]);
         }
     }
 
@@ -370,10 +372,12 @@ QtObject {
 
     /// Attempt auto-retry if the error is transient and retries remain.
     /// Returns true if an auto-retry was scheduled, false otherwise.
+    /// When auto-retry is not possible, shows the suppressed error toast.
     function _tryAutoRetry(): bool {
-        if (_autoRetryCount >= _maxAutoRetries) return false;
-        if (!_isTransientError()) return false;
-        if (_currentAudioFile === "") return false;
+        if (_autoRetryCount >= _maxAutoRetries || !_isTransientError() || _currentAudioFile === "") {
+            Toaster.toast(qsTr("STT: %1").arg(_errorDetail), _errorHint, "error", Toast.Error);
+            return false;
+        }
 
         _autoRetryCount++;
         Logger.log("qml", "stt", "auto-retry | id=" + sessionId
@@ -411,7 +415,7 @@ QtObject {
         Logger.log("qml", "stt", "transcribe | id=" + sessionId + " segments=" + _segmentFiles.length);
         if (_segmentFiles.length === 0) {
             console.error("[STT:D05] NO segments — aborting");
-            _setErrorState("internal", "No audio segments", "Recording may have failed");
+            _setErrorState("internal", "No audio segments", "Recording may have failed", false);
             return;
         }
 
@@ -490,9 +494,10 @@ QtObject {
     }
 
     /// Trigger animated removal — called by SttService orchestrator.
-    /// Starts the per-job removal timer so the delegate slide-up animation plays
-    /// before the job is destroyed. Exposed as public to avoid SttService accessing
-    /// the private _removalTimer directly across the component boundary.
+    /// Starts the per-job removal timer so the close animations driven by
+    /// the `closing` flag (Wrapper.qml slide-up, Bar.qml embed clip)
+    /// complete before the job is destroyed. Exposed as public to avoid
+    /// SttService accessing _removalTimer across the component boundary.
     function startRemoval(): void {
         _removalTimer.start();
     }
@@ -579,7 +584,7 @@ QtObject {
 
     // Animated removal delay — per-job to avoid overwrite races
     readonly property Timer _removalTimer: Timer {
-        // Must outlast the delegate hideAnim in Wrapper.qml (Anim {} = durations.normal)
+        // Must outlast close animations (Wrapper.qml hideAnim, Bar.qml embed clip = durations.normal)
         interval: Appearance.anim.durations.normal + 50
         onTriggered: SttService._finalizeRemoval(job)
     }
@@ -593,7 +598,7 @@ QtObject {
                 job._pendingTimeoutKill = true;
                 job.transcribeProcess.signal(9);
             }
-            job._setErrorState("timeout", "Processing timed out", "Check your network connection");
+            job._setErrorState("timeout", "Processing timed out", "Check your network connection", true);
             job._tryAutoRetry();
         }
     }
@@ -651,7 +656,7 @@ QtObject {
                 job._submitForTranscription();
             } else if (code !== 0 && job._state === "recording") {
                 console.error("[STT:D08] pw-record exited unexpectedly (code", code + ")");
-                job._setErrorState("recording", "Recording failed", "Check audio device");
+                job._setErrorState("recording", "Recording failed", "Check audio device", false);
             }
         }
     }
@@ -681,7 +686,7 @@ QtObject {
                     console.warn("[STT:D20] falling back to last segment:", job._currentAudioFile);
                     job._startTranscription(job._currentAudioFile);
                 } else {
-                    job._setErrorState("concat", "Failed to combine segments", "Is ffmpeg installed?");
+                    job._setErrorState("concat", "Failed to combine segments", "Is ffmpeg installed?", false);
                 }
                 return;
             }
@@ -731,7 +736,7 @@ QtObject {
                     job._errorDetail = "Transcription failed";
                     job._errorHint = "Check logs for details";
                 }
-                job._setErrorState("api", job._errorDetail, job._errorHint);
+                job._setErrorState("api", job._errorDetail, job._errorHint, true);
                 job._tryAutoRetry();
             }
         }
