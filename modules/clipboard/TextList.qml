@@ -3,13 +3,10 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.components.controls
 import qs.components.containers
-import qs.components.misc
 import qs.services
 import qs.config
 import Quickshell
-import Quickshell.Widgets
 import QtQuick
-import QtQuick.Layouts
 
 /// Progressive text entry list for the clipboard Text tab.
 /// Uses a ListModel with lazy append() loading for smooth scrolling.

@@ -1,6 +1,7 @@
+pragma ComponentBehavior: Bound
+
 import qs.components
 import qs.components.controls
-import qs.components.effects
 import qs.services
 import qs.config
 import QtQuick
@@ -26,7 +27,7 @@ SectionContainer {
 
     /// Emitted when any setting changes. The parent should update
     /// its mirrored property and call saveConfig().
-    signal settingChanged(string name, var value)
+    signal settingChanged(string name, var value) // intentional var: heterogeneous — int for 'shown', bool for switches
 
     StyledText {
         text: qsTr("Workspaces")
