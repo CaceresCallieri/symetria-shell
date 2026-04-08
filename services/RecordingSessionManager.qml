@@ -53,7 +53,7 @@ Singleton {
 
     /// Ordered delivery mode list for cycling (STT "ask" mode only).
     // intentional var: JS string array used as constant lookup table
-    readonly property var deliveryModes: ["clipboard", "inject", "submit"]
+    readonly property var _deliveryModes: ["clipboard", "inject", "submit"]
 
     /// Format seconds as MM:SS for elapsed time display.
     function formatElapsedTime(seconds: real): string {
@@ -67,8 +67,8 @@ Singleton {
     function cycleDeliveryMode(): void {
         const job = currentJob;
         if (!job || _activeMode !== "stt") return;
-        const idx = deliveryModes.indexOf(job.activeDeliveryChoice ?? "clipboard");
-        job.setDeliveryChoice(deliveryModes[(idx + 1) % deliveryModes.length]);
+        const idx = _deliveryModes.indexOf(job.activeDeliveryChoice ?? "clipboard");
+        job.setDeliveryChoice(_deliveryModes[(idx + 1) % _deliveryModes.length]);
     }
 
     // ── Public methods ─────────────────────────────────────────────

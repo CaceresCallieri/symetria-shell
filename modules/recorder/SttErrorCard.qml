@@ -69,6 +69,8 @@ ColumnLayout {
         }
     }
 
+    // Safe: unconditional connection is correct — this card is only
+    // instantiated when mode === "stt" (see Content.qml Loader selection).
     Connections {
         target: SttService
 

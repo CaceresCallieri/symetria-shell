@@ -381,7 +381,6 @@ Item {
             // ── Terminal state (success/error) ────────────────────
             Loader {
                 Layout.alignment: Qt.AlignHCenter
-                visible: sourceComponent !== null
 
                 sourceComponent: {
                     if (root.displayState === "success")

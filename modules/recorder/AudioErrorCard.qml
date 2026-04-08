@@ -52,6 +52,8 @@ ColumnLayout {
         }
     }
 
+    // Safe: unconditional connection is correct — this card is only
+    // instantiated when mode === "audio" (see Content.qml Loader selection).
     Connections {
         target: AudioRecorderService
 
