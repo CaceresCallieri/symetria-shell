@@ -6,6 +6,11 @@ import qs.services
 import Quickshell
 import QtQuick
 
+/// Drawer wrapper for the recorder module.
+///
+/// Uses DrawerVertical for the slide-down animation. Merge mode is handled
+/// implicitly: Recorder.qml sets visibilities.recorder = false when merge
+/// activates, which makes shouldBeActive false → drawer animates closed.
 DrawerVertical {
     id: root
 
@@ -13,7 +18,7 @@ DrawerVertical {
     required property PersistentProperties visibilities
     required property var panels
 
-    shouldBeActive: visibilities.audioRecorder && Config.audioRecorder.enabled
+    shouldBeActive: visibilities.recorder && Config.audioRecorder.enabled
 
     maxHeight: screen.height
     clampToMaxHeight: false

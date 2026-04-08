@@ -4,6 +4,7 @@ import qs.components
 import qs.services
 import qs.config
 import qs.modules.stt as SttModule
+import qs.modules.recorder as RecorderModule
 import "popouts" as BarPopouts
 import "components"
 import "components/workspaces"
@@ -190,6 +191,18 @@ Item {
                     popouts.currentName = "stt";
                     popouts.currentCenter = Qt.binding(
                         () => sttCenterContainer.mapToItem(root, sttCenterContainer.width / 2, 0).x
+                    );
+                    popouts.hasCurrent = true;
+                    return;
+                }
+            }
+            // Check audio recording center embed
+            if (recordingCenterContainer.visible) {
+                const localPos = mapToItem(recordingCenterContainer, x, recordingCenterContainer.height / 2);
+                if (localPos.x >= 0 && localPos.x <= recordingCenterContainer.width) {
+                    popouts.currentName = "recording";
+                    popouts.currentCenter = Qt.binding(
+                        () => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x
                     );
                     popouts.hasCurrent = true;
                     return;
@@ -414,6 +427,60 @@ Item {
             function onClosingChanged(): void {
                 if (sttCenterContainer._latestJob?.closing)
                     sttCenterContainer._showEmbed = false;
+            }
+        }
+    }
+
+    // Audio recorder bar embed — shown in center when merge mode is active
+    // and audio recording is active. Same clip-reveal pattern as STT embed.
+    // Mutual exclusivity (via RecordingSessionManager) ensures only one
+    // center embed is ever active at a time.
+    Item {
+        id: recordingCenterContainer
+
+        property bool _showEmbed: false
+        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
+
+        readonly property AudioRecorderJob _job: AudioRecorderService.job
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        clip: true
+
+        visible: _shouldBeActive || width > 0
+        implicitWidth: _shouldBeActive ? recordingEmbed.implicitWidth : 0
+        implicitHeight: recordingEmbed.implicitHeight
+        width: implicitWidth
+        height: implicitHeight
+
+        RecorderModule.RecordingBarEmbed {
+            id: recordingEmbed
+
+            x: (recordingCenterContainer.width - implicitWidth) / 2
+            width: implicitWidth
+        }
+
+        Behavior on implicitWidth {
+            Anim {
+                duration: Appearance.anim.durations.expressiveDefaultSpatial
+                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            }
+        }
+
+        Connections {
+            target: AudioRecorderService
+
+            function onActiveChanged(): void {
+                recordingCenterContainer._showEmbed = AudioRecorderService.active;
+            }
+        }
+
+        Connections {
+            target: recordingCenterContainer._job
+
+            function onClosingChanged(): void {
+                if (recordingCenterContainer._job?.closing)
+                    recordingCenterContainer._showEmbed = false;
             }
         }
     }

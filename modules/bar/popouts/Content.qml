@@ -140,6 +140,11 @@ Item {
             sourceComponent: SttActions {}
         }
 
+        Popout {
+            name: "recording"
+            sourceComponent: RecordingActions {}
+        }
+
         Repeater {
             model: ScriptModel {
                 values: [...SystemTray.items.values]

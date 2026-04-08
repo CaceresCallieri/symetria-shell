@@ -280,7 +280,7 @@ Item {
                         sttState: root.displayState
                         barCount: root.barCount
                         containerHeight: root.audioBarContainerHeight
-                        active: root.visibilities.audioRecorder
+                        active: root.visibilities.recorder
                     }
 
                     StyledText {

@@ -8,7 +8,7 @@ import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
 import qs.modules.stt as SttModule
-import qs.modules.audio as AudioModule
+import qs.modules.recorder as RecorderModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
 import QtQuick
@@ -90,8 +90,8 @@ Item {
             startY: 0  // Start at top-left (clockwise path like bar popouts)
         }
 
-        AudioModule.AudioRecorderBackground {
-            wrapper: root.panels.audioRecorder
+        RecorderModule.RecorderBackground {
+            wrapper: root.panels.recorder
 
             startX: (shape.width - wrapper.width) / 2 - rounding
             startY: 0
