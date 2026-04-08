@@ -14,9 +14,29 @@ Slider {
 
     orientation: Qt.Vertical
 
+    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
+    readonly property var trackStyle: Colours.pillStyle(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.subtle
+    )
+
+    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
+    readonly property var fillStyle: Colours.pillStyle(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.medium
+    )
+
+    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
+    readonly property var handleStyle: Colours.pillStyle(
+        Colours.palette.m3surfaceContainerHigh,
+        Colours.glass.veryStrong
+    )
+
     background: StyledRect {
-        color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
+        color: root.trackStyle.background
         radius: Appearance.rounding.full
+        border.width: 1
+        border.color: root.trackStyle.border
 
         StyledRect {
             anchors.left: parent.left
@@ -25,7 +45,7 @@ Slider {
             y: root.handle.y
             implicitHeight: parent.height - y
 
-            color: Colours.palette.m3secondary
+            color: root.fillStyle.background
             radius: parent.radius
         }
     }
@@ -50,8 +70,10 @@ Slider {
 
             anchors.fill: parent
 
-            color: Colours.palette.m3inverseSurface
+            color: root.handleStyle.background
             radius: Appearance.rounding.full
+            border.width: 1
+            border.color: root.handleStyle.border
 
             MouseArea {
                 id: handleInteraction
@@ -75,7 +97,7 @@ Slider {
                 }
 
                 text: root.icon
-                color: Colours.palette.m3inverseOnSurface
+                color: Colours.palette.m3onSurface
                 anchors.centerIn: parent
 
                 onMovingChanged: anim.restart()

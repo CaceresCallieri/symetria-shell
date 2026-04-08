@@ -7,7 +7,6 @@ import qs.config
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
-import QtQuick.Effects
 
 /// Standalone notifications overlay on WlrLayer.Overlay.
 ///
@@ -72,31 +71,18 @@ Scope {
 
                 width: content.implicitWidth
                 height: content.implicitHeight
-                visible: win.hasContent
+                // Slide + fade: right-to-left on show, left-to-right on hide
+                opacity: win.hasContent ? 1 : 0
+                visible: opacity > 0
 
-                // Background with shadow and transparency.
-                // Two-layer approach matches OsdOverlay / Drawers.qml: outer layer applies
-                // transparency + shadow, inner layer renders shapes at full opacity.
-                Item {
-                    anchors.fill: parent
-                    layer.enabled: win.hasContent
-                    opacity: Colours.transparency.enabled ? Colours.transparency.base : 1
-                    layer.effect: MultiEffect {
-                        shadowEnabled: true
-                        blurMax: 15
-                        shadowColor: Qt.alpha(Colours.palette.m3shadow, 0.7)
-                    }
+                Behavior on opacity {
+                    Anim {}
+                }
 
-                    Item {
-                        anchors.fill: parent
-                        layer.enabled: win.hasContent
-                        opacity: Colours.generalBackgroundAlpha
-
-                        Rectangle {
-                            anchors.fill: parent
-                            color: Colours.generalBackgroundOpaque
-                            radius: Config.border.rounding
-                        }
+                transform: Translate {
+                    x: win.hasContent ? 0 : notifContent.width + Config.border.thickness
+                    Behavior on x {
+                        Anim {}
                     }
                 }
 

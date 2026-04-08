@@ -8,7 +8,6 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
-import QtQuick.Effects
 
 /// Standalone OSD overlay on WlrLayer.Overlay.
 ///
@@ -157,29 +156,11 @@ Scope {
                     Anim {}
                 }
 
-                // Background with shadow and transparency.
-                // Two-layer approach matches Drawers.qml: outer layer applies
-                // transparency + shadow, inner layer renders shapes at full opacity.
-                Item {
-                    anchors.fill: parent
-                    layer.enabled: osdContent.visible
-                    opacity: Colours.transparency.enabled ? Colours.transparency.base : 1
-                    layer.effect: MultiEffect {
-                        shadowEnabled: true
-                        blurMax: 15
-                        shadowColor: Qt.alpha(Colours.palette.m3shadow, 0.7)
-                    }
-
-                    Item {
-                        anchors.fill: parent
-                        layer.enabled: osdContent.visible
-                        opacity: Colours.generalBackgroundAlpha
-
-                        Rectangle {
-                            anchors.fill: parent
-                            color: Colours.generalBackgroundOpaque
-                            radius: Config.border.rounding
-                        }
+                // Slide right-to-left on show, left-to-right on hide
+                transform: Translate {
+                    x: win.showing ? 0 : osdContent.width + Config.border.thickness
+                    Behavior on x {
+                        Anim {}
                     }
                 }
 
