@@ -27,12 +27,11 @@ Singleton {
     // Public interface
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// Whether any jobs exist (controls drawer visibility)
-    readonly property bool active: _jobs.length > 0
+    /// Whether a job exists (controls drawer visibility)
+    readonly property bool active: _job !== null
 
-    /// The job list — newest first. Read by recorder UI components to resolve the current job.
-    // intentional var: aliases _jobs which must remain var for spread/filter reassignment
-    readonly property var jobs: _jobs
+    /// The current job, or null. Read by recorder UI components.
+    readonly property SttJob job: _job
 
     /// The currently recording job (at most one), or null
     readonly property SttJob activeRecording: _activeRecording
@@ -50,8 +49,7 @@ Singleton {
     // Shared state (service-level, not per-job)
     // ─────────────────────────────────────────────────────────────────────────
 
-    // intentional var: JS array with spread/filter reassignment — [job, ..._jobs] pattern
-    property var _jobs: []
+    property SttJob _job: null
     property SttJob _activeRecording: null
 
     // Toggle debouncing
@@ -65,9 +63,6 @@ Singleton {
     // Temp directory readiness
     property bool _tempDirReady: false
 
-    // FIFO delivery queues: windowAddress → [SttJob, ...]
-    // intentional var: JS object used as hash map ({ windowAddress: SttJob[] })
-    property var _deliveryQueues: ({})
 
     // Per-session vocabulary hints (tag-chip widget).
     // Service-level so the widget and IPC can modify them without job reference.
@@ -100,19 +95,18 @@ Singleton {
             console.log("[STT:D19] toggle() DEBOUNCED | elapsed:", now - _lastToggleTime, "ms");
             return;
         }
-        Logger.log("qml", "stt", "toggle | activeRecording=" + (_activeRecording !== null) + " jobs=" + _jobs.length);
+        Logger.log("qml", "stt", "toggle | activeRecording=" + (_activeRecording !== null) + " job=" + (_job !== null));
         _lastToggleTime = now;
 
         if (_activeRecording) {
             stop();
-        } else if (_jobs.length === 0) {
+        } else if (!_job) {
             start();
         } else {
             // Job exists but not recording (processing/delivering) — check for error
-            const errorJob = _mostRecentErrorJob();
-            if (errorJob) {
-                errorJob.retry();
-                actionTriggered(errorJob.sessionId, "retry");
+            if (_job.state === "error" && _job.errorSource !== "config") {
+                _job.retry();
+                actionTriggered(_job.sessionId, "retry");
             } else {
                 // Job is processing/delivering — inform the user
                 Toaster.toast(
@@ -125,9 +119,9 @@ Singleton {
         }
     }
 
-    /// Start a new recording job. Blocked if any job already exists.
+    /// Start a new recording job. Blocked if a job already exists.
     function start(): void {
-        if (_jobs.length > 0) {
+        if (_job) {
             Toaster.toast(
                 qsTr("STT is busy"),
                 qsTr("Wait for the current job to finish"),
@@ -146,7 +140,7 @@ Singleton {
             console.warn("[STT] _startInternal() called while already recording — ignoring");
             return;
         }
-        Logger.log("qml", "stt", "start | delivery=" + _deliveryMode + " jobs=" + _jobs.length);
+        Logger.log("qml", "stt", "start | delivery=" + _deliveryMode);
 
         // Check API key before starting (SttJob._resolvedApiKey checks
         // both Config.stt.apiKey and OPENAI_API_KEY env var)
@@ -154,7 +148,7 @@ Singleton {
         if (job._resolvedApiKey === "") {
             job._setErrorState("config", "API key not configured",
                 "Set OPENAI_API_KEY env var or stt.apiKey in shell.json", false);
-            _jobs = [job, ..._jobs];
+            _job = job;
             return;
         }
 
@@ -166,9 +160,9 @@ Singleton {
         _activeRecording = job;
         job._state = "recording";
 
-        // Add to _jobs AFTER state is "recording" so the bar embed
-        // (which binds to _activeJob via jobs) sees the correct state immediately.
-        _jobs = [job, ..._jobs];
+        // Assign _job AFTER state is "recording" so the bar embed
+        // (which binds to _activeJob via job) sees the correct state immediately.
+        _job = job;
 
         // Ensure temp dir exists, then start recording
         if (_tempDirReady) {
@@ -281,9 +275,7 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     function _mostRecentErrorJob(): SttJob {
-        for (const job of _jobs) {
-            if (job.state === "error" && job.errorSource !== "config") return job;
-        }
+        if (_job && _job.state === "error" && _job.errorSource !== "config") return _job;
         return null;
     }
 
@@ -300,10 +292,10 @@ Singleton {
         });
 
         job.finished.connect(() => _onJobFinished(job));
-        job.readyForDelivery.connect(() => _enqueueForDelivery(job));
+        job.readyForDelivery.connect(() => job._startDeliveryChain());
 
-        // Caller must add to _jobs AFTER setting job state, so that
-        // UI consumers binding to jobs see the correct state immediately.
+        // Caller must assign _job AFTER setting job state, so that
+        // UI consumers binding to job see the correct state immediately.
         return job;
     }
 
@@ -318,43 +310,9 @@ Singleton {
     }
 
     function _finalizeRemoval(job: SttJob): void {
-        _jobs = _jobs.filter(j => j !== job);
+        if (_job === job)
+            _job = null;
         job.destroy();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // FIFO delivery
-    // ─────────────────────────────────────────────────────────────────────────
-
-    function _enqueueForDelivery(job: SttJob): void {
-        const key = job._targetWindowAddress || "__clipboard__";
-        const queues = _deliveryQueues;
-        if (!queues[key]) queues[key] = [];
-        queues[key].push(job);
-        _deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
-        _tryDeliverNext(key);
-    }
-
-    function _tryDeliverNext(key: string): void {
-        const queues = _deliveryQueues;
-        const queue = queues[key];
-        if (!queue || queue.length === 0) return;
-
-        const front = queue[0];
-        if (front.state !== "transcribed") return;  // not ready or already delivering
-
-        front._startDeliveryChain();
-    }
-
-    function _onDeliveryComplete(job: SttJob): void {
-        const key = job._targetWindowAddress || "__clipboard__";
-        const queues = _deliveryQueues;
-        const queue = queues[key];
-        if (queue && queue.length > 0 && queue[0] === job) {
-            queue.shift();
-            _deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
-            _tryDeliverNext(key);  // pump next
-        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -391,8 +349,7 @@ Singleton {
 
     Component.onDestruction: {
         restartDelayTimer.stop();
-        for (const job of _jobs) {
-            job._destroyCleanup();
-        }
+        if (_job)
+            _job._destroyCleanup();
     }
 }

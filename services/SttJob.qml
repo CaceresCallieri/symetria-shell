@@ -11,8 +11,8 @@ import QtQuick
 /// delivery chain, error handling, and auto-retry.
 ///
 /// Created dynamically by SttService via Component.createObject().
-/// Accesses service-level state (delivery queues, delivery mode, temp dir)
-/// through the SttService singleton.
+/// Accesses service-level state (delivery mode, temp dir) through
+/// the SttService singleton.
 ///
 /// State machine:
 ///   recording ⇄ paused → processing → transcribed → delivering → success → [removed]
@@ -196,7 +196,7 @@ QtObject {
         _state = "recording";
     }
 
-    /// Cancel: kill processes, discard audio, remove from queue.
+    /// Cancel: kill processes, discard audio, trigger removal.
     function cancel(): void {
         _pendingRecordAction = "cancel";
         _stopAllTimers();
@@ -212,20 +212,6 @@ QtObject {
         // Clear activeRecording if this job is the active one
         if (SttService._activeRecording === job)
             SttService._activeRecording = null;
-
-        // Remove from delivery queue if enqueued
-        const key = _targetWindowAddress || "__clipboard__";
-        const queues = SttService._deliveryQueues;
-        const queue = queues[key];
-        if (queue) {
-            const idx = queue.indexOf(job);
-            if (idx >= 0) {
-                const wasDelivering = _state === "delivering";
-                queue.splice(idx, 1);
-                SttService._deliveryQueues = queues;  // reassign to emit changed (var mutation is silent)
-                if (wasDelivering) SttService._tryDeliverNext(key);
-            }
-        }
 
         // Remove from jobs list (via _removeJob so hide animation plays)
         SttService._removeJob(job);
@@ -722,7 +708,7 @@ QtObject {
             }
             Logger.log("qml", "stt", "transcribe-result | id=" + job.sessionId + " code=" + code + " textLen=" + job._transcribedText.length);
             if (code === 0 && job._transcribedText !== "") {
-                // Mark as transcribed and signal readiness for FIFO delivery
+                // Mark as transcribed and signal readiness for delivery
                 job._state = "transcribed";
                 if (Config.stt?.cache?.deleteOnSuccess ?? true)
                     job._cleanupTempFiles();
@@ -746,7 +732,6 @@ QtObject {
             if (code !== 0) {
                 console.error("[STT:D12] wl-copy FAILED (exit", code + ")");
                 job._state = "success";
-                SttService._onDeliveryComplete(job);
                 return;
             }
 
@@ -775,7 +760,6 @@ QtObject {
                 job._injectionDowngraded = false;
                 job._injectionSubmitted = false;
                 job._state = "success";
-                SttService._onDeliveryComplete(job);
             }
         }
     }
@@ -828,7 +812,6 @@ QtObject {
             if (code !== 0)
                 console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal, clipboard still has text");
             job._state = "success";
-            SttService._onDeliveryComplete(job);
         }
     }
 }

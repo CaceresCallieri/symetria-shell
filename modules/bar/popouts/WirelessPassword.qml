@@ -21,20 +21,9 @@ ColumnLayout {
         target: root.wrapper
         function onCurrentNameChanged() {
             if (root.wrapper.currentName === "wirelesspassword") {
-                // Update network when popout becomes active
-                Qt.callLater(() => {
-                    // Try to get network from parent Content's networkPopout
-                    const content = root.parent?.parent?.parent;
-                    if (content) {
-                        const networkPopout = content.children.find(c => c.name === "network");
-                        if (networkPopout && networkPopout.item) {
-                            root.network = networkPopout.item.passwordNetwork;
-                        }
-                    }
-                    // Force focus to password container when popout becomes active
-                    // Use Timer for actual delay to ensure dialog is fully rendered
-                    focusTimer.start();
-                });
+                // Force focus to password container when popout becomes active.
+                // Network is set by Content.qml's reactive binding.
+                focusTimer.start();
             }
         }
     }
@@ -151,34 +140,6 @@ ColumnLayout {
                 }
                 color: Colours.palette.m3outline
                 font.pointSize: Appearance.font.size.small
-            }
-
-            Timer {
-                interval: 50
-                running: root.shouldBeVisible && (!root.network || !root.network.ssid)
-                repeat: true
-                property int attempts: 0
-                onTriggered: {
-                    attempts++;
-                    // Keep trying to get network from Network component
-                    const content = root.parent?.parent?.parent;
-                    if (content) {
-                        const networkPopout = content.children.find(c => c.name === "network");
-                        if (networkPopout && networkPopout.item && networkPopout.item.passwordNetwork) {
-                            root.network = networkPopout.item.passwordNetwork;
-                        }
-                    }
-                    // Stop if we got it or after 20 attempts (1 second)
-                    if ((root.network && root.network.ssid) || attempts >= 20) {
-                        stop();
-                        attempts = 0;
-                    }
-                }
-                onRunningChanged: {
-                    if (!running) {
-                        attempts = 0;
-                    }
-                }
             }
 
             StyledText {

@@ -20,10 +20,7 @@ ColumnLayout {
 
     readonly property var job: {
         if (mode === "audio") return AudioRecorderService.job;
-        if (mode === "stt") {
-            const jobs = SttService.jobs;
-            return jobs.length > 0 ? jobs[jobs.length - 1] : null;
-        }
+        if (mode === "stt") return SttService.job;
         return null;
     }
 
