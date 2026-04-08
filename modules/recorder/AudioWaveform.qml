@@ -95,7 +95,7 @@ Item {
 
     // ── Pre-calculated wave offsets (recording mode) ────────────
     readonly property var waveOffsets: {
-        if (root.displayState !== "recording") return [];
+        if (root.displayState !== "recording" || !root.active) return [];
         const cfg = audioConfig;
         const offsets = [];
         for (let i = 0; i < barCount; i++) {
@@ -107,7 +107,7 @@ Item {
 
     // ── Processing wave data (offsets + opacities) ──────────────
     readonly property var processingWaveData: {
-        if (root.displayState !== "processing") return { offsets: [], opacities: [] };
+        if (root.displayState !== "processing" || !root.active) return { offsets: [], opacities: [] };
         const cfg = processingConfig;
         const offsets = [];
         const opacities = [];
@@ -187,7 +187,7 @@ Item {
 
                 width: 4
                 height: smoothedHeight
-                y: parent ? (parent.height - height) / 2 : 0
+                anchors.verticalCenter: parent?.verticalCenter ?? undefined
 
                 radius: 2
                 color: root.displayState === "paused" ? root.pausedBarColor : (root.barColors[index] ?? Colours.palette.m3primary)
