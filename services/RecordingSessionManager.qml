@@ -35,6 +35,7 @@ Singleton {
     })
 
     /// Shared icon names for STT delivery modes. Used by Content.qml and RecordingBarEmbed.qml.
+    // intentional var: JS string→string map (no QML typed map)
     readonly property var deliveryModeIcons: ({
         "clipboard": "content_copy",
         "inject": "input",
