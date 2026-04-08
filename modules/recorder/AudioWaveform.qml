@@ -113,7 +113,7 @@ Item {
         const opacities = [];
         for (let i = 0; i < barCount; i++) {
             const spatialPhase = (i / (barCount - 1)) * 2 * Math.PI;
-            const wavePos = spatialPhase + animationTime * cfg.waveSpeed;
+            const wavePos = spatialPhase - animationTime * cfg.waveSpeed;
             const primaryWave = 0.5 + 0.5 * Math.sin(wavePos);
             const harmonic = cfg.harmonicStrength * Math.sin(wavePos * 2);
             offsets.push(Math.max(0, primaryWave + harmonic));
