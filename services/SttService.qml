@@ -153,7 +153,7 @@ Singleton {
         const job = _createJob();
         if (job._resolvedApiKey === "") {
             job._setErrorState("config", "API key not configured",
-                "Set OPENAI_API_KEY env var or stt.apiKey in shell.json");
+                "Set OPENAI_API_KEY env var or stt.apiKey in shell.json", false);
             _jobs = [job, ..._jobs];
             return;
         }
@@ -376,7 +376,7 @@ Singleton {
             if (code !== 0) {
                 console.error("[STT] Failed to create temp directory:", root._tempDir);
                 if (root._activeRecording)
-                    root._activeRecording._setErrorState("internal", "Failed to create temp directory", "Check permissions");
+                    root._activeRecording._setErrorState("internal", "Failed to create temp directory", "Check permissions", false);
                 return;
             }
             root._tempDirReady = true;
