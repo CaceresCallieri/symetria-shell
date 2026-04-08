@@ -86,7 +86,6 @@ Row {
             // context property. With ComponentBehavior: Bound, inner Components can only
             // access real properties, not context properties. Declaring the property makes
             // it real and accessible to sourceComponent children. (See docs/qml-pitfalls.md)
-            // intentional var: heterogeneous JS object { isGroup: bool, clients: HyprlandToplevel[] }
             required property var modelData
 
             anchors.verticalCenter: parent.verticalCenter
@@ -108,7 +107,8 @@ Row {
                     id: container
 
                     // Pill styling (subtle intensity for background element)
-                    readonly property var glassStyle: Colours.pillStyle( // intentional var: heterogeneous JS { background, border }
+                    // intentional var: heterogeneous JS { background, border }
+                    readonly property var glassStyle: Colours.pillStyle(
                         Colours.palette.m3surfaceContainerHigh,
                         Colours.glass.subtle
                     )
