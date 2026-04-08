@@ -13,7 +13,7 @@ Shape {
     property int padding: 0
     property int spacing: Appearance.spacing.small
     property color fgColour: Colours.palette.m3primary
-    property color bgColour: Colours.palette.m3secondaryContainer
+    property color bgColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
     readonly property real size: Math.min(width, height)
     readonly property real arcRadius: (size - padding - strokeWidth) / 2

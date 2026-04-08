@@ -92,8 +92,8 @@ RowLayout {
 
         property color fg1: Colours.palette.m3primary
         property color fg2: Colours.palette.m3secondary
-        property color bg1: Colours.palette.m3primaryContainer
-        property color bg2: Colours.palette.m3secondaryContainer
+        property color bg1: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+        property color bg2: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
         implicitWidth: Config.dashboard.sizes.resourceSize * primaryMult
         implicitHeight: Config.dashboard.sizes.resourceSize * primaryMult

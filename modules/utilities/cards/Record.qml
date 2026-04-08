@@ -38,7 +38,7 @@ StyledRect {
                 }
 
                 radius: Appearance.rounding.full
-                color: Recorder.running ? Colours.palette.m3secondary : Colours.palette.m3secondaryContainer
+                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Recorder.running ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                 MaterialIcon {
                     id: icon
@@ -47,7 +47,7 @@ StyledRect {
                     anchors.horizontalCenterOffset: -0.5
                     anchors.verticalCenterOffset: 1.5
                     text: "screen_record"
-                    color: Recorder.running ? Colours.palette.m3onSecondary : Colours.palette.m3onSecondaryContainer
+                    color: Colours.palette.m3onSurface
                     font.pointSize: Appearance.font.size.large
                 }
             }

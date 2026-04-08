@@ -22,7 +22,7 @@ BusyIndicator {
     property real implicitSize: Appearance.font.size.normal * 3
     property real strokeWidth: Appearance.padding.small * 0.8
     property color fgColour: Colours.palette.m3primary
-    property color bgColour: Colours.palette.m3secondaryContainer
+    property color bgColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
     property alias type: manager.indeterminateAnimationType
     readonly property alias progress: manager.progress

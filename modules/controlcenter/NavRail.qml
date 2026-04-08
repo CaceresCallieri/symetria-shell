@@ -53,13 +53,13 @@ Item {
                 implicitWidth: nonAnimWidth
                 implicitHeight: root.session.navExpanded ? normalWinIcon.implicitHeight + Appearance.padding.normal * 2 : nonAnimWidth
 
-                color: Colours.palette.m3primaryContainer
+                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                 radius: Appearance.rounding.small
 
                 StateLayer {
                     id: normalWinState
 
-                    color: Colours.palette.m3onPrimaryContainer
+                    color: Colours.palette.m3onSurface
 
                     function onClicked(): void {
                         root.session.root.close();
@@ -78,7 +78,7 @@ Item {
                     anchors.leftMargin: Appearance.padding.large
 
                     text: "select_window"
-                    color: Colours.palette.m3onPrimaryContainer
+                    color: Colours.palette.m3onSurface
                     font.pointSize: Appearance.font.size.large
                     fill: 1
                 }
@@ -91,7 +91,7 @@ Item {
                     anchors.leftMargin: Appearance.spacing.normal
 
                     text: qsTr("Float window")
-                    color: Colours.palette.m3onPrimaryContainer
+                    color: Colours.palette.m3onSurface
                     opacity: root.session.navExpanded ? 1 : 0
 
                     Behavior on opacity {

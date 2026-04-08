@@ -136,7 +136,7 @@ DeviceList {
                     implicitHeight: icon.implicitHeight + Appearance.padding.normal * 2
 
                     radius: Appearance.rounding.normal
-                    color: modelData.active ? Colours.palette.m3primaryContainer : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, modelData.active ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                     MaterialIcon {
                         id: icon
@@ -145,7 +145,7 @@ DeviceList {
                         text: Icons.getNetworkIcon(modelData.strength, modelData.isSecure)
                         font.pointSize: Appearance.font.size.large
                         fill: modelData.active ? 1 : 0
-                        color: modelData.active ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                     }
                 }
 
@@ -189,7 +189,7 @@ DeviceList {
                     implicitHeight: connectIcon.implicitHeight + Appearance.padding.smaller * 2
 
                     radius: Appearance.rounding.full
-                    color: Qt.alpha(Colours.palette.m3primaryContainer, modelData.active ? 1 : 0)
+                    color: modelData.active ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
 
                     StateLayer {
                         function onClicked(): void {
@@ -206,7 +206,7 @@ DeviceList {
 
                         anchors.centerIn: parent
                         text: modelData.active ? "link_off" : "link"
-                        color: modelData.active ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                     }
                 }
             }

@@ -81,8 +81,8 @@ ColumnLayout {
                     readonly property int wsId: Math.floor((Hypr.activeWsId - 1) / 10) * 10 + index + 1
                     readonly property bool isCurrent: root.client?.workspace.id === wsId
 
-                    color: isCurrent ? Colours.tPalette.m3surfaceContainerHighest : Colours.palette.m3tertiaryContainer
-                    onColor: isCurrent ? Colours.palette.m3onSurface : Colours.palette.m3onTertiaryContainer
+                    color: isCurrent ? Colours.tPalette.m3surfaceContainerHighest : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                    onColor: Colours.palette.m3onSurface
                     text: wsId
                     disabled: isCurrent
 
@@ -107,8 +107,8 @@ ColumnLayout {
         spacing: root.client?.lastIpcObject.floating ? Appearance.spacing.normal : Appearance.spacing.small
 
         Button {
-            color: Colours.palette.m3secondaryContainer
-            onColor: Colours.palette.m3onSecondaryContainer
+            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+            onColor: Colours.palette.m3onSurface
             text: root.client?.lastIpcObject.floating ? qsTr("Tile") : qsTr("Float")
 
             function onClicked(): void {
@@ -124,8 +124,8 @@ ColumnLayout {
             Layout.rightMargin: active ? 0 : -parent.spacing
 
             sourceComponent: Button {
-                color: Colours.palette.m3secondaryContainer
-                onColor: Colours.palette.m3onSecondaryContainer
+                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                onColor: Colours.palette.m3onSurface
                 text: root.client?.lastIpcObject.pinned ? qsTr("Unpin") : qsTr("Pin")
 
                 function onClicked(): void {

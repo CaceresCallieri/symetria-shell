@@ -26,17 +26,17 @@ StyledRect {
     property alias radiusAnim: radiusAnim
 
     property bool internalChecked
-    property color activeColour: type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary
+    property color activeColour: Qt.lighter(Colours.pillStyle(type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5)
     property color inactiveColour: {
         if (!toggle && type === IconButton.Filled)
-            return Colours.palette.m3primary;
-        return type === IconButton.Filled ? Colours.tPalette.m3surfaceContainer : Colours.palette.m3secondaryContainer;
+            return Qt.lighter(Colours.pillStyle(Colours.palette.m3primary, Colours.glass.veryStrong).background, 1.5);
+        return type === IconButton.Filled ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background;
     }
-    property color activeOnColour: type === IconButton.Filled ? Colours.palette.m3onPrimary : type === IconButton.Tonal ? Colours.palette.m3onSecondary : Colours.palette.m3primary
+    property color activeOnColour: type === IconButton.Text ? Colours.palette.m3primary : Colours.palette.m3onSurface
     property color inactiveOnColour: {
         if (!toggle && type === IconButton.Filled)
-            return Colours.palette.m3onPrimary;
-        return type === IconButton.Tonal ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurfaceVariant;
+            return Colours.palette.m3onSurface;
+        return type === IconButton.Text ? Colours.palette.m3onSurfaceVariant : Colours.palette.m3onSurface;
     }
     property color disabledColour: Qt.alpha(Colours.palette.m3onSurface, 0.1)
     property color disabledOnColour: Qt.alpha(Colours.palette.m3onSurface, 0.38)

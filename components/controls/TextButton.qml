@@ -24,23 +24,23 @@ StyledRect {
     property alias label: label
 
     property bool internalChecked
-    property color activeColour: type === TextButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary
+    property color activeColour: Qt.lighter(Colours.pillStyle(type === TextButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5)
     property color inactiveColour: {
         if (!toggle && type === TextButton.Filled)
-            return Colours.palette.m3primary;
-        return type === TextButton.Filled ? Colours.tPalette.m3surfaceContainer : Colours.palette.m3secondaryContainer;
+            return Qt.lighter(Colours.pillStyle(Colours.palette.m3primary, Colours.glass.veryStrong).background, 1.5);
+        return Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background;
     }
     property color activeOnColour: {
         if (type === TextButton.Text)
             return Colours.palette.m3primary;
-        return type === TextButton.Filled ? Colours.palette.m3onPrimary : Colours.palette.m3onSecondary;
+        return Colours.palette.m3onSurface;
     }
     property color inactiveOnColour: {
         if (!toggle && type === TextButton.Filled)
-            return Colours.palette.m3onPrimary;
+            return Colours.palette.m3onSurface;
         if (type === TextButton.Text)
             return Colours.palette.m3primary;
-        return type === TextButton.Filled ? Colours.palette.m3onSurface : Colours.palette.m3onSecondaryContainer;
+        return Colours.palette.m3onSurface;
     }
 
     signal clicked

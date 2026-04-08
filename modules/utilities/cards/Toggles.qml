@@ -98,7 +98,7 @@ StyledRect {
         Layout.fillWidth: true
         Layout.preferredWidth: implicitWidth + (stateLayer.pressed ? Appearance.padding.large : internalChecked ? Appearance.padding.smaller : 0)
         radius: stateLayer.pressed ? Appearance.rounding.small / 2 : internalChecked ? Appearance.rounding.small : Appearance.rounding.normal
-        inactiveColour: Colours.layer(Colours.palette.m3surfaceContainerHighest, 2)
+        inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
         toggle: true
         radiusAnim.duration: Appearance.anim.durations.expressiveFastSpatial
         radiusAnim.easing.bezierCurve: Appearance.anim.curves.expressiveFastSpatial

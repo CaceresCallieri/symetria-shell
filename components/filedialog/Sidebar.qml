@@ -48,7 +48,7 @@ StyledRect {
                 implicitHeight: placeInner.implicitHeight + Appearance.padding.normal * 2
 
                 radius: Appearance.rounding.full
-                color: Qt.alpha(Colours.palette.m3secondaryContainer, selected ? 1 : 0)
+                color: selected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
 
                 StateLayer {
                     color: place.selected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface

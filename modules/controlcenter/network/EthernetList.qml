@@ -92,12 +92,12 @@ DeviceList {
                     implicitHeight: icon.implicitHeight + Appearance.padding.normal * 2
 
                     radius: Appearance.rounding.normal
-                    color: modelData.connected ? Colours.palette.m3primaryContainer : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, modelData.connected ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                     StyledRect {
                         anchors.fill: parent
                         radius: parent.radius
-                        color: Qt.alpha(modelData.connected ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface, stateLayer.pressed ? 0.1 : stateLayer.containsMouse ? 0.08 : 0)
+                        color: Qt.alpha(Colours.palette.m3onSurface, stateLayer.pressed ? 0.1 : stateLayer.containsMouse ? 0.08 : 0)
                     }
 
                     MaterialIcon {
@@ -107,7 +107,7 @@ DeviceList {
                         text: "cable"
                         font.pointSize: Appearance.font.size.large
                         fill: modelData.connected ? 1 : 0
-                        color: modelData.connected ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
 
                         Behavior on fill {
                             Anim {}
@@ -148,10 +148,10 @@ DeviceList {
                     implicitHeight: connectIcon.implicitHeight + Appearance.padding.smaller * 2
 
                     radius: Appearance.rounding.full
-                    color: Qt.alpha(Colours.palette.m3primaryContainer, modelData.connected ? 1 : 0)
+                    color: modelData.connected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
 
                     StateLayer {
-                        color: modelData.connected ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
 
                         function onClicked(): void {
                             if (modelData.connected && modelData.connection) {
@@ -168,7 +168,7 @@ DeviceList {
                         anchors.centerIn: parent
                         animate: true
                         text: modelData.connected ? "link_off" : "link"
-                        color: modelData.connected ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                     }
                 }
             }

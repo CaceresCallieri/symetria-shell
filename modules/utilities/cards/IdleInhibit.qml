@@ -29,14 +29,14 @@ StyledRect {
             implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
 
             radius: Appearance.rounding.full
-            color: IdleInhibitor.enabled ? Colours.palette.m3secondary : Colours.palette.m3secondaryContainer
+            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, IdleInhibitor.enabled ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
             MaterialIcon {
                 id: icon
 
                 anchors.centerIn: parent
                 text: "coffee"
-                color: IdleInhibitor.enabled ? Colours.palette.m3onSecondary : Colours.palette.m3onSecondaryContainer
+                color: Colours.palette.m3onSurface
                 font.pointSize: Appearance.font.size.large
             }
         }

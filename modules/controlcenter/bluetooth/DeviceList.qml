@@ -168,12 +168,12 @@ DeviceList {
                     implicitHeight: icon.implicitHeight + Appearance.padding.normal * 2
 
                     radius: Appearance.rounding.normal
-                    color: device.connected ? Colours.palette.m3primaryContainer : (device.modelData && device.modelData.bonded) ? Colours.palette.m3secondaryContainer : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, device.connected ? Colours.glass.veryStrong : (device.modelData && device.modelData.bonded) ? Colours.glass.medium : Colours.glass.subtle).background
 
                     StyledRect {
                         anchors.fill: parent
                         radius: parent.radius
-                        color: Qt.alpha(device.connected ? Colours.palette.m3onPrimaryContainer : (device.modelData && device.modelData.bonded) ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface, stateLayer.pressed ? 0.1 : stateLayer.containsMouse ? 0.08 : 0)
+                        color: Qt.alpha(Colours.palette.m3onSurface, stateLayer.pressed ? 0.1 : stateLayer.containsMouse ? 0.08 : 0)
                     }
 
                     MaterialIcon {
@@ -181,7 +181,7 @@ DeviceList {
 
                         anchors.centerIn: parent
                         text: Icons.getBluetoothIcon(device.modelData ? device.modelData.icon : "")
-                        color: device.connected ? Colours.palette.m3onPrimaryContainer : (device.modelData && device.modelData.bonded) ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                         font.pointSize: Appearance.font.size.large
                         fill: device.connected ? 1 : 0
 
@@ -218,7 +218,7 @@ DeviceList {
                     implicitHeight: connectIcon.implicitHeight + Appearance.padding.smaller * 2
 
                     radius: Appearance.rounding.full
-                    color: Qt.alpha(Colours.palette.m3primaryContainer, device.connected ? 1 : 0)
+                    color: device.connected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
 
                     CircularIndicator {
                         anchors.fill: parent
@@ -226,7 +226,7 @@ DeviceList {
                     }
 
                     StateLayer {
-                        color: device.connected ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
                         disabled: device.loading
 
                         function onClicked(): void {
@@ -251,7 +251,7 @@ DeviceList {
                         anchors.centerIn: parent
                         animate: true
                         text: device.connected ? "link_off" : "link"
-                        color: device.connected ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
 
                         opacity: device.loading ? 0 : 1
 

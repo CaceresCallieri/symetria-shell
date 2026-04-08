@@ -244,12 +244,12 @@ StyledFlickable {
                                         implicitHeight: cancelEditIcon.implicitHeight + Appearance.padding.smaller * 2
 
                                         radius: Appearance.rounding.small
-                                        color: Colours.palette.m3secondaryContainer
+                                        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                                         opacity: root.session.bt.editingDeviceName ? 1 : 0
                                         scale: root.session.bt.editingDeviceName ? 1 : 0.5
 
                                         StateLayer {
-                                            color: Colours.palette.m3onSecondaryContainer
+                                            color: Colours.palette.m3onSurface
                                             disabled: !root.session.bt.editingDeviceName
 
                                             function onClicked(): void {
@@ -264,7 +264,7 @@ StyledFlickable {
                                             anchors.centerIn: parent
                                             animate: true
                                             text: "cancel"
-                                            color: Colours.palette.m3onSecondaryContainer
+                                            color: Colours.palette.m3onSurface
                                         }
 
                                         Behavior on opacity {
@@ -386,7 +386,7 @@ StyledFlickable {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Appearance.rounding.full
-                                        color: Colours.palette.m3secondaryContainer
+                                        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
                                         StyledRect {
                                             anchors.right: parent.right
@@ -490,7 +490,7 @@ StyledFlickable {
                 implicitHeight: fabMenuItemInner.implicitHeight + Appearance.padding.larger * 2
 
                 radius: Appearance.rounding.full
-                color: Colours.palette.m3primaryContainer
+                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
                 opacity: 0
 
@@ -571,14 +571,14 @@ StyledFlickable {
 
                     MaterialIcon {
                         text: fabMenuItem.modelData.icon
-                        color: Colours.palette.m3onPrimaryContainer
+                        color: Colours.palette.m3onSurface
                         fill: 1
                     }
 
                     StyledText {
                         animate: true
                         text: (root.device && root.device[`${fabMenuItem.modelData.name}ed`] ? fabMenuItem.modelData.name === "connect" ? "dis" : "un" : "") + fabMenuItem.modelData.name
-                        color: Colours.palette.m3onPrimaryContainer
+                        color: Colours.palette.m3onSurface
                         font.capitalization: Font.Capitalize
                         Layout.preferredWidth: implicitWidth
 
@@ -612,7 +612,7 @@ StyledFlickable {
             implicitHeight: 64
 
             radius: Appearance.rounding.normal
-            color: root.session.bt.fabMenuOpen ? Colours.palette.m3primary : Colours.palette.m3primaryContainer
+            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, root.session.bt.fabMenuOpen ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
             states: State {
                 name: "expanded"
@@ -647,7 +647,7 @@ StyledFlickable {
             StateLayer {
                 id: fabState
 
-                color: root.session.bt.fabMenuOpen ? Colours.palette.m3onPrimary : Colours.palette.m3onPrimaryContainer
+                color: Colours.palette.m3onSurface
 
                 function onClicked(): void {
                     root.session.bt.fabMenuOpen = !root.session.bt.fabMenuOpen;
@@ -660,7 +660,7 @@ StyledFlickable {
                 anchors.centerIn: parent
                 animate: true
                 text: root.session.bt.fabMenuOpen ? "close" : "settings"
-                color: root.session.bt.fabMenuOpen ? Colours.palette.m3onPrimary : Colours.palette.m3onPrimaryContainer
+                color: Colours.palette.m3onSurface
                 font.pointSize: Appearance.font.size.large
                 fill: 1
             }

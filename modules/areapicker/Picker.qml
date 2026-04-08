@@ -215,7 +215,7 @@ MouseArea {
         id: overlay
 
         anchors.fill: parent
-        color: Colours.palette.m3secondaryContainer
+        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
         opacity: 0.3
 
         layer.enabled: true

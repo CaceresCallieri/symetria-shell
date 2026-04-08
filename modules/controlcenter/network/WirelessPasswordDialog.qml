@@ -351,8 +351,8 @@ Item {
 
                     Layout.fillWidth: true
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.palette.m3secondaryContainer
-                    inactiveOnColour: Colours.palette.m3onSecondaryContainer
+                    inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+                    inactiveOnColour: Colours.palette.m3onSurface
                     text: qsTr("Cancel")
 
                     onClicked: root.closeDialog()

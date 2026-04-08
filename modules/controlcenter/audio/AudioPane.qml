@@ -321,7 +321,7 @@ Item {
                                         implicitHeight: muteIcon.implicitHeight + Appearance.padding.normal * 2
 
                                         radius: Appearance.rounding.normal
-                                        color: Audio.muted ? Colours.palette.m3secondary : Colours.palette.m3secondaryContainer
+                                        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Audio.muted ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                                         StateLayer {
                                             function onClicked(): void {
@@ -336,7 +336,7 @@ Item {
 
                                             anchors.centerIn: parent
                                             text: Audio.muted ? "volume_off" : "volume_up"
-                                            color: Audio.muted ? Colours.palette.m3onSecondary : Colours.palette.m3onSecondaryContainer
+                                            color: Colours.palette.m3onSurface
                                         }
                                     }
                                 }
@@ -433,7 +433,7 @@ Item {
                                         implicitHeight: muteInputIcon.implicitHeight + Appearance.padding.normal * 2
 
                                         radius: Appearance.rounding.normal
-                                        color: Audio.sourceMuted ? Colours.palette.m3secondary : Colours.palette.m3secondaryContainer
+                                        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Audio.sourceMuted ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                                         StateLayer {
                                             function onClicked(): void {
@@ -448,7 +448,7 @@ Item {
 
                                             anchors.centerIn: parent
                                             text: "mic_off"
-                                            color: Audio.sourceMuted ? Colours.palette.m3onSecondary : Colours.palette.m3onSecondaryContainer
+                                            color: Colours.palette.m3onSurface
                                         }
                                     }
                                 }

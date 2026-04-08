@@ -190,7 +190,7 @@ ColumnLayout {
                         anchors.bottom: parent.bottom
                         implicitHeight: adapterPickerButton.expanded ? adapterList.implicitHeight : adapterPickerButton.implicitHeight
 
-                        color: Colours.palette.m3secondaryContainer
+                        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                         radius: Appearance.rounding.small
                         opacity: adapterPickerButton.expanded ? 1 : 0
                         scale: adapterPickerButton.expanded ? 1 : 0.7
@@ -237,12 +237,12 @@ ColumnLayout {
                                             Layout.fillWidth: true
                                             Layout.leftMargin: Appearance.padding.small
                                             text: adapter.modelData.name
-                                            color: Colours.palette.m3onSecondaryContainer
+                                            color: Colours.palette.m3onSurface
                                         }
 
                                         MaterialIcon {
                                             text: "check"
-                                            color: Colours.palette.m3onSecondaryContainer
+                                            color: Colours.palette.m3onSurface
                                             visible: adapter.modelData === root.session.bt.currentAdapter
                                         }
                                     }
@@ -382,12 +382,12 @@ ColumnLayout {
                     implicitHeight: cancelEditIcon.implicitHeight + Appearance.padding.smaller * 2
 
                     radius: Appearance.rounding.small
-                    color: Colours.palette.m3secondaryContainer
+                    color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                     opacity: root.session.bt.editingAdapterName ? 1 : 0
                     scale: root.session.bt.editingAdapterName ? 1 : 0.5
 
                     StateLayer {
-                        color: Colours.palette.m3onSecondaryContainer
+                        color: Colours.palette.m3onSurface
                         disabled: !root.session.bt.editingAdapterName
 
                         function onClicked(): void {
@@ -402,7 +402,7 @@ ColumnLayout {
                         anchors.centerIn: parent
                         animate: true
                         text: "cancel"
-                        color: Colours.palette.m3onSecondaryContainer
+                        color: Colours.palette.m3onSurface
                     }
 
                     Behavior on opacity {

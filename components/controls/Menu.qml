@@ -49,10 +49,10 @@ Elevation {
                     implicitWidth: menuOptionRow.implicitWidth + Appearance.padding.normal * 2
                     implicitHeight: menuOptionRow.implicitHeight + Appearance.padding.normal * 2
 
-                    color: Qt.alpha(Colours.palette.m3secondaryContainer, active ? 1 : 0)
+                    color: active ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
 
                     StateLayer {
-                        color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                        color: item.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurface
                         disabled: !root.expanded
 
                         function onClicked(): void {
@@ -72,14 +72,14 @@ Elevation {
                         MaterialIcon {
                             Layout.alignment: Qt.AlignVCenter
                             text: item.modelData.icon
-                            color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurfaceVariant
+                            color: item.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
                         }
 
                         StyledText {
                             Layout.alignment: Qt.AlignVCenter
                             Layout.fillWidth: true
                             text: item.modelData.text
-                            color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                            color: item.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurface
                         }
 
                         Loader {
@@ -89,7 +89,7 @@ Elevation {
 
                             sourceComponent: MaterialIcon {
                                 text: item.modelData.trailingIcon
-                                color: item.active ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                                color: item.active ? Colours.palette.m3onSurface : Colours.palette.m3onSurface
                             }
                         }
                     }
