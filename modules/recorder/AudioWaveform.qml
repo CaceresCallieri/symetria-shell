@@ -70,7 +70,7 @@ Item {
     }
 
     // ── Cached bar gradient colors ──────────────────────────────
-    property var barColors: []
+    property list<color> barColors: []
 
     function updateBarColors(): void {
         const colors = [];
@@ -122,8 +122,8 @@ Item {
         return { offsets, opacities };
     }
 
-    readonly property var processingWaveOffsets: processingWaveData.offsets
-    readonly property var processingWaveOpacities: processingWaveData.opacities
+    readonly property list<real> processingWaveOffsets: processingWaveData.offsets ?? []
+    readonly property list<real> processingWaveOpacities: processingWaveData.opacities ?? []
 
     // ── Bar visualization ───────────────────────────────────────
     Row {

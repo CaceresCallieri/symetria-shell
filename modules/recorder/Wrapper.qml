@@ -19,7 +19,6 @@ DrawerVertical {
 
     required property ShellScreen screen
     required property PersistentProperties visibilities
-    required property var panels
 
     shouldBeActive: visibilities.recorder
 

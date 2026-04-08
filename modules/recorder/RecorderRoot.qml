@@ -120,8 +120,10 @@ Scope {
             SttService.pause();
         }
 
+        // resume routes through pause(), which handles both directions
+        // (recording→paused and paused→recording) and emits actionTriggered.
         function resume(): void {
-            SttService.resume();
+            SttService.pause();
         }
 
         function cancel(): void {

@@ -205,12 +205,6 @@ Singleton {
         }
     }
 
-    /// Resume the active recording.
-    function resume(): void {
-        if (!_activeRecording) return;
-        _activeRecording.resume();
-    }
-
     /// Cancel the active recording (discard audio).
     function cancel(): void {
         const sid = _activeRecording?.sessionId ?? "";
@@ -256,9 +250,10 @@ Singleton {
         if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
         if (_lastDeliveryChoice === mode) return;
         _lastDeliveryChoice = mode;
-        if (_activeRecording)
+        if (_activeRecording) {
             _activeRecording._activeDeliveryChoice = mode;
-        actionTriggered(_activeRecording?.sessionId ?? "", "mode-" + mode);
+            actionTriggered(_activeRecording.sessionId, "mode-" + mode);
+        }
     }
 
     /// Add a per-session vocabulary hint (shown as chip in the widget).
