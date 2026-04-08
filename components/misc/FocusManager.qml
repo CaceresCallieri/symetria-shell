@@ -28,11 +28,11 @@ QtObject {
 
     /// Optional callback invoked when active changes to true.
     /// Called after focus is set.
-    property var onOpen: null
+    property var onOpen: null // intentional var: nullable function callback
 
     /// Optional callback invoked when active changes to false.
     /// Use for cleanup like clearing text fields.
-    property var onClose: null
+    property var onClose: null // intentional var: nullable function callback
 
     onActiveChanged: {
         if (active) {

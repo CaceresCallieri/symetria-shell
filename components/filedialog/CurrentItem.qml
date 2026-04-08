@@ -7,7 +7,7 @@ import QtQuick.Shapes
 Item {
     id: root
 
-    required property var currentItem
+    required property var currentItem // intentional var: nullable GridView delegate item (dynamic .modelData.name access)
 
     implicitWidth: content.implicitWidth + Appearance.padding.larger + content.anchors.rightMargin
     implicitHeight: currentItem ? content.implicitHeight + Appearance.padding.normal + content.anchors.bottomMargin : 0

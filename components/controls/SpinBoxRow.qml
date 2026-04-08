@@ -14,7 +14,7 @@ StyledRect {
     required property real min
     required property real max
     property real step: 1
-    property var onValueModified: function(value) {}
+    property var onValueModified: function(value) {} // intentional var: function callback (no QML function-property type)
 
     Layout.fillWidth: true
     implicitHeight: row.implicitHeight + Appearance.padding.large * 2

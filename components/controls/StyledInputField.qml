@@ -10,7 +10,7 @@ Item {
     id: root
 
     property string text: ""
-    property var validator: null
+    property var validator: null // intentional var: nullable QML Validator (IntValidator, RegularExpressionValidator, etc.)
     property bool readOnly: false
     property int horizontalAlignment: TextInput.AlignHCenter
     property int implicitWidth: 70

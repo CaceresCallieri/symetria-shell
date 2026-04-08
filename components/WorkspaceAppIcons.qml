@@ -27,14 +27,14 @@ Row {
     // Events that affect window positions, lifecycle, or grouping (Set for O(1) lookup)
     // activewindowv2 included because Hyprland 0.54+ doesn't emit togglegroup events;
     // focus changes are the closest proxy. modelsEqual() prevents unnecessary rerenders.
-    readonly property var windowLayoutEvents: new Set([
+    readonly property var windowLayoutEvents: new Set([ // intentional var: JS Set for O(1) event name lookup (no QML Set type)
         "openwindow", "closewindow",
         "movewindow", "movewindowv2",
         "togglegroup", "moveintogroup", "moveoutofgroup",
         "activewindowv2", "changegroupactive"
     ])
 
-    property var cachedModel: []
+    property var cachedModel: [] // intentional var: JS array of { isGroup: bool, clients: HyprlandToplevel[] } from AppIconsProcessor
 
     function updateClients(): void {
         const result = AppIconsProcessor.processClients(root.workspaceId, Hypr.toplevels.values);
@@ -86,6 +86,7 @@ Row {
             // context property. With ComponentBehavior: Bound, inner Components can only
             // access real properties, not context properties. Declaring the property makes
             // it real and accessible to sourceComponent children. (See docs/qml-pitfalls.md)
+            // intentional var: heterogeneous JS object { isGroup: bool, clients: HyprlandToplevel[] }
             required property var modelData
 
             anchors.verticalCenter: parent.verticalCenter
@@ -107,7 +108,7 @@ Row {
                     id: container
 
                     // Pill styling (subtle intensity for background element)
-                    readonly property var glassStyle: Colours.pillStyle(
+                    readonly property var glassStyle: Colours.pillStyle( // intentional var: heterogeneous JS { background, border }
                         Colours.palette.m3surfaceContainerHigh,
                         Colours.glass.subtle
                     )
@@ -140,7 +141,7 @@ Row {
                             model: modelData.clients
 
                             ClientAppIcon {
-                                required property var modelData
+                                required property HyprlandToplevel modelData
                                 client: modelData
                                 animateEntry: false
                             }

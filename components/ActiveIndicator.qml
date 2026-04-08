@@ -28,7 +28,7 @@ StyledRect {
     property color textColor: Colours.palette.m3onPrimary
 
     // --- Pill styling (strong intensity for active indicator) ---
-    readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong)
+    readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
 
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
@@ -49,6 +49,7 @@ StyledRect {
     }
 
     // --- Unified current item access ---
+    // intentional var: nullable polymorphic — Repeater item (workspace) or ListView.currentItem (special workspace)
     readonly property var currentWs: {
         if (useListView)
             return listView?.currentItem ?? null;

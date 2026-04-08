@@ -8,7 +8,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
 
-    required property var deviceDetails
+    required property var deviceDetails // intentional var: duck-typed network details object { ipAddress, subnet, gateway, dns }
 
     spacing: Appearance.spacing.small / 2
 

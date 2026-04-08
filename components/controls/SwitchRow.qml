@@ -12,7 +12,7 @@ StyledRect {
     required property string label
     required property bool checked
     property bool enabled: true
-    property var onToggled: function(checked) {}
+    property var onToggled: function(checked) {} // intentional var: function callback (no QML function-property type)
 
     Layout.fillWidth: true
     implicitHeight: row.implicitHeight + Appearance.padding.large * 2

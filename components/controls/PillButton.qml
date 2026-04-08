@@ -39,7 +39,7 @@ Item {
 
     // Unselected: standard matte pill (subtle → medium on hover)
     // Selected: pillColor at visible alpha over matte base, so it actually reads as colored
-    readonly property var baseStyle: Colours.pillStyle(
+    readonly property var baseStyle: Colours.pillStyle( // intentional var: heterogeneous JS { background, border }
         Colours.palette.m3surfaceContainerHigh,
         stateLayer.containsMouse ? Colours.glass.medium : Colours.glass.subtle
     )
@@ -57,7 +57,7 @@ Item {
         );
     }
 
-    readonly property var currentStyle: {
+    readonly property var currentStyle: { // intentional var: heterogeneous JS { background, border }
         if (effectiveSelected)
             return {
                 background: selectedBackground,

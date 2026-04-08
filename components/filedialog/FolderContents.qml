@@ -15,7 +15,7 @@ import QtQuick.Effects
 Item {
     id: root
 
-    required property var dialog
+    required property var dialog // intentional var: duck-typed FileDialog root (cwd, filters, selectionValid, accepted())
     property alias currentItem: view.currentItem
 
     StyledRect {

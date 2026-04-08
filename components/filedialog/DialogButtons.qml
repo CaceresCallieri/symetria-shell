@@ -6,7 +6,7 @@ import QtQuick.Layouts
 StyledRect {
     id: root
 
-    required property var dialog
+    required property var dialog // intentional var: duck-typed FileDialog root (filterLabel, filters, selectionValid, accepted(), rejected())
     required property FolderContents folder
 
     implicitHeight: inner.implicitHeight + Appearance.padding.normal * 2

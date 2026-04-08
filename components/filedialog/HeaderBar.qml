@@ -9,7 +9,7 @@ import QtQuick.Layouts
 StyledRect {
     id: root
 
-    required property var dialog
+    required property var dialog // intentional var: duck-typed FileDialog root (cwd, title)
 
     implicitWidth: inner.implicitWidth + Appearance.padding.normal * 2
     implicitHeight: inner.implicitHeight + Appearance.padding.normal * 2

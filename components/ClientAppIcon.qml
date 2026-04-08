@@ -5,6 +5,7 @@ import qs.services
 import qs.utils
 import qs.config
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Widgets
 import QtQuick
 
@@ -13,7 +14,7 @@ import QtQuick
 Item {
     id: root
 
-    required property var client // HyprlandToplevel
+    required property HyprlandToplevel client
     property bool animateEntry: true // Whether to animate entry (disabled for grouped icons)
 
     // Hide when client data becomes invalid (prevents fallback icon flash on close)
