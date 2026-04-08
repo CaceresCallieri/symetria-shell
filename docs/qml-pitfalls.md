@@ -102,6 +102,14 @@ Background {}  // Resolves to keycaster's Background, not wallpaper!
 4. Prefix module-specific components: `{ModuleName}{Component}.qml`
 5. Run `./scripts/check-qml-conflicts.sh` (exit code 1 = critical conflicts)
 
+**Service/Module Name Clash (live example):**
+
+`services/Recorder.qml` (screen-recorder singleton) and the audio recorder IPC handler
+would collide if the latter were named `Recorder.qml`. To prevent this, the audio
+IPC handler is named `RecorderRoot.qml` in `modules/recorder/`. The naming rule:
+if a module's root IPC scope would share a name with an existing service singleton,
+append `Root` to the module file name.
+
 ---
 
 ## Transparency Compensation for Out-of-Backgrounds Components

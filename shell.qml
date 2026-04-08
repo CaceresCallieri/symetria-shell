@@ -34,7 +34,7 @@ ShellRoot {
     NotifsModule.NotificationsOverlay {}
     Askpass {}
     Stt {}
-    Recorder {}
+    RecorderRoot {}
     Keycaster {}
     KeyChordsModule.Wrapper {}
     KeyChordsModule.KeyChordsOverlay {}

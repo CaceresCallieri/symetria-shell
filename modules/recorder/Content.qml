@@ -10,7 +10,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-/// Content UI for the audio recorder drawer card.
+/// Content UI for the recorder drawer card.
 ///
 /// Compact horizontal layout:
 /// - Default: [MM:SS] · [waveform] · [mic icon]

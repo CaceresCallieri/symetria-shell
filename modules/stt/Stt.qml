@@ -68,6 +68,7 @@ Scope {
             SttService.cancel();
         }
         function restart(): void {
+            if (!RecordingSessionManager.acquire("stt")) return;
             SttService.restart();
         }
         function retry(): void {
