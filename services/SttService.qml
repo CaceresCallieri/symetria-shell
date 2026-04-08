@@ -63,7 +63,6 @@ Singleton {
     // Temp directory readiness
     property bool _tempDirReady: false
 
-
     // Per-session vocabulary hints (tag-chip widget).
     // Service-level so the widget and IPC can modify them without job reference.
     // Reset after each transcription completes (when _activeRecording → null).
@@ -228,10 +227,9 @@ Singleton {
 
     /// Retry the most recent errored job.
     function retry(): void {
-        const errorJob = _mostRecentErrorJob();
-        if (!errorJob) return;
-        actionTriggered(errorJob.sessionId, "retry");
-        errorJob.retry();
+        if (!_job || _job.state !== "error" || _job.errorSource === "config") return;
+        actionTriggered(_job.sessionId, "retry");
+        _job.retry();
     }
 
     /// Switch the runtime delivery choice (only effective in "ask" mode).
@@ -268,15 +266,6 @@ Singleton {
     function toggleVocabHints(): void {
         if (!_activeRecording) return;
         vocabHintsVisible = !vocabHintsVisible;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Internal helpers (service-level)
-    // ─────────────────────────────────────────────────────────────────────────
-
-    function _mostRecentErrorJob(): SttJob {
-        if (_job && _job.state === "error" && _job.errorSource !== "config") return _job;
-        return null;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
