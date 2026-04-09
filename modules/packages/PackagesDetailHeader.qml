@@ -57,6 +57,7 @@ Item {
                 spacing: Appearance.spacing.small
 
                 StyledText {
+                    id: nameText
                     text: Packages.selectedDetail?.name ?? ""
                     font.pointSize: Appearance.font.size.larger
                     font.weight: Font.Medium
@@ -66,7 +67,7 @@ Item {
                     text: Packages.selectedDetail?.version ?? ""
                     font.pointSize: Appearance.font.size.normal
                     color: Colours.palette.m3outline
-                    anchors.baseline: parent.children[0]?.baseline
+                    anchors.baseline: nameText.baseline
                 }
             }
 
@@ -78,9 +79,8 @@ Item {
                     visible: (Packages.selectedDetail?.repo ?? "") !== ""
                     color: {
                         const d = Packages.selectedDetail;
-                        if (!d) return "transparent";
-                        if (d.installed) return Qt.alpha(Colours.palette.m3primary, 0.15);
-                        if (d.isAur) return Qt.alpha(Colours.palette.m3tertiary, 0.15);
+                        if (d?.installed) return Qt.alpha(Colours.palette.m3primary, 0.15);
+                        if (d?.isAur) return Qt.alpha(Colours.palette.m3tertiary, 0.15);
                         return Colours.palette.m3surfaceContainerHighest;
                     }
                     radius: Appearance.rounding.full
@@ -95,9 +95,8 @@ Item {
                         font.weight: Font.Medium
                         color: {
                             const d = Packages.selectedDetail;
-                            if (!d) return Colours.palette.m3onSurfaceVariant;
-                            if (d.installed) return Colours.palette.m3primary;
-                            if (d.isAur) return Colours.palette.m3tertiary;
+                            if (d?.installed) return Colours.palette.m3primary;
+                            if (d?.isAur) return Colours.palette.m3tertiary;
                             return Colours.palette.m3onSurfaceVariant;
                         }
                     }

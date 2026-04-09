@@ -25,6 +25,14 @@ Item {
     required property real viewWidth
     required property real viewHeight
 
+    // ── Helpers ──────────────────────────────────────────────────
+
+    function menuItemLabel(device: QtObject, name: string): string {
+        if (!device || !device[`${name}ed`])
+            return name;
+        return (name === "connect" ? "dis" : "un") + name;
+    }
+
     // ── Menu items ───────────────────────────────────────────────
 
     ColumnLayout {
@@ -128,7 +136,7 @@ Item {
                         root.session.bt.fabMenuOpen = false;
 
                         const name = fabMenuItem.modelData.name;
-                        if (fabMenuItem.modelData.name !== "pair")
+                        if (name !== "pair")
                             root.device[`${name}ed`] = !root.device[`${name}ed`];
                         else if (root.device.paired)
                             root.device.forget();
@@ -152,7 +160,7 @@ Item {
 
                     StyledText {
                         animate: true
-                        text: (root.device && root.device[`${fabMenuItem.modelData.name}ed`] ? fabMenuItem.modelData.name === "connect" ? "dis" : "un" : "") + fabMenuItem.modelData.name
+                        text: root.menuItemLabel(root.device, fabMenuItem.modelData.name)
                         color: Colours.palette.m3onSurface
                         font.capitalization: Font.Capitalize
                         Layout.preferredWidth: implicitWidth

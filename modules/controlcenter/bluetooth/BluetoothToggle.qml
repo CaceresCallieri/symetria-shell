@@ -12,7 +12,7 @@ RowLayout {
 
     required property string label
     property alias checked: toggle.checked
-    property alias toggle: toggle
+    property alias toggle: toggle // exposes internal StyledSwitch for onToggled wiring
 
     Layout.fillWidth: true
     spacing: Appearance.spacing.normal

@@ -20,28 +20,18 @@ StyledRect {
     /// Focus target for FocusManager (the text field itself).
     readonly property alias focusTarget: search
 
-    /// Natural height of the search bar (used by Content.qml for layout).
-    readonly property real naturalHeight: Math.max(
-        searchIcon.implicitHeight, search.implicitHeight,
-        submitButton.implicitHeight, clearIcon.implicitHeight
-    )
-
     signal accepted()
     signal navigateUp()
     signal navigateDown()
     signal searchRequested()
     signal searchTextEdited(string text)
 
-    function clear(): void {
-        search.text = "";
-    }
-
     // ── Layout ────────────────────────────────────────────────────
 
     color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
     radius: Appearance.rounding.full
 
-    implicitHeight: naturalHeight
+    implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, submitButton.implicitHeight, clearIcon.implicitHeight)
 
     MaterialIcon {
         id: searchIcon
@@ -78,10 +68,7 @@ StyledRect {
     StyledRect {
         id: submitButton
 
-        readonly property bool canSearch: {
-            const trimmed = search.text.trim();
-            return trimmed.length >= 2 && trimmed !== Packages.currentQuery;
-        }
+        readonly property bool canSearch: search.text.trim().length >= 2 && search.text.trim() !== Packages.currentQuery
 
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: clearIcon.left
