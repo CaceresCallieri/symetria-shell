@@ -56,7 +56,7 @@ ColumnLayout {
 
             spacing: Appearance.spacing.larger
 
-            Toggle {
+            BluetoothToggle {
                 label: qsTr("Powered")
                 checked: Bluetooth.defaultAdapter?.enabled ?? false
                 toggle.onToggled: {
@@ -66,7 +66,7 @@ ColumnLayout {
                 }
             }
 
-            Toggle {
+            BluetoothToggle {
                 label: qsTr("Discoverable")
                 checked: Bluetooth.defaultAdapter?.discoverable ?? false
                 toggle.onToggled: {
@@ -76,7 +76,7 @@ ColumnLayout {
                 }
             }
 
-            Toggle {
+            BluetoothToggle {
                 label: qsTr("Pairable")
                 checked: Bluetooth.defaultAdapter?.pairable ?? false
                 toggle.onToggled: {
@@ -515,26 +515,6 @@ ColumnLayout {
                 color: Colours.palette.m3outline
                 font.pointSize: Appearance.font.size.small
             }
-        }
-    }
-
-    component Toggle: RowLayout {
-        required property string label
-        property alias checked: toggle.checked
-        property alias toggle: toggle
-
-        Layout.fillWidth: true
-        spacing: Appearance.spacing.normal
-
-        StyledText {
-            Layout.fillWidth: true
-            text: parent.label
-        }
-
-        StyledSwitch {
-            id: toggle
-
-            cLayer: 2
         }
     }
 }

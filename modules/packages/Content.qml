@@ -31,11 +31,11 @@ FocusScope {
     property bool hasNavigated: false
 
     function focusSearch(): void {
-        search.forceActiveFocus();
+        searchWrapper.focusTarget.forceActiveFocus();
     }
 
     function executeSearch(): void {
-        const trimmed = search.text.trim();
+        const trimmed = searchWrapper.text.trim();
         if (trimmed.length >= 2 && trimmed !== Packages.currentQuery) {
             Packages.search(trimmed);
         }
@@ -45,7 +45,7 @@ FocusScope {
     Keys.onEscapePressed: {
         if (root.showingDetail) {
             Packages.clearDetail();
-            search.forceActiveFocus();
+            searchWrapper.focusTarget.forceActiveFocus();
         } else {
             root.visibilities.packages = false;
         }
@@ -68,18 +68,18 @@ FocusScope {
     // from a child — a hidden TextField still receives key events.
     onShowingDetailChanged: {
         if (showingDetail) {
-            search.focus = false;
+            searchWrapper.focusTarget.focus = false;
             root.forceActiveFocus();
         } else {
-            search.forceActiveFocus();
+            searchWrapper.focusTarget.forceActiveFocus();
         }
     }
 
     FocusManager {
         active: root.visibilities.packages
-        target: search
+        target: searchWrapper.focusTarget
         onClose: () => {
-            search.text = "";
+            searchWrapper.text = "";
             root.hasNavigated = false;
             Packages.cancelSearch();
             Packages.clearDetail();
@@ -92,9 +92,9 @@ FocusScope {
         target: Packages
 
         function onSearchFromDetailRequested(name: string): void {
-            search.text = name;
+            searchWrapper.text = name;
             Packages.search(name);
-            search.forceActiveFocus();
+            searchWrapper.focusTarget.forceActiveFocus();
         }
     }
 
@@ -114,13 +114,11 @@ FocusScope {
     }
 
     // ===== Search bar (top, hidden in detail view) =====
-    StyledRect {
+    PackagesSearchBar {
         id: searchWrapper
 
         visible: !root.showingDetail
-
-        color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
-        radius: Appearance.rounding.full
+        padding: root.padding
 
         anchors.top: parent.top
         anchors.left: parent.left
@@ -129,157 +127,43 @@ FocusScope {
         anchors.leftMargin: root.padding
         anchors.rightMargin: root.padding
 
-        implicitHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, submitButton.implicitHeight, clearIcon.implicitHeight)
-
-        MaterialIcon {
-            id: searchIcon
-
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: root.padding
-
-            text: "search"
-            color: Colours.palette.m3onSurfaceVariant
-        }
-
-        StyledTextField {
-            id: search
-
-            anchors.left: searchIcon.right
-            anchors.right: submitButton.left
-            anchors.leftMargin: Appearance.spacing.small
-            anchors.rightMargin: Appearance.spacing.small
-
-            topPadding: Appearance.padding.larger
-            bottomPadding: Appearance.padding.larger
-
-            placeholderText: qsTr("Search packages...")
-
-            onTextChanged: {
-                root.hasNavigated = false;
-                if (!text) {
-                    Packages.clearResults();
-                    Packages.hasSearched = false;
-                }
-            }
-
-            onAccepted: {
-                if (root.hasNavigated && resultList.count > 0 && resultList.currentIndex >= 0) {
-                    const entry = Packages.results[resultList.currentIndex];
-                    if (entry)
-                        Packages.fetchDetail(entry.name, entry.installed);
-                } else {
-                    root.executeSearch();
-                }
-            }
-
-            Keys.onUpPressed: {
-                if (resultList.count > 0 && resultList.currentIndex > 0) {
-                    resultList.currentIndex--;
-                    root.hasNavigated = true;
-                }
-            }
-
-            Keys.onDownPressed: {
-                if (resultList.count > 0 && resultList.currentIndex < resultList.count - 1) {
-                    resultList.currentIndex++;
-                    root.hasNavigated = true;
-                }
-            }
-
-        }
-
-        // Search submit button (circular arrow)
-        StyledRect {
-            id: submitButton
-
-            readonly property bool canSearch: {
-                const trimmed = search.text.trim();
-                return trimmed.length >= 2 && trimmed !== Packages.currentQuery;
-            }
-
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: clearIcon.left
-            anchors.rightMargin: Appearance.spacing.small
-
-            implicitWidth: submitIcon.implicitWidth + Appearance.padding.normal * 2
-            implicitHeight: implicitWidth
-            radius: Appearance.rounding.full
-            color: canSearch ? Colours.palette.m3primary : "transparent"
-
-            MaterialIcon {
-                id: submitIcon
-                anchors.centerIn: parent
-                text: "arrow_forward"
-                font.pointSize: Appearance.font.size.normal
-                color: submitButton.canSearch ? Colours.palette.m3onPrimary : Colours.palette.m3outline
-            }
-
-            StateLayer {
-                visible: submitButton.canSearch
-                radius: parent.radius
-                color: Colours.palette.m3onPrimary
-
-                function onClicked(): void {
-                    root.executeSearch();
-                }
-            }
-
-            Behavior on color {
-                CAnim {}
+        onSearchTextEdited: text => {
+            root.hasNavigated = false;
+            if (!text) {
+                Packages.clearResults();
+                Packages.hasSearched = false;
             }
         }
 
-        MaterialIcon {
-            id: clearIcon
-
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
-            anchors.rightMargin: root.padding
-
-            width: search.text ? implicitWidth : implicitWidth / 2
-            opacity: {
-                if (!search.text)
-                    return 0;
-                if (mouse.pressed)
-                    return 0.7;
-                if (mouse.containsMouse)
-                    return 0.8;
-                return 1;
-            }
-
-            text: "close"
-            color: Colours.palette.m3onSurfaceVariant
-
-            MouseArea {
-                id: mouse
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: search.text ? Qt.PointingHandCursor : undefined
-
-                onClicked: {
-                    search.text = "";
-                    search.forceActiveFocus();
-                }
-            }
-
-            Behavior on width {
-                Anim {
-                    duration: Appearance.anim.durations.small
-                }
-            }
-
-            Behavior on opacity {
-                Anim {
-                    duration: Appearance.anim.durations.small
-                }
+        onAccepted: {
+            if (root.hasNavigated && resultList.count > 0 && resultList.currentIndex >= 0) {
+                const entry = Packages.results[resultList.currentIndex];
+                if (entry)
+                    Packages.fetchDetail(entry.name, entry.installed);
+            } else {
+                root.executeSearch();
             }
         }
+
+        onNavigateUp: {
+            if (resultList.count > 0 && resultList.currentIndex > 0) {
+                resultList.currentIndex--;
+                root.hasNavigated = true;
+            }
+        }
+
+        onNavigateDown: {
+            if (resultList.count > 0 && resultList.currentIndex < resultList.count - 1) {
+                resultList.currentIndex++;
+                root.hasNavigated = true;
+            }
+        }
+
+        onSearchRequested: root.executeSearch()
     }
 
     // ===== Detail header (top, visible in detail view) =====
-    Item {
+    PackagesDetailHeader {
         id: detailHeader
 
         visible: root.showingDetail
@@ -291,118 +175,7 @@ FocusScope {
         anchors.leftMargin: root.padding
         anchors.rightMargin: root.padding
 
-        implicitHeight: detailHeaderRow.implicitHeight
-
-        Row {
-            id: detailHeaderRow
-
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: Appearance.spacing.normal
-
-            // Back button
-            StyledRect {
-                id: backButton
-
-                implicitWidth: backIcon.implicitWidth + Appearance.padding.normal * 2
-                implicitHeight: backIcon.implicitHeight + Appearance.padding.normal * 2
-                radius: Appearance.rounding.full
-                color: "transparent"
-                anchors.verticalCenter: parent.verticalCenter
-
-                MaterialIcon {
-                    id: backIcon
-                    anchors.centerIn: parent
-                    text: "arrow_back"
-                    color: Colours.palette.m3onSurface
-                }
-
-                StateLayer {
-                    radius: parent.radius
-
-                    function onClicked(): void {
-                        Packages.clearDetail();
-                    }
-                }
-            }
-
-            // Package name + version
-            Column {
-                anchors.verticalCenter: parent.verticalCenter
-
-                Row {
-                    spacing: Appearance.spacing.small
-
-                    StyledText {
-                        text: Packages.selectedDetail?.name ?? ""
-                        font.pointSize: Appearance.font.size.larger
-                        font.weight: Font.Medium
-                    }
-
-                    StyledText {
-                        text: Packages.selectedDetail?.version ?? ""
-                        font.pointSize: Appearance.font.size.normal
-                        color: Colours.palette.m3outline
-                        anchors.baseline: parent.children[0]?.baseline
-                    }
-                }
-
-                Row {
-                    spacing: Appearance.spacing.small
-
-                    // Repo badge
-                    StyledRect {
-                        visible: (Packages.selectedDetail?.repo ?? "") !== ""
-                        color: {
-                            const d = Packages.selectedDetail;
-                            if (!d) return "transparent";
-                            if (d.installed) return Qt.alpha(Colours.palette.m3primary, 0.15);
-                            if (d.isAur) return Qt.alpha(Colours.palette.m3tertiary, 0.15);
-                            return Colours.palette.m3surfaceContainerHighest;
-                        }
-                        radius: Appearance.rounding.full
-                        implicitWidth: repoText.implicitWidth + Appearance.padding.normal * 2
-                        implicitHeight: repoText.implicitHeight + Appearance.padding.small * 2
-
-                        StyledText {
-                            id: repoText
-                            anchors.centerIn: parent
-                            text: Packages.selectedDetail?.repo ?? ""
-                            font.pointSize: Appearance.font.size.small
-                            font.weight: Font.Medium
-                            color: {
-                                const d = Packages.selectedDetail;
-                                if (!d) return Colours.palette.m3onSurfaceVariant;
-                                if (d.installed) return Colours.palette.m3primary;
-                                if (d.isAur) return Colours.palette.m3tertiary;
-                                return Colours.palette.m3onSurfaceVariant;
-                            }
-                        }
-                    }
-
-                    // Installed indicator
-                    Row {
-                        visible: Packages.selectedDetail?.installed ?? false
-                        spacing: 2
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        MaterialIcon {
-                            text: "check_circle"
-                            font.pointSize: Appearance.font.size.small
-                            color: Colours.palette.m3primary
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-
-                        StyledText {
-                            text: qsTr("Installed")
-                            font.pointSize: Appearance.font.size.small
-                            color: Colours.palette.m3primary
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
-            }
-        }
+        onBackRequested: Packages.clearDetail()
     }
 
     // ===== Detail section (below detail header) =====
