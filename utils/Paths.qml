@@ -19,7 +19,7 @@ Singleton {
     readonly property string imagecache: `${cache}/imagecache`
     readonly property string notifimagecache: `${imagecache}/notifs`
     readonly property string clipboardcache: `${imagecache}/clipboard`
-    readonly property string toastthumbcache: `${cache}/toast-thumbs`
+    readonly property string toastimagecache: `${imagecache}/toast-thumbs`
     readonly property string wallsdir: Quickshell.env("SYMMETRIA_WALLPAPERS_DIR") || absolutePath(Config.paths.wallpaperDir)
     readonly property string recsdir: Quickshell.env("SYMMETRIA_RECORDINGS_DIR") || `${videos}/Recordings`
     readonly property string libdir: Quickshell.env("SYMMETRIA_LIB_DIR") || "/usr/lib/symmetria"

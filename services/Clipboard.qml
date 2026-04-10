@@ -147,9 +147,10 @@ Singleton {
         property bool skipped: false   // True if image was truncated and skipped during decode
     }
 
-    // Check for cliphist on startup
+    // Check for cliphist on startup; clean up any orphaned toast thumbnails from prior sessions
     Component.onCompleted: {
         checkProcess.running = true;
+        toastThumbCleanupProcess.running = true;
     }
 
     // Refresh when service becomes active (drawer opens)
@@ -397,6 +398,12 @@ Singleton {
         }
     }
 
+    // Clean up orphaned toast thumbnails left from previous sessions (e.g., shell crash)
+    Process {
+        id: toastThumbCleanupProcess
+        command: ["rm", "-rf", Paths.toastimagecache]
+    }
+
     // --- Clipboard change watcher ---
     // Fires a toast notification on every external clipboard copy.
 
@@ -412,13 +419,14 @@ Singleton {
     // Leading-edge throttle: first clipboard event fires immediately,
     // subsequent events within 500ms are dropped to avoid toast spam
     // (e.g., rapid terminal selection changes).
-    property real _lastToastTime: 0
+    property int _lastToastTime: 0
 
     // Persistent watcher: outputs primary MIME type on each clipboard change
     Process {
         id: clipboardWatcher
 
-        running: root.cliphistAvailable
+        // wl-paste is independent of cliphist; wl-clipboard is a hard prerequisite (see docs/module-setup.md)
+        running: true
         command: ["sh", "-c", "wl-paste --watch sh -c 'wl-paste --list-types 2>/dev/null | head -1'"]
 
         stdout: SplitParser {
@@ -434,11 +442,14 @@ Singleton {
                 root._lastToastTime = now;
 
                 if (mime.startsWith("text/")) {
-                    textPreviewProcess.running = true;
+                    if (!textPreviewProcess.running)
+                        textPreviewProcess.running = true;
                 } else if (mime.startsWith("image/")) {
-                    imageThumbProcess.mimeType = mime;
-                    imageThumbProcess.thumbPath = `${Paths.toastthumbcache}/${Date.now()}.png`;
-                    imageThumbProcess.running = true;
+                    if (!imageThumbProcess.running) {
+                        imageThumbProcess.mimeType = mime;
+                        imageThumbProcess.thumbPath = `${Paths.toastimagecache}/${Date.now()}.png`;
+                        imageThumbProcess.running = true;
+                    }
                 } else {
                     Toaster.toast(qsTr("Copied to clipboard"), mime, "content_copy");
                 }

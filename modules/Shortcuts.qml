@@ -212,6 +212,7 @@ Scope {
             Toaster.toast(title, message, icon, Toast.Error);
         }
 
+        // IPC entrypoint: symmetria shell toaster infoImage <title> <message> <icon> <imagePath>
         function infoImage(title: string, message: string, icon: string, imagePath: string): void {
             Toaster.toast(title, message, icon, Toast.Info, 5000, imagePath);
         }

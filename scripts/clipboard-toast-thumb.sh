@@ -47,10 +47,9 @@ try:
     img.thumbnail((256, 256), Image.LANCZOS)
     img.save(tmp_path, format="PNG")
 except ImportError:
-    # Pillow not installed — copy raw
-    import shutil
-    shutil.copy2(raw_path, tmp_path)
-    print("NO_PILLOW", file=sys.stderr)
+    # Pillow not installed — exit 1 so the caller shows icon-only toast
+    print("NO_PILLOW: install python-pillow for image thumbnails", file=sys.stderr)
+    sys.exit(1)
 except Exception as e:
     print(f"PIL error: {e}", file=sys.stderr)
     sys.exit(1)
