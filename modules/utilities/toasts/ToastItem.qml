@@ -13,6 +13,7 @@ StyledRect {
     required property Toast modelData
 
     readonly property bool hasImage: root.modelData.imagePath !== ""
+    readonly property url imageUrl: root.hasImage ? (`file://${root.modelData.imagePath}`) : ""
     readonly property int maxWidth: Config.utilities.sizes.toastWidth - Appearance.padding.normal * 2
     readonly property int previewHeight: 140
 
@@ -128,7 +129,7 @@ StyledRect {
                 id: previewImage
 
                 anchors.fill: parent
-                source: root.hasImage ? `file://${root.modelData.imagePath}` : ""
+                source: root.imageUrl
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 sourceSize: Qt.size(512, 512)
