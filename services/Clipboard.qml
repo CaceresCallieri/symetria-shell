@@ -427,7 +427,17 @@ Singleton {
 
         // wl-paste is independent of cliphist; wl-clipboard is a hard prerequisite (see docs/module-setup.md)
         running: true
-        command: ["sh", "-c", "wl-paste --watch sh -c 'wl-paste --list-types 2>/dev/null | head -1'"]
+        // Classify clipboard by scanning all MIME types: prefer image/* > text/* > first available.
+        // Apps like Chromium list internal types first (e.g., chromium/x-internal-source-rfh-token),
+        // so head -1 alone would misclassify image/text copies as "other".
+        command: ["sh", "-c", `wl-paste --watch sh -c '
+            types=$(wl-paste --list-types 2>/dev/null)
+            img=$(echo "$types" | grep "^image/" | head -1)
+            if [ -n "$img" ]; then echo "$img"; exit; fi
+            txt=$(echo "$types" | grep "^text/" | head -1)
+            if [ -n "$txt" ]; then echo "$txt"; exit; fi
+            echo "$types" | head -1
+        '`]
 
         stdout: SplitParser {
             onRead: data => {
@@ -496,7 +506,7 @@ Singleton {
         property string mimeType: ""
         property string thumbPath: ""
 
-        command: [root._thumbScript, thumbPath]
+        command: [root._thumbScript, mimeType, thumbPath]
 
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) {

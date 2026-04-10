@@ -1,8 +1,10 @@
 #!/bin/bash
 # Generate a thumbnail from the current clipboard image for toast notifications.
-# Usage: clipboard-toast-thumb.sh <output_path>
+# Usage: clipboard-toast-thumb.sh <mime_type> <output_path>
 #
-# Reads clipboard via wl-paste, validates and resizes to 256x256 via PIL.
+# Reads clipboard via wl-paste --type <mime_type>, validates and resizes to 256x256 via PIL.
+# The MIME type must be specified because apps like Chromium advertise multiple formats
+# and the default wl-paste output may be text/html instead of image/png.
 # Exit codes:
 #   0 — success
 #   1 — failure (not an image or processing error)
@@ -16,12 +18,13 @@ for cmd in wl-paste python3; do
     }
 done
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 <output_path>" >&2
+if [[ $# -ne 2 ]]; then
+    echo "Usage: $0 <mime_type> <output_path>" >&2
     exit 1
 fi
 
-OUTPUT_PATH="$1"
+MIME_TYPE="$1"
+OUTPUT_PATH="$2"
 DIR=$(dirname "$OUTPUT_PATH")
 RAW="${OUTPUT_PATH}.raw"
 TMP="${OUTPUT_PATH}.tmp"
@@ -30,7 +33,7 @@ cleanup() { rm -f "$RAW" "$TMP"; }
 trap cleanup EXIT
 
 mkdir -p "$DIR"
-wl-paste > "$RAW" 2>/dev/null
+wl-paste --type "$MIME_TYPE" > "$RAW" 2>/dev/null
 
 # Validate and resize via PIL
 python3 - "$RAW" "$TMP" << 'PYEOF'

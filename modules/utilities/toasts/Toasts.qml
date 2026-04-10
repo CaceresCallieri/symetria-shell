@@ -79,9 +79,9 @@ Item {
             return y;
         }
 
-        anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
+        implicitWidth: toastInner.implicitWidth
         implicitHeight: toastInner.implicitHeight
 
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton

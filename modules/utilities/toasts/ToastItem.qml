@@ -12,9 +12,24 @@ StyledRect {
 
     required property Toast modelData
 
-    anchors.left: parent.left
-    anchors.right: parent.right
-    implicitHeight: layout.implicitHeight + Appearance.padding.smaller * 2
+    readonly property bool hasImage: root.modelData.imagePath !== ""
+    readonly property int maxWidth: Config.utilities.sizes.toastWidth - Appearance.padding.normal * 2
+    readonly property int previewHeight: 140
+
+    // Content-adaptive width: image toasts shrink to fit the image's
+    // natural aspect ratio; text-only toasts keep the full config width.
+    implicitWidth: {
+        if (!hasImage || previewImage.status !== Image.Ready)
+            return maxWidth;
+        const aspectRatio = previewImage.implicitWidth / Math.max(1, previewImage.implicitHeight);
+        const imageWidth = Math.round(previewHeight * aspectRatio);
+        // Content width = image + padding on both sides
+        const contentWidth = imageWidth + Appearance.padding.normal * 2;
+        // At minimum, be as wide as the header row needs
+        const headerMinWidth = headerRow.implicitWidth + Appearance.padding.normal * 2;
+        return Math.min(Math.max(contentWidth, headerMinWidth), maxWidth);
+    }
+    implicitHeight: layout.implicitHeight + Appearance.padding.normal * 2
 
     readonly property color toastBaseColor: {
         if (root.modelData.type === Toast.Success)
@@ -40,33 +55,27 @@ StyledRect {
         level: 3
     }
 
-    RowLayout {
+    ColumnLayout {
         id: layout
 
         anchors.fill: parent
-        anchors.margins: Appearance.padding.smaller
-        anchors.leftMargin: Appearance.padding.normal
-        anchors.rightMargin: Appearance.padding.normal
-        spacing: Appearance.spacing.normal
+        anchors.margins: Appearance.padding.normal
+        spacing: Appearance.spacing.small
 
-        // Image thumbnail when imagePath is set, Material icon otherwise
-        Loader {
-            id: iconLoader
+        // Top row: icon + title/message (always present)
+        RowLayout {
+            id: headerRow
 
-            readonly property bool hasImage: root.modelData.imagePath !== ""
-            readonly property var iconStyle: Colours.pillStyle(root.toastBaseColor, Colours.glass.strong)
-
-            sourceComponent: hasImage ? imageComponent : iconComponent
-        }
-
-        Component {
-            id: iconComponent
+            Layout.fillWidth: true
+            spacing: Appearance.spacing.normal
 
             StyledRect {
+                readonly property var iconStyle: Colours.pillStyle(root.toastBaseColor, Colours.glass.strong)
+
                 radius: Appearance.rounding.normal
-                color: iconLoader.iconStyle.background
+                color: iconStyle.background
                 border.width: 1
-                border.color: iconLoader.iconStyle.border
+                border.color: iconStyle.border
 
                 implicitWidth: implicitHeight
                 implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
@@ -80,52 +89,55 @@ StyledRect {
                     font.pointSize: Math.round(Appearance.font.size.large * 1.2)
                 }
             }
-        }
 
-        Component {
-            id: imageComponent
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
 
-            ClippingRectangle {
-                readonly property int thumbSize: Math.round(Appearance.font.size.large * 1.2) + Appearance.padding.smaller * 2
+                StyledText {
+                    id: title
 
-                radius: Appearance.rounding.normal
-                implicitWidth: thumbSize
-                implicitHeight: thumbSize
-                color: "transparent"
+                    Layout.fillWidth: true
+                    text: root.modelData.title
+                    color: Colours.palette.m3onSurface
+                    font.pointSize: Appearance.font.size.normal
+                    elide: Text.ElideRight
+                }
 
-                Image {
-                    anchors.fill: parent
-                    source: `file://${root.modelData.imagePath}`
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    sourceSize: Qt.size(256, 256)
+                StyledText {
+                    Layout.fillWidth: true
+                    textFormat: Text.StyledText
+                    text: root.modelData.message
+                    color: Colours.palette.m3onSurfaceVariant
+                    opacity: 0.8
+                    elide: Text.ElideRight
                 }
             }
         }
 
-        ColumnLayout {
+        // Image preview (only for image toasts)
+        ClippingRectangle {
+            visible: root.hasImage
             Layout.fillWidth: true
-            spacing: 0
+            Layout.preferredHeight: root.previewHeight
 
-            StyledText {
-                id: title
+            radius: Appearance.rounding.small
+            color: "transparent"
 
-                Layout.fillWidth: true
-                text: root.modelData.title
-                color: Colours.palette.m3onSurface
-                font.pointSize: Appearance.font.size.normal
-                elide: Text.ElideRight
-            }
+            Image {
+                id: previewImage
 
-            StyledText {
-                Layout.fillWidth: true
-                textFormat: Text.StyledText
-                text: root.modelData.message
-                color: Colours.palette.m3onSurfaceVariant
-                opacity: 0.8
-                elide: Text.ElideRight
+                anchors.fill: parent
+                source: root.hasImage ? `file://${root.modelData.imagePath}` : ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                sourceSize: Qt.size(512, 512)
             }
         }
+    }
+
+    Behavior on implicitWidth {
+        Anim {}
     }
 
     Behavior on border.color {
