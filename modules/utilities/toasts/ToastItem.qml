@@ -3,6 +3,7 @@ import qs.components.effects
 import qs.services
 import qs.config
 import Symmetria
+import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
 
@@ -48,24 +49,57 @@ StyledRect {
         anchors.rightMargin: Appearance.padding.normal
         spacing: Appearance.spacing.normal
 
-        StyledRect {
+        // Image thumbnail when imagePath is set, Material icon otherwise
+        Loader {
+            id: iconLoader
+
+            readonly property bool hasImage: root.modelData.imagePath !== ""
             readonly property var iconStyle: Colours.pillStyle(root.toastBaseColor, Colours.glass.strong)
 
-            radius: Appearance.rounding.normal
-            color: iconStyle.background
-            border.width: 1
-            border.color: iconStyle.border
+            sourceComponent: hasImage ? imageComponent : iconComponent
+        }
 
-            implicitWidth: implicitHeight
-            implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
+        Component {
+            id: iconComponent
 
-            MaterialIcon {
-                id: icon
+            StyledRect {
+                radius: Appearance.rounding.normal
+                color: iconLoader.iconStyle.background
+                border.width: 1
+                border.color: iconLoader.iconStyle.border
 
-                anchors.centerIn: parent
-                text: root.modelData.icon
-                color: Colours.palette.m3onSurface
-                font.pointSize: Math.round(Appearance.font.size.large * 1.2)
+                implicitWidth: implicitHeight
+                implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
+
+                MaterialIcon {
+                    id: icon
+
+                    anchors.centerIn: parent
+                    text: root.modelData.icon
+                    color: Colours.palette.m3onSurface
+                    font.pointSize: Math.round(Appearance.font.size.large * 1.2)
+                }
+            }
+        }
+
+        Component {
+            id: imageComponent
+
+            ClippingRectangle {
+                readonly property int thumbSize: Math.round(Appearance.font.size.large * 1.2) + Appearance.padding.smaller * 2
+
+                radius: Appearance.rounding.normal
+                implicitWidth: thumbSize
+                implicitHeight: thumbSize
+                color: "transparent"
+
+                Image {
+                    anchors.fill: parent
+                    source: `file://${root.modelData.imagePath}`
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    sourceSize: Qt.size(256, 256)
+                }
             }
         }
 

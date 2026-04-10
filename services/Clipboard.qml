@@ -2,6 +2,7 @@ pragma Singleton
 
 import qs.config
 import qs.utils
+import Symmetria
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -46,8 +47,12 @@ Singleton {
         }
     }
 
+    // Suppress clipboard toast when we initiate the copy ourselves
+    property bool _suppressClipboardToast: false
+
     // Restore an entry to the clipboard
     function restore(id: string): void {
+        _suppressClipboardToast = true;
         restoreProcess.entryId = id;
         restoreProcess.running = true;
     }
@@ -60,6 +65,7 @@ Singleton {
 
     // Clear all clipboard history
     function clear(): void {
+        _suppressClipboardToast = true;
         clearProcess.running = true;
     }
 
@@ -345,6 +351,7 @@ Singleton {
 
         onExited: (exitCode, exitStatus) => {
             ProcessUtils.logExit("Clipboard", "restore", exitCode, "");
+            suppressClearTimer.restart();
             if (exitCode === 0) {
                 root.refresh();
             }
@@ -381,11 +388,118 @@ Singleton {
 
         onExited: (exitCode, exitStatus) => {
             ProcessUtils.logExit("Clipboard", "wipe", exitCode, "");
+            suppressClearTimer.restart();
             root.refresh();
         }
 
         stderr: StdioCollector {
             onStreamFinished: ProcessUtils.logStderr("Clipboard", "wipe", text)
+        }
+    }
+
+    // --- Clipboard change watcher ---
+    // Fires a toast notification on every external clipboard copy.
+
+    readonly property string _thumbScript: Qt.resolvedUrl("../scripts/clipboard-toast-thumb.sh").toString().replace(/^file:\/\//, "")
+
+    // Suppression timer: clears the flag after self-initiated copies (restore/clear)
+    Timer {
+        id: suppressClearTimer
+        interval: 300
+        onTriggered: root._suppressClipboardToast = false
+    }
+
+    // Leading-edge throttle: first clipboard event fires immediately,
+    // subsequent events within 500ms are dropped to avoid toast spam
+    // (e.g., rapid terminal selection changes).
+    property real _lastToastTime: 0
+
+    // Persistent watcher: outputs primary MIME type on each clipboard change
+    Process {
+        id: clipboardWatcher
+
+        running: root.cliphistAvailable
+        command: ["sh", "-c", "wl-paste --watch sh -c 'wl-paste --list-types 2>/dev/null | head -1'"]
+
+        stdout: SplitParser {
+            onRead: data => {
+                const mime = data.trim();
+                if (!mime || root._suppressClipboardToast || !Config.utilities.toasts.clipboardCopied)
+                    return;
+
+                // Leading-edge throttle
+                const now = Date.now();
+                if (now - root._lastToastTime < 500)
+                    return;
+                root._lastToastTime = now;
+
+                if (mime.startsWith("text/")) {
+                    textPreviewProcess.running = true;
+                } else if (mime.startsWith("image/")) {
+                    imageThumbProcess.mimeType = mime;
+                    imageThumbProcess.thumbPath = `${Paths.toastthumbcache}/${Date.now()}.png`;
+                    imageThumbProcess.running = true;
+                } else {
+                    Toaster.toast(qsTr("Copied to clipboard"), mime, "content_copy");
+                }
+            }
+        }
+
+        onExited: watcherRestartTimer.start()
+    }
+
+    Timer {
+        id: watcherRestartTimer
+        interval: 2000
+        onTriggered: clipboardWatcher.running = true
+    }
+
+    // One-shot: fetch text preview for clipboard toast
+    Process {
+        id: textPreviewProcess
+
+        command: ["sh", "-c", "wl-paste -n 2>/dev/null | head -c 200"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const preview = text.trim().replace(/\n/g, " ");
+                if (preview)
+                    Toaster.toast(qsTr("Copied to clipboard"), preview, "content_copy");
+                else
+                    Toaster.toast(qsTr("Copied to clipboard"), qsTr("Text content"), "content_copy");
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.trim())
+                    console.warn(`[Clipboard] text preview stderr: ${text.trim()}`);
+            }
+        }
+    }
+
+    // One-shot: generate image thumbnail for clipboard toast
+    Process {
+        id: imageThumbProcess
+
+        property string mimeType: ""
+        property string thumbPath: ""
+
+        command: [root._thumbScript, thumbPath]
+
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0) {
+                Toaster.toast(qsTr("Image copied"), mimeType, "image", Toast.Info, 5000, thumbPath);
+            } else {
+                Toaster.toast(qsTr("Image copied"), mimeType, "image");
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.trim())
+                    console.warn(`[Clipboard] thumb stderr: ${text.trim()}`);
+            }
         }
     }
 }

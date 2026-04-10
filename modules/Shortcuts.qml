@@ -211,5 +211,9 @@ Scope {
         function error(title: string, message: string, icon: string): void {
             Toaster.toast(title, message, icon, Toast.Error);
         }
+
+        function infoImage(title: string, message: string, icon: string, imagePath: string): void {
+            Toaster.toast(title, message, icon, Toast.Info, 5000, imagePath);
+        }
     }
 }

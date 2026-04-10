@@ -6,12 +6,14 @@
 
 namespace symmetria {
 
-Toast::Toast(const QString& title, const QString& message, const QString& icon, Type type, int timeout, QObject* parent)
+Toast::Toast(const QString& title, const QString& message, const QString& icon, Type type, int timeout,
+    const QString& imagePath, QObject* parent)
     : QObject(parent)
     , m_closed(false)
     , m_title(title)
     , m_message(message)
     , m_icon(icon)
+    , m_imagePath(imagePath)
     , m_type(type)
     , m_timeout(timeout) {
     QTimer::singleShot(timeout, this, &Toast::close);
@@ -64,6 +66,10 @@ QString Toast::icon() const {
     return m_icon;
 }
 
+QString Toast::imagePath() const {
+    return m_imagePath;
+}
+
 int Toast::timeout() const {
     return m_timeout;
 }
@@ -101,11 +107,15 @@ QQmlListProperty<Toast> Toaster::toasts() {
     return QQmlListProperty<Toast>(this, &m_toasts);
 }
 
-void Toaster::toast(const QString& title, const QString& message, const QString& icon, Toast::Type type, int timeout) {
-    auto* toast = new Toast(title, message, icon, type, timeout, this);
+void Toaster::toast(const QString& title, const QString& message, const QString& icon, Toast::Type type, int timeout,
+    const QString& imagePath) {
+    auto* toast = new Toast(title, message, icon, type, timeout, imagePath, this);
     QObject::connect(toast, &Toast::finishedClose, this, [toast, this]() {
         if (m_toasts.removeOne(toast)) {
             emit toastsChanged();
+            if (!toast->imagePath().isEmpty()) {
+                QFile::remove(toast->imagePath());
+            }
             toast->deleteLater();
         }
     });
