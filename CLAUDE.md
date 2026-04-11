@@ -39,6 +39,15 @@ cd ~/projects/symmetria-file-manager && ./build-plugin.sh
 ```
 If missing, Symmetria will fail to load components that browse the filesystem. See symmetria-file-manager's CLAUDE.md for build details.
 
+**CLI (`symmetria-cli`)** — Python CLI at `~/.config/quickshell/symmetria-cli/` providing screenshot, recording, scheme, wallpaper, and shell IPC commands. Installed manually (not via pacman):
+- Source: `~/.config/quickshell/symmetria-cli/src/symmetria/`
+- Installed to: `/usr/lib/python3.14/site-packages/symmetria/`
+- Entry point: `/usr/bin/symmetria` (Python 3.14 shim)
+- After editing CLI source, re-deploy:
+```bash
+sudo cp -r ~/.config/quickshell/symmetria-cli/src/symmetria /usr/lib/python3.14/site-packages/symmetria
+```
+
 ## Pre-commit Hooks
 
 Pre-commit hooks run `qmllint` on `.qml` files and `shellcheck` on `.sh` files. Setup (once per clone):
