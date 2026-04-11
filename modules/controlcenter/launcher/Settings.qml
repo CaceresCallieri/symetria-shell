@@ -140,24 +140,6 @@ ColumnLayout {
         }
 
         ToggleRow {
-            label: qsTr("Schemes")
-            checked: Config.launcher.useFuzzy.schemes
-            toggle.onToggled: {
-                Config.launcher.useFuzzy.schemes = checked;
-                Config.save();
-            }
-        }
-
-        ToggleRow {
-            label: qsTr("Variants")
-            checked: Config.launcher.useFuzzy.variants
-            toggle.onToggled: {
-                Config.launcher.useFuzzy.variants = checked;
-                Config.save();
-            }
-        }
-
-        ToggleRow {
             label: qsTr("Wallpapers")
             checked: Config.launcher.useFuzzy.wallpapers
             toggle.onToggled: {

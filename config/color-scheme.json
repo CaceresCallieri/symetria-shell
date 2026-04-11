@@ -1,8 +1,4 @@
 {
-  "name": "warm-neutral",
-  "flavour": "custom",
-  "mode": "dark",
-  "variant": "monochrome",
   "colours": {
     "primary_paletteKeyColor": "887f74",
     "secondary_paletteKeyColor": "6b6560",

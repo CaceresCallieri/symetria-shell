@@ -219,8 +219,6 @@
     "useFuzzy": {
       "apps": false,
       "actions": false,
-      "schemes": false,
-      "variants": false,
       "wallpapers": false
     },
     "sizes": {
@@ -244,17 +242,6 @@
       {
         "command": [
           "autocomplete",
-          "scheme"
-        ],
-        "dangerous": false,
-        "description": "Change the current colour scheme",
-        "enabled": true,
-        "icon": "palette",
-        "name": "Scheme"
-      },
-      {
-        "command": [
-          "autocomplete",
           "wallpaper"
         ],
         "dangerous": false,
@@ -262,17 +249,6 @@
         "enabled": true,
         "icon": "image",
         "name": "Wallpaper"
-      },
-      {
-        "command": [
-          "autocomplete",
-          "variant"
-        ],
-        "dangerous": false,
-        "description": "Change the current scheme variant",
-        "enabled": true,
-        "icon": "colors",
-        "name": "Variant"
       },
       {
         "command": [
@@ -296,28 +272,6 @@
         "enabled": true,
         "icon": "casino",
         "name": "Random"
-      },
-      {
-        "command": [
-          "setMode",
-          "light"
-        ],
-        "dangerous": false,
-        "description": "Change the scheme to light mode",
-        "enabled": true,
-        "icon": "light_mode",
-        "name": "Light"
-      },
-      {
-        "command": [
-          "setMode",
-          "dark"
-        ],
-        "dangerous": false,
-        "description": "Change the scheme to dark mode",
-        "enabled": true,
-        "icon": "dark_mode",
-        "name": "Dark"
       },
       {
         "command": [
@@ -485,7 +439,6 @@
     "visualiserBars": 45,
     "audioIncrement": 0.1,
     "maxVolume": 1,
-    "smartScheme": true,
     "defaultPlayer": "Spotify",
     "playerAliases": [
       {

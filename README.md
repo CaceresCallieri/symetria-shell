@@ -419,26 +419,10 @@ default, you must create it manually.
                 "dangerous": false
             },
             {
-                "name": "Scheme",
-                "icon": "palette",
-                "description": "Change the current colour scheme",
-                "command": ["autocomplete", "scheme"],
-                "enabled": true,
-                "dangerous": false
-            },
-            {
                 "name": "Wallpaper",
                 "icon": "image",
                 "description": "Change the current wallpaper",
                 "command": ["autocomplete", "wallpaper"],
-                "enabled": true,
-                "dangerous": false
-            },
-            {
-                "name": "Variant",
-                "icon": "colors",
-                "description": "Change the current scheme variant",
-                "command": ["autocomplete", "variant"],
                 "enabled": true,
                 "dangerous": false
             },
@@ -455,22 +439,6 @@ default, you must create it manually.
                 "icon": "casino",
                 "description": "Switch to a random wallpaper",
                 "command": ["symmetria", "wallpaper", "-r"],
-                "enabled": true,
-                "dangerous": false
-            },
-            {
-                "name": "Light",
-                "icon": "light_mode",
-                "description": "Change the scheme to light mode",
-                "command": ["setMode", "light"],
-                "enabled": true,
-                "dangerous": false
-            },
-            {
-                "name": "Dark",
-                "icon": "dark_mode",
-                "description": "Change the scheme to dark mode",
-                "command": ["setMode", "dark"],
                 "enabled": true,
                 "dangerous": false
             },
@@ -524,8 +492,6 @@ default, you must create it manually.
         "useFuzzy": {
             "apps": false,
             "actions": false,
-            "schemes": false,
-            "variants": false,
             "wallpapers": false
         },
         "showOnHover": false,
@@ -563,7 +529,6 @@ default, you must create it manually.
         "weatherLocation": "",
         "useFahrenheit": false,
         "useTwelveHourClock": false,
-        "smartScheme": true,
         "visualiserBars": 45
     },
     "session": {
@@ -671,16 +636,6 @@ for the corresponding repo.
 
 Please read the [configuring](https://github.com/caelestia-dots/shell?tab=readme-ov-file#configuring) section in the readme.
 If there is no corresponding option, make feature request.
-
-### How do I make my colour scheme change with my wallpaper?
-
-Set a wallpaper via the launcher or `symmetria wallpaper` and set the scheme to the dynamic scheme via the launcher
-or `symmetria scheme set`. e.g.
-
-```sh
-symmetria wallpaper -f <path/to/file>
-symmetria scheme set -n dynamic
-```
 
 ### My wallpapers aren't showing up in the launcher!
 

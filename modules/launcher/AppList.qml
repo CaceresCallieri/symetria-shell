@@ -62,8 +62,6 @@ StyledListView {
         return "apps";
     }
 
-    onStateChanged: {}
-
     states: [
         State {
             name: "apps"

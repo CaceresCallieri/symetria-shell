@@ -48,7 +48,7 @@ Singleton {
     function alterColour(c: color, a: real, layer: int): color {
         const luminance = getLuminance(c);
 
-        const offset = (!light || layer == 1 ? 1 : -layer / 2) * (light ? 0.2 : 0.3) * (1 - transparency.base) * (1 + wallLuminance * (light ? (layer == 1 ? 3 : 1) : 2.5));
+        const offset = 0.3 * (1 - transparency.base) * (1 + wallLuminance * 2.5);
         const scale = (luminance + offset) / luminance;
         const r = Math.max(0, Math.min(1, c.r * scale));
         const g = Math.max(0, Math.min(1, c.g * scale));
@@ -89,8 +89,7 @@ Singleton {
         // 0.35 provides subtle glass edge across all intensities
         readonly property real borderOpacity: 0.35
 
-        // Border base color (dark mode optimized)
-        // TODO: Consider theme-aware border when light mode is fully supported
+        // Border base color: pure white for dark mode
         readonly property color borderBaseColor: "#ffffff"
     }
 
@@ -262,9 +261,6 @@ Singleton {
                 p[key] = String(root.palette[key]);
 
             return JSON.stringify({
-                meta: {
-                    light: root.light,
-                },
                 palette: p,
                 appearance: {
                     rounding: {
