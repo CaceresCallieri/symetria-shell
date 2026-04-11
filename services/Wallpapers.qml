@@ -11,15 +11,12 @@ import QtQuick
 Searcher {
     id: root
 
-    readonly property list<string> smartArg: Config.services.smartScheme ? [] : ["--no-smart"]
-
     property bool showPreview: false
     readonly property string current: showPreview ? previewPath : actualCurrent
     property string previewPath
     // Not initialized from file - remains empty until setWallpaper() is called.
     // Fallback logic uses workspace wallpapers or shows "missing wallpaper" UI.
     property string actualCurrent
-    property bool previewColourLock
     property bool focusMode: false
     readonly property bool wallpaperVisible: !focusMode
 
@@ -136,21 +133,16 @@ Searcher {
 
     function setWallpaper(path: string): void {
         actualCurrent = path;
-        Quickshell.execDetached(["symmetria", "wallpaper", "-f", path, ...smartArg]);
+        Quickshell.execDetached(["symmetria", "wallpaper", "-f", path]);
     }
 
     function preview(path: string): void {
         previewPath = path;
         showPreview = true;
-
-        if (Colours.scheme === "dynamic")
-            getPreviewColoursProc.running = true;
     }
 
     function stopPreview(): void {
         showPreview = false;
-        if (!previewColourLock)
-            Colours.showPreview = false;
     }
 
     list: wallpapers.entries
@@ -223,15 +215,4 @@ Searcher {
         onTriggered: root._checkWorkspaceWallpapers()
     }
 
-    Process {
-        id: getPreviewColoursProc
-
-        command: ["symmetria", "wallpaper", "-p", root.previewPath, ...root.smartArg]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                Colours.load(text, true);
-                Colours.showPreview = true;
-            }
-        }
-    }
 }

@@ -183,9 +183,6 @@ Item {
                         label.animate: true
                         onClicked: {
                             const shouldExpand = !sidebarLayout.allSectionsExpanded;
-                            themeModeSection.expanded = shouldExpand;
-                            colorVariantSection.expanded = shouldExpand;
-                            colorSchemeSection.expanded = shouldExpand;
                             animationsSection.expanded = shouldExpand;
                             fontsSection.expanded = shouldExpand;
                             scalesSection.expanded = shouldExpand;
@@ -194,18 +191,6 @@ Item {
                             backgroundSection.expanded = shouldExpand;
                         }
                     }
-                }
-
-                ThemeModeSection {
-                    id: themeModeSection
-                }
-
-                ColorVariantSection {
-                    id: colorVariantSection
-                }
-
-                ColorSchemeSection {
-                    id: colorSchemeSection
                 }
 
                 AnimationsSection {

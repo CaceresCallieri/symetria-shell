@@ -433,7 +433,6 @@ Singleton {
             visualiserBars: services.visualiserBars,
             audioIncrement: services.audioIncrement,
             maxVolume: services.maxVolume,
-            smartScheme: services.smartScheme,
             defaultPlayer: services.defaultPlayer,
             playerAliases: services.playerAliases
         };

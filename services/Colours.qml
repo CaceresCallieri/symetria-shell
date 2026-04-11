@@ -27,21 +27,15 @@ Singleton {
     readonly property color generalBackgroundOpaque: panelBackgroundTint
     readonly property real generalBackgroundAlpha: panelBackgroundAlpha
 
-    property bool showPreview
-    property string scheme
-    property string flavour
     property list<string> _paletteKeys: []
 
     // Absolute path to the bundled default scheme (used to seed state file on first launch)
     // string (not url): raw filesystem path passed to shell cp — not a QML source URL
     readonly property string _defaultSchemePath: Qt.resolvedUrl("../config/color-scheme.json").toString().replace(/^file:\/\//, "")
-    readonly property bool light: showPreview ? previewLight : currentLight
-    property bool currentLight
-    property bool previewLight
-    readonly property M3Palette palette: showPreview ? preview : current
+    readonly property bool light: false
+    readonly property M3Palette palette: current
     readonly property M3TPalette tPalette: M3TPalette {}
     readonly property M3Palette current: M3Palette {}
-    readonly property M3Palette preview: M3Palette {}
     readonly property Transparency transparency: Transparency {}
     readonly property alias wallLuminance: analyser.luminance
 
@@ -206,32 +200,18 @@ Singleton {
         readonly property real veryStrong: 0.9
     }
 
-    function load(data: string, isPreview: bool): void {
-        const colours = isPreview ? preview : current;
+    function load(data: string): void {
         const scheme = JSON.parse(data);
-
-        if (!isPreview) {
-            root.scheme = scheme.name;
-            flavour = scheme.flavour;
-            currentLight = scheme.mode === "light";
-        } else {
-            previewLight = scheme.mode === "light";
-        }
 
         const keys = [];
         for (const [name, colour] of Object.entries(scheme.colours)) {
             const propName = name.startsWith("term") ? name : `m3${name}`;
-            if (colours.hasOwnProperty(propName)) {
-                colours[propName] = `#${colour}`;
+            if (current.hasOwnProperty(propName)) {
+                current[propName] = `#${colour}`;
                 keys.push(propName);
             }
         }
-        if (!isPreview)
-            root._paletteKeys = keys;
-    }
-
-    function setMode(mode: string): void {
-        Quickshell.execDetached(["symmetria", "scheme", "set", "--notify", "-m", mode]);
+        root._paletteKeys = keys;
     }
 
     // Read scheme from state directory (where the CLI writes).
@@ -242,7 +222,7 @@ Singleton {
         path: `${Paths.state}/scheme.json`
         watchChanges: true
         onFileChanged: reload()
-        onLoaded: root.load(text(), false)
+        onLoaded: root.load(text())
         // Silently ignore missing file on first launch — _initScheme creates it and calls reload()
         onLoadFailed: err => {
             if (err !== FileViewError.FileNotFound)
@@ -283,8 +263,6 @@ Singleton {
 
             return JSON.stringify({
                 meta: {
-                    name: root.scheme,
-                    flavour: root.flavour,
                     light: root.light,
                 },
                 palette: p,
@@ -349,7 +327,7 @@ Singleton {
 
     component Transparency: QtObject {
         readonly property bool enabled: Appearance.transparency.enabled
-        readonly property real base: Appearance.transparency.base - (root.light ? 0.1 : 0)
+        readonly property real base: Appearance.transparency.base
         readonly property real layers: Appearance.transparency.layers
     }
 

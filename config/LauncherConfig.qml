@@ -17,8 +17,6 @@ JsonObject {
     component UseFuzzy: JsonObject {
         property bool apps: false
         property bool actions: false
-        property bool schemes: false
-        property bool variants: false
         property bool wallpapers: false
     }
 
@@ -39,26 +37,10 @@ JsonObject {
             dangerous: false
         },
         {
-            name: "Scheme",
-            icon: "palette",
-            description: "Change the current colour scheme",
-            command: ["autocomplete", "scheme"],
-            enabled: true,
-            dangerous: false
-        },
-        {
             name: "Wallpaper",
             icon: "image",
             description: "Change the current wallpaper",
             command: ["autocomplete", "wallpaper"],
-            enabled: true,
-            dangerous: false
-        },
-        {
-            name: "Variant",
-            icon: "colors",
-            description: "Change the current scheme variant",
-            command: ["autocomplete", "variant"],
             enabled: true,
             dangerous: false
         },
@@ -75,22 +57,6 @@ JsonObject {
             icon: "casino",
             description: "Switch to a random wallpaper",
             command: ["symmetria", "wallpaper", "-r"],
-            enabled: true,
-            dangerous: false
-        },
-        {
-            name: "Light",
-            icon: "light_mode",
-            description: "Change the scheme to light mode",
-            command: ["setMode", "light"],
-            enabled: true,
-            dangerous: false
-        },
-        {
-            name: "Dark",
-            icon: "dark_mode",
-            description: "Change the scheme to dark mode",
-            command: ["setMode", "dark"],
             enabled: true,
             dangerous: false
         },
