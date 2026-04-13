@@ -24,14 +24,17 @@ Row {
     visible: cachedModel.length > 0
     height: Config.bar.sizes.indicatorHeight
 
-    // Events that affect window positions, lifecycle, or grouping (Set for O(1) lookup)
+    // Events that affect window positions, lifecycle, grouping, or fullscreen state (Set for O(1) lookup).
     // activewindowv2 included because Hyprland 0.54+ doesn't emit togglegroup events;
     // focus changes are the closest proxy. modelsEqual() prevents unnecessary rerenders.
+    // fullscreen included to trigger re-sort when entering/exiting fullscreen — ensures
+    // the tiled order cache in AppIconsProcessor is populated and position sort resumes promptly.
     readonly property var windowLayoutEvents: new Set([ // intentional var: JS Set for O(1) event name lookup (no QML Set type)
         "openwindow", "closewindow",
         "movewindow", "movewindowv2",
         "togglegroup", "moveintogroup", "moveoutofgroup",
-        "activewindowv2", "changegroupactive"
+        "activewindowv2", "changegroupactive",
+        "fullscreen"
     ])
 
     property var cachedModel: [] // intentional var: JS array of { isGroup: bool, clients: HyprlandToplevel[] } from AppIconsProcessor
