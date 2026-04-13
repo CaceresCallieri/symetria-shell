@@ -34,21 +34,26 @@ Singleton {
             // Key is sorted addresses joined — stable across any group member order
             const groupMap = new Map();
             const ungrouped = [];
+            const ungroupedKeys = [];
 
             for (const client of filtered) {
                 const groupedArr = client.lastIpcObject?.grouped ?? [];
                 if (groupedArr.length > 0) {
                     const groupKey = [...groupedArr].sort().join(',');
                     if (!groupMap.has(groupKey))
-                        groupMap.set(groupKey, { canonicalOrder: groupedArr, clients: [], _key: groupKey });
+                        groupMap.set(groupKey, { canonicalOrder: groupedArr, clients: [] });
                     groupMap.get(groupKey).clients.push(client);
                 } else {
-                    ungrouped.push({ isGroup: false, clients: [client], _key: client.lastIpcObject?.address ?? "" });
+                    ungrouped.push({ isGroup: false, clients: [client] });
+                    ungroupedKeys.push(client.lastIpcObject?.address ?? "");
                 }
             }
 
             // Sort each group's clients by canonical tab order
-            const groups = Array.from(groupMap.values()).map(group => {
+            const groupEntries = Array.from(groupMap.entries());
+            const groups = [];
+            const groupKeys = [];
+            for (const [groupKey, group] of groupEntries) {
                 const { canonicalOrder, clients: groupClients } = group;
                 groupClients.sort((a, b) => {
                     const aIdx = canonicalOrder.indexOf(a.lastIpcObject?.address);
@@ -56,11 +61,15 @@ Singleton {
                     if (aIdx === -1 || bIdx === -1) return 0;
                     return aIdx - bIdx;
                 });
-                return { isGroup: true, clients: groupClients, _key: group._key };
-            });
+                groups.push({ isGroup: true, clients: groupClients });
+                groupKeys.push(groupKey);
+            }
 
-            // Combine groups and ungrouped entries, then sort
+            // Combine groups and ungrouped entries with a parallel key array.
+            // Keys are kept separate to avoid attaching then deleting properties on returned
+            // objects — `delete obj.prop` de-optimizes V4 hidden classes (project-standards P0).
             const combined = [...groups, ...ungrouped];
+            const combinedKeys = [...groupKeys, ...ungroupedKeys];
 
             // Detect maximize mode (fullscreen === 1) specifically.
             // Only maximize shifts the viewport in Hyprland's scrolling layout,
@@ -72,19 +81,30 @@ Singleton {
             );
 
             if (hasMaximized && root._tiledOrderCache.has(workspaceId)) {
-                // Maximize mode: sort by cached tiled order; entries not in cache go to end
+                // Maximize mode: sort by cached tiled order; entries not in cache go to end.
+                // Stale keys from windows that closed while maximized are harmless — they
+                // produce no orderMap entry and are simply absent from combined.
                 const cachedOrder = root._tiledOrderCache.get(workspaceId);
                 const orderMap = new Map(cachedOrder.map((key, i) => [key, i]));
-                combined.sort((a, b) => {
-                    const aIdx = orderMap.get(a._key) ?? Infinity;
-                    const bIdx = orderMap.get(b._key) ?? Infinity;
+                // Sort combined and combinedKeys together by zipping indices
+                const indices = combined.map((_, i) => i);
+                indices.sort((a, b) => {
+                    const aIdx = orderMap.get(combinedKeys[a]) ?? Infinity;
+                    const bIdx = orderMap.get(combinedKeys[b]) ?? Infinity;
                     return aIdx - bIdx;
                 });
+                const sortedCombined = indices.map(i => combined[i]);
+                return sortedCombined;
             } else {
-                // Tiled mode (or maximize with no cache — fallback): sort by screen position
-                combined.sort((a, b) => {
-                    const aClient = a.clients[0];
-                    const bClient = b.clients[0];
+                // Tiled mode (or first maximize with no prior cache — bootstrap path).
+                // The bootstrap case position-sorts correctly; the cache is populated on the
+                // preceding tiled event (triggered by the fullscreen event listener).
+                //
+                // Sort combined and combinedKeys together by zipping indices
+                const indices = combined.map((_, i) => i);
+                indices.sort((a, b) => {
+                    const aClient = combined[a].clients[0];
+                    const bClient = combined[b].clients[0];
                     const ax = aClient?.lastIpcObject?.at?.[0] ?? 0;
                     const bx = bClient?.lastIpcObject?.at?.[0] ?? 0;
                     if (ax !== bx) return ax - bx;
@@ -92,15 +112,13 @@ Singleton {
                     const by = bClient?.lastIpcObject?.at?.[1] ?? 0;
                     return ay - by;
                 });
-                // Only cache when no window is maximized — position data is reliable
-                if (!hasMaximized)
-                    root._tiledOrderCache.set(workspaceId, combined.map(e => e._key));
+                const sortedCombined = indices.map(i => combined[i]);
+                // Only cache when no window is maximized — position data is reliable.
+                // Skip caching if any key is empty (IPC data not yet available for that window).
+                if (!hasMaximized && combinedKeys.every(k => k !== ""))
+                    root._tiledOrderCache.set(workspaceId, indices.map(i => combinedKeys[i]));
+                return sortedCombined;
             }
-
-            // Strip internal keys before returning
-            for (const entry of combined) delete entry._key;
-
-            return combined;
         } catch (e) {
             console.error("AppIconsProcessor: Failed to process clients:", e);
             return [];
