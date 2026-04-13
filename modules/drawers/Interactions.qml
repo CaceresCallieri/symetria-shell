@@ -52,6 +52,32 @@ CustomMouseArea {
         return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
+    // --- Keep-alive hysteresis helpers ---
+    // When a drawer/popout is already open, these expanded zones prevent
+    // accidental closure from small mouse deviations.
+
+    function withinPanelWidthExpanded(panel: Item, x: real, y: real): bool {
+        const margin = Config.border.rounding + Config.border.keepAliveMargin;
+        const panelX = Config.border.thickness + panel.x;
+        return x >= panelX - margin && x <= panelX + panel.width + margin;
+    }
+
+    function inTopPanelExpanded(panel: Item, x: real, y: real): bool {
+        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin
+            && withinPanelWidthExpanded(panel, x, y);
+    }
+
+    function inBottomPanelExpanded(panel: Item, x: real, y: real): bool {
+        const panelBottomEdge = root.height - agentBar.implicitHeight;
+        return y < panelBottomEdge
+            && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin
+            && withinPanelWidthExpanded(panel, x, y);
+    }
+
+    function inAgentBarForPanelExpanded(panel: Item, x: real, y: real): bool {
+        return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidthExpanded(panel, x, y);
+    }
+
     // Narrower trigger zone for the utilities drawer — only the rightmost 1/4 of the panel width
     // activates on hover, so the user must move to the very bottom-right corner to trigger it.
     function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
@@ -187,12 +213,21 @@ CustomMouseArea {
         //         visibilities.dashboard = false;
         // }
 
-        // Show utilities on hover (corner-only trigger zone)
+        // Show utilities on hover (corner-only trigger to open, full panel to keep alive)
         const showUtilities = inUtilitiesTriggerZone(panels.utilities, x, y);
 
-        // Always update visibility based on hover if not in shortcut mode
         if (!utilitiesShortcutActive) {
-            visibilities.utilities = showUtilities;
+            if (!visibilities.utilities) {
+                // Open: require precise corner trigger
+                if (showUtilities)
+                    visibilities.utilities = true;
+            } else {
+                // Keep alive: use expanded full-panel zone so content is usable
+                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y)
+                    || inAgentBarForPanelExpanded(panels.utilities, x, y);
+                if (!inKeepAlive)
+                    visibilities.utilities = false;
+            }
         } else if (showUtilities) {
             // If hovering over utilities area while in shortcut mode, transition to hover control
             utilitiesShortcutActive = false;
@@ -204,7 +239,7 @@ CustomMouseArea {
             if (!_popoutThrottleTimer.running)
                 _popoutThrottleTimer.start();
         } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                   && !inTopPanel(panels.popouts, x, y)
+                   && !inTopPanelExpanded(panels.popouts, x, y)
                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;

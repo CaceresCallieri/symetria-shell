@@ -171,7 +171,8 @@
   },
   "border": {
     "thickness": 7,
-    "rounding": 25
+    "rounding": 25,
+    "keepAliveMargin": 50
   },
   "dashboard": {
     "enabled": false,
