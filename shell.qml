@@ -16,6 +16,7 @@ import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
 import "modules/killconfirm" as KillConfirmModule
 import Quickshell
+import Quickshell.Io
 import QtQuick
 
 ShellRoot {
@@ -24,6 +25,15 @@ ShellRoot {
         interval: 0
         running: true
         onTriggered: Quickshell.watchFiles = false
+    }
+
+    // Kill competing notification daemons (swaync, dunst, mako) so QuickShell can
+    // claim org.freedesktop.Notifications. DBus activation files auto-start these
+    // even when their systemd services are disabled. QuickShell's NotificationServer
+    // watches for the name to become available and re-registers automatically.
+    Process {
+        running: true
+        command: ["sh", "-c", "pkill -x swaync; pkill -x dunst; pkill -x mako; exit 0"]
     }
 
     BackgroundModule.Wrapper {}
