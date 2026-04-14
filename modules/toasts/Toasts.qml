@@ -85,7 +85,13 @@ Item {
         implicitHeight: toastInner.implicitHeight
 
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-        onClicked: modelData.close()
+        cursorShape: modelData.hasAction ? Qt.PointingHandCursor : Qt.ArrowCursor
+        onClicked: {
+            if (modelData.hasAction)
+                modelData.invokeAction();
+            else
+                modelData.close();
+        }
 
         Component.onCompleted: modelData.lock(this)
 

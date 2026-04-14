@@ -7,15 +7,17 @@
 namespace symmetria {
 
 Toast::Toast(const QString& title, const QString& message, const QString& icon, Type type, int timeout,
-    const QString& imagePath, QObject* parent)
+    const QString& imagePath, QJSValue action, QObject* parent)
     : QObject(parent)
     , m_closed(false)
     , m_title(title)
     , m_message(message)
     , m_icon(icon)
     , m_imagePath(imagePath)
+    , m_action(std::move(action))
     , m_type(type)
-    , m_timeout(timeout) {
+    , m_timeout(timeout)
+    , m_hasAction(m_action.isCallable()) {
     QTimer::singleShot(timeout, this, &Toast::close);
 
     if (m_icon.isEmpty()) {
@@ -78,6 +80,17 @@ Toast::Type Toast::type() const {
     return m_type;
 }
 
+bool Toast::hasAction() const {
+    return m_hasAction;
+}
+
+void Toast::invokeAction() {
+    if (m_hasAction) {
+        m_action.call();
+    }
+    close();
+}
+
 void Toast::close() {
     if (!m_closed) {
         m_closed = true;
@@ -108,8 +121,8 @@ QQmlListProperty<Toast> Toaster::toasts() {
 }
 
 void Toaster::toast(const QString& title, const QString& message, const QString& icon, Toast::Type type, int timeout,
-    const QString& imagePath) {
-    auto* toast = new Toast(title, message, icon, type, timeout, imagePath, this);
+    const QString& imagePath, QJSValue action) {
+    auto* toast = new Toast(title, message, icon, type, timeout, imagePath, std::move(action), this);
     QObject::connect(toast, &Toast::finishedClose, this, [toast, this]() {
         if (m_toasts.removeOne(toast)) {
             emit toastsChanged();

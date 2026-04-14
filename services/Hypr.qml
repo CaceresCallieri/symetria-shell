@@ -34,6 +34,8 @@ Singleton {
     readonly property alias devices: extras.devices
 
     property bool hadKeyboard
+    property string _lastUrgentAddr: ""
+    property real _lastUrgentTime: 0
 
     signal configReloaded
 
@@ -47,6 +49,42 @@ Singleton {
 
     function reloadDynamicConfs(): void {
         extras.batchMessage(["keyword bindlni ,Caps_Lock,global,symmetria:refreshDevices", "keyword bindlni ,Num_Lock,global,symmetria:refreshDevices"]);
+    }
+
+    function handleUrgent(addr: string): void {
+        if (!Config.utilities.toasts.windowUrgent)
+            return;
+
+        const now = Date.now();
+        if (addr === root._lastUrgentAddr && now - root._lastUrgentTime < 3000)
+            return;
+        root._lastUrgentAddr = addr;
+        root._lastUrgentTime = now;
+
+        const fullAddr = "0x" + addr;
+        let windowClass = "";
+        let windowTitle = "";
+        for (const toplevel of Hyprland.toplevels.values) {
+            const ipc = toplevel.lastIpcObject;
+            if (ipc && ipc.address === fullAddr) {
+                windowClass = ipc.class ?? "";
+                windowTitle = toplevel.title ?? "";
+                break;
+            }
+        }
+
+        const displayName = windowClass || qsTr("Unknown window");
+        const displayMsg = windowTitle || qsTr("is requesting attention");
+
+        Toaster.toast(
+            displayName,
+            displayMsg,
+            "notification_important",
+            Toast.Warning,
+            7000,
+            "",
+            function() { root.dispatch(`focuswindow address:${fullAddr}`); }
+        );
     }
 
     Component.onCompleted: reloadDynamicConfs()
@@ -95,6 +133,9 @@ Singleton {
             } else if (["openwindow", "closewindow", "movewindow"].includes(n)) {
                 Hyprland.refreshToplevels();
                 Hyprland.refreshWorkspaces();
+            } else if (n === "urgent") {
+                root.handleUrgent(event.data);
+                return;
             } else if (n.includes("mon")) {
                 Hyprland.refreshMonitors();
             } else if (n.includes("workspace")) {

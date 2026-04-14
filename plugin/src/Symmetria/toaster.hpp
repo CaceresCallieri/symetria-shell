@@ -1,6 +1,7 @@
 #pragma once
 
 #include <qfile.h>
+#include <qjsvalue.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
 #include <qqmllist.h>
@@ -20,6 +21,7 @@ class Toast : public QObject {
     Q_PROPERTY(QString imagePath READ imagePath CONSTANT)
     Q_PROPERTY(int timeout READ timeout CONSTANT)
     Q_PROPERTY(Type type READ type CONSTANT)
+    Q_PROPERTY(bool hasAction READ hasAction CONSTANT)
 
 public:
     enum class Type {
@@ -31,7 +33,7 @@ public:
     Q_ENUM(Type)
 
     explicit Toast(const QString& title, const QString& message, const QString& icon, Type type, int timeout,
-        const QString& imagePath = QString(), QObject* parent = nullptr);
+        const QString& imagePath = QString(), QJSValue action = QJSValue(), QObject* parent = nullptr);
 
     [[nodiscard]] bool closed() const;
     [[nodiscard]] QString title() const;
@@ -40,7 +42,9 @@ public:
     [[nodiscard]] QString imagePath() const;
     [[nodiscard]] int timeout() const;
     [[nodiscard]] Type type() const;
+    [[nodiscard]] bool hasAction() const;
 
+    Q_INVOKABLE void invokeAction();
     Q_INVOKABLE void close();
     Q_INVOKABLE void lock(QObject* sender);
     Q_INVOKABLE void unlock(QObject* sender);
@@ -57,8 +61,10 @@ private:
     QString m_message;
     QString m_icon;
     QString m_imagePath;
+    QJSValue m_action;
     Type m_type;
     int m_timeout;
+    bool m_hasAction;
 };
 
 class Toaster : public QObject {
@@ -75,7 +81,7 @@ public:
 
     Q_INVOKABLE void toast(const QString& title, const QString& message, const QString& icon = QString(),
         symmetria::Toast::Type type = Toast::Type::Info, int timeout = 5000,
-        const QString& imagePath = QString());
+        const QString& imagePath = QString(), QJSValue action = QJSValue());
 
 signals:
     void toastsChanged();

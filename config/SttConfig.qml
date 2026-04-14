@@ -10,6 +10,11 @@ JsonObject {
     // Valid values: "clipboard" | "inject" | "submit" | "ask"
     property string deliveryMode: "clipboard"
 
+    // Prefix prepended to transcribed text when injecting into agent-backed
+    // terminals (e.g. Claude Code). Signals the LLM that input is voice-
+    // transcribed and may contain STT artifacts. Empty string disables.
+    property string voiceTag: "[voiced] "
+
     // Persistent vocabulary hints sent with every transcription to improve
     // proper noun / technical term accuracy (appended to the API prompt).
     property list<string> vocabularyHints: []

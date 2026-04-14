@@ -403,7 +403,8 @@ Singleton {
                 kbLayoutChanged: utilities.toasts.kbLayoutChanged,
                 vpnChanged: utilities.toasts.vpnChanged,
                 nowPlaying: utilities.toasts.nowPlaying,
-                focusModeChanged: utilities.toasts.focusModeChanged
+                focusModeChanged: utilities.toasts.focusModeChanged,
+                windowUrgent: utilities.toasts.windowUrgent
             },
             vpn: {
                 enabled: utilities.vpn.enabled,
@@ -476,6 +477,7 @@ Singleton {
             autoHideDelay: stt.autoHideDelay,
             processingTimeout: stt.processingTimeout,
             deliveryMode: stt.deliveryMode,
+            voiceTag: stt.voiceTag,
             vocabularyHints: stt.vocabularyHints,
             recording: {
                 format: stt.recording.format,

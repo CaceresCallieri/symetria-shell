@@ -747,8 +747,12 @@ QtObject {
                 const cmd = [job._injectScript, job._targetWindowAddress, job._targetWindowClass];
                 if (effectiveMode === "submit") cmd.push("submit");
                 Logger.log("qml", "stt", "inject-start | id=" + job.sessionId + " target=" + job._targetWindowAddress);
+                // Prepend voice tag for agent-backed terminals (e.g. Claude Code)
+                // so the LLM knows the input is voice-transcribed.
+                const voicePrefix = (Config.stt.voiceTag && job._targetNvimSocket !== "")
+                    ? Config.stt.voiceTag : "";
                 injectProcess.environment = ({
-                    STT_EXPECTED_TEXT: job._transcribedText,
+                    STT_EXPECTED_TEXT: voicePrefix + job._transcribedText,
                     STT_NVIM_SOCKET: job._targetNvimSocket,
                     STT_NVIM_ACTIVE_BUF: job._targetNvimActiveBuf.toString()
                 });

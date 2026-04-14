@@ -27,6 +27,7 @@ JsonObject {
         property bool nowPlaying: false
         property bool focusModeChanged: true
         property bool clipboardCopied: true
+        property bool windowUrgent: true
     }
 
     component Vpn: JsonObject {
