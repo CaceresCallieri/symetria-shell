@@ -4,7 +4,6 @@ import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
-import qs.modules.utilities.toasts as Toasts
 import qs.modules.sidebar as Sidebar
 import qs.modules.clipboard as ClipboardModule
 import qs.modules.askpass as Askpass
@@ -28,7 +27,6 @@ Item {
     readonly property Item dashboard: Item {}
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
-    readonly property alias toasts: toasts
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
@@ -184,19 +182,6 @@ Item {
         anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
         anchors.right: sidebar.left
         anchors.margins: Appearance.padding.normal
-    }
-
-    Toasts.Toasts {
-        id: toasts
-
-        anchors.bottom: sidebar.visible ? parent.bottom : utilities.top
-        anchors.right: sidebar.left
-        anchors.rightMargin: Appearance.padding.normal
-        anchors.bottomMargin: Appearance.padding.normal + (recordingIndicator.active ? recordingIndicator.implicitHeight + Appearance.spacing.small : 0)
-
-        Behavior on anchors.bottomMargin {
-            Anim {}
-        }
     }
 
     Sidebar.Wrapper {
