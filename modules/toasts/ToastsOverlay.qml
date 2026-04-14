@@ -35,7 +35,7 @@ Scope {
             anchors.left: true
             anchors.right: true
 
-            // Click-through when no toasts, content area when visible.
+            // Click-through when no visible toasts, content area when toasts are showing.
             mask: contentRegion
 
             readonly property bool hasContent: toasts.implicitHeight > 0
@@ -48,14 +48,9 @@ Scope {
                 height: win.hasContent ? toastContent.height : 0
             }
 
-            // Bar reference for top offset (avoid overlapping the bar).
-            readonly property Item barRef: {
-                void Visibilities.barsVersion;
-                return Visibilities.bars.get(modelData) ?? null;
-            }
-            readonly property real barHeight: barRef?.implicitHeight ?? Config.border.thickness
-
             // Agent bar reference for bottom offset.
+            // Reactive via agentBarsVersion — resolves correctly even when agent bars register
+            // after this overlay (onCompleted order is not guaranteed across Variants).
             readonly property Item agentBarRef: {
                 void Visibilities.agentBarsVersion;
                 return Visibilities.agentBars.get(modelData) ?? null;
