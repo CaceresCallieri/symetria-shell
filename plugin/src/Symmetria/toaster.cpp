@@ -87,8 +87,9 @@ bool Toast::hasAction() const {
 void Toast::invokeAction() {
     if (m_hasAction) {
         m_action.call();
+        close();
     }
-    close();
+    // If called without an action, do nothing — callers should check hasAction() first.
 }
 
 void Toast::close() {

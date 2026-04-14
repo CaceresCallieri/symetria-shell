@@ -86,8 +86,8 @@ Item {
 
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
         cursorShape: modelData.hasAction ? Qt.PointingHandCursor : Qt.ArrowCursor
-        onClicked: {
-            if (modelData.hasAction)
+        onClicked: mouse => {
+            if (mouse.button === Qt.LeftButton && modelData.hasAction)
                 modelData.invokeAction();
             else
                 modelData.close();

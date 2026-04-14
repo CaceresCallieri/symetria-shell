@@ -58,6 +58,7 @@ Singleton {
         const now = Date.now();
         if (addr === root._lastUrgentAddr && now - root._lastUrgentTime < 3000)
             return;
+        // Update dedup state before lookup — throttles spam even when window is unknown.
         root._lastUrgentAddr = addr;
         root._lastUrgentTime = now;
 
@@ -74,7 +75,7 @@ Singleton {
         }
 
         const displayName = windowClass || qsTr("Unknown window");
-        const displayMsg = windowTitle || qsTr("is requesting attention");
+        const displayMsg = windowTitle || qsTr("Window is requesting attention");
 
         Toaster.toast(
             displayName,
