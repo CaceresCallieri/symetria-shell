@@ -81,7 +81,7 @@ Scope {
                 void Visibilities.agentBarsVersion;
                 return Visibilities.agentBars.get(modelData) ?? null;
             }
-            readonly property real bottomOffset: agentBarRef?.implicitHeight ?? Config.border.thickness
+            readonly property real bottomOffset: agentBarRef?.implicitHeight ?? 0
 
             // IMPORTANT: The idle value of dialogOpacity MUST reach 0.0 so visible becomes false.
             // When visible: true, the full-window dismiss MouseArea participates in Qt Quick's

@@ -24,7 +24,8 @@ Item {
     required property Item agentBar
 
     anchors.fill: parent
-    anchors.margins: Config.border.thickness
+    anchors.leftMargin: Config.border.sideThickness
+    anchors.rightMargin: Config.border.sideThickness
     anchors.topMargin: bar.implicitHeight
     anchors.bottomMargin: agentBar.implicitHeight
 

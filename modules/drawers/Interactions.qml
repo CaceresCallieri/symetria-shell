@@ -20,21 +20,21 @@ CustomMouseArea {
     property real _pendingPopoutX
 
     function withinPanelHeight(panel: Item, x: real, y: real): bool {
-        const panelY = Config.border.thickness + panel.y;
+        const panelY = panel.y;
         return y >= panelY - Config.border.rounding && y <= panelY + panel.height + Config.border.rounding;
     }
 
     function withinPanelWidth(panel: Item, x: real, y: real): bool {
-        const panelX = Config.border.thickness + panel.x;
+        const panelX = Config.border.sideThickness + panel.x;
         return x >= panelX - Config.border.rounding && x <= panelX + panel.width + Config.border.rounding;
     }
 
     function inLeftPanel(panel: Item, x: real, y: real): bool {
-        return x < Config.border.thickness + panel.x + panel.width && withinPanelHeight(panel, x, y);
+        return x < Config.border.sideThickness + panel.x + panel.width && withinPanelHeight(panel, x, y);
     }
 
     function inRightPanel(panel: Item, x: real, y: real): bool {
-        return x > Config.border.thickness + panel.x && withinPanelHeight(panel, x, y);
+        return x > Config.border.sideThickness + panel.x && withinPanelHeight(panel, x, y);
     }
 
     function inTopPanel(panel: Item, x: real, y: real): bool {
@@ -58,7 +58,7 @@ CustomMouseArea {
 
     function withinPanelWidthExpanded(panel: Item, x: real, y: real): bool {
         const margin = Config.border.rounding + Config.border.keepAliveMargin;
-        const panelX = Config.border.thickness + panel.x;
+        const panelX = Config.border.sideThickness + panel.x;
         return x >= panelX - margin && x <= panelX + panel.width + margin;
     }
 
@@ -82,7 +82,7 @@ CustomMouseArea {
     // activates on hover, so the user must move to the very bottom-right corner to trigger it.
     function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
         const triggerWidth = panel.width / 4;
-        const panelRight = Config.border.thickness + panel.x + panel.width + Config.border.rounding;
+        const panelRight = Config.border.sideThickness + panel.x + panel.width + Config.border.rounding;
         const triggerLeft = panelRight - triggerWidth;
         const inTriggerX = x >= triggerLeft && x <= panelRight;
 
@@ -146,7 +146,7 @@ CustomMouseArea {
             if (inRightPanel(panels.osd, x, y))
                 Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
 
-            const showSidebar = pressed && dragStart.x > Config.border.thickness + panels.sidebar.x;
+            const showSidebar = pressed && dragStart.x > 2 + panels.sidebar.x;
 
             // Show/hide session on drag
             if (pressed && inRightPanel(panels.session, dragStart.x, dragStart.y) && withinPanelHeight(panels.session, x, y)) {
@@ -192,26 +192,6 @@ CustomMouseArea {
             else if (dragY > Config.launcher.dragThreshold)
                 visibilities.launcher = false;
         }
-
-        // DISABLED: Dashboard panel (bottom-left hover zone)
-        // The dashboard module is disabled and slated for removal.
-        // Some sub-features (weather/forecast) may be extracted and reimplemented elsewhere.
-        // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
-        //
-        // const showDashboard = Config.dashboard.showOnHover && (inBottomLeftPanel(panels.dashboard, x, y) || inAgentBarForPanel(panels.dashboard, x, y));
-        //
-        // if (!dashboardShortcutActive) {
-        //     visibilities.dashboard = showDashboard;
-        // } else if (showDashboard) {
-        //     dashboardShortcutActive = false;
-        // }
-        //
-        // if (pressed && inBottomLeftPanel(panels.dashboard, dragStart.x, dragStart.y) && withinPanelWidth(panels.dashboard, x, y)) {
-        //     if (dragY < -Config.dashboard.dragThreshold)
-        //         visibilities.dashboard = true;
-        //     else if (dragY > Config.dashboard.dragThreshold)
-        //         visibilities.dashboard = false;
-        // }
 
         // Show utilities on hover (corner-only trigger to open, full panel to keep alive)
         const showUtilities = inUtilitiesTriggerZone(panels.utilities, x, y);

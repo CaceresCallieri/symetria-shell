@@ -55,7 +55,7 @@ Scope {
                 void Visibilities.agentBarsVersion;
                 return Visibilities.agentBars.get(modelData) ?? null;
             }
-            readonly property real agentBarHeight: agentBarRef?.implicitHeight ?? Config.border.thickness
+            readonly property real agentBarHeight: agentBarRef?.implicitHeight ?? 0
 
             Item {
                 id: toastContent
@@ -63,7 +63,7 @@ Scope {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: win.agentBarHeight
                 anchors.right: parent.right
-                anchors.rightMargin: Config.border.thickness
+                anchors.rightMargin: 0
 
                 width: toasts.implicitWidth
                 height: toasts.implicitHeight

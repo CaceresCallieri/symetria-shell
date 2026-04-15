@@ -84,9 +84,9 @@ Variants {
             WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
-                x: Config.border.thickness + win.dragMaskPadding
+                x: Config.border.sideThickness + win.dragMaskPadding
                 y: bar.implicitHeight + win.dragMaskPadding
-                width: win.width - Config.border.thickness * 2 - win.dragMaskPadding * 2
+                width: win.width - Config.border.sideThickness * 2 - win.dragMaskPadding * 2
                 height: win.height - bar.implicitHeight - agentBar.implicitHeight - win.dragMaskPadding * 2
                 intersection: Intersection.Xor
 
@@ -106,7 +106,7 @@ Variants {
                 Region {
                     required property Item modelData
 
-                    x: modelData.x + Config.border.thickness
+                    x: modelData.x + Config.border.sideThickness
                     y: modelData.y + bar.implicitHeight
                     width: modelData.width
                     height: modelData.height

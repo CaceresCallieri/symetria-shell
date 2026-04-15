@@ -9,9 +9,9 @@ import QtQuick
 /// Animated bottom bar container for the agent bar, embedded in the unified
 /// Drawers surface. Mirrors bar/Wrapper.qml but for the bottom edge.
 ///
-/// When agents are active, expands upward from the bottom border strip to
+/// When agents are active, expands upward from the bottom screen edge to
 /// reveal either AgentBarContent (separate mode) or MergedBarContent (merged mode).
-/// When no agents are connected, collapses back to Config.border.thickness.
+/// When no agents are connected, collapses to height 0 (no bottom presence).
 ///
 /// Key properties consumed by the drawers system:
 ///   - implicitHeight: flows into mask Region, Border, Backgrounds, Panels, Interactions
@@ -30,13 +30,13 @@ Item {
     readonly property int contentHeight: innerHeight + padding * 2
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches bar/Wrapper behavior — prevents content from being momentarily obscured)
-    readonly property int exclusiveZone: shouldBeVisible ? contentHeight : Config.border.thickness
+    readonly property int exclusiveZone: shouldBeVisible ? contentHeight : 0
     readonly property bool shouldBeVisible: (Config.agentbar.enabled && AgentService.agentCount > 0 && !AgentService.userHidden)
         || preview.previewActive
 
     clip: true
-    visible: height > Config.border.thickness
-    implicitHeight: Config.border.thickness
+    visible: height > 0
+    implicitHeight: 0
 
     states: State {
         name: "visible"

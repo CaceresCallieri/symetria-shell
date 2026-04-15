@@ -142,7 +142,7 @@ Scope {
                 id: osdContent
 
                 anchors.right: parent.right
-                anchors.rightMargin: Config.border.thickness
+                anchors.rightMargin: 0
                 anchors.verticalCenter: parent.verticalCenter
 
                 width: content.implicitWidth
@@ -158,7 +158,7 @@ Scope {
 
                 // Slide right-to-left on show, left-to-right on hide
                 transform: Translate {
-                    x: win.showing ? 0 : osdContent.width + Config.border.thickness
+                    x: win.showing ? 0 : osdContent.width
                     Behavior on x {
                         Anim {}
                     }

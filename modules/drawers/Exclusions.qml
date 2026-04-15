@@ -19,10 +19,12 @@ Scope {
 
     ExclusionZone {
         anchors.left: true
+        exclusiveZone: Config.border.sideThickness
     }
 
     ExclusionZone {
         anchors.right: true
+        exclusiveZone: Config.border.sideThickness
     }
 
     ExclusionZone {
@@ -33,7 +35,7 @@ Scope {
     component ExclusionZone: StyledWindow {
         screen: root.screen
         name: "border-exclusion"
-        exclusiveZone: Config.border.thickness
+        exclusiveZone: 0
         mask: Region {}
         implicitWidth: 1
         implicitHeight: 1

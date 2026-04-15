@@ -58,7 +58,7 @@ Scope {
                 void Visibilities.barsVersion;
                 return Visibilities.bars.get(modelData) ?? null;
             }
-            readonly property real barHeight: barRef?.implicitHeight ?? Config.border.thickness
+            readonly property real barHeight: barRef?.implicitHeight ?? 0
 
             // Notifications content — top-right aligned, below bar
             Item {
@@ -67,7 +67,7 @@ Scope {
                 anchors.top: parent.top
                 anchors.topMargin: win.barHeight
                 anchors.right: parent.right
-                anchors.rightMargin: Config.border.thickness
+                anchors.rightMargin: 0
 
                 width: content.implicitWidth
                 height: content.implicitHeight
@@ -80,7 +80,7 @@ Scope {
                 }
 
                 transform: Translate {
-                    x: win.hasContent ? 0 : notifContent.width + Config.border.thickness
+                    x: win.hasContent ? 0 : notifContent.width
                     Behavior on x {
                         Anim {}
                     }

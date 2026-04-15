@@ -24,7 +24,6 @@ Item {
     readonly property alias osd: osd
     readonly property alias session: session
     readonly property alias launcher: launcher
-    readonly property Item dashboard: Item {}
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
     readonly property alias sidebar: sidebar
@@ -35,7 +34,8 @@ Item {
     readonly property alias packages: packages
 
     anchors.fill: parent
-    anchors.margins: Config.border.thickness
+    anchors.leftMargin: Config.border.sideThickness
+    anchors.rightMargin: Config.border.sideThickness
     anchors.topMargin: bar.implicitHeight
     anchors.bottomMargin: agentBar.implicitHeight
 
@@ -156,7 +156,7 @@ Item {
             if (popouts._detachedFull)
                 return 0;
 
-            const off = currentCenter - Config.border.thickness - nonAnimWidth / 2;
+            const off = currentCenter - Config.border.sideThickness - nonAnimWidth / 2;
             const diff = root.width - Math.floor(off + nonAnimWidth);
             if (diff < 0)
                 return off + diff;
