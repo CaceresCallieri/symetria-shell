@@ -23,8 +23,6 @@ Singleton {
 
     // --- Public API ---
 
-    // Transfer an already-captured local file to the remote host.
-    // Called by the area picker after its own capture completes.
     function _checkSshConfig(): bool {
         if (!Config.screenshot.ssh.enabled) {
             Toaster.toast(qsTr("SSH transfer disabled"), qsTr("Enable in shell.json → screenshot.ssh.enabled"),
@@ -40,6 +38,8 @@ Singleton {
         return true;
     }
 
+    // Transfer an already-captured local file to the remote host.
+    // Called by the area picker after its own capture completes.
     function transfer(localPath: string): void {
         if (!_checkSshConfig())
             return;
