@@ -5,7 +5,8 @@ JsonObject {
 
     component Ssh: JsonObject {
         property bool enabled: true
-        property string host: "corpy"
+        // Host must be configured in shell.json → screenshot.ssh.host
+        property string host: ""
         property string remoteDir: "/tmp"
     }
 }

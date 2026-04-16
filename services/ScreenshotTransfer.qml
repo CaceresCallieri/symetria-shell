@@ -20,13 +20,17 @@ Singleton {
     // Capture metadata carried across async Process boundaries
     property string _pendingLocalPath: ""
     property string _pendingRemotePath: ""
-    property string _pendingFilename: ""
 
     // --- Public API ---
 
     // Transfer an already-captured local file to the remote host.
     // Called by the area picker after its own capture completes.
     function transfer(localPath: string): void {
+        if (!Config.screenshot.ssh.enabled) {
+            Toaster.toast(qsTr("SSH transfer disabled"), qsTr("Enable in shell.json → screenshot.ssh.enabled"),
+                "cloud_off", Toast.Warning, 0, "", root.toastKey);
+            return;
+        }
         const timestamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd_HH-mm-ss");
         const remotePath = `${Config.screenshot.ssh.remoteDir}/screenshot-${timestamp}.png`;
         _doTransfer(localPath, remotePath);
@@ -47,7 +51,6 @@ Singleton {
 
         root._pendingLocalPath = localPath;
         root._pendingRemotePath = remotePath;
-        root._pendingFilename = filename;
 
         Toaster.toast(qsTr("Capturing screenshot\u2026"), _modeLabel(mode),
             "photo_camera", Toast.Info, -1, "", root.toastKey);
@@ -69,7 +72,7 @@ Singleton {
             _startCaptureFirst(localPath);
             break;
         case "keyboard":
-            _startKeyboardCapture(localPath);
+            _startKeyboardCapture();
             break;
         default:
             console.warn(`[ScreenshotTransfer] Unknown mode: ${mode}`);
@@ -85,8 +88,7 @@ Singleton {
 
         root._pendingLocalPath = localPath;
         root._pendingRemotePath = remotePath;
-        transferProcess.command = ["sh", "-c",
-            `ssh ${Config.screenshot.ssh.host} "cat > ${remotePath}" < "${localPath}"`];
+        transferProcess.command = ["scp", localPath, `${Config.screenshot.ssh.host}:${remotePath}`];
         transferProcess.running = true;
     }
 
@@ -202,7 +204,7 @@ Singleton {
 
     // --- Keyboard mode (wl-kbptr × 2 → grim → transfer) ---
 
-    function _startKeyboardCapture(localPath: string): void {
+    function _startKeyboardCapture(): void {
         root._kbptrState = 1;
         root._tileA = null;
         kbptrProcess.running = true;
@@ -218,10 +220,16 @@ Singleton {
         }
 
         onExited: (exitCode, exitStatus) => {
-            if (exitCode === 2 || exitCode !== 0) {
+            if (exitCode === 2) {
                 root._kbptrState = 0;
                 Toaster.toast(qsTr("Screenshot cancelled"), qsTr("Selection was cancelled"),
                     "close", Toast.Warning, 0, "", root.toastKey);
+                return;
+            }
+            if (exitCode !== 0) {
+                root._kbptrState = 0;
+                Toaster.toast(qsTr("Screenshot failed"), qsTr("wl-kbptr exited with an error"),
+                    "broken_image", Toast.Error, 0, "", root.toastKey);
                 return;
             }
 
