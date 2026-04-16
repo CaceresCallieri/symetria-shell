@@ -25,12 +25,24 @@ Singleton {
 
     // Transfer an already-captured local file to the remote host.
     // Called by the area picker after its own capture completes.
-    function transfer(localPath: string): void {
+    function _checkSshConfig(): bool {
         if (!Config.screenshot.ssh.enabled) {
             Toaster.toast(qsTr("SSH transfer disabled"), qsTr("Enable in shell.json → screenshot.ssh.enabled"),
                 "cloud_off", Toast.Warning, 0, "", root.toastKey);
-            return;
+            return false;
         }
+        if (!Config.screenshot.ssh.host) {
+            Toaster.toast(qsTr("SSH host not configured"),
+                qsTr("Set shell.json → screenshot.ssh.host"),
+                "cloud_off", Toast.Error, 0, "", root.toastKey);
+            return false;
+        }
+        return true;
+    }
+
+    function transfer(localPath: string): void {
+        if (!_checkSshConfig())
+            return;
         const timestamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd_HH-mm-ss");
         const remotePath = `${Config.screenshot.ssh.remoteDir}/screenshot-${timestamp}.png`;
         _doTransfer(localPath, remotePath);
@@ -38,11 +50,8 @@ Singleton {
 
     // Full capture-and-transfer pipeline for non-picker modes.
     function captureAndTransfer(mode: string): void {
-        if (!Config.screenshot.ssh.enabled) {
-            Toaster.toast(qsTr("SSH transfer disabled"), qsTr("Enable in shell.json → screenshot.ssh.enabled"),
-                "cloud_off", Toast.Warning, 0, "", root.toastKey);
+        if (!_checkSshConfig())
             return;
-        }
 
         const timestamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd_HH-mm-ss");
         const filename = `screenshot_${timestamp}.png`;

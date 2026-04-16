@@ -528,5 +528,12 @@
     "sizes": {
       "innerHeight": 18
     }
+  },
+  "screenshot": {
+    "ssh": {
+      "enabled": true,
+      "host": "corpy",
+      "remoteDir": "/tmp"
+    }
   }
 }
