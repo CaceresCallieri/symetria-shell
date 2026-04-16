@@ -212,8 +212,10 @@ Scope {
             Toaster.toast(title, message, icon, Toast.Error);
         }
 
-        // Keyed variants: update existing toast with matching key, or create new
-        // infoKeyed is persistent (timeout -1) — stays until updated or dismissed
+        // Keyed variants: update an existing toast with matching key in-place, or create a new one.
+        // infoKeyed uses timeout=-1 (persistent) so the loading toast stays visible until the
+        // follow-up successKeyed/errorKeyed call explicitly replaces it.
+        // successKeyed/warnKeyed/errorKeyed use timeout=0 (type-default auto-close).
         function infoKeyed(title: string, message: string, icon: string, key: string): void {
             Toaster.toast(title, message, icon, Toast.Info, -1, "", key);
         }

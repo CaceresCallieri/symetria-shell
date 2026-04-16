@@ -21,7 +21,7 @@ class Toast : public QObject {
     Q_PROPERTY(QString message READ message NOTIFY messageChanged)
     Q_PROPERTY(QString icon READ icon NOTIFY iconChanged)
     Q_PROPERTY(QString imagePath READ imagePath CONSTANT)
-    Q_PROPERTY(int timeout READ timeout CONSTANT)
+    Q_PROPERTY(int timeout READ timeout NOTIFY timeoutChanged)
     Q_PROPERTY(Type type READ type NOTIFY typeChanged)
     Q_PROPERTY(bool hasAction READ hasAction CONSTANT)
 
@@ -48,6 +48,8 @@ public:
     [[nodiscard]] Type type() const;
     [[nodiscard]] bool hasAction() const;
 
+    // Updates the toast content in-place. Also callable directly from QML if a
+    // caller holds a toast reference, consistent with close()/lock()/unlock().
     Q_INVOKABLE void update(const QString& title, const QString& message, const QString& icon, Type type, int timeout = 0);
     Q_INVOKABLE void invokeAction();
     Q_INVOKABLE void close();
@@ -59,6 +61,7 @@ signals:
     void titleChanged();
     void messageChanged();
     void iconChanged();
+    void timeoutChanged();
     void typeChanged();
     void finishedClose();
 

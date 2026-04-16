@@ -1,9 +1,5 @@
 #include "toaster.hpp"
 
-#include <qdebug.h>
-#include <qlogging.h>
-#include <qtimer.h>
-
 namespace symmetria {
 
 Toast::Toast(const QString& title, const QString& message, const QString& icon, Type type, int timeout,
@@ -65,6 +61,12 @@ void Toast::applyDefaults() {
 }
 
 void Toast::update(const QString& title, const QString& message, const QString& icon, Type type, int timeout) {
+    // Ignore updates to a toast that is already closing — the close animation
+    // is in progress and the toast is about to be removed from the list.
+    if (m_closed)
+        return;
+
+    const int oldTimeout = m_timeout;
     m_timeout = timeout;
 
     if (m_title != title) {
@@ -76,13 +78,21 @@ void Toast::update(const QString& title, const QString& message, const QString& 
         emit messageChanged();
     }
 
+    const QString oldIcon = m_icon;
+    const Type oldType = m_type;
+
     m_icon = icon; // Reset before applyDefaults so empty triggers default
     m_type = type;
     applyDefaults();
 
-    // Always emit — applyDefaults may have resolved empty icon
-    emit iconChanged();
-    emit typeChanged();
+    // Emit only when the resolved value actually changed to avoid spurious
+    // QML binding re-evaluations and unnecessary color transition animations.
+    if (m_icon != oldIcon)
+        emit iconChanged();
+    if (m_type != oldType)
+        emit typeChanged();
+    if (m_timeout != oldTimeout)
+        emit timeoutChanged();
 
     if (m_timeout > 0) {
         m_timer->start(m_timeout);
@@ -166,7 +176,9 @@ QQmlListProperty<Toast> Toaster::toasts() {
 
 void Toaster::toast(const QString& title, const QString& message, const QString& icon, Toast::Type type, int timeout,
     const QString& imagePath, const QString& key, QJSValue action) {
-    // Update existing keyed toast if found
+    // Update existing keyed toast if found.
+    // Note: the action parameter is intentionally not updated on keyed toasts —
+    // the action is set once at creation time and is not replaced by subsequent updates.
     if (!key.isEmpty()) {
         for (auto* existing : m_toasts) {
             if (!existing->closed() && existing->key() == key) {
