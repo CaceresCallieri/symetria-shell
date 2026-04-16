@@ -6,6 +6,7 @@
 #include <qqmlintegration.h>
 #include <qqmllist.h>
 #include <qset.h>
+#include <qtimer.h>
 
 namespace symmetria {
 
@@ -15,12 +16,13 @@ class Toast : public QObject {
     QML_UNCREATABLE("Toast instances can only be retrieved from a Toaster")
 
     Q_PROPERTY(bool closed READ closed NOTIFY closedChanged)
-    Q_PROPERTY(QString title READ title CONSTANT)
-    Q_PROPERTY(QString message READ message CONSTANT)
-    Q_PROPERTY(QString icon READ icon CONSTANT)
+    Q_PROPERTY(QString key READ key CONSTANT)
+    Q_PROPERTY(QString title READ title NOTIFY titleChanged)
+    Q_PROPERTY(QString message READ message NOTIFY messageChanged)
+    Q_PROPERTY(QString icon READ icon NOTIFY iconChanged)
     Q_PROPERTY(QString imagePath READ imagePath CONSTANT)
     Q_PROPERTY(int timeout READ timeout CONSTANT)
-    Q_PROPERTY(Type type READ type CONSTANT)
+    Q_PROPERTY(Type type READ type NOTIFY typeChanged)
     Q_PROPERTY(bool hasAction READ hasAction CONSTANT)
 
 public:
@@ -33,9 +35,11 @@ public:
     Q_ENUM(Type)
 
     explicit Toast(const QString& title, const QString& message, const QString& icon, Type type, int timeout,
-        const QString& imagePath = QString(), QJSValue action = QJSValue(), QObject* parent = nullptr);
+        const QString& imagePath = QString(), QJSValue action = QJSValue(),
+        const QString& key = QString(), QObject* parent = nullptr);
 
     [[nodiscard]] bool closed() const;
+    [[nodiscard]] QString key() const;
     [[nodiscard]] QString title() const;
     [[nodiscard]] QString message() const;
     [[nodiscard]] QString icon() const;
@@ -44,6 +48,7 @@ public:
     [[nodiscard]] Type type() const;
     [[nodiscard]] bool hasAction() const;
 
+    Q_INVOKABLE void update(const QString& title, const QString& message, const QString& icon, Type type, int timeout = 0);
     Q_INVOKABLE void invokeAction();
     Q_INVOKABLE void close();
     Q_INVOKABLE void lock(QObject* sender);
@@ -51,12 +56,20 @@ public:
 
 signals:
     void closedChanged();
+    void titleChanged();
+    void messageChanged();
+    void iconChanged();
+    void typeChanged();
     void finishedClose();
 
 private:
+    void applyDefaults();
+
     QSet<QObject*> m_locks;
+    QTimer* m_timer;
 
     bool m_closed;
+    QString m_key;
     QString m_title;
     QString m_message;
     QString m_icon;
@@ -81,7 +94,8 @@ public:
 
     Q_INVOKABLE void toast(const QString& title, const QString& message, const QString& icon = QString(),
         symmetria::Toast::Type type = Toast::Type::Info, int timeout = 5000,
-        const QString& imagePath = QString(), QJSValue action = QJSValue());
+        const QString& imagePath = QString(), const QString& key = QString(),
+        QJSValue action = QJSValue());
 
 signals:
     void toastsChanged();

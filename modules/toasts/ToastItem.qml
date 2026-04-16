@@ -141,6 +141,10 @@ StyledRect {
         Anim {}
     }
 
+    Behavior on color {
+        CAnim {}
+    }
+
     Behavior on border.color {
         CAnim {}
     }

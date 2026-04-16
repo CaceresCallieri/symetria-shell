@@ -212,6 +212,24 @@ Scope {
             Toaster.toast(title, message, icon, Toast.Error);
         }
 
+        // Keyed variants: update existing toast with matching key, or create new
+        // infoKeyed is persistent (timeout -1) — stays until updated or dismissed
+        function infoKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Info, -1, "", key);
+        }
+
+        function successKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Success, 0, "", key);
+        }
+
+        function warnKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Warning, 0, "", key);
+        }
+
+        function errorKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Error, 0, "", key);
+        }
+
         // IPC entrypoint: symmetria shell toaster infoImage <title> <message> <icon> <imagePath>
         function infoImage(title: string, message: string, icon: string, imagePath: string): void {
             Toaster.toast(title, message, icon, Toast.Info, 5000, imagePath);

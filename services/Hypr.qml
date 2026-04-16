@@ -84,6 +84,7 @@ Singleton {
             Toast.Warning,
             7000,
             "",
+            "",
             function() { root.dispatch(`focuswindow address:${fullAddr}`); }
         );
     }
