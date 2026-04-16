@@ -27,8 +27,14 @@ SOCKET_PATH = Path(os.environ.get(
 ))
 
 # Seconds before an orphaned activity entry (no live orchestrator connection)
-# is reaped. Registered agents are never reaped by timeout.
+# is reaped.
 ACTIVITY_STALENESS_TIMEOUT = 15
+
+# Seconds before a registered agent's activity is reset to idle when no hook
+# events arrive. Catches stuck animations from cancelled sessions, API errors
+# (e.g. 500), or crashes where Claude Code fails to send a Stop event.
+# Self-correcting: if the agent resumes, the next hook event restores state.
+REGISTERED_STALENESS_TIMEOUT = 90
 
 # Inode of the socket we created — used to avoid deleting a newer process's socket
 _our_socket_inode: int | None = None
@@ -141,6 +147,7 @@ class AgentBridge:
                     "dangerous": inst.get("dangerous", False),
                     "active": inst.get("active", False),
                     "spawn_type": inst.get("spawn_type", "fresh"),
+                    "spawned_at": inst.get("spawned_at", 0),
                     "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
                     "remote": nvim_pid in self._remote_clients,
                     "activity_state": activity.get("state", ""),
@@ -148,8 +155,8 @@ class AgentBridge:
                     "in_plan_mode": activity.get("in_plan_mode", False),
                 })
 
-        # Sort: by project, then by spawned_at within project
-        agents.sort(key=lambda a: (a["project"], a["id"]))
+        # Sort: by project, then by spawn time within project
+        agents.sort(key=lambda a: (a["project"], a["spawned_at"]))
 
         payload = {
             "agents": agents,
@@ -358,20 +365,22 @@ class AgentBridge:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
 
     def reap_stale_activities(self) -> None:
-        """Clear activity entries that haven't been updated within the staleness timeout.
+        """Clear activity entries that haven't been updated within staleness timeouts.
 
-        Only reaps activities for agents NOT registered in _clients (orphaned
-        entries from crashed sessions or hook race conditions). Registered
-        agents are protected — their cleanup is handled by explicit events
-        (idle/offline hooks, removed, goodbye, client disconnect).
+        Two-tier timeout:
+        - Orphaned agents (no orchestrator connection): ACTIVITY_STALENESS_TIMEOUT (15s)
+        - Registered agents (connection alive, no hook events): REGISTERED_STALENESS_TIMEOUT (90s)
+
+        The registered timeout catches stuck animations from cancelled sessions,
+        API 500 errors, or crashes where Claude Code fails to send a Stop event.
+        Self-correcting: if the agent resumes, the next hook event restores state.
         """
         now = time.monotonic()
-        stale_ids = []
+        stale: list[tuple[str, str]] = []  # (agent_id, reason)
         for aid, act in self._activities.items():
             if act.get("state") in ("idle", ""):
                 continue
-            if (now - act.get("ts", now)) <= ACTIVITY_STALENESS_TIMEOUT:
-                continue
+            age = now - act.get("ts", now)
 
             # Check if agent is still registered (orchestrator connection alive)
             nvim_pid_str, _, buf_str = aid.partition("_")
@@ -379,18 +388,21 @@ class AgentBridge:
                 nvim_pid = int(nvim_pid_str)
                 buf = int(buf_str)
             except ValueError:
-                stale_ids.append(aid)  # Malformed ID — reap
+                stale.append((aid, "malformed"))
                 continue
 
-            if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
-                continue  # Session alive — don't reap
+            registered = nvim_pid in self._clients and buf in self._clients[nvim_pid]
+            timeout = REGISTERED_STALENESS_TIMEOUT if registered else ACTIVITY_STALENESS_TIMEOUT
 
-            stale_ids.append(aid)
+            if age <= timeout:
+                continue
 
-        if stale_ids:
-            for aid in stale_ids:
-                log.info("reap_stale_activities: %s orphaned+stale (was %s), clearing",
-                         aid, self._activities[aid].get("state"))
+            stale.append((aid, "registered" if registered else "orphaned"))
+
+        if stale:
+            for aid, reason in stale:
+                log.info("reap_stale_activities: %s %s+stale (was %s), clearing",
+                         aid, reason, self._activities[aid].get("state"))
                 self._activities.pop(aid, None)
             self._schedule_emit()
 
@@ -560,8 +572,8 @@ async def main():
     # Actively solicit running Neovim instances to reconnect
     asyncio.create_task(solicit_neovim_instances())
 
-    # Periodic staleness reaper — clears orphaned activity entries (no live
-    # orchestrator connection). Registered agents are never reaped.
+    # Periodic staleness reaper — clears stale activity entries.
+    # Orphaned (15s) and registered-but-silent (90s) agents are reset to idle.
     async def activity_reaper():
         while True:
             await asyncio.sleep(5)  # Check every 5 seconds
