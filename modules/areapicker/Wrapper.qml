@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components.containers
 import qs.components.misc
+import qs.services
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
@@ -13,6 +14,7 @@ Scope {
         property bool freeze
         property bool closing
         property bool clipboardOnly
+        property bool sshTransfer
 
         Variants {
             model: Quickshell.screens
@@ -53,6 +55,7 @@ Scope {
             root.freeze = false;
             root.closing = false;
             root.clipboardOnly = false;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
 
@@ -60,6 +63,7 @@ Scope {
             root.freeze = true;
             root.closing = false;
             root.clipboardOnly = false;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
 
@@ -67,6 +71,7 @@ Scope {
             root.freeze = false;
             root.closing = false;
             root.clipboardOnly = true;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
 
@@ -74,8 +79,35 @@ Scope {
             root.freeze = true;
             root.closing = false;
             root.clipboardOnly = true;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
+    }
+
+    IpcHandler {
+        target: "screenshot"
+
+        function region(): void {
+            root.freeze = false;
+            root.closing = false;
+            root.clipboardOnly = false;
+            root.sshTransfer = true;
+            root.activeAsync = true;
+        }
+
+        function regionFreeze(): void {
+            root.freeze = true;
+            root.closing = false;
+            root.clipboardOnly = false;
+            root.sshTransfer = true;
+            root.activeAsync = true;
+        }
+
+        function window(): void { ScreenshotTransfer.captureAndTransfer("window") }
+        function monitor(): void { ScreenshotTransfer.captureAndTransfer("monitor") }
+        function monitorSelect(): void { ScreenshotTransfer.captureAndTransfer("monitorSelect") }
+        function keyboard(): void { ScreenshotTransfer.captureAndTransfer("keyboard") }
+        function captureFirst(): void { ScreenshotTransfer.captureAndTransfer("captureFirst") }
     }
 
     CustomShortcut {
@@ -85,6 +117,7 @@ Scope {
             root.freeze = false;
             root.closing = false;
             root.clipboardOnly = false;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
     }
@@ -96,6 +129,7 @@ Scope {
             root.freeze = true;
             root.closing = false;
             root.clipboardOnly = false;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
     }
@@ -107,6 +141,7 @@ Scope {
             root.freeze = false;
             root.closing = false;
             root.clipboardOnly = true;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
     }
@@ -118,6 +153,7 @@ Scope {
             root.freeze = true;
             root.closing = false;
             root.clipboardOnly = true;
+            root.sshTransfer = false;
             root.activeAsync = true;
         }
     }

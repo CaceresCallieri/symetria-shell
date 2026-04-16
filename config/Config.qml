@@ -35,6 +35,7 @@ Singleton {
     property alias keychords: adapter.keychords
     property alias agentbar: adapter.agentbar
     property alias audioRecorder: adapter.audioRecorder
+    property alias screenshot: adapter.screenshot
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -112,7 +113,8 @@ Singleton {
             calculator: serializeCalculator(),
             packages: serializePackages(),
             keychords: serializeKeyChords(),
-            agentbar: serializeAgentBar()
+            agentbar: serializeAgentBar(),
+            screenshot: serializeScreenshot()
         };
     }
 
@@ -549,6 +551,16 @@ Singleton {
         };
     }
 
+    function serializeScreenshot(): var {
+        return {
+            ssh: {
+                enabled: screenshot.ssh.enabled,
+                host: screenshot.ssh.host,
+                remoteDir: screenshot.ssh.remoteDir
+            }
+        };
+    }
+
     FileView {
         id: fileView
 
@@ -613,6 +625,7 @@ Singleton {
             property KeyChordsConfig keychords: KeyChordsConfig {}
             property AgentBarConfig agentbar: AgentBarConfig {}
             property AudioRecorderConfig audioRecorder: AudioRecorderConfig {}
+            property ScreenshotConfig screenshot: ScreenshotConfig {}
         }
     }
 }
