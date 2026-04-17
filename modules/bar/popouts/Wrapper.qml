@@ -136,6 +136,7 @@ Item {
         windows: [QsWindow.window]
         onCleared: {
             if (root._vocabHintsActive)
+                // Popout intentionally stays open — only the hints input closes on click-outside.
                 SttService.vocabHintsVisible = false;
             else
                 root.close();
@@ -159,7 +160,7 @@ Item {
     }
 
     Binding {
-        when: root.hasCurrent && root.currentName === "recording" && SttService.vocabHintsVisible
+        when: root._vocabHintsActive
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"

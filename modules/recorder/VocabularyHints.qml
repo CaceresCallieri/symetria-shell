@@ -26,6 +26,11 @@ Item {
     // Component.onCompleted covers the fresh-load path (popout was closed).
     // onVisibleChanged covers the toggle-while-open path (popout already
     // open from hover, FadeTransition.show flips false→true).
+    //
+    // The two handlers are mutually exclusive: onCompleted fires at construction
+    // (when visible is already true, no change event follows), onVisibleChanged
+    // fires only on transitions. FadeTransition sets visible=show, so there is
+    // no double-trigger.
     Component.onCompleted: {
         if (visible)
             _kickFocus();
