@@ -123,10 +123,23 @@ Item {
         }
     }
 
+    // Grab is active for detached panels (controlcenter, winfo) and also for
+    // the STT recording popout while vocab hints are visible — the vocab-hints
+    // TextField lives in THIS window, so the grab must live here too to avoid
+    // a focus tug-of-war with the drawer window's grab.
+    readonly property bool _vocabHintsActive: root.hasCurrent
+        && root.currentName === "recording"
+        && SttService.vocabHintsVisible
+
     HyprlandFocusGrab {
-        active: root.isDetached
+        active: root.isDetached || root._vocabHintsActive
         windows: [QsWindow.window]
-        onCleared: root.close()
+        onCleared: {
+            if (root._vocabHintsActive)
+                SttService.vocabHintsVisible = false;
+            else
+                root.close();
+        }
     }
 
     Binding {

@@ -43,6 +43,12 @@ Variants {
         StyledWindow {
             id: win
 
+            // NOTE: SttService.vocabHintsVisible is intentionally NOT listed here.
+            // The vocab-hints TextField lives in the bar popout window, not the
+            // drawer. If the drawer grab activates for vocab hints, it fires
+            // onCleared the moment the popout takes focus — which cancels
+            // vocabHintsVisible and makes the first Alt+W after Escape fail.
+            // The popout wrapper owns its own HyprlandFocusGrab for this case.
             readonly property bool _shouldGrabFocus:
                 (visibilities.launcher && Config.launcher.enabled)
                 || (visibilities.session && Config.session.enabled)
@@ -52,7 +58,6 @@ Variants {
                 || (visibilities.calculator && Config.calculator.enabled)
                 || (visibilities.packages && Config.packages.enabled)
                 || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
-                || SttService.vocabHintsVisible
 
             readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
             readonly property int dragMaskPadding: {
@@ -81,7 +86,10 @@ Variants {
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            // NOTE: SttService.vocabHintsVisible intentionally omitted — keyboard
+            // focus for vocab hints is granted on the bar popout window (which
+            // hosts the TextField), not the drawer. See _shouldGrabFocus above.
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
                 x: Config.border.sideThickness + win.dragMaskPadding

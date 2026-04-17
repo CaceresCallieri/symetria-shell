@@ -18,11 +18,46 @@ Item {
     implicitWidth: hintInput.implicitWidth
     implicitHeight: hintInput.implicitHeight
 
-    // Defer focus to next event loop tick so the Wayland layer-shell
-    // keyboard grab has time to activate before we request focus.
+    // Kick focus whenever this item becomes visible. Two trigger points are
+    // needed because `onVisibleChanged` only fires on CHANGES, not on initial
+    // creation — when the popout is loaded async fresh, VocabularyHints is
+    // mounted with visible=true from the start and the signal never fires.
+    //
+    // Component.onCompleted covers the fresh-load path (popout was closed).
+    // onVisibleChanged covers the toggle-while-open path (popout already
+    // open from hover, FadeTransition.show flips false→true).
+    Component.onCompleted: {
+        if (visible)
+            _kickFocus();
+    }
+
     onVisibleChanged: {
         if (visible)
-            Qt.callLater(hintInput.forceActiveFocus);
+            _kickFocus();
+        else
+            focusRetryTimer.stop();
+    }
+
+    function _kickFocus(): void {
+        focusRetryTimer.attempts = 0;
+        focusRetryTimer.restart();
+    }
+
+    Timer {
+        id: focusRetryTimer
+
+        property int attempts: 0
+        readonly property int maxAttempts: 10
+
+        interval: 50
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            attempts++;
+            hintInput.forceActiveFocus();
+            if (hintInput.activeFocus || attempts >= maxAttempts)
+                stop();
+        }
     }
 
     StyledTextField {
