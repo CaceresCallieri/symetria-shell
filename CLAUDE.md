@@ -153,6 +153,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Hypr.activeToplevel null on fresh start** — The Wayland activation guard in `Hypr.qml` may filter out the active toplevel at shell startup before the `activated` protocol event arrives. Fall back to raw `Hyprland.activeToplevel` when you only need Hyprland window identity (address, class, PID) rather than confirmed Wayland activation. → `docs/qml-pitfalls.md`
 
+**Electron tray icons are unthemeable from QML** — Discord, Heroic, Altus, and other Electron apps all register with SNI id `chrome_status_icon_1` and ship embedded pixmap bytes (no file path). They are indistinguishable from each other at the QML layer because `SystemTrayItem` exposes neither bus name nor PID. Do NOT attempt to auto-theme them via id heuristics — it cannot work. Users must override via `iconSubs` or live with the raw pixmap. → `docs/tray-icon-theming.md`
+
 ## Deep Dives
 
 Detailed documentation in `docs/` — read on-demand when working on specific areas:
@@ -164,6 +166,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 **Pitfalls & Research:**
 - [`qml-pitfalls.md`](docs/qml-pitfalls.md) — All QML gotchas consolidated
 - [`cursor-shape-layer-shell.md`](docs/cursor-shape-layer-shell.md) — Cursor shape behavior in Wayland layer-shell
+- [`tray-icon-theming.md`](docs/tray-icon-theming.md) — Icon resolution pipeline, Electron SNI limitation, Option C future path
 - [`module-setup.md`](docs/module-setup.md) — External prerequisites for Askpass, Clipboard, STT, Calculator, KeyChords
 
 **STT:**

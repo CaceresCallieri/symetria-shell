@@ -366,6 +366,16 @@ Singleton {
         return Array(+digits.join("") + 1).join("M") + roman;
     }
 
+    // Generic path segments that rarely identify an app. Used when scanning
+    // pixmap file paths for candidate theme names (see guessThemeNameFromPath).
+    readonly property var pathNoiseSegments: new Set([
+        "tmp", "usr", "opt", "home", "var", "run", "etc",
+        "local", "share", "lib", "lib32", "lib64", "cache",
+        "data", "assets", "flutter_assets", "img", "images",
+        "icons", "icon", "pixmaps", "resources", "public",
+        "app", "bin", "linux", "x64"
+    ])
+
     // Resolve a tray icon, preferring the Freedesktop icon theme over the
     // app-provided pixmap. This makes systray icons share the same visual
     // style as workspace client icons — both now hit Quickshell.iconPath /
@@ -376,7 +386,14 @@ Singleton {
     //   2. Theme lookup by SNI id (e.g. "com.discordapp.Discord" → theme SVG)
     //   3. DesktopEntries heuristic lookup on the id (same path workspaces use)
     //   4. Theme lookup on the raw icon name (if not a file path / pixmap / data URI)
-    //   5. Fallback: parse StatusNotifierItem ?path= pixmap, or raw icon
+    //   5. Path heuristic: extract app name from pixmap path directories
+    //   6. Fallback: parse StatusNotifierItem ?path= pixmap, or raw icon
+    //
+    // Known limitation: Electron/Chromium apps (Discord, Heroic, Altus, etc.)
+    // all register as SNI id "chrome_status_icon_1" and ship pixmap bytes
+    // (no file path), so steps 2-5 all miss. They will always fall through
+    // to the raw pixmap unless the user adds an explicit iconSubs override.
+    // See docs/tray-icon-theming.md for the full analysis and future paths.
     function getTrayIcon(id: string, icon: string): string {
         for (const sub of Config.bar.tray.iconSubs)
             if (sub.id === id)
@@ -410,13 +427,73 @@ Singleton {
             }
         }
 
-        // Only attempt theme lookup on `icon` when it's a plain name, not a
-        // file path, file URL, ?path= pixmap, or embedded data URI — those
-        // are raw bytes the theme can't match.
-        if (icon && !icon.startsWith("/") && !icon.startsWith("file:") && !icon.includes("?path=") && !icon.startsWith("data:")) {
+        if (!icon)
+            return "";
+
+        // Plain name branch: icon is a theme-lookupable string (not a path,
+        // URL, ?path= pixmap, or data URI — those are raw bytes).
+        if (!icon.startsWith("/") && !icon.startsWith("file:") && !icon.includes("?path=") && !icon.startsWith("data:")) {
             const byIcon = Quickshell.iconPath(icon, true);
             if (byIcon)
                 return byIcon;
+            return "";
+        }
+
+        // Path-like branch: scan the pixmap path's directories for an
+        // app-identifying name (e.g. /opt/localsend/... → "localsend").
+        if (icon.startsWith("/") || icon.startsWith("file:"))
+            return guessThemeNameFromPath(icon);
+
+        return "";
+    }
+
+    // Scan an absolute file path for directory names that might match a
+    // theme icon. Returns the resolved theme path, or empty on no match.
+    //
+    // Example: "/opt/localsend/data/flutter_assets/assets/img/logo.png"
+    //   → candidates after filtering noise: "localsend", "logo"
+    //   → iconPath("localsend") hits → themed SVG returned
+    //
+    // Does NOT help Electron apps: they ship IconPixmap bytes (no file path)
+    // and Quickshell caches those to /tmp/qs-xxxxx/icon.png — nothing in that
+    // path identifies the source app.
+    function guessThemeNameFromPath(path: string): string {
+        if (!path)
+            return "";
+
+        let clean = path;
+        if (clean.startsWith("file://"))
+            clean = clean.slice(7);
+        else if (clean.startsWith("file:"))
+            clean = clean.slice(5);
+
+        const q = clean.indexOf("?");
+        if (q !== -1)
+            clean = clean.slice(0, q);
+
+        if (!clean.startsWith("/"))
+            return "";
+
+        const parts = clean.split("/").filter(p => p && !pathNoiseSegments.has(p.toLowerCase()));
+
+        for (const part of parts) {
+            // Strip common image extensions so "discord.png" matches "discord"
+            const base = part.replace(/\.(png|svg|jpg|jpeg|ico|xpm)$/i, "");
+            if (!base)
+                continue;
+
+            let hit = Quickshell.iconPath(base, true);
+            if (hit)
+                return hit;
+
+            // Theme icons are conventionally lowercase — retry if the original
+            // segment had mixed case (e.g. "LocalSend" → "localsend").
+            const lower = base.toLowerCase();
+            if (lower !== base) {
+                hit = Quickshell.iconPath(lower, true);
+                if (hit)
+                    return hit;
+            }
         }
 
         return "";
