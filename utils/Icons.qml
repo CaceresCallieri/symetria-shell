@@ -366,15 +366,59 @@ Singleton {
         return Array(+digits.join("") + 1).join("M") + roman;
     }
 
+    // Resolve a tray icon, preferring the Freedesktop icon theme over the
+    // app-provided pixmap. This makes systray icons share the same visual
+    // style as workspace client icons — both now hit Quickshell.iconPath /
+    // DesktopEntries.heuristicLookup, which the active icon theme owns.
+    //
+    // Resolution order:
+    //   1. User overrides from Config.bar.tray.iconSubs
+    //   2. Theme lookup by SNI id (e.g. "com.discordapp.Discord" → theme SVG)
+    //   3. DesktopEntries heuristic lookup on the id (same path workspaces use)
+    //   4. Theme lookup on the raw icon name (if not a file path / pixmap / data URI)
+    //   5. Fallback: parse StatusNotifierItem ?path= pixmap, or raw icon
     function getTrayIcon(id: string, icon: string): string {
         for (const sub of Config.bar.tray.iconSubs)
             if (sub.id === id)
                 return sub.image ? Qt.resolvedUrl(sub.image) : Quickshell.iconPath(sub.icon);
+
+        const themed = resolveThemedTrayIcon(id, icon);
+        if (themed)
+            return themed;
 
         if (icon.includes("?path=")) {
             const [name, path] = icon.split("?path=");
             icon = Qt.resolvedUrl(`${path}/${name.slice(name.lastIndexOf("/") + 1)}`);
         }
         return icon;
+    }
+
+    // Try to resolve a tray icon through the active Freedesktop icon theme.
+    // Returns empty string if nothing themeable was found — caller falls back
+    // to the app-provided pixmap.
+    function resolveThemedTrayIcon(id: string, icon: string): string {
+        if (id) {
+            const byId = Quickshell.iconPath(id, true);
+            if (byId)
+                return byId;
+
+            const entry = DesktopEntries.heuristicLookup(id);
+            if (entry?.icon) {
+                const byEntry = Quickshell.iconPath(entry.icon, true);
+                if (byEntry)
+                    return byEntry;
+            }
+        }
+
+        // Only attempt theme lookup on `icon` when it's a plain name, not a
+        // file path, file URL, ?path= pixmap, or embedded data URI — those
+        // are raw bytes the theme can't match.
+        if (icon && !icon.startsWith("/") && !icon.startsWith("file:") && !icon.includes("?path=") && !icon.startsWith("data:")) {
+            const byIcon = Quickshell.iconPath(icon, true);
+            if (byIcon)
+                return byIcon;
+        }
+
+        return "";
     }
 }
