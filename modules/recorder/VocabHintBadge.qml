@@ -19,11 +19,13 @@ Item {
     id: root
 
     readonly property int count: SttService.sessionVocabHints.length
-    readonly property bool hasHints: count > 0
 
+    // Hidden in audio mode — vocab hints only apply to STT transcription.
+    // Hidden when no hints are queued.
     // Fade with opacity, not visible, so the Behavior animates the
     // transition across the empty boundary instead of snapping.
-    opacity: hasHints ? 1 : 0
+    readonly property bool _isSttMode: RecordingSessionManager.activeMode === "stt"
+    opacity: _isSttMode && count > 0 ? 1 : 0
     visible: opacity > 0
 
     Behavior on opacity {
@@ -33,7 +35,8 @@ Item {
     // Match PillButton's matte/glass base so the badge reads as a
     // visually tethered companion to the delivery pill rather than an
     // accent-colored notification dot.
-    readonly property var _style: Colours.pillStyle( // intentional var: heterogeneous JS { background, border }
+    // intentional var: heterogeneous JS { background, border }
+    readonly property var _style: Colours.pillStyle(
         Colours.palette.m3surfaceContainerHigh,
         Colours.glass.subtle
     )
@@ -66,7 +69,7 @@ Item {
             id: countText
 
             anchors.centerIn: parent
-            text: root.count.toString()
+            text: root.count
             color: Colours.palette.m3onSurface
             // Additional 0.9 multiplier on the digit itself (separate from
             // root._scale) so the number reads slightly smaller than the
@@ -78,7 +81,9 @@ Item {
         MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            onClicked: SttService.vocabHintsVisible = !SttService.vocabHintsVisible
+            // Use toggleVocabHints() rather than direct property assignment —
+            // it guards against toggling when there is no active recording.
+            onClicked: SttService.toggleVocabHints()
         }
     }
 }

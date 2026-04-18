@@ -227,7 +227,7 @@ Item {
 
                     // Separator before trailing icon
                     StyledText {
-                        visible: audioModeIcon.visible || modeBtn.visible
+                        visible: audioModeIcon.visible || modeBtn.visible || vocabBadge.visible
                         text: "·"
                         font.pointSize: Appearance.font.size.small
                         color: Colours.palette.m3outlineVariant
@@ -262,6 +262,7 @@ Item {
                     // Keeping the two surfaces consistent is more valuable
                     // than optimizing the drawer placement separately.
                     VocabHintBadge {
+                        id: vocabBadge
                         Layout.alignment: Qt.AlignTop
                     }
                 }

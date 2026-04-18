@@ -94,7 +94,7 @@ Item {
 
         // Separator before trailing icon (visible when icon is visible)
         StyledText {
-            visible: audioIcon.visible || deliveryModeBtn.visible
+            visible: audioIcon.visible || deliveryModeBtn.visible || vocabBadge.visible
             text: "\u00b7"
             font.pointSize: Appearance.font.size.small
             color: Colours.palette.m3outlineVariant
@@ -125,6 +125,7 @@ Item {
         // which kills any child trying to float above the compact row.
         // See Content.qml for the matching drawer placement.
         VocabHintBadge {
+            id: vocabBadge
             Layout.alignment: Qt.AlignTop
         }
     }
