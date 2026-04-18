@@ -73,3 +73,9 @@ Deferred Panels loading was **reverted** (over-engineering). Kept changes (4 fil
 - QML cache: `~/.cache/quickshell/qmlcache/`
 - Runtime logs: `qs log -c symmetria -n` (binary .qslog format, use `qs log` to read)
 - User config: `~/.config/symmetria/shell.json`
+
+## Ecosystem Naming (absorbed from agents-naming)
+- [Symmetria Umbrella Decision](project_symmetria_umbrella_decision.md) — Symmetria evolves into conceptual umbrella for the entire personal computing environment
+- [Naming Constellation](project_naming_constellation.md) — Map of all named projects and their conceptual positions
+- [Semitas Project](project_semita.md) — Browser extension for quick navigation (Latin: narrow paths)
+- [Naming Philosophy](user_naming_philosophy.md) — How the user approaches naming: preferences, values, collaboration style
