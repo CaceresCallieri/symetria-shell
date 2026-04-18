@@ -147,6 +147,12 @@ QtObject {
     property bool _injectionDowngraded: false
     property bool _injectionSubmitted: false
 
+    // Set when _cleanupRecovery() is called while recoveryPersistProcess is
+    // still running. The onExited handler re-runs cleanup so a cancel-during-
+    // persist race ends with the file absent (honoring the cancel intent)
+    // rather than orphaned (rm fires before cp completes).
+    property bool _pendingRecoveryCleanup: false
+
     // Current segment file path
     readonly property string _currentSegmentPath: {
         if (sessionId === "") return "";
@@ -487,12 +493,13 @@ QtObject {
     function _persistRecovery(): void {
         if (sessionId === "" || _currentAudioFile === "") return;
         if (!(Config.stt?.cache?.enabled ?? true)) return;
+        if (recoveryPersistProcess.running) return;
 
         const sidecar = {
             sessionId: sessionId,
             createdAt: new Date().toISOString(),
             audioFile: `session_${sessionId}.wav`,
-            vocabHints: job._snapshotVocabHints.slice(),
+            vocabHints: _snapshotVocabHints.slice(),
             deliveryMode: SttService._deliveryMode,
             activeDeliveryChoice: _activeDeliveryChoice,
             errorSource: _errorSource,
@@ -507,13 +514,13 @@ QtObject {
         const maxEntries = Config.stt?.cache?.maxEntries ?? 10;
 
         recoveryPersistProcess.savedAudioPath = `${SttService._recoveryDir}/session_${sessionId}.wav`;
-        recoveryPersistProcess.environment = ({
+        recoveryPersistProcess.environment = {
             RECOVERY_DIR: SttService._recoveryDir,
             SRC_AUDIO: _currentAudioFile,
             SESSION_ID: sessionId,
             SIDECAR_B64: sidecarB64,
             MAX_ENTRIES: maxEntries.toString()
-        });
+        };
         recoveryPersistProcess.running = true;
     }
 
@@ -523,6 +530,14 @@ QtObject {
     /// don't dangle after the target is deleted.
     function _cleanupRecovery(): void {
         if (sessionId === "") return;
+        // Defer cleanup if persistence is mid-flight — otherwise rm -f may
+        // fire before cp completes, leaving an orphan file. onExited calls
+        // us back when the persist Process has finished.
+        if (recoveryPersistProcess.running) {
+            _pendingRecoveryCleanup = true;
+            return;
+        }
+        _pendingRecoveryCleanup = false;
         // Use `env KEY=val ... sh -c` to set shell variables cleanly —
         // avoids embedding sessionId / path in the script body with all
         // the quote-escaping risks that entails.
@@ -865,11 +880,15 @@ QtObject {
                     qsTr("STT: Recording saved for recovery"),
                     savedAudioPath,
                     "save",
-                    Toast.Info
+                    Toast.Warning
                 );
             } else {
-                console.error("[STT] Recovery persist failed (exit", code + ")");
+                Logger.log("qml", "stt", "recovery-persist-failed | id=" + job.sessionId + " code=" + code);
+                console.error("[STT:D21] Recovery persist failed (exit", code + ")");
             }
+            // Honor a cancel that arrived while persistence was in flight.
+            if (job._pendingRecoveryCleanup)
+                job._cleanupRecovery();
         }
     }
 
