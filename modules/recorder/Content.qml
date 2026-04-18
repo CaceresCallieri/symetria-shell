@@ -251,6 +251,19 @@ Item {
                         icon: RecordingSessionManager.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
                     }
+
+                    // Inline vocab-hint count sibling — placed after the
+                    // delivery pill. Previously tried as an anchored child
+                    // floating above-right of the pill; that works in the
+                    // drawer but gets clipped in the bar embed because
+                    // recordingCenterContainer in Bar.qml uses clip: true
+                    // (needed for the horizontal reveal animation) and the
+                    // bar's layer-shell surface caps the vertical extent.
+                    // Keeping the two surfaces consistent is more valuable
+                    // than optimizing the drawer placement separately.
+                    VocabHintBadge {
+                        Layout.alignment: Qt.AlignTop
+                    }
                 }
             }
 

@@ -118,6 +118,15 @@ Item {
             icon: RecordingSessionManager.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"
             onClicked: RecordingSessionManager.cycleDeliveryMode()
         }
+
+        // Inline vocab-hint count, placed after the delivery pill.
+        // Must stay inline because the parent recordingCenterContainer
+        // in Bar.qml uses clip: true for its horizontal reveal animation,
+        // which kills any child trying to float above the compact row.
+        // See Content.qml for the matching drawer placement.
+        VocabHintBadge {
+            Layout.alignment: Qt.AlignTop
+        }
     }
 
     // ── Compact success indicator ───────────────────────────
