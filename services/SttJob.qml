@@ -207,6 +207,9 @@ QtObject {
         if (concatProcess.running) concatProcess.signal(9);
 
         _cleanupTempFiles();
+        // Cancel is a deliberate "throw this away" action — also drop any
+        // persistent recovery copy, since the user explicitly discarded it.
+        _cleanupRecovery();
         _clearSttTargetIfOwned();
 
         // Clear activeRecording if this job is the active one
@@ -362,6 +365,10 @@ QtObject {
     function _tryAutoRetry(): bool {
         if (_autoRetryCount >= _maxAutoRetries || !_isTransientError() || _currentAudioFile === "") {
             Toaster.toast(qsTr("STT: %1").arg(_errorDetail), _errorHint, "error", Toast.Error);
+            // Save the audio + metadata so the user can retry after a shell
+            // restart. Only fires when no more auto-retries will happen —
+            // avoids churn for errors that the service will silently resolve.
+            _persistRecovery();
             return false;
         }
 
@@ -469,6 +476,66 @@ QtObject {
             Quickshell.execDetached(["find", SttService._tempDir, "-maxdepth", "1",
                 "-name", `session_${sessionId}_*`, "-delete"]);
         }
+    }
+
+    /// Copy the current audio file to the persistent recovery dir and write
+    /// a JSON sidecar alongside it, so the user can retry the transcription
+    /// after a shell restart. Also refreshes the `latest.{wav,json}` symlinks
+    /// for easy access, and enforces the Config.stt.cache.maxEntries cap by
+    /// deleting oldest pairs. Called once per job, only when a final error
+    /// has been reached (auto-retries exhausted).
+    function _persistRecovery(): void {
+        if (sessionId === "" || _currentAudioFile === "") return;
+        if (!(Config.stt?.cache?.enabled ?? true)) return;
+
+        const sidecar = {
+            sessionId: sessionId,
+            createdAt: new Date().toISOString(),
+            audioFile: `session_${sessionId}.wav`,
+            vocabHints: job._snapshotVocabHints.slice(),
+            deliveryMode: SttService._deliveryMode,
+            activeDeliveryChoice: _activeDeliveryChoice,
+            errorSource: _errorSource,
+            errorDetail: _errorDetail,
+            errorHint: _errorHint,
+            targetWindowClass: _targetWindowClass,
+            model: Config.stt?.model ?? "gpt-4o-transcribe"
+        };
+        // Pass the JSON via base64 to avoid quote-escaping hell in the shell
+        // command — the output is ASCII-safe and won't interact with `sh -c`.
+        const sidecarB64 = Qt.btoa(JSON.stringify(sidecar, null, 2));
+        const maxEntries = Config.stt?.cache?.maxEntries ?? 10;
+
+        recoveryPersistProcess.savedAudioPath = `${SttService._recoveryDir}/session_${sessionId}.wav`;
+        recoveryPersistProcess.environment = ({
+            RECOVERY_DIR: SttService._recoveryDir,
+            SRC_AUDIO: _currentAudioFile,
+            SESSION_ID: sessionId,
+            SIDECAR_B64: sidecarB64,
+            MAX_ENTRIES: maxEntries.toString()
+        });
+        recoveryPersistProcess.running = true;
+    }
+
+    /// Remove any persisted recovery copy for this session. Safe to call
+    /// unconditionally — `rm -f` swallows missing-file errors. Also cleans
+    /// up the `latest.*` symlinks if they pointed at this session, so they
+    /// don't dangle after the target is deleted.
+    function _cleanupRecovery(): void {
+        if (sessionId === "") return;
+        // Use `env KEY=val ... sh -c` to set shell variables cleanly —
+        // avoids embedding sessionId / path in the script body with all
+        // the quote-escaping risks that entails.
+        Quickshell.execDetached([
+            "env",
+            "RECOVERY_DIR=" + SttService._recoveryDir,
+            "SESSION_ID=" + sessionId,
+            "sh", "-c",
+            'latest_wav="$RECOVERY_DIR/latest.wav"\n' +
+            'latest_json="$RECOVERY_DIR/latest.json"\n' +
+            'if [ "$(readlink "$latest_wav" 2>/dev/null)" = "session_$SESSION_ID.wav" ]; then rm -f "$latest_wav" "$latest_json"; fi\n' +
+            'rm -f "$RECOVERY_DIR/session_$SESSION_ID.wav" "$RECOVERY_DIR/session_$SESSION_ID.json"\n'
+        ]);
     }
 
     function _stopAllTimers(): void {
@@ -712,6 +779,10 @@ QtObject {
                 job._state = "transcribed";
                 if (Config.stt?.cache?.deleteOnSuccess ?? true)
                     job._cleanupTempFiles();
+                // Always clean up any persistent recovery copy on success —
+                // the user clearly didn't need it. Safe even if nothing was
+                // persisted (rm -f swallows missing-file errors).
+                job._cleanupRecovery();
                 job.readyForDelivery();
             } else {
                 Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail + " raw=" + job._errorRaw);
@@ -764,6 +835,40 @@ QtObject {
                 job._injectionDowngraded = false;
                 job._injectionSubmitted = false;
                 job._state = "success";
+            }
+        }
+    }
+
+    // Persist audio + sidecar to the recovery dir after a final error.
+    // All filesystem work happens inside a single `sh -c` script so the
+    // steps are ordered (mkdir → cp → sidecar → symlink → cap-enforce)
+    // without needing to chain multiple Processes.
+    readonly property Process recoveryPersistProcess: Process {
+        property string savedAudioPath: ""
+        command: [
+            "sh", "-c",
+            'set -e\n' +
+            'mkdir -p "$RECOVERY_DIR"\n' +
+            'cp -f "$SRC_AUDIO" "$RECOVERY_DIR/session_$SESSION_ID.wav"\n' +
+            'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$RECOVERY_DIR/session_$SESSION_ID.json"\n' +
+            'ln -sfn "session_$SESSION_ID.wav" "$RECOVERY_DIR/latest.wav"\n' +
+            'ln -sfn "session_$SESSION_ID.json" "$RECOVERY_DIR/latest.json"\n' +
+            // Evict oldest sidecar+audio pairs when over maxEntries. `ls -t`
+            // lists newest-first; tailing from MAX+1 gives us just the
+            // overflow, then we delete each .json with its matching .wav.
+            'ls -t "$RECOVERY_DIR"/session_*.json 2>/dev/null | tail -n +$((MAX_ENTRIES + 1)) | while read -r f; do rm -f "$f" "${f%.json}.wav"; done\n'
+        ]
+        onExited: (code, status) => {
+            if (code === 0) {
+                Logger.log("qml", "stt", "recovery-saved | id=" + job.sessionId + " path=" + savedAudioPath);
+                Toaster.toast(
+                    qsTr("STT: Recording saved for recovery"),
+                    savedAudioPath,
+                    "save",
+                    Toast.Info
+                );
+            } else {
+                console.error("[STT] Recovery persist failed (exit", code + ")");
             }
         }
     }

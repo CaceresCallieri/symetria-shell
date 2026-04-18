@@ -75,6 +75,10 @@ Singleton {
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
     readonly property string _tempDir: `${_runtimeDir}/symmetria-stt`
+    // Persistent storage for audio/sidecars whose transcription failed.
+    // Lives under XDG_STATE_HOME so it survives shell restart and logout
+    // (unlike _tempDir, which is tmpfs). Created on startup below.
+    readonly property string _recoveryDir: `${Paths.state}/stt/recoverable`
 
     // Delivery mode from config: "clipboard" (default), "inject", "submit", or "ask"
     readonly property string _deliveryMode: {
@@ -330,6 +334,13 @@ Singleton {
             if (root._activeRecording && root._activeRecording._state === "recording")
                 root._activeRecording._startRecording();
         }
+    }
+
+    // Create the persistent recovery directory once at startup. Fire-and-forget:
+    // jobs only attempt to write into it after a final error, and those writes
+    // also `mkdir -p` defensively, so a transient failure here is non-fatal.
+    Component.onCompleted: {
+        Quickshell.execDetached(["mkdir", "-p", root._recoveryDir]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
