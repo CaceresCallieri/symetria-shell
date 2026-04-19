@@ -206,7 +206,11 @@ QtObject {
     function cancel(): void {
         cancelForRestart();
 
-        // Clear activeRecording if this job is the active one
+        // Clear activeRecording if this job is the active one.
+        // NOTE: When called via SttService.cancel(), _activeRecording has
+        // already been cleared. This guard only fires when cancel() is called
+        // directly on the job (e.g. from RecordingActions.qml cancel button),
+        // bypassing the service-level orchestration.
         if (SttService._activeRecording === job)
             SttService._activeRecording = null;
 
@@ -219,10 +223,11 @@ QtObject {
     /// wants a seamless atomic swap: _job is kept alive (and closing stays
     /// false) until the new job is ready, at which point _startInternal
     /// reassigns _job and destroys this old job directly. Setting
-    /// closing=true here would force the bar embed's close animation to fire
-    /// (see Bar.qml's onClosingChanged → _showEmbed=false handler), which
-    /// collapses the embed and never raises it again because active/mode
-    /// don't re-transition with the corrected restart timing.
+    /// closing=true here would prematurely trigger Bar.qml's declarative
+    /// _showEmbed binding (which is true when !closing), collapsing the embed
+    /// without a subsequent re-raise because the binding only re-evaluates
+    /// when _job or its closing flag changes — and _job never transitions
+    /// back through null in the new restart flow.
     function cancelForRestart(): void {
         _pendingRecordAction = "cancel";
         _stopAllTimers();

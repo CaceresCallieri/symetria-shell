@@ -253,11 +253,12 @@ Singleton {
     /// No-op if there is no active recording.
     ///
     /// Plays a close → open animation sequence:
-    ///   T=0          close animation starts (closing=true on old job triggers
-    ///                Bar.qml's onClosingChanged → _showEmbed=false → shrink)
+    ///   T=0          close animation starts (closing=true on old job causes
+    ///                Bar.qml's declarative _showEmbed binding to evaluate
+    ///                false → implicitWidth animates to 0 → shrink)
     ///   T=500ms      _startInternal fires: _job swaps to new job atomically,
-    ///                old job is destroyed, Bar.qml's on_ActiveJobChanged
-    ///                handler re-raises _showEmbed=true → open animation,
+    ///                old job is destroyed, Bar.qml's _showEmbed re-evaluates
+    ///                true (new job has closing=false) → open animation,
     ///                pw-record spawns, recording begins.
     ///
     /// The lock-release bug the old 500ms delay suffered from is prevented by
@@ -273,15 +274,18 @@ Singleton {
         _sessionVocabHints = [];
         vocabHintsVisible = false;
         job.cancelForRestart();
-        // Trigger the bar embed's close animation. The Bar.qml Connections on
-        // _activeJob.closing fires _showEmbed=false, shrinking the embed.
-        // _job is NOT cleared here — _pendingOldJob keeps it alive so the
-        // lock stays held; the swap happens in _startInternal.
+        // Trigger the bar embed's close animation. job.closing=true causes the
+        // declarative _showEmbed binding in Bar.qml to evaluate false, which
+        // animates implicitWidth to 0 (shrink). _job is NOT cleared here —
+        // _pendingOldJob keeps it alive so the lock stays held; the swap
+        // happens in _startInternal.
         job.closing = true;
 
-        // Clean up any leftover pending job from a previous restart that was
-        // interrupted before _startInternal could fire (shouldn't normally
-        // happen, but be defensive against leaks).
+        // Defense-in-depth: clean up any leftover pending job that wasn't consumed
+        // by _startInternal. Structurally unreachable via the normal code path
+        // (restart() returns early when !_activeRecording, which is always the
+        // case when _pendingOldJob is set), but retained as an explicit
+        // leak-prevention guard in case future callers change the preconditions.
         if (_pendingOldJob && _pendingOldJob !== job) {
             _pendingOldJob._destroyCleanup();
             _pendingOldJob.destroy();
@@ -355,7 +359,7 @@ Singleton {
     }
 
     function _removeJob(job: SttJob): void {
-        job.closing = true;  // triggers bar-embed close animation via _activeJob.closing in Bar.qml
+        job.closing = true;  // closes embed via _showEmbed declarative binding in Bar.qml
         job.startRemoval();  // per-job timer, avoids overwrite race
     }
 
@@ -418,7 +422,11 @@ Singleton {
         restartDelayTimer.stop();
         if (_pendingOldJob)
             _pendingOldJob._destroyCleanup();
-        if (_job)
+        // Guard: during the restart gap _job === _pendingOldJob, so skip the
+        // second _destroyCleanup call — cancelForRestart() already tore everything
+        // down, and calling _stopAllTimers() + process signals a second time is
+        // harmless but noisy.
+        if (_job && _job !== _pendingOldJob)
             _job._destroyCleanup();
     }
 }

@@ -63,7 +63,11 @@ ColumnLayout {
                 icon: "close"
                 iconColor: Colours.palette.m3error
                 onClicked: {
-                    if (root.job) root.job.cancel();
+                    // Route through the service so SttService.cancel() clears
+                    // _sessionVocabHints / vocabHintsVisible and emits
+                    // actionTriggered (button animation). Direct job.cancel()
+                    // bypasses all of that.
+                    RecordingSessionManager.routeAction("cancel");
                 }
             }
 
