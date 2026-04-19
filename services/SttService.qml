@@ -52,6 +52,11 @@ Singleton {
     property SttJob _job: null
     property SttJob _activeRecording: null
 
+    // Old job kept alive across a restart so _job can swap atomically
+    // oldJob → newJob without going through null. Destroyed from inside
+    // _startInternal after the new job takes over.
+    property SttJob _pendingOldJob: null
+
     // Toggle debouncing
     property real _lastToggleTime: 0
     readonly property int _toggleDebounceMs: 200
@@ -165,7 +170,20 @@ Singleton {
 
         // Assign _job AFTER state is "recording" so the bar embed
         // (which binds to _activeJob via job) sees the correct state immediately.
+        // When called from the restart path, _job transitions directly from
+        // the parked old job to this new job — the bar embed's binding on
+        // RecordingSessionManager.currentJob re-evaluates, swapping content
+        // seamlessly without any close/open animation.
         _job = job;
+
+        // If a restart is in progress, dispose the parked old job now that
+        // the new job has taken over. Must happen AFTER _job = job so the
+        // QML binding on currentJob has moved to the new reference before
+        // the old one is destroyed.
+        if (_pendingOldJob) {
+            _pendingOldJob.destroy();
+            _pendingOldJob = null;
+        }
 
         // Ensure temp dir exists, then start recording
         if (_tempDirReady) {
@@ -204,6 +222,22 @@ Singleton {
 
     /// Cancel the active recording (discard audio).
     function cancel(): void {
+        // A restart is mid-flight if _pendingOldJob is set and the
+        // restartDelayTimer hasn't fired _startInternal yet. In that window
+        // _activeRecording is already null, so the normal branch below would
+        // silently no-op — leaving the parked old job leaked and the bar
+        // embed stuck on it. Abort the pending restart explicitly.
+        if (_pendingOldJob) {
+            restartDelayTimer.stop();
+            const pending = _pendingOldJob;
+            _pendingOldJob = null;
+            actionTriggered(pending.sessionId, "cancel");
+            // Run the normal close-animation path now that we know the user
+            // didn't actually want to continue recording.
+            _removeJob(pending);
+            return;
+        }
+
         const sid = _activeRecording?.sessionId ?? "";
         actionTriggered(sid, "cancel");
         if (_activeRecording) {
@@ -217,6 +251,19 @@ Singleton {
 
     /// Restart: cancel active recording + start a new one.
     /// No-op if there is no active recording.
+    ///
+    /// Plays a close → open animation sequence:
+    ///   T=0          close animation starts (closing=true on old job triggers
+    ///                Bar.qml's onClosingChanged → _showEmbed=false → shrink)
+    ///   T=500ms      _startInternal fires: _job swaps to new job atomically,
+    ///                old job is destroyed, Bar.qml's on_ActiveJobChanged
+    ///                handler re-raises _showEmbed=true → open animation,
+    ///                pw-record spawns, recording begins.
+    ///
+    /// The lock-release bug the old 500ms delay suffered from is prevented by
+    /// parking the old job in _pendingOldJob so _job stays non-null across
+    /// the animation window — SttService.active never flips false, so
+    /// RecordingSessionManager doesn't auto-release the "stt" lock.
     function restart(): void {
         if (!_activeRecording) return;
         actionTriggered(_activeRecording.sessionId, "restart");
@@ -225,7 +272,22 @@ Singleton {
         _activeRecording = null;
         _sessionVocabHints = [];
         vocabHintsVisible = false;
-        job.cancel();
+        job.cancelForRestart();
+        // Trigger the bar embed's close animation. The Bar.qml Connections on
+        // _activeJob.closing fires _showEmbed=false, shrinking the embed.
+        // _job is NOT cleared here — _pendingOldJob keeps it alive so the
+        // lock stays held; the swap happens in _startInternal.
+        job.closing = true;
+
+        // Clean up any leftover pending job from a previous restart that was
+        // interrupted before _startInternal could fire (shouldn't normally
+        // happen, but be defensive against leaks).
+        if (_pendingOldJob && _pendingOldJob !== job) {
+            _pendingOldJob._destroyCleanup();
+            _pendingOldJob.destroy();
+        }
+        _pendingOldJob = job;
+
         restartDelayTimer.start();
     }
 
@@ -312,10 +374,15 @@ Singleton {
     // Service-level timers & processes
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Delayed start after cancel (used by restart)
+    // Delay between setting closing=true on the old job and swapping in the
+    // new job. Matched to the bar embed's implicitWidth Behavior duration
+    // (expressiveDefaultSpatial = 500ms) so the close animation has fully
+    // played out before the new job triggers the open animation. The lock
+    // isn't released during this window because _pendingOldJob keeps _job
+    // non-null (see restart()).
     Timer {
         id: restartDelayTimer
-        interval: 500
+        interval: Appearance.anim.durations.expressiveDefaultSpatial
         onTriggered: root._startInternal()
     }
 
@@ -349,6 +416,8 @@ Singleton {
 
     Component.onDestruction: {
         restartDelayTimer.stop();
+        if (_pendingOldJob)
+            _pendingOldJob._destroyCleanup();
         if (_job)
             _job._destroyCleanup();
     }

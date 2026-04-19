@@ -341,12 +341,28 @@ Item {
     Item {
         id: recordingCenterContainer
 
-        property bool _showEmbed: false
-        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
-
-        // Track the active job to watch its closing signal
+        // Track the active job so _showEmbed can depend on its closing flag.
         // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
         readonly property var _activeJob: RecordingSessionManager.currentJob
+
+        // Declarative visibility — a pure function of current state.
+        //
+        // This replaced a procedurally-latched property that was updated by
+        // three separate signal handlers (onActiveChanged / onClosingChanged
+        // / on_ActiveJobChanged). That design had a latent failure mode: any
+        // state transition that didn't fire all the relevant handlers could
+        // leave _showEmbed stuck at the wrong value — which is exactly how
+        // the STT restart regression happened (the lock-preservation fix
+        // eliminated the activeChanged edge the old code relied on to
+        // re-raise the embed). Deriving _showEmbed as a binding means it
+        // re-evaluates whenever ANY source changes, so there's no "forgot to
+        // flip it" failure mode. The close/open animations still play
+        // correctly because the Behavior on implicitWidth animates whenever
+        // the bound value changes.
+        readonly property bool _showEmbed:
+            RecordingSessionManager.active && !(_activeJob?.closing ?? false)
+
+        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
@@ -368,19 +384,15 @@ Item {
             width: implicitWidth
         }
 
+        // NOTE: duration is coupled to SttService.restartDelayTimer.interval.
+        // The STT restart animation relies on the close animation finishing
+        // before _startInternal swaps _job to the new job (which triggers the
+        // open animation). If you change either duration, change both — they
+        // must reference the same Appearance.anim.durations value.
         Behavior on implicitWidth {
             Anim {
                 duration: Appearance.anim.durations.expressiveDefaultSpatial
                 easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-        }
-
-        // Show embed when any recording mode becomes active.
-        Connections {
-            target: RecordingSessionManager
-
-            function onActiveChanged(): void {
-                recordingCenterContainer._showEmbed = RecordingSessionManager.active;
             }
         }
 
@@ -400,19 +412,6 @@ Item {
                 } else if (root.popouts.currentName === "recording") {
                     root.popouts.hasCurrent = false;
                 }
-            }
-        }
-
-        // Immediate close animation: react to job.closing rather than
-        // waiting for the job to be removed from the jobs array (~450ms).
-        // For STT restart: close starts at T=0, new job opens at T=500ms —
-        // producing a clean close → gap → open sequence.
-        Connections {
-            target: recordingCenterContainer._activeJob
-
-            function onClosingChanged(): void {
-                if (recordingCenterContainer._activeJob?.closing)
-                    recordingCenterContainer._showEmbed = false;
             }
         }
     }

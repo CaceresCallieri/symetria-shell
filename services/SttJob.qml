@@ -204,6 +204,26 @@ QtObject {
 
     /// Cancel: kill processes, discard audio, trigger removal.
     function cancel(): void {
+        cancelForRestart();
+
+        // Clear activeRecording if this job is the active one
+        if (SttService._activeRecording === job)
+            SttService._activeRecording = null;
+
+        // Remove from jobs list (via _removeJob so hide animation plays)
+        SttService._removeJob(job);
+    }
+
+    /// Tear down processes and resources WITHOUT triggering the close
+    /// animation or scheduling removal. Used by SttService.restart(), which
+    /// wants a seamless atomic swap: _job is kept alive (and closing stays
+    /// false) until the new job is ready, at which point _startInternal
+    /// reassigns _job and destroys this old job directly. Setting
+    /// closing=true here would force the bar embed's close animation to fire
+    /// (see Bar.qml's onClosingChanged → _showEmbed=false handler), which
+    /// collapses the embed and never raises it again because active/mode
+    /// don't re-transition with the corrected restart timing.
+    function cancelForRestart(): void {
         _pendingRecordAction = "cancel";
         _stopAllTimers();
 
@@ -217,13 +237,6 @@ QtObject {
         // persistent recovery copy, since the user explicitly discarded it.
         _cleanupRecovery();
         _clearSttTargetIfOwned();
-
-        // Clear activeRecording if this job is the active one
-        if (SttService._activeRecording === job)
-            SttService._activeRecording = null;
-
-        // Remove from jobs list (via _removeJob so hide animation plays)
-        SttService._removeJob(job);
     }
 
     /// Retry failed transcription with the same audio file.
