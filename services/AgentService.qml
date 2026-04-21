@@ -393,24 +393,8 @@ Singleton {
         const prevCount = root._agents.length;
         const nextAgents = parsed.agents ?? [];
 
-        // Diff activity_state per agent BEFORE assigning — pairs with the
-        // bridge's "activity |" line to confirm UI-side propagation.
-        const prevByIdState = {};
-        for (const a of root._agents) prevByIdState[a.id] = a.activity_state ?? "";
-        for (const a of nextAgents) {
-            const prev = prevByIdState[a.id] ?? "";
-            const curr = a.activity_state ?? "";
-            if (prev !== curr) {
-                Logger.log("qml", "agent",
-                    `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
-            }
-            delete prevByIdState[a.id];
-        }
-        // Anything left in prevByIdState disappeared from the new set — log as removed
-        for (const aid in prevByIdState) {
-            const prev = prevByIdState[aid];
-            if (prev) Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
-        }
+        // Diff and log activity state changes — pairs with bridge's "activity |" line.
+        _logAgentStateDiff(root._agents, nextAgents);
 
         root._agents = nextAgents;
         root._projects = parsed.projects ?? [];
@@ -421,6 +405,33 @@ Singleton {
         if (!backoffResetTimer.running)
             backoffResetTimer.start();
         Logger.log("qml", "agent", `recv | agents=${root._agents.length} projects=${root._projects.length} prev=${prevCount}`);
+    }
+
+    /// Log per-agent activity_state changes between prevAgents and nextAgents.
+    /// Pairs with bridge's "activity |" line to confirm UI-side propagation.
+    function _logAgentStateDiff(prevAgents: var, nextAgents: var): void {
+        // Build prev-state lookup using a Set to track seen IDs — avoids
+        // 'delete obj.prop' which de-optimizes V8 hidden class (project-standards P0).
+        const prevStateById = {};
+        for (const a of prevAgents) prevStateById[a.id] = a.activity_state ?? "";
+
+        const seenIds = new Set();
+        for (const a of nextAgents) {
+            seenIds.add(a.id);
+            const prev = prevStateById[a.id] ?? "";
+            const curr = a.activity_state ?? "";
+            if (prev !== curr) {
+                Logger.log("qml", "agent",
+                    `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
+            }
+        }
+        // Anything left in prevStateById that wasn't seen disappeared from the new set
+        for (const aid in prevStateById) {
+            if (!seenIds.has(aid)) {
+                const prev = prevStateById[aid];
+                if (prev) Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
+            }
+        }
     }
 
     function _startBridge(): void {

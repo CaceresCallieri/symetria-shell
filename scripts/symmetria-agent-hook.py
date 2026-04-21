@@ -27,7 +27,7 @@ SOCKET_PATH = os.environ.get(
 # Format matches plugin/src/Symmetria/logger.cpp exactly so all sources
 # interleave in a single timeline at ~/.local/state/symmetria/debug.log.
 _LOG_PATH = os.environ.get("SYMMETRIA_DEBUG_LOG") or os.path.join(
-    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
     "symmetria", "debug.log",
 )
 

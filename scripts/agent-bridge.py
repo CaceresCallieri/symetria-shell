@@ -43,8 +43,11 @@ _our_socket_inode: int | None = None
 _LOG_LEVELS = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "WARN": 2, "ERROR": 3}
 _LOG_LEVEL = _LOG_LEVELS.get(os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "INFO").upper(), 1)
 _LOG_PATH = Path(os.environ["SYMMETRIA_DEBUG_LOG"]) if os.environ.get("SYMMETRIA_DEBUG_LOG") \
-    else Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "symmetria" / "debug.log"
-_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    else Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "symmetria" / "debug.log"
+try:
+    _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass  # Log directory creation failure must not crash the bridge
 
 
 def _emit_log(level: int, msg: str) -> None:
@@ -64,7 +67,6 @@ class _Log:
     def debug(self, fmt, *args): _emit_log(0, fmt % args if args else fmt)
     def info(self, fmt, *args): _emit_log(1, fmt % args if args else fmt)
     def warning(self, fmt, *args): _emit_log(2, fmt % args if args else fmt)
-    warn = warning
     def error(self, fmt, *args): _emit_log(3, fmt % args if args else fmt)
 
 
@@ -233,8 +235,7 @@ class AgentBridge:
             prev_state = prev_entry.get("state", "") if prev_entry else ""
 
             if state in ("offline", "idle"):
-                if prev_entry:
-                    self._activities.pop(agent_id, None)
+                self._activities.pop(agent_id, None)
             else:
                 self._activities[agent_id] = {
                     "state": state,
