@@ -7,6 +7,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
+import Symmetria
 
 /// AgentService — bridges orchestrator.nvim agent state into QML.
 ///
@@ -309,7 +310,7 @@ Singleton {
         const message = notif.message ?? "";
         const urgency = notif.urgency ?? "normal";
 
-        console.debug(`[AgentService] NOTIFY: "${title}" — ${message} (${urgency})`);
+        Logger.log("qml", "agent", `notify | title="${title}" msg="${message}" urgency=${urgency}`);
         _sendNotification(title, message, urgency);
     }
 
@@ -377,7 +378,7 @@ Singleton {
     }
 
     Component.onCompleted: {
-        console.debug("[AgentService] INIT: agentbar.enabled =", Config.agentbar.enabled);
+        Logger.log("qml", "agent", `init | enabled=${Config.agentbar.enabled}`);
         if (Config.agentbar.enabled)
             _startBridge();
     }
@@ -390,7 +391,28 @@ Singleton {
     /// Apply a parsed bridge state update to agent/project properties.
     function _applyBridgeUpdate(parsed: var): void {
         const prevCount = root._agents.length;
-        root._agents = parsed.agents ?? [];
+        const nextAgents = parsed.agents ?? [];
+
+        // Diff activity_state per agent BEFORE assigning — pairs with the
+        // bridge's "activity |" line to confirm UI-side propagation.
+        const prevByIdState = {};
+        for (const a of root._agents) prevByIdState[a.id] = a.activity_state ?? "";
+        for (const a of nextAgents) {
+            const prev = prevByIdState[a.id] ?? "";
+            const curr = a.activity_state ?? "";
+            if (prev !== curr) {
+                Logger.log("qml", "agent",
+                    `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
+            }
+            delete prevByIdState[a.id];
+        }
+        // Anything left in prevByIdState disappeared from the new set — log as removed
+        for (const aid in prevByIdState) {
+            const prev = prevByIdState[aid];
+            if (prev) Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
+        }
+
+        root._agents = nextAgents;
         root._projects = parsed.projects ?? [];
         // Start the backoff reset timer once (not restart!) — it fires after 10s
         // of the bridge being alive, regardless of data flow. Using .restart()
@@ -398,15 +420,15 @@ Singleton {
         // arrive every 3-5s, the timer would never fire.
         if (!backoffResetTimer.running)
             backoffResetTimer.start();
-        console.debug(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
+        Logger.log("qml", "agent", `recv | agents=${root._agents.length} projects=${root._projects.length} prev=${prevCount}`);
     }
 
     function _startBridge(): void {
         if (bridgeProcess.running) {
-            console.debug("[AgentService] _startBridge: already running, skipping");
+            Logger.log("qml", "agent", "start | already running, skipping");
             return;
         }
-        console.debug("[AgentService] _startBridge: launching", _bridgeScript);
+        Logger.log("qml", "agent", `start | launching ${_bridgeScript}`);
         bridgeProcess.command = ["python3", _bridgeScript];
         bridgeProcess.running = true;
     }
@@ -441,13 +463,13 @@ Singleton {
                         root._pendingUpdate = parsed;
                     }
                 } catch (e) {
-                    console.warn("[AgentService] Failed to parse bridge output:", text);
+                    Logger.log("qml", "agent", `parse-error | ${text.slice(0, 200)}`);
                 }
             }
         }
 
         onExited: (code, status) => {
-            console.debug(`[AgentService] BRIDGE EXITED: code=${code}, status=${status}, had ${root._agents.length} agents`);
+            Logger.log("qml", "agent", `bridge-exit | code=${code} status=${status} hadAgents=${root._agents.length}`);
             // Clear state on exit (including throttle state)
             root._agents = [];
             root._projects = [];
@@ -457,7 +479,7 @@ Singleton {
             backoffResetTimer.stop();
 
             if (!Config.agentbar.enabled) {
-                console.debug("[AgentService] agentbar disabled, not restarting");
+                Logger.log("qml", "agent", "bridge-exit | agentbar disabled, not restarting");
                 return;
             }
 
@@ -465,7 +487,7 @@ Singleton {
             const delay = Math.min(1000 * Math.pow(2, root._restartCount), root._maxRestartDelay);
             // Cap _restartCount to prevent unbounded growth (2^10 = 1024s, well past 30s cap)
             root._restartCount = Math.min(root._restartCount + 1, 10);
-            console.warn(`[AgentService] Bridge exited (code ${code}), restarting in ${delay}ms (attempt #${root._restartCount})`);
+            Logger.log("qml", "agent", `bridge-restart | code=${code} delayMs=${delay} attempt=${root._restartCount}`);
             restartTimer.interval = delay;
             restartTimer.restart();
         }
@@ -502,7 +524,7 @@ Singleton {
         interval: 10000
         onTriggered: {
             root._restartCount = 0;
-            console.debug("[AgentService] Bridge stable for 10s, backoff reset");
+            Logger.log("qml", "agent", "bridge-stable | backoff reset after 10s");
         }
     }
 

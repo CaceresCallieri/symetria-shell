@@ -16,11 +16,32 @@ import json
 import os
 import socket
 import sys
+from datetime import datetime
 
 SOCKET_PATH = os.environ.get(
     "SYMMETRIA_AGENT_SOCKET",
     f"/run/user/{os.getuid()}/symmetria-agents.sock",
 )
+
+# Unified log shared with Symmetria.Logger (C++), QML services, and bash.
+# Format matches plugin/src/Symmetria/logger.cpp exactly so all sources
+# interleave in a single timeline at ~/.local/state/symmetria/debug.log.
+_LOG_PATH = os.environ.get("SYMMETRIA_DEBUG_LOG") or os.path.join(
+    os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")),
+    "symmetria", "debug.log",
+)
+
+
+def _hook_log(msg: str) -> None:
+    """Append a line to the unified debug log. Never raises."""
+    try:
+        os.makedirs(os.path.dirname(_LOG_PATH), exist_ok=True)
+        now = datetime.now()
+        ts = f"{now.strftime('%H:%M:%S')}.{now.microsecond // 1000:03d}"
+        with open(_LOG_PATH, "a") as f:
+            f.write(f"{ts} [py:hook] {msg}\n")
+    except Exception:
+        pass  # Logging must never break the hook
 
 # Hook event → activity state mapping
 EVENT_STATE_MAP = {
@@ -146,6 +167,9 @@ def main():
     elif hook_name == "SubagentStart":
         tool = "Delegating"  # no tool_name in payload; label directly
 
+    # Log every invocation — the canonical record of what this hook delivered.
+    _hook_log(f"hook | agent={agent_id} event={hook_name} state={state} tool={tool or '-'} plan={plan_mode}")
+
     # Build messages before opening socket
     activity_msg = json.dumps({
         "type": "activity",
@@ -171,13 +195,4 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        # Log to debug file before swallowing — silent failures make debugging impossible
-        try:
-            log_dir = os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state"))
-            log_path = os.path.join(log_dir, "symmetria", "debug.log")
-            os.makedirs(os.path.dirname(log_path), exist_ok=True)
-            with open(log_path, "a") as f:
-                from datetime import datetime
-                f.write(f"{datetime.now().strftime('%H:%M:%S.%f')[:12]} [py:hook] error: {e}\n")
-        except Exception:
-            pass  # Truly cannot log — give up silently
+        _hook_log(f"exception | {type(e).__name__}: {e}")

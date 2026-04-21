@@ -13,12 +13,12 @@ Protocol: JSON lines (newline-delimited JSON) in both directions.
 import asyncio
 import atexit
 import json
-import logging
 import os
 import signal
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 SOCKET_PATH = Path(os.environ.get(
@@ -27,27 +27,48 @@ SOCKET_PATH = Path(os.environ.get(
 ))
 
 # Seconds before an orphaned activity entry (no live orchestrator connection)
-# is reaped.
+# is reaped. Registered agents are NOT reaped by timeout — Claude Code can
+# legitimately go silent for minutes during long thinking/planning phases
+# where no hook events fire. Use manual assertion (orchestrator keybind)
+# to force-check agent liveness instead.
 ACTIVITY_STALENESS_TIMEOUT = 15
-
-# Seconds before a registered agent's activity is reset to idle when no hook
-# events arrive. Catches stuck animations from cancelled sessions, API errors
-# (e.g. 500), or crashes where Claude Code fails to send a Stop event.
-# Self-correcting: if the agent resumes, the next hook event restores state.
-REGISTERED_STALENESS_TIMEOUT = 90
 
 # Inode of the socket we created — used to avoid deleting a newer process's socket
 _our_socket_inode: int | None = None
 
-# Debug logging to stderr (stdout is reserved for QML SplitParser data).
-# Default WARNING in production; override with AGENT_BRIDGE_LOG_LEVEL=DEBUG.
-_log_level = os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "WARNING").upper()
-logging.basicConfig(
-    stream=sys.stderr,
-    level=getattr(logging, _log_level, logging.WARNING),
-    format="[bridge.py %(levelname)s] %(message)s",
-)
-log = logging.getLogger("agent-bridge")
+# Unified log shared with Symmetria.Logger (C++), QML services, and bash
+# scripts. Format: "HH:MM:SS.mmm [py:bridge] message". Path resolution and
+# format match plugin/src/Symmetria/logger.cpp so all sources interleave
+# in a single timeline.
+_LOG_LEVELS = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "WARN": 2, "ERROR": 3}
+_LOG_LEVEL = _LOG_LEVELS.get(os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "INFO").upper(), 1)
+_LOG_PATH = Path(os.environ["SYMMETRIA_DEBUG_LOG"]) if os.environ.get("SYMMETRIA_DEBUG_LOG") \
+    else Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "symmetria" / "debug.log"
+_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _emit_log(level: int, msg: str) -> None:
+    if level < _LOG_LEVEL:
+        return
+    now = datetime.now()
+    ts = f"{now.strftime('%H:%M:%S')}.{now.microsecond // 1000:03d}"
+    line = f"{ts} [py:bridge] {msg}\n"
+    try:
+        with open(_LOG_PATH, "a") as f:
+            f.write(line)
+    except OSError:
+        pass
+
+
+class _Log:
+    def debug(self, fmt, *args): _emit_log(0, fmt % args if args else fmt)
+    def info(self, fmt, *args): _emit_log(1, fmt % args if args else fmt)
+    def warning(self, fmt, *args): _emit_log(2, fmt % args if args else fmt)
+    warn = warning
+    def error(self, fmt, *args): _emit_log(3, fmt % args if args else fmt)
+
+
+log = _Log()
 
 
 class AgentBridge:
@@ -205,22 +226,28 @@ class AgentBridge:
             if not agent_id:
                 return
             state = msg.get("state", "")
+            tool = msg.get("tool", "")
+            plan = msg.get("in_plan_mode", False)
+
+            prev_entry = self._activities.get(agent_id)
+            prev_state = prev_entry.get("state", "") if prev_entry else ""
 
             if state in ("offline", "idle"):
-                self._activities.pop(agent_id, None)
+                if prev_entry:
+                    self._activities.pop(agent_id, None)
             else:
-                new_activity = {
+                self._activities[agent_id] = {
                     "state": state,
-                    "tool": msg.get("tool", ""),
+                    "tool": tool,
                     "ts": time.monotonic(),
                     # Hook reads permission_mode on every event, so in_plan_mode
                     # is always current — no accumulation needed.
-                    "in_plan_mode": msg.get("in_plan_mode", False),
+                    "in_plan_mode": plan,
                 }
-                self._activities[agent_id] = new_activity
 
-            log.debug("handle_message: activity agent_id=%s state=%s tool=%s",
-                       agent_id, state, msg.get("tool", ""))
+            if prev_state != state:
+                log.info("activity | %s %s→%s tool=%s plan=%s",
+                         agent_id, prev_state or "-", state, tool, plan)
             self._schedule_emit()
             return
 
@@ -320,6 +347,27 @@ class AgentBridge:
                 log.warning("  updated: unknown buf=%s for pid=%s (known: %s)",
                             buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
 
+        elif msg_type == "liveness":
+            dead_bufs = msg.get("dead_bufs", [])
+            quiet_bufs = msg.get("quiet_bufs", [])
+            cleared_any = False
+            for buf in dead_bufs:
+                agent_id = f"{nvim_pid}_{buf}"
+                if agent_id in self._activities:
+                    log.info("  liveness: clearing DEAD agent %s (was %s)",
+                             agent_id, self._activities[agent_id].get("state"))
+                    self._activities.pop(agent_id)
+                    cleared_any = True
+            for buf in quiet_bufs:
+                agent_id = f"{nvim_pid}_{buf}"
+                if agent_id in self._activities:
+                    log.info("  liveness: clearing QUIET agent %s (was %s, terminal silent 60s+)",
+                             agent_id, self._activities[agent_id].get("state"))
+                    self._activities.pop(agent_id)
+                    cleared_any = True
+            if cleared_any:
+                self._schedule_emit()
+
         elif msg_type == "focus":
             buf = msg.get("buf")
             if nvim_pid in self._clients:
@@ -365,22 +413,21 @@ class AgentBridge:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
 
     def reap_stale_activities(self) -> None:
-        """Clear activity entries that haven't been updated within staleness timeouts.
+        """Clear activity entries that haven't been updated within the staleness timeout.
 
-        Two-tier timeout:
-        - Orphaned agents (no orchestrator connection): ACTIVITY_STALENESS_TIMEOUT (15s)
-        - Registered agents (connection alive, no hook events): REGISTERED_STALENESS_TIMEOUT (90s)
-
-        The registered timeout catches stuck animations from cancelled sessions,
-        API 500 errors, or crashes where Claude Code fails to send a Stop event.
-        Self-correcting: if the agent resumes, the next hook event restores state.
+        Only reaps activities for agents NOT registered in _clients (orphaned
+        entries from crashed sessions or hook race conditions). Registered
+        agents are protected — Claude Code can legitimately go silent for
+        minutes during long thinking/planning phases. Use manual assertion
+        via the orchestrator keybind to force-check agent liveness.
         """
         now = time.monotonic()
-        stale: list[tuple[str, str]] = []  # (agent_id, reason)
+        stale_ids = []
         for aid, act in self._activities.items():
             if act.get("state") in ("idle", ""):
                 continue
-            age = now - act.get("ts", now)
+            if (now - act.get("ts", now)) <= ACTIVITY_STALENESS_TIMEOUT:
+                continue
 
             # Check if agent is still registered (orchestrator connection alive)
             nvim_pid_str, _, buf_str = aid.partition("_")
@@ -388,21 +435,18 @@ class AgentBridge:
                 nvim_pid = int(nvim_pid_str)
                 buf = int(buf_str)
             except ValueError:
-                stale.append((aid, "malformed"))
+                stale_ids.append(aid)  # Malformed ID — reap
                 continue
 
-            registered = nvim_pid in self._clients and buf in self._clients[nvim_pid]
-            timeout = REGISTERED_STALENESS_TIMEOUT if registered else ACTIVITY_STALENESS_TIMEOUT
+            if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
+                continue  # Session alive — don't reap
 
-            if age <= timeout:
-                continue
+            stale_ids.append(aid)
 
-            stale.append((aid, "registered" if registered else "orphaned"))
-
-        if stale:
-            for aid, reason in stale:
-                log.info("reap_stale_activities: %s %s+stale (was %s), clearing",
-                         aid, reason, self._activities[aid].get("state"))
+        if stale_ids:
+            for aid in stale_ids:
+                log.info("reap_stale_activities: %s orphaned+stale (was %s), clearing",
+                         aid, self._activities[aid].get("state"))
                 self._activities.pop(aid, None)
             self._schedule_emit()
 
@@ -572,8 +616,8 @@ async def main():
     # Actively solicit running Neovim instances to reconnect
     asyncio.create_task(solicit_neovim_instances())
 
-    # Periodic staleness reaper — clears stale activity entries.
-    # Orphaned (15s) and registered-but-silent (90s) agents are reset to idle.
+    # Periodic staleness reaper — clears orphaned activity entries (no live
+    # orchestrator connection). Registered agents are never reaped by timeout.
     async def activity_reaper():
         while True:
             await asyncio.sleep(5)  # Check every 5 seconds
