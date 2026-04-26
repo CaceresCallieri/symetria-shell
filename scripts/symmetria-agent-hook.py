@@ -16,6 +16,7 @@ import json
 import os
 import socket
 import sys
+import time
 from datetime import datetime
 
 SOCKET_PATH = os.environ.get(
@@ -31,6 +32,16 @@ _LOG_PATH = os.environ.get("SYMMETRIA_DEBUG_LOG") or os.path.join(
     "symmetria", "debug.log",
 )
 
+# Optional raw-payload dump for diagnostic sessions. Enable by exporting
+# SYMMETRIA_AGENT_DEBUG_HOOKS=1 in the orchestrator's environment. Captures
+# every hook payload verbatim (one JSON line per event) to a sidecar file
+# so we can postmortem out-of-order events, recap behavior, and any new
+# hook event types Claude Code adds in the future.
+_RAW_DUMP_ENABLED = os.environ.get("SYMMETRIA_AGENT_DEBUG_HOOKS", "") == "1"
+_RAW_DUMP_PATH = os.path.join(
+    os.path.dirname(_LOG_PATH), "agent-hooks-raw.jsonl"
+)
+
 
 def _hook_log(msg: str) -> None:
     """Append a line to the unified debug log. Never raises."""
@@ -43,19 +54,75 @@ def _hook_log(msg: str) -> None:
     except Exception:
         pass  # Logging must never break the hook
 
-# Hook event → activity state mapping
+
+def _raw_dump(agent_id: str, hook_name: str, event: dict) -> None:
+    """Append the full raw event payload to the sidecar dump file.
+
+    Only fires when SYMMETRIA_AGENT_DEBUG_HOOKS=1. The dump is a JSON-lines
+    file — each line contains {ts, agent_id, hook_event_name, payload}.
+    Use it to investigate any "stuck on X" symptom without re-running the
+    failure case.
+    """
+    if not _RAW_DUMP_ENABLED:
+        return
+    try:
+        record = {
+            "ts": datetime.now().isoformat(timespec="milliseconds"),
+            "ts_mono_ns": time.monotonic_ns(),
+            "agent_id": agent_id,
+            "hook_event_name": hook_name,
+            "payload": event,
+        }
+        with open(_RAW_DUMP_PATH, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        pass  # Diagnostics must never break the hook
+
+# Hook event → activity state mapping.
+#
+# Coverage is intentionally generous: Claude Code adds new hook events over
+# time (e.g. PostCompact in 2026, Notification, StopFailure). Mapping them
+# explicitly — even when the resulting state is the same as a sibling event
+# — avoids "unmapped event" warnings spamming the log AND ensures we don't
+# accidentally drop a legitimate state transition because the payload had
+# a slightly different hook_event_name than we expected.
 EVENT_STATE_MAP = {
+    # Session lifecycle
     "SessionStart": "starting",
+    "SessionEnd": "offline",
+    # Per-turn input
     "UserPromptSubmit": "thinking",
+    "UserPromptExpansion": "thinking",  # Claude Code 2026+: prompt-template expansion phase
+    # Per-turn output
+    "Stop": "idle",
+    "StopFailure": "idle",  # Stop attempted but failed — agent is still done
+    # Tool use
     "PreToolUse": "working",
     "PostToolUse": "thinking",
     "PostToolUseFailure": "thinking",
+    "PostToolBatch": "thinking",  # 2026+: emitted after a batch of tool calls
     "PermissionRequest": "needs_permission",
+    "PermissionDenied": "thinking",  # User denied — agent will reconsider
+    # Subagents
     "SubagentStart": "working",
     "SubagentStop": "thinking",
+    # Context management
     "PreCompact": "thinking",
-    "Stop": "idle",
-    "SessionEnd": "offline",
+    "PostCompact": "thinking",  # 2026+: emitted after compaction completes
+    # Observer-only events (no state change but explicitly mapped to silence
+    # "unmapped event" warnings — they carry no actionable lifecycle info)
+    "Notification": "",
+    "TaskCreated": "",
+    "TaskCompleted": "",
+    "TeammateIdle": "",
+    "FileChanged": "",
+    "CwdChanged": "",
+    "InstructionsLoaded": "",
+    "ConfigChange": "",
+    "Elicitation": "",
+    "ElicitationResult": "",
+    "WorktreeCreate": "",
+    "WorktreeRemove": "",
 }
 
 # Tool name → human-readable display name
@@ -142,15 +209,30 @@ def main():
     event = json.loads(raw)
     hook_name = event.get("hook_event_name", "")
 
-    state = EVENT_STATE_MAP.get(hook_name, "")
+    # Capture the raw payload BEFORE any filtering — we want the dump to
+    # include observer-only and unmapped events too, since those are the
+    # most interesting ones for diagnosing "stuck on X" symptoms.
+    _raw_dump(agent_id, hook_name, event)
+
+    # Surface unmapped event types loudly. These are events Claude Code
+    # added that we haven't classified — worth investigating because they
+    # may contain new lifecycle signals we should react to.
+    if hook_name not in EVENT_STATE_MAP:
+        _hook_log(f"unmapped | agent={agent_id} event={hook_name or '(none)'} keys={sorted(event.keys())}")
+        return
+
+    state = EVENT_STATE_MAP[hook_name]
 
     # Clear-sourced SessionStart → "clearing" state for blink animation (start → stop).
     # Normal SessionStart (startup/resume) keeps "starting" (eye-opening + hold).
     if hook_name == "SessionStart" and event.get("source", "") == "clear":
         state = "clearing"
 
-    # All events must have a mapped state to proceed.
+    # Observer-only events have an explicit empty-string mapping — log them
+    # at debug-info level (so we know they fired) but don't emit an activity
+    # message to the bridge.
     if not state:
+        _hook_log(f"observer | agent={agent_id} event={hook_name} (no state change)")
         return
 
     # Detect plan mode from permission_mode field (present in all hook events).
@@ -167,8 +249,15 @@ def main():
     elif hook_name == "SubagentStart":
         tool = "Delegating"  # no tool_name in payload; label directly
 
+    # Wall-clock timestamp from this hook's invocation — used by the bridge
+    # to detect out-of-order delivery (async hooks fire in parallel and can
+    # race over the socket). We use time.time_ns() rather than monotonic_ns
+    # because monotonic clocks aren't comparable across separate processes;
+    # CLOCK_REALTIME is shared and good enough for ms-scale ordering.
+    event_ts_ns = time.time_ns()
+
     # Log every invocation — the canonical record of what this hook delivered.
-    _hook_log(f"hook | agent={agent_id} event={hook_name} state={state} tool={tool or '-'} plan={plan_mode}")
+    _hook_log(f"hook | agent={agent_id} event={hook_name} state={state} tool={tool or '-'} plan={plan_mode} ts_ns={event_ts_ns}")
 
     # Build messages before opening socket
     activity_msg = json.dumps({
@@ -177,6 +266,8 @@ def main():
         "state": state,
         "tool": tool,
         "in_plan_mode": plan_mode,
+        "hook_event": hook_name,  # passthrough — bridge logs it for diff context
+        "event_ts_ns": event_ts_ns,
     })
     notif = _build_notification(hook_name, event, agent_id)
 

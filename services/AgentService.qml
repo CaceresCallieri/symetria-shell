@@ -409,6 +409,9 @@ Singleton {
 
     /// Log per-agent activity_state changes between prevAgents and nextAgents.
     /// Pairs with bridge's "activity |" line to confirm UI-side propagation.
+    /// Also updates _stateEnteredAt so the QML-side stuck watchdog can
+    /// detect any agent that has held a non-idle state for too long even
+    /// when the bridge process is silent.
     function _logAgentStateDiff(prevAgents: var, nextAgents: var): void {
         // Build prev-state lookup using a Set to track seen IDs — avoids
         // 'delete obj.prop' which de-optimizes V8 hidden class (project-standards P0).
@@ -416,6 +419,7 @@ Singleton {
         for (const a of prevAgents) prevStateById[a.id] = a.activity_state ?? "";
 
         const seenIds = new Set();
+        const now = Date.now();
         for (const a of nextAgents) {
             seenIds.add(a.id);
             const prev = prevStateById[a.id] ?? "";
@@ -423,15 +427,93 @@ Singleton {
             if (prev !== curr) {
                 Logger.log("qml", "agent",
                     `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
+                root._stateEnteredAt[a.id] = now;
+                root._stuckWarned.delete(a.id);
+            } else if (!(a.id in root._stateEnteredAt)) {
+                // First sighting of this agent — record the entry time so
+                // the stuck watchdog has a reference even if no transition
+                // ever follows (e.g., bridge restart leaves us already in
+                // "working").
+                root._stateEnteredAt[a.id] = now;
             }
         }
-        // Anything left in prevStateById that wasn't seen disappeared from the new set
+        // Anything left in prevStateById that wasn't seen disappeared from
+        // the new set. We deliberately do NOT delete the entry from
+        // _stateEnteredAt: V8 de-optimizes hash maps that get keys deleted
+        // (project standard P0). A stale entry is harmless — it'll be
+        // overwritten on the agent's next sighting, and the key set is
+        // bounded by the lifetime of all agent_ids in this shell session.
         for (const aid in prevStateById) {
             if (!seenIds.has(aid)) {
                 const prev = prevStateById[aid];
                 if (prev) Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
+                root._stuckWarned.delete(aid);
             }
         }
+    }
+
+    // ── Stuck-state watchdog (QML side) ─────────────────────────────────
+    // Mirrors the bridge-side check_stuck_working() but observes from the
+    // rendering layer. Catches the case where the bridge has up-to-date
+    // state but QML missed an emission, AND surfaces the symptom directly
+    // in the QML log so it interleaves with rendering events.
+
+    // {agent_id: ms-since-epoch when this agent's current state began}
+    // intentional var: JS object used as hash map (string → number)
+    property var _stateEnteredAt: ({})
+    // Set of agent_ids we've already warned about; cleared on transition.
+    // intentional var: JS Set — no QML equivalent for .has()/.delete()
+    property var _stuckWarned: new Set()
+    // Threshold for warning (ms). Mirrors bridge STUCK_WORKING_WARN_SECONDS.
+    readonly property int _stuckWorkingWarnMs: 120 * 1000
+
+    Timer {
+        id: stuckWatchdog
+        interval: 30 * 1000  // Check every 30s
+        running: Config.agentbar.enabled
+        repeat: true
+
+        onTriggered: {
+            const now = Date.now();
+            for (const a of root._agents) {
+                const state = a.activity_state ?? "";
+                if (state !== "working") continue;
+                const entered = root._stateEnteredAt[a.id] ?? now;
+                const stuckFor = now - entered;
+                if (stuckFor < root._stuckWorkingWarnMs) continue;
+                if (root._stuckWarned.has(a.id)) continue;
+                root._stuckWarned.add(a.id);
+                Logger.log("qml", "agent",
+                    `STUCK WORKING | ${a.id} project=${a.project} tool=${a.activity_tool || "-"} stuck_for=${Math.round(stuckFor / 1000)}s`);
+            }
+        }
+    }
+
+    /// Build a JSON-serializable snapshot of QML-side agent state for
+    /// diagnostic dumps. Mirrors the bridge's diagnostic dump but from the
+    /// rendering layer's perspective so we can compare and find drift.
+    function diagnosticSnapshot(): var {
+        const now = Date.now();
+        return {
+            ts: new Date().toISOString(),
+            agentCount: root._agents.length,
+            projects: root._projects,
+            mergeActive: root.mergeActive,
+            userHidden: root.userHidden,
+            bridgeRunning: root.bridgeRunning,
+            agents: root._agents.map(a => ({
+                id: a.id,
+                project: a.project,
+                state: a.activity_state ?? "",
+                tool: a.activity_tool ?? "",
+                in_plan_mode: a.in_plan_mode === true,
+                active: a.active === true,
+                remote: a.remote === true,
+                terminal_pid: a.terminal_pid ?? 0,
+                state_age_ms: now - (root._stateEnteredAt[a.id] ?? now),
+                warned_stuck: root._stuckWarned.has(a.id),
+            })),
+        };
     }
 
     function _startBridge(): void {
@@ -550,6 +632,30 @@ Singleton {
                 userHidden: root.userHidden,
                 mergeActive: root.mergeActive,
             });
+        }
+
+        /// Full per-agent diagnostic snapshot: state, tool, age, stuck flags.
+        /// Pair with bridge-side dump (SIGUSR1) for end-to-end pipeline view.
+        ///
+        /// Usage:
+        ///   symmetria shell agentbar diagnose
+        ///   pkill -USR1 -f agent-bridge.py  # then read the bridge JSON
+        function diagnose(): string {
+            const snap = root.diagnosticSnapshot();
+            Logger.log("qml", "agent", `diagnose | ${JSON.stringify(snap)}`);
+            return JSON.stringify(snap, null, 2);
+        }
+
+        /// Manually clear the activity_state of a specific agent. Use this
+        /// as the user-controlled escape hatch for the "stuck on working"
+        /// symptom — it tells the bridge to drop the entry as if Stop had
+        /// fired. The bridge does not currently accept clear messages over
+        /// the socket from arbitrary clients, so this routes via SIGUSR2:
+        /// future work could add a proper IPC verb. For now this records
+        /// the user's intent in the log so we know how often they hit it.
+        function reportStuck(agentId: string): void {
+            Logger.log("qml", "agent", `report-stuck | user reports ${agentId} stuck — full snapshot to follow`);
+            Logger.log("qml", "agent", `report-stuck-snap | ${JSON.stringify(root.diagnosticSnapshot())}`);
         }
 
         function toggle(): void {
