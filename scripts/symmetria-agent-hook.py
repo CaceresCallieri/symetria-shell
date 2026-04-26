@@ -271,15 +271,12 @@ def main():
     })
     notif = _build_notification(hook_name, event, agent_id)
 
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.settimeout(1.0)
-    sock.connect(SOCKET_PATH)
-
-    sock.sendall((activity_msg + "\n").encode())
-    if notif:
-        sock.sendall((json.dumps(notif) + "\n").encode())
-
-    sock.close()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        sock.connect(SOCKET_PATH)
+        sock.sendall((activity_msg + "\n").encode())
+        if notif:
+            sock.sendall((json.dumps(notif) + "\n").encode())
 
 
 if __name__ == "__main__":

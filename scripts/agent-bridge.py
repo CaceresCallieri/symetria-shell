@@ -312,20 +312,13 @@ class AgentBridge:
                     # NOT touch _activities; let the agent stay idle.
                     log.info("RECAP DETECTED | %s SubagentStop without preceding SubagentStart — dropping (was state=%s)",
                              agent_id, prev_state or "idle")
-                    history = self._activity_history.setdefault(
-                        agent_id, deque(maxlen=ACTIVITY_HISTORY_DEPTH)
-                    )
-                    history.append({
-                        "ts_iso": datetime.now().isoformat(timespec="milliseconds"),
-                        "ts_mono": time.monotonic(),
-                        "event_ts_ns": event_ts_ns,
-                        "hook_event": "SubagentStop",
-                        "state": "(dropped: recap)",
-                        "tool": tool,
-                        "ooo": ooo,
-                    })
+                    self._append_to_history(agent_id, "SubagentStop", "(dropped: recap)",
+                                             tool, event_ts_ns, ooo)
                     return  # Skip _activities update + emit entirely
 
+            # SubagentStart/Stop depth tracking is complete. Both SubagentStart
+            # (depth++) and SubagentStop with depth > 0 (depth--) fall through
+            # here to apply the normal state update in _activities.
             if state in ("offline", "idle"):
                 self._activities.pop(agent_id, None)
                 self._warned_stuck.discard(agent_id)
@@ -353,19 +346,10 @@ class AgentBridge:
 
             # Record into per-agent history ring buffer (always, even for
             # idle/offline, so postmortems can see the final transition).
-            history = self._activity_history.setdefault(
-                agent_id, deque(maxlen=ACTIVITY_HISTORY_DEPTH)
-            )
-            history.append({
-                "ts_iso": datetime.now().isoformat(timespec="milliseconds"),
-                "ts_mono": time.monotonic(),
-                "event_ts_ns": event_ts_ns,
-                "hook_event": hook_event,
-                "state": state,
-                "tool": tool,
-                "ooo": ooo,
-            })
+            self._append_to_history(agent_id, hook_event, state, tool, event_ts_ns, ooo)
 
+            # History is always recorded above (even no-ops). Log only state transitions
+            # to avoid noise from repeated same-state events (e.g., multiple PreToolUse).
             if prev_state != state:
                 log.info("activity | %s %s→%s event=%s tool=%s plan=%s",
                          agent_id, prev_state or "-", state, hook_event or "?", tool, plan)
@@ -449,10 +433,7 @@ class AgentBridge:
             if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
                 del self._clients[nvim_pid][buf]
                 aid = f"{nvim_pid}_{buf}"
-                self._activities.pop(aid, None)
-                self._activity_history.pop(aid, None)
-                self._warned_stuck.discard(aid)
-                self._subagent_depth.pop(aid, None)
+                self._clear_agent_state(aid)
                 log.debug("  removed: buf=%s from pid %s", buf, nvim_pid)
                 self._schedule_emit()
             else:
@@ -512,11 +493,7 @@ class AgentBridge:
             if nvim_pid in self._clients:
                 # Clean up activities for all agents belonging to this nvim instance
                 for buf in self._clients[nvim_pid]:
-                    aid = f"{nvim_pid}_{buf}"
-                    self._activities.pop(aid, None)
-                    self._activity_history.pop(aid, None)
-                    self._warned_stuck.discard(aid)
-                    self._subagent_depth.pop(aid, None)
+                    self._clear_agent_state(f"{nvim_pid}_{buf}")
                 del self._clients[nvim_pid]
                 self._terminal_pids.pop(nvim_pid, None)
                 self._remote_clients.discard(nvim_pid)
@@ -533,11 +510,7 @@ class AgentBridge:
                      nvim_pid, count, len(self._clients) - 1)
             # Clean up activities for all agents belonging to this nvim instance
             for buf in self._clients[nvim_pid]:
-                aid = f"{nvim_pid}_{buf}"
-                self._activities.pop(aid, None)
-                self._activity_history.pop(aid, None)
-                self._warned_stuck.discard(aid)
-                self._subagent_depth.pop(aid, None)
+                self._clear_agent_state(f"{nvim_pid}_{buf}")
             del self._clients[nvim_pid]
             self._terminal_pids.pop(nvim_pid, None)
             self._remote_clients.discard(nvim_pid)
@@ -580,8 +553,7 @@ class AgentBridge:
             for aid in stale_ids:
                 log.info("reap_stale_activities: %s orphaned+stale (was %s), clearing",
                          aid, self._activities[aid].get("state"))
-                self._activities.pop(aid, None)
-                self._warned_stuck.discard(aid)
+                self._clear_agent_state(aid)
             self._schedule_emit()
 
     def check_stuck_working(self) -> None:
@@ -593,6 +565,8 @@ class AgentBridge:
         the stuck event with the hook sequence that led to it.
         """
         now = time.monotonic()
+        # asyncio single-thread: iteration is safe — no concurrent modification
+        # can occur within a single coroutine turn (the reaper awaits between calls).
         for aid, act in self._activities.items():
             if act.get("state") != "working":
                 continue
@@ -661,6 +635,37 @@ class AgentBridge:
         except Exception as exc:  # noqa: BLE001
             log.error("write_diagnostic_dump: failed: %s", exc)
 
+    def _append_to_history(self, agent_id: str, hook_event: str, state: str,
+                           tool: str, event_ts_ns: int, ooo: bool) -> None:
+        """Append a transition record to the per-agent activity history ring buffer.
+
+        Called for every activity update (including drops) so postmortems have
+        a complete transition log. The ring buffer caps at ACTIVITY_HISTORY_DEPTH.
+        """
+        history = self._activity_history.setdefault(
+            agent_id, deque(maxlen=ACTIVITY_HISTORY_DEPTH)
+        )
+        history.append({
+            "ts_iso": datetime.now().isoformat(timespec="milliseconds"),
+            "ts_mono": time.monotonic(),
+            "event_ts_ns": event_ts_ns,
+            "hook_event": hook_event,
+            "state": state,
+            "tool": tool,
+            "ooo": ooo,
+        })
+
+    def _clear_agent_state(self, aid: str) -> None:
+        """Remove all per-agent state for a given agent_id.
+
+        Called from removed/goodbye/remove_client and reap_stale_activities
+        to ensure all four per-agent dicts stay consistent. Centralises the
+        teardown so new dicts only need to be added here.
+        """
+        self._activities.pop(aid, None)
+        self._activity_history.pop(aid, None)
+        self._subagent_depth.pop(aid, None)
+        self._warned_stuck.discard(aid)
 
 bridge = AgentBridge()
 

@@ -90,7 +90,7 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **Module entry points** — Each major module exposes `Wrapper.qml` as its entry point, imported via qualified alias: `import "modules/x" as XModule` → `XModule.Wrapper {}`. This avoids the last-import-wins collision pitfall. Modules without collision risk (e.g., `Stt`, `Keycaster`) keep their own name.
 - **Drawer system** — `modules/drawers/` manages slide-out panels with unified visibility and gestures
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
-- **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords)
+- **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar)
 
 
 ## Remote Agents (SSH Tunnel)
@@ -162,7 +162,6 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 **Architecture & Extension:**
 - [`drawer-extension-guide.md`](docs/drawer-extension-guide.md) — Panel backgrounds, bar pill pattern, FocusManager usage
 - [`ags-porting-reference.md`](docs/ags-porting-reference.md) — AGS bar features to port (workspace icons, updates, Kanata, submap)
-- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Hook → bridge → QML pipeline, stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC
 
 **Pitfalls & Research:**
 - [`qml-pitfalls.md`](docs/qml-pitfalls.md) — All QML gotchas consolidated
@@ -178,6 +177,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Investigations:**
 - `*.investigation.md` files — Debug session logs for past issues
+- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Hook → bridge → QML pipeline, stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC
 
 ## Updating from Upstream
 

@@ -646,13 +646,15 @@ Singleton {
             return JSON.stringify(snap, null, 2);
         }
 
-        /// Manually clear the activity_state of a specific agent. Use this
-        /// as the user-controlled escape hatch for the "stuck on working"
-        /// symptom — it tells the bridge to drop the entry as if Stop had
-        /// fired. The bridge does not currently accept clear messages over
-        /// the socket from arbitrary clients, so this routes via SIGUSR2:
-        /// future work could add a proper IPC verb. For now this records
-        /// the user's intent in the log so we know how often they hit it.
+        /// Log a user report that a specific agent is stuck. Use this as the
+        /// user-controlled escape hatch for the "stuck on working" symptom —
+        /// it records the complaint in the log so we can grep for the exact
+        /// moment the user noticed, and emits a full diagnostic snapshot for
+        /// correlation with the bridge's SIGUSR1 dump.
+        ///
+        /// NOTE: This does NOT actually clear the stuck state. The bridge does
+        /// not accept clear messages from arbitrary clients. A proper IPC verb
+        /// is future work. Until then, the log record is the entire action.
         function reportStuck(agentId: string): void {
             Logger.log("qml", "agent", `report-stuck | user reports ${agentId} stuck — full snapshot to follow`);
             Logger.log("qml", "agent", `report-stuck-snap | ${JSON.stringify(root.diagnosticSnapshot())}`);

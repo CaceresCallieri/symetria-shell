@@ -60,6 +60,7 @@ Long-running asyncio Unix-socket server. Maintains:
 | `_clients[nvim_pid][buf]` | Registered orchestrator instances (keyed by Neovim PID and buffer). |
 | `_activities[agent_id]` | Current state per agent, plus `event_ts_ns` for ordering. |
 | `_activity_history[agent_id]` | Ring buffer of last 20 transitions. |
+| `_subagent_depth[agent_id]` | SubagentStart/Stop pairing counter per parent agent. |
 | `_warned_stuck` | Agents we've already logged a stuck warning for. |
 
 ### Out-of-order detection
@@ -109,6 +110,10 @@ The warning is purely observational. The orchestrator's `quiet_bufs` liveness pa
 pkill -USR1 -f agent-bridge.py
 cat ~/.local/state/symmetria/agent-bridge-diagnostic.json | jq
 ```
+
+If the file is not updated (or does not exist), check the debug log for a
+`write_diagnostic_dump: failed` line — the most common cause is the state
+directory not existing yet (`mkdir -p ~/.local/state/symmetria` to create it).
 
 The dump includes every client, every activity entry with `stuck_for_seconds`, every history ring, and the warned-stuck set. Written atomically (`.tmp` + rename) so a reader can never see a half-written file.
 
