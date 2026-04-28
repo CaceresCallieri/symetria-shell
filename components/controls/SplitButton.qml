@@ -15,14 +15,8 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    enum Type {
-        Filled,
-        Tonal
-    }
-
     property real horizontalPadding: Appearance.padding.normal
     property real verticalPadding: Appearance.padding.smaller
-    property int type: SplitButton.Filled
     property bool disabled
     property bool loading
     property bool menuOnTop
@@ -43,9 +37,8 @@ Item {
     // "selected/emphasis" — but now that the chevron's `expanded` cue uses
     // the inverse-neumorphism inset (and the Quick Toggles brighten on active),
     // colour-emphasis is no longer carrying state and just made the SplitButton
-    // pop louder than the surrounding pills. Both Filled and Tonal types now
-    // share the same matte body; type retains semantic meaning if a consumer
-    // wants to override.
+    // pop louder than the surrounding pills. Override `colour:` directly if a
+    // different fill is needed.
     property color colour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
     property color textColour: Colours.palette.m3onSurface
     property color disabledColour: Qt.alpha(Colours.palette.m3onSurface, 0.1)
