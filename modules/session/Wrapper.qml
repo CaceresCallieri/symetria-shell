@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import qs.components
+import qs.services
 import qs.config
 import Quickshell
 import QtQuick
@@ -12,16 +13,21 @@ Item {
     required property var panels
     readonly property real nonAnimWidth: content.implicitWidth
 
-    visible: width > 0
-    implicitWidth: 0
+    visible: opacity > 0
+    implicitWidth: content.implicitWidth
     implicitHeight: content.implicitHeight
+
+    opacity: 0
+    scale: 0.9
+    transformOrigin: Item.Center
 
     states: State {
         name: "visible"
         when: root.visibilities.session && Config.session.enabled
 
         PropertyChanges {
-            root.implicitWidth: root.nonAnimWidth
+            root.opacity: 1
+            root.scale: 1
         }
     }
 
@@ -30,29 +36,38 @@ Item {
             from: ""
             to: "visible"
 
-            Anim {
-                target: root
-                property: "implicitWidth"
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            ParallelAnimation {
+                Anim {
+                    target: root
+                    property: "opacity"
+                }
+                Anim {
+                    target: root
+                    property: "scale"
+                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                }
             }
         },
         Transition {
             from: "visible"
             to: ""
 
-            Anim {
-                target: root
-                property: "implicitWidth"
-                easing.bezierCurve: Appearance.anim.curves.emphasized
+            ParallelAnimation {
+                Anim {
+                    target: root
+                    property: "opacity"
+                }
+                Anim {
+                    target: root
+                    property: "scale"
+                    easing.bezierCurve: Appearance.anim.curves.emphasized
+                }
             }
         }
     ]
 
     Loader {
         id: content
-
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.left: parent.left
 
         Component.onCompleted: active = Qt.binding(() => (root.visibilities.session && Config.session.enabled) || root.visible)
 

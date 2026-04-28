@@ -11,7 +11,7 @@ JsonObject {
     component Commands: JsonObject {
         property list<string> logout: ["loginctl", "terminate-user", ""]
         property list<string> shutdown: ["systemctl", "poweroff"]
-        property list<string> hibernate: ["systemctl", "hibernate"]
+        property list<string> suspend: ["systemctl", "suspend"]
         property list<string> reboot: ["systemctl", "reboot"]
     }
 

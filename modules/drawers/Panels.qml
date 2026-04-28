@@ -57,19 +57,16 @@ Item {
 
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
-        anchors.rightMargin: session.width + sidebar.width
+        anchors.rightMargin: sidebar.width
     }
 
     Session.Wrapper {
         id: session
 
-        clip: sidebar.width > 0
         visibilities: root.visibilities
         panels: root
 
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: parent.right
-        anchors.rightMargin: sidebar.width
+        anchors.centerIn: parent
     }
 
     Launcher.Wrapper {

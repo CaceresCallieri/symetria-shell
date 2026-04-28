@@ -8,7 +8,7 @@ import qs.utils
 import Quickshell
 import QtQuick
 
-Column {
+Row {
     id: root
 
     required property PersistentProperties visibilities
@@ -21,13 +21,36 @@ Column {
         target: logout
     }
 
+    Keys.onPressed: event => {
+        if (event.modifiers !== Qt.NoModifier)
+            return;
+        switch (event.key) {
+        case Qt.Key_L:
+            Quickshell.execDetached(Config.session.commands.logout);
+            event.accepted = true;
+            break;
+        case Qt.Key_P:
+            Quickshell.execDetached(Config.session.commands.shutdown);
+            event.accepted = true;
+            break;
+        case Qt.Key_S:
+            Quickshell.execDetached(Config.session.commands.suspend);
+            event.accepted = true;
+            break;
+        case Qt.Key_R:
+            Quickshell.execDetached(Config.session.commands.reboot);
+            event.accepted = true;
+            break;
+        }
+    }
+
     SessionButton {
         id: logout
 
         icon: "logout"
         command: Config.session.commands.logout
 
-        KeyNavigation.down: shutdown
+        KeyNavigation.right: shutdown
     }
 
     SessionButton {
@@ -36,30 +59,18 @@ Column {
         icon: "power_settings_new"
         command: Config.session.commands.shutdown
 
-        KeyNavigation.up: logout
-        KeyNavigation.down: hibernate
-    }
-
-    AnimatedImage {
-        width: Config.session.sizes.button
-        height: Config.session.sizes.button
-        sourceSize.width: width
-        sourceSize.height: height
-
-        playing: visible
-        asynchronous: true
-        speed: 0.7
-        source: Paths.absolutePath(Config.paths.sessionGif)
+        KeyNavigation.left: logout
+        KeyNavigation.right: suspend
     }
 
     SessionButton {
-        id: hibernate
+        id: suspend
 
-        icon: "downloading"
-        command: Config.session.commands.hibernate
+        icon: "bedtime"
+        command: Config.session.commands.suspend
 
-        KeyNavigation.up: shutdown
-        KeyNavigation.down: reboot
+        KeyNavigation.left: shutdown
+        KeyNavigation.right: reboot
     }
 
     SessionButton {
@@ -68,10 +79,10 @@ Column {
         icon: "cached"
         command: Config.session.commands.reboot
 
-        KeyNavigation.up: hibernate
+        KeyNavigation.left: suspend
     }
 
-    component SessionButton: StyledRect {
+    component SessionButton: Item {
         id: button
 
         required property string icon
@@ -79,9 +90,6 @@ Column {
 
         implicitWidth: Config.session.sizes.button
         implicitHeight: Config.session.sizes.button
-
-        radius: Appearance.rounding.large
-        color: button.activeFocus ? Colours.palette.m3secondaryContainer : Colours.tPalette.m3surfaceContainer
 
         Keys.onEnterPressed: Quickshell.execDetached(button.command)
         Keys.onReturnPressed: Quickshell.execDetached(button.command)
@@ -91,26 +99,37 @@ Column {
                 return;
 
             if (event.modifiers & Qt.ControlModifier) {
-                if (event.key === Qt.Key_J && KeyNavigation.down) {
-                    KeyNavigation.down.focus = true;
+                if (event.key === Qt.Key_L && KeyNavigation.right) {
+                    KeyNavigation.right.focus = true;
                     event.accepted = true;
-                } else if (event.key === Qt.Key_K && KeyNavigation.up) {
-                    KeyNavigation.up.focus = true;
+                } else if (event.key === Qt.Key_H && KeyNavigation.left) {
+                    KeyNavigation.left.focus = true;
                     event.accepted = true;
                 }
-            } else if (event.key === Qt.Key_Tab && KeyNavigation.down) {
-                KeyNavigation.down.focus = true;
+            } else if (event.key === Qt.Key_Tab && KeyNavigation.right) {
+                KeyNavigation.right.focus = true;
                 event.accepted = true;
             } else if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
-                if (KeyNavigation.up) {
-                    KeyNavigation.up.focus = true;
+                if (KeyNavigation.left) {
+                    KeyNavigation.left.focus = true;
                     event.accepted = true;
                 }
             }
         }
 
+        PillSurface {
+            anchors.fill: parent
+            radius: Appearance.rounding.full
+            color: button.activeFocus
+                ? Colours.pillStyle(Colours.palette.m3secondaryContainer, Colours.glass.subtle).background
+                : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+            borderColor: button.activeFocus
+                ? Colours.pillStyle(Colours.palette.m3secondaryContainer, Colours.glass.subtle).border
+                : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+        }
+
         StateLayer {
-            radius: parent.radius
+            radius: Appearance.rounding.full
             color: button.activeFocus ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
 
             function onClicked(): void {

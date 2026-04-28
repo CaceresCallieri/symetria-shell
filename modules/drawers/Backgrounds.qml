@@ -1,6 +1,5 @@
 import qs.services
 import qs.config
-import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
@@ -40,13 +39,6 @@ Item {
 
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-
-        Session.Background {
-            wrapper: root.panels.session
-
-            startX: shape.width - root.panels.sidebar.width
-            startY: (shape.height - wrapper.height) / 2 - rounding
-        }
 
         Launcher.Background {
             wrapper: root.panels.launcher
