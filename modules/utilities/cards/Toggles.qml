@@ -111,6 +111,9 @@ StyledRect {
         radius: Appearance.rounding.normal
         inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
         toggle: true
+        // radius is constant here, so the inherited radiusAnim Behavior can never fire.
+        // Disable it explicitly to prevent the evaluator from tracking a change that won't come.
+        radiusAnim.enabled: false
         radiusAnim.duration: Appearance.anim.durations.expressiveFastSpatial
         radiusAnim.easing.bezierCurve: Appearance.anim.curves.expressiveFastSpatial
 

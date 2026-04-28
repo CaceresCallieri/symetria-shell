@@ -45,6 +45,7 @@ Item {
     readonly property int visualActiveWsId: onSpecial && activeSpecialWsId !== -1 ? activeSpecialWsId : activeWsId
 
     // Occupied workspace map
+    // intentional var: JS object used as hash map ({ [wsId]: bool }) built via .reduce()
     readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
         acc[curr.id] = curr.lastIpcObject.windows > 0;
         return acc;

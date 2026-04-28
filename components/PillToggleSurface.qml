@@ -40,9 +40,14 @@ Item {
     property bool raised: true
 
     // --- Colors ----------------------------------------------------------
-    property color inactiveColor: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+    // Default style cached once — inactiveColor and borderColor share the same
+    // Colours.pillStyle() result so we avoid calling it twice per instance/change.
+    readonly property var _defaultStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
+    // American spelling matches QML's Color type convention (not the project's Colour convention).
+    property color inactiveColor: _defaultStyle.background
     property color activeColor: Colours.palette.m3primary
-    property color borderColor: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+    property color borderColor: _defaultStyle.border
 
     property real radius: Appearance.rounding.full
 
@@ -80,6 +85,10 @@ Item {
     // insetFactor = "depth is inverted (pressed in)". raisedFactor is a derived
     // "raised cues only" multiplier so outer shadows + top rim light fade out
     // exactly when the inset cues fade in.
+    //
+    // INTERNAL — do NOT set these from outside. Drive the depth state via `raised`
+    // and `active`. Writing these directly would desync the state machine (the
+    // Behavior would animate from the external value, not from raised/active).
     property real depthFactor: raised ? 1.0 : 0.0
     property real insetFactor: raised && active ? 1.0 : 0.0
     readonly property real raisedFactor: depthFactor * (1.0 - insetFactor)

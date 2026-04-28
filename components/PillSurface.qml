@@ -42,7 +42,11 @@ Item {
     id: root
 
     // --- Fill ------------------------------------------------------------
-    property color color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+    // Default style cached once — both color and borderColor share the same
+    // Colours.pillStyle() result so we avoid calling it twice per instance/change.
+    readonly property var _defaultStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
+    property color color: _defaultStyle.background
     property real radius: Appearance.rounding.full
 
     // --- Border ----------------------------------------------------------
@@ -52,7 +56,7 @@ Item {
     // Hairline border from the shared pill palette — gives the pill a
     // crisp silhouette on transparent/wallpaper-backed bars where the
     // shadows alone would leave the edge vague.
-    property color borderColor: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
+    property color borderColor: _defaultStyle.border
     property real borderWidth: 1
 
     // --- Two-shadow convex depth (neumorphism-derived) -------------------
@@ -112,9 +116,10 @@ Item {
         border.width: root.borderWidth
         border.color: root.borderColor
 
-        // Inner rim/contact gradient — disabled by default in neumorphism
-        // mode (alphas default to 0). Rectangle is still instantiated so
-        // consumers that flip the alphas on per-instance see immediate effect.
+        // Inner rim/contact gradient — top rim highlight renders by default
+        // (highlightAlpha: 0.08); innerShadowAlpha defaults to 0 so the bottom
+        // band is off. Rectangle is always instantiated so consumers that change
+        // the alphas per-instance see immediate effect without a Loader.
         Rectangle {
             anchors.fill: parent
             radius: parent.radius
