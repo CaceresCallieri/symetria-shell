@@ -148,34 +148,14 @@ CustomMouseArea {
 
             const showSidebar = pressed && dragStart.x > 2 + panels.sidebar.x;
 
-            // Show/hide session on drag
-            if (pressed && inRightPanel(panels.session, dragStart.x, dragStart.y) && withinPanelHeight(panels.session, x, y)) {
-                if (dragX < -Config.session.dragThreshold)
-                    visibilities.session = true;
-                else if (dragX > Config.session.dragThreshold)
-                    visibilities.session = false;
-
-                // Show sidebar on drag if in session area and session is nearly fully visible
-                if (showSidebar && panels.session.width >= panels.session.nonAnimWidth && dragX < -Config.sidebar.dragThreshold)
-                    visibilities.sidebar = true;
-            } else if (showSidebar && dragX < -Config.sidebar.dragThreshold) {
-                // Show sidebar on drag if not in session area
+            if (showSidebar && dragX < -Config.sidebar.dragThreshold)
                 visibilities.sidebar = true;
-            }
         } else {
             const outOfSidebar = x < width - panels.sidebar.width;
 
             // Show OSD overlay on right-edge hover (outside sidebar)
             if (outOfSidebar && inRightPanel(panels.osd, x, y))
                 Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
-
-            // Show/hide session on drag
-            if (pressed && outOfSidebar && inRightPanel(panels.session, dragStart.x, dragStart.y) && withinPanelHeight(panels.session, x, y)) {
-                if (dragX < -Config.session.dragThreshold)
-                    visibilities.session = true;
-                else if (dragX > Config.session.dragThreshold)
-                    visibilities.session = false;
-            }
 
             // Hide sidebar on drag
             if (pressed && inRightPanel(panels.sidebar, dragStart.x, 0) && dragX > Config.sidebar.dragThreshold)

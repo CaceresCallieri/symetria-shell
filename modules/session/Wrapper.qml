@@ -11,7 +11,6 @@ Item {
 
     required property PersistentProperties visibilities
     required property var panels
-    readonly property real nonAnimWidth: content.implicitWidth
 
     visible: opacity > 0
     implicitWidth: content.implicitWidth
