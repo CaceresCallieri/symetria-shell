@@ -7,8 +7,10 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-// Base component for pill-styled containers in the bar.
-// Provides consistent styling and layout structure for StatusIcons, TimePill, SystemPill, etc.
+// Base component for bar pills with a single centered RowLayout child
+// (StatusIcons, TimePill, SystemPill). Uses the shared PillSurface primitive
+// for background styling, so visual changes (claymorphism / flat / glass)
+// happen in PillSurface.qml and propagate here for free.
 //
 // Usage:
 //   PillContainer {
@@ -21,7 +23,7 @@ import QtQuick.Layouts
 //       }
 //   }
 
-StyledRect {
+Item {
     id: root
 
     // Content color passed to child components (default: m3tertiary for info pills).
@@ -35,26 +37,12 @@ StyledRect {
     // Children with popouts should set: iconContainer: <RowLayout id>
     property Item iconContainer: null
 
-    // Glassmorphism styling (subtle intensity for background containers).
-    // Centralized here - changes apply to all pills automatically.
-    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var glassStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
-    color: glassStyle.background
-    radius: Appearance.rounding.full
-    border.width: 1
-    border.color: glassStyle.border
-
     // Internal padding constant for pill edges
     readonly property int pillPadding: Appearance.spacing.large
 
     // Index of primary content child (assumes single RowLayout child)
     readonly property int primaryContentIndex: 0
 
-    clip: true
     implicitHeight: Config.bar.sizes.innerWidth
     implicitWidth: contentArea.children[primaryContentIndex]?.implicitWidth ?? 0
 
@@ -63,6 +51,17 @@ StyledRect {
     // This enables natural syntax: PillContainer { RowLayout { ... } }
     default property alias content: contentArea.data
 
+    // Shared pill visual (claymorphism shadow + fill + border + inner gradient).
+    // Defaults match the shell-wide pill appearance, so we don't pass any
+    // styling overrides here.
+    PillSurface {
+        anchors.fill: parent
+    }
+
+    // Content lives as a SIBLING of PillSurface (not inside it): pill content
+    // is always smaller than the pill body and centered, so no rounded clipping
+    // is needed. Keeping it at the Item-root level avoids interfering with
+    // PillSurface's internal holder/clipping machinery.
     Item {
         id: contentArea
         anchors.centerIn: parent

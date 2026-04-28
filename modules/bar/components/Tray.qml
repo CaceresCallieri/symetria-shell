@@ -6,7 +6,7 @@ import qs.config
 import Quickshell.Services.SystemTray
 import QtQuick
 
-StyledRect {
+Item {
     id: root
 
     // Popout interface: trayContainer is the Row, trayItems is the Repeater
@@ -19,11 +19,6 @@ StyledRect {
 
     property bool expanded
 
-    // Pill styling (subtle intensity for background containers,
-    // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
-    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
-
     // Width calculation: In non-compact mode, Row's implicitWidth includes
     // leftPadding + rightPadding. In compact mode, we manually calculate
     // based on expanded state and add padding for the expand icon area.
@@ -33,16 +28,19 @@ StyledRect {
         return (expanded ? expandIcon.implicitWidth + layout.implicitWidth + spacing : expandIcon.implicitWidth) + pillPadding * 2;
     }
 
-    clip: true
     visible: width > 0
 
     implicitHeight: Config.bar.sizes.innerWidth
     implicitWidth: nonAnimWidth
 
-    color: items.count > 0 ? glassStyle.background : "transparent"
-    radius: Appearance.rounding.full
-    border.width: items.count > 0 ? 1 : 0
-    border.color: glassStyle.border
+    // Shared pill background. Hidden when the tray is empty so the bar shows
+    // no floating shadow/frame when there are no items. Borderless/transparent
+    // state is handled by `visible` rather than fading `color` → "transparent"
+    // because the pill's drop shadow must also disappear.
+    PillSurface {
+        anchors.fill: parent
+        visible: items.count > 0
+    }
 
     Row {
         id: layout

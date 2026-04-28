@@ -62,16 +62,6 @@ StyledRect {
             }
 
             Toggle {
-                icon: "settings"
-                inactiveOnColour: Colours.palette.m3onSurfaceVariant
-                toggle: false
-                onClicked: {
-                    root.visibilities.utilities = false;
-                    root.popouts.detach("network");
-                }
-            }
-
-            Toggle {
                 icon: "gamepad"
                 checked: GameMode.enabled
                 onClicked: GameMode.enabled = !GameMode.enabled
@@ -91,13 +81,34 @@ StyledRect {
                 onClicked: VPN.toggle()
             }
 
+            // Settings entry — placed last and forced into the same raised
+            // claymorphism aesthetic as the inactive toggles, so it doesn't
+            // visually stand alone. `toggle: false` keeps its semantics as a
+            // pure action (no on/off state); `raised: true` overrides
+            // IconButton's auto-derivation (which would flatten it because
+            // toggle is false) to keep the look consistent across the row.
+            Toggle {
+                icon: "settings"
+                inactiveOnColour: Colours.palette.m3onSurfaceVariant
+                toggle: false
+                raised: true
+                onClicked: {
+                    root.visibilities.utilities = false;
+                    root.popouts.detach("network");
+                }
+            }
+
         }
     }
 
     component Toggle: IconButton {
         Layout.fillWidth: true
         Layout.preferredWidth: implicitWidth + (stateLayer.pressed ? Appearance.padding.large : internalChecked ? Appearance.padding.smaller : 0)
-        radius: stateLayer.pressed ? Appearance.rounding.small / 2 : internalChecked ? Appearance.rounding.small : Appearance.rounding.normal
+        // Constant pill rounding across active / inactive — the visual
+        // differentiation now comes from PillToggleSurface's inset depth +
+        // brighter fill, so we no longer need the Material "circle → rounded
+        // square morph" radius shift to signal state.
+        radius: Appearance.rounding.normal
         inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
         toggle: true
         radiusAnim.duration: Appearance.anim.durations.expressiveFastSpatial

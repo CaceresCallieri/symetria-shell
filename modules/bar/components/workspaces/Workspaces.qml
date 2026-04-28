@@ -59,13 +59,6 @@ Item {
 
     property real blur: onSpecial ? 1 : 0
 
-    // Pill styling (matching other bar pills like Tray, TimePill, SystemPill)
-    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var glassStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
     // Dot sizing
     readonly property int dotSize: 4
     readonly property int dotSpacing: Appearance.spacing.normal
@@ -93,19 +86,17 @@ Item {
         }
     }
 
-    // The workspace pill
-    StyledClippingRect {
+    // The workspace pill — uses the shared PillSurface for claymorphism styling.
+    // Content is declared inside its default slot so full-bleed overlays
+    // (OccupiedBg, ActiveIndicator, SpecialWorkspaces) are clipped to the
+    // rounded capsule shape.
+    PillSurface {
         id: pill
 
         anchors.centerIn: parent
 
         implicitHeight: Config.bar.sizes.innerWidth
         implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
-
-        color: root.glassStyle.background
-        radius: Appearance.rounding.full
-        border.width: 1
-        border.color: root.glassStyle.border
 
         Item {
             anchors.fill: parent

@@ -151,24 +151,15 @@ Item {
         return order.map(p => ({ project: p, agents: groups[p] }));
     }
 
-    // Glass style for the outer container (matches top bar workspace pill)
-    readonly property var glassStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
-    StyledClippingRect {
+    // Outer pill — shared claymorphism surface, matches the top-bar workspace pill.
+    // Full-bleed overlays (ActiveIndicator) clip against its rounded shape.
+    PillSurface {
         id: pill
 
         anchors.centerIn: parent
 
         implicitHeight: Config.bar.sizes.innerWidth
         implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
-
-        color: root.glassStyle.background
-        radius: Appearance.rounding.full
-        border.width: 1
-        border.color: root.glassStyle.border
 
         RowLayout {
             id: layout

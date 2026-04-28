@@ -3,7 +3,11 @@ import qs.services
 import qs.config
 import QtQuick
 
-StyledRect {
+// Visual root is now PillToggleSurface so toggle-style IconButtons get the
+// Tier 2 raised-claymorphism (inactive) ↔ flat-accent (active) treatment for
+// free. Non-toggle IconButtons (`toggle: false`) auto-derive `raised: false`
+// and stay flat — Tier 3 behavior preserved with no consumer changes.
+PillToggleSurface {
     id: root
 
     enum Type {
@@ -26,7 +30,16 @@ StyledRect {
     property alias radiusAnim: radiusAnim
 
     property bool internalChecked
-    property color activeColour: Qt.lighter(Colours.pillStyle(type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5)
+    // Toggle buttons (toggle: true, non-Text) use a subtle lightening of the
+    // inactive surface for the active state — same matte family, just one
+    // tier brighter, so the "on" state reads as a brighter same-shape pill
+    // rather than a vivid color shift. Non-toggle Filled action buttons keep
+    // the original vivid lightened-primary fill (their state never flips).
+    property color activeColour: {
+        if (toggle && type !== IconButton.Text)
+            return Qt.lighter(inactiveColour, 1.35);
+        return Qt.lighter(Colours.pillStyle(type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5);
+    }
     property color inactiveColour: {
         if (!toggle && type === IconButton.Filled)
             return Qt.lighter(Colours.pillStyle(Colours.palette.m3primary, Colours.glass.veryStrong).background, 1.5);
@@ -45,8 +58,21 @@ StyledRect {
 
     onCheckedChanged: internalChecked = checked
 
+    // --- PillToggleSurface bindings -----------------------------------
+    // Tier 2 only when this is a real toggle button. Filled/Tonal toggles
+    // get raised claymorphism in the inactive state; Text variant is always
+    // flat (transparent surface).
+    raised: toggle && type !== IconButton.Text
+    active: internalChecked
+
+    // PillToggleSurface body fill is driven by inactiveColor / activeColor.
+    // For Text type, the body must be transparent regardless of state.
+    // For disabled, both colors collapse to disabledColour so the disabled
+    // pill reads uniformly without losing the active-on-disabled animation.
+    inactiveColor: type === IconButton.Text ? "transparent" : (disabled ? disabledColour : inactiveColour)
+    activeColor: type === IconButton.Text ? "transparent" : (disabled ? disabledColour : activeColour)
+
     radius: internalChecked ? Appearance.rounding.small : implicitHeight / 2 * Math.min(1, Appearance.rounding.scale)
-    color: type === IconButton.Text ? "transparent" : disabled ? disabledColour : internalChecked ? activeColour : inactiveColour
 
     implicitWidth: implicitHeight
     implicitHeight: label.implicitHeight + padding * 2

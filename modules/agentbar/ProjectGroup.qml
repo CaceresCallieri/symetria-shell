@@ -8,7 +8,7 @@ import QtQuick
 import QtQuick.Layouts
 
 /// Per-project pill: styled container with project name and agent chips.
-StyledRect {
+PillSurface {
     id: root
 
     required property string project
@@ -50,13 +50,15 @@ StyledRect {
 
     color: isCurrentProject ? focusedStyle.background : unfocusedStyle.background
     radius: Appearance.rounding.full
-    border.width: hasPermissionNeeded ? 2 : 1
-    border.color: {
+    borderWidth: hasPermissionNeeded ? 2 : 1
+    borderColor: {
         if (hasPermissionNeeded) return Colours.palette.m3tertiary;
         if (isCurrentProject) return focusedStyle.border;
         return unfocusedStyle.border;
     }
-    clip: true  // clips outer half of sweepCanvas halo stroke → inward glow effect
+    // PillSurface's body is a StyledClippingRect, which already clips children to
+    // the rounded capsule shape — this clips the outer half of sweepCanvas's halo
+    // stroke, producing the inward-glow effect we want. No extra clip flag needed.
 
     Behavior on color {
         ColorAnimation {
@@ -65,14 +67,14 @@ StyledRect {
         }
     }
 
-    Behavior on border.width {
+    Behavior on borderWidth {
         Anim {
             duration: Appearance.anim.durations.normal
             easing.type: Easing.OutCubic
         }
     }
 
-    Behavior on border.color {
+    Behavior on borderColor {
         ColorAnimation {
             duration: Appearance.anim.durations.normal
             easing.type: Easing.OutCubic
@@ -243,7 +245,7 @@ StyledRect {
         ctx.clearRect(0, 0, w, h);
         if (w <= 0 || h <= 0) return;
 
-        const bw = root.border.width;
+        const bw = root.borderWidth;
         const inset = bw / 2;
         const ew = w - bw;      // effective width inside border
         const eh = h - bw;      // effective height inside border
