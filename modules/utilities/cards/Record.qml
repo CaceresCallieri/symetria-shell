@@ -30,14 +30,16 @@ StyledRect {
             spacing: Appearance.spacing.normal
             z: 1
 
-            StyledRect {
+            PillSurface {
                 implicitWidth: implicitHeight
                 implicitHeight: {
                     const h = icon.implicitHeight + Appearance.padding.smaller * 2;
                     return h - (h % 2);
                 }
 
-                radius: Appearance.rounding.full
+                // Match the Keep Awake icon circle: claymorphism in both states,
+                // body brightens while recording. Keeps the popup visually unified
+                // with the Quick Toggles row.
                 color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Recorder.running ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                 MaterialIcon {

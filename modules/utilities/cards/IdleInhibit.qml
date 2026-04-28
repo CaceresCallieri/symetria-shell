@@ -24,11 +24,13 @@ StyledRect {
         anchors.margins: Appearance.padding.large
         spacing: Appearance.spacing.normal
 
-        StyledRect {
+        PillSurface {
             implicitWidth: implicitHeight
             implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
 
-            radius: Appearance.rounding.full
+            // Brighten the body when Keep Awake is on, but keep the raised
+            // claymorphism depth in both states so the icon circle reads as
+            // part of the same pill family as the Quick Toggles below.
             color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, IdleInhibitor.enabled ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
             MaterialIcon {

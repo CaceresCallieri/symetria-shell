@@ -4,7 +4,15 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-Row {
+// Two adjacent claymorphism pills: a selector pill (left, always raised) and
+// an expander pill (right, raised when closed → inset when the menu is open).
+// The "menu open" cue reuses the inverse-neumorphism inset depth from the
+// Quick Toggles so the SplitButton speaks the same visual language.
+//
+// Root is Item (not Row) because the dropdown Menu must escape PillToggleSurface's
+// ClippingRectangle body — otherwise it gets clipped to the pill's bounds. Placing
+// it as a sibling of the two halves at the SplitButton root level keeps it free.
+Item {
     id: root
 
     enum Type {
@@ -29,18 +37,38 @@ Row {
     property alias label: label
     property alias stateLayer: stateLayer
 
-    property color colour: type == SplitButton.Filled ? Qt.lighter(Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background, 1.5) : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+    // Match the inactive Quick Toggle body fill so SplitButton halves sit in
+    // the same tonal family as the row of toggles below them. The previous
+    // Filled variant used a Qt.lighter()×1.5 + glass.medium fill that read as
+    // "selected/emphasis" — but now that the chevron's `expanded` cue uses
+    // the inverse-neumorphism inset (and the Quick Toggles brighten on active),
+    // colour-emphasis is no longer carrying state and just made the SplitButton
+    // pop louder than the surrounding pills. Both Filled and Tonal types now
+    // share the same matte body; type retains semantic meaning if a consumer
+    // wants to override.
+    property color colour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
     property color textColour: Colours.palette.m3onSurface
     property color disabledColour: Qt.alpha(Colours.palette.m3onSurface, 0.1)
     property color disabledTextColour: Qt.alpha(Colours.palette.m3onSurface, 0.38)
 
-    spacing: Math.floor(Appearance.spacing.small / 2)
+    readonly property real _gap: Appearance.spacing.small
 
-    StyledRect {
+    implicitWidth: selector.implicitWidth + _gap + expandBtn.implicitWidth
+    implicitHeight: expandBtn.implicitHeight
+
+    PillToggleSurface {
+        id: selector
+
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+
+        raised: true
+        active: false
+        // Body color is constant — selector half never changes state, so we
+        // wire activeColor to the same value to keep CAnim bindings inert.
+        inactiveColor: root.disabled ? root.disabledColour : root.colour
+        activeColor: inactiveColor
         radius: implicitHeight / 2 * Math.min(1, Appearance.rounding.scale)
-        topRightRadius: Appearance.rounding.small / 2
-        bottomRightRadius: Appearance.rounding.small / 2
-        color: root.disabled ? root.disabledColour : root.colour
 
         implicitWidth: textRow.implicitWidth + root.horizontalPadding * 2
         implicitHeight: expandBtn.implicitHeight
@@ -48,8 +76,11 @@ Row {
         StateLayer {
             id: stateLayer
 
-            rect.topRightRadius: parent.topRightRadius
-            rect.bottomRightRadius: parent.bottomRightRadius
+            // contentHolder (StateLayer's actual parent) has no radius, so the
+            // implicit `parent.radius` fallback in StateLayer would clip to 0.
+            // Bind directly to the surface radius so hover/press feedback hugs
+            // the pill shape.
+            radius: selector.radius
             color: root.textColour
             disabled: root.disabled
 
@@ -117,15 +148,21 @@ Row {
         }
     }
 
-    StyledRect {
+    PillToggleSurface {
         id: expandBtn
 
-        property real rad: root.expanded ? implicitHeight / 2 * Math.min(1, Appearance.rounding.scale) : Appearance.rounding.small / 2
+        anchors.left: selector.right
+        anchors.leftMargin: root._gap
+        anchors.verticalCenter: parent.verticalCenter
 
+        // Press-in cue when the menu is open: PillToggleSurface fades the
+        // outer shadows + top rim and paints an inset gradient. Combined with
+        // the chevron rotation already below, "expanded" reads unambiguously.
+        raised: true
+        active: root.expanded
+        inactiveColor: root.disabled ? root.disabledColour : root.colour
+        activeColor: inactiveColor
         radius: implicitHeight / 2 * Math.min(1, Appearance.rounding.scale)
-        topLeftRadius: rad
-        bottomLeftRadius: rad
-        color: root.disabled ? root.disabledColour : root.colour
 
         implicitWidth: implicitHeight
         implicitHeight: expandIcon.implicitHeight + root.verticalPadding * 2
@@ -133,8 +170,7 @@ Row {
         StateLayer {
             id: expandStateLayer
 
-            rect.topLeftRadius: parent.topLeftRadius
-            rect.bottomLeftRadius: parent.bottomLeftRadius
+            radius: expandBtn.radius
             color: root.textColour
             disabled: root.disabled
 
@@ -147,42 +183,35 @@ Row {
             id: expandIcon
 
             anchors.centerIn: parent
-            anchors.horizontalCenterOffset: root.expanded ? 0 : -Math.floor(root.verticalPadding / 4)
-
             text: "expand_more"
             color: root.disabled ? root.disabledTextColour : root.textColour
             rotation: root.expanded ? 180 : 0
-
-            Behavior on anchors.horizontalCenterOffset {
-                Anim {}
-            }
 
             Behavior on rotation {
                 Anim {}
             }
         }
+    }
 
-        Behavior on rad {
-            Anim {}
-        }
+    // Menu lives outside both PillToggleSurfaces so the ClippingRectangle pill
+    // bodies don't crop it. Anchored to expandBtn so it tracks the chevron's
+    // edge regardless of layout changes.
+    Menu {
+        id: menu
 
-        Menu {
-            id: menu
+        states: State {
+            when: root.menuOnTop
 
-            states: State {
-                when: root.menuOnTop
-
-                AnchorChanges {
-                    target: menu
-                    anchors.top: undefined
-                    anchors.bottom: expandBtn.top
-                }
+            AnchorChanges {
+                target: menu
+                anchors.top: undefined
+                anchors.bottom: expandBtn.top
             }
-
-            anchors.top: parent.bottom
-            anchors.right: parent.right
-            anchors.topMargin: Appearance.spacing.small
-            anchors.bottomMargin: Appearance.spacing.small
         }
+
+        anchors.top: expandBtn.bottom
+        anchors.right: expandBtn.right
+        anchors.topMargin: Appearance.spacing.small
+        anchors.bottomMargin: Appearance.spacing.small
     }
 }
