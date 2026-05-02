@@ -97,8 +97,44 @@ StyledRect {
     implicitWidth: size
     radius: Appearance.rounding.full
     color: glassStyle.background
-    border.width: 1
+    // Neumorphic recipe: drop the border so the inset depression is the only
+    // state cue, matching PillToggleSurface's pressed-in look on the quick
+    // toggles. A drawn outline competes with shadow-defined edges.
+    border.width: 0
     border.color: glassStyle.border
+
+    // Inset depression overlays — mirror PillToggleSurface's diagonal "well":
+    // top-dark + bottom-light (vertical, full strength) composited with a
+    // horizontal pass at 50% weight so the top-LEFT corner is darkest and the
+    // bottom-RIGHT brightest. Stops match PillToggleSurface so the bar's
+    // active workspace and the utility toggles share the same pressed feel.
+    // Rendered before the Colouriser so the icon glyph stays crisp.
+    Rectangle {
+        anchors.fill: parent
+        radius: parent.radius
+        color: "transparent"
+
+        gradient: Gradient {
+            GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, 0.55) }
+            GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
+            GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
+            GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.12) }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: parent.radius
+        color: "transparent"
+
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, 0.55 * 0.5) }
+            GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
+            GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
+            GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.12 * 0.5) }
+        }
+    }
 
     Colouriser {
         source: root.mask
