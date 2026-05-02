@@ -8,8 +8,11 @@ import QtQuick.Layouts
 PillCard {
     id: root
 
+    // Spacing between the main layout row and the active-since chip below it.
+    readonly property real chipTopSpacing: Appearance.spacing.larger
+
     Layout.fillWidth: true
-    implicitHeight: layout.implicitHeight + (IdleInhibitor.enabled ? activeChip.implicitHeight + activeChip.anchors.topMargin : 0) + Appearance.padding.large * 2
+    implicitHeight: layout.implicitHeight + (IdleInhibitor.enabled ? activeChip.implicitHeight + root.chipTopSpacing : 0) + Appearance.padding.large * 2
 
     // Opt into clipping: the active-since chip slides off the bottom edge
     // when Keep Awake is toggled off, and we want that overflow hidden.
@@ -74,7 +77,6 @@ PillCard {
 
         anchors.bottom: parent.bottom
         anchors.left: parent.left
-        anchors.topMargin: Appearance.spacing.larger
         anchors.bottomMargin: IdleInhibitor.enabled ? Appearance.padding.large : -implicitHeight
         anchors.leftMargin: Appearance.padding.large
 

@@ -6,7 +6,6 @@ import qs.components.containers
 import qs.services
 import qs.config
 import qs.utils
-import Symmetria
 import Quickshell
 import Quickshell.Widgets
 import QtQuick
@@ -71,8 +70,14 @@ ColumnLayout {
             sortReversed: false  // Time sort: false = descending (newest first)
         }
 
-        // Force refresh when recording stops to ensure new file is detected
-        // We poll because the CLI moves the file asynchronously after the recorder process dies
+        // HACK: force-refresh FolderListModel by toggling `folder` after recording stops.
+        // Root cause: the CLI moves the finished recording file asynchronously after the recorder
+        // process exits, so the file may not appear for 1–5s after `Recorder.running` goes false.
+        // The clean solution would be a filesystem watcher (inotify) on the recordings directory,
+        // but QML's FolderListModel already provides polling-free watching — the issue is it doesn't
+        // pick up files moved into the folder by an external process. Toggling `folder` forces a
+        // model reset which re-reads the directory. Remove once the CLI writes the file before
+        // signalling stop (or once Recorder exposes a `recordingReady` signal with the file path).
         Timer {
             id: refreshTimer
             interval: 500  // Poll every 500ms
