@@ -53,30 +53,34 @@ Item {
     // Flat props (not a `border` group) so Item-based consumers can bind
     // and animate them directly: `Behavior on borderWidth { Anim {} }`.
     //
-    // Hairline border from the shared pill palette — gives the pill a
-    // crisp silhouette on transparent/wallpaper-backed bars where the
-    // shadows alone would leave the edge vague.
+    // Default 0: reference dark neumorphism uses dual shadows alone to
+    // define the silhouette — drawn outlines compete with the shadow-edge.
+    // Consumers that explicitly need a hairline (e.g. on transparent bars
+    // where shadows wash out) can opt back in via `borderWidth: 1`.
     property color borderColor: _defaultStyle.border
-    property real borderWidth: 1
+    property real borderWidth: 0
 
     // --- Two-shadow convex depth (neumorphism-derived) -------------------
-    // Slightly asymmetric offsets (y > x on the dark shadow) mimic a
-    // natural overhead light source rather than a perfect 45° diagonal,
-    // which feels more organic than pure neumorphism.
+    // Reference-aligned: SHORT-RANGE blur (depth cue stays near the pill
+    // edge — no outer-glow halo) but STRONG alpha (so the depth reads
+    // clearly against PillCard's solid backdrop). Offsets stay slightly
+    // asymmetric (y > x on the dark shadow) for a natural overhead-light
+    // feel rather than a sterile perfect-diagonal.
     property real darkShadowOffsetX: 2
     property real darkShadowOffsetY: 3
-    property real darkShadowBlur: 12
-    property real darkShadowAlpha: 0.40
+    property real darkShadowBlur: 10
+    property real darkShadowAlpha: 0.45
 
     property real lightShadowOffsetX: -2
     property real lightShadowOffsetY: -2
-    property real lightShadowBlur: 8
+    property real lightShadowBlur: 7
     property real lightShadowAlpha: 0.10
 
     // --- Inner rim highlight (clay-derived, dialed back) -----------------
-    // Subtle top rim light only; the heavy bottom inner shadow that
-    // made pure claymorphism feel dated is kept at 0 by default.
-    property real highlightAlpha: 0.08
+    // Pulled back to near-zero — the reference relies on dual shadows
+    // alone, with no top rim. Keeping a faint trace so the pill doesn't
+    // feel completely matte/dead, but barely there.
+    property real highlightAlpha: 0.02
     property real innerShadowAlpha: 0.0
 
     // Default slot: children declared inside PillSurface { ... } get reparented

@@ -52,28 +52,51 @@ Item {
     property real radius: Appearance.rounding.full
 
     // --- Tunable depth params (apply when raised && !active) -------------
-    // Slightly stronger than PillSurface defaults — toggles want to feel more
-    // tactile so users get a clear "press me" cue.
+    // Reference-aligned dark neumorphism: SHORT-RANGE blur (shadow stays
+    // close to the pill edge — no outer-glow halo) but STRONG alpha (so the
+    // depth cue actually reads against PillCard's solid backdrop). Reference
+    // shadows are visibly punchy, just contained. Top rim highlight near
+    // zero so dual shadows alone define the raised silhouette. Border width
+    // dropped to zero — drawn outlines compete with shadow-defined edges.
     property real darkShadowOffsetX: 2
     property real darkShadowOffsetY: 4
-    property real darkShadowBlur: 14
-    property real darkShadowAlphaMax: 0.45
+    property real darkShadowBlur: 10
+    property real darkShadowAlphaMax: 0.55
 
     property real lightShadowOffsetX: -2
     property real lightShadowOffsetY: -2
-    property real lightShadowBlur: 10
+    property real lightShadowBlur: 8
     property real lightShadowAlphaMax: 0.12
 
-    property real highlightAlphaMax: 0.16
-    property real borderWidthMax: 1
+    property real highlightAlphaMax: 0.04
+    property real borderWidthMax: 0
 
     // --- Inverse-neumorphism (inset / pressed-in) depth params ----------
-    // Applied when raised && active. The dark inset band along the top sells
-    // the "well" effect; the light band at the bottom is a subtle fill-light
-    // reflection that grounds the pill so it doesn't read as just a dark
-    // smudge.
-    property real darkInsetAlpha: 0.35
-    property real lightInsetAlpha: 0.10
+    // Applied when raised && active. The depression's depth is composed
+    // along TWO axes for a true diagonal "well" effect (matching the
+    // reference where dark concentrates at top-LEFT and light at bottom-
+    // RIGHT, not just top↔bottom):
+    //
+    //   Vertical axis (full strength):
+    //     top  → darkInsetAlpha (shadow falling into the well from overhead)
+    //     bottom → lightInsetAlpha (reflected fill light from below)
+    //
+    //   Horizontal axis (weighted by horizontalInsetWeight, default 50%):
+    //     left  → darkInsetAlpha × weight  (rim shadow continuing down-side)
+    //     right → lightInsetAlpha × weight (fill-light wrapping up-side)
+    //
+    // The two gradients composite: top-left corner gets shadow from BOTH
+    // axes (deepest dark), bottom-right corner gets light from both
+    // (brightest highlight), off-diagonals partially cancel. This produces
+    // the classical neumorphic diagonal-inset look without needing a true
+    // 2D radial gradient (which QML's Gradient API doesn't support).
+    //
+    // Vertical bias keeps the lighting direction consistent with the
+    // raised pills' overhead-light dual shadows — the whole shell feels
+    // lit from the same direction.
+    property real darkInsetAlpha: 0.55
+    property real lightInsetAlpha: 0.12
+    property real horizontalInsetWeight: 0.50
 
     // --- Animation duration for the active↔inactive transition ----------
     property int transitionDuration: Appearance.anim.durations.normal
@@ -158,10 +181,9 @@ Item {
             }
         }
 
-        // Inset-cue overlay: dark band along the top edge (shadow falling
-        // into the well) + subtle light band at the bottom (reflected fill).
-        // Visible only when raised && active. This is the inverse neumorphism
-        // pressed-in effect — the dominant cue that the toggle is "on."
+        // Inset-cue overlay (vertical axis): dark band on top edge (shadow
+        // falling into the well from overhead light) + light band on the
+        // bottom edge (reflected fill light). Full strength.
         Rectangle {
             anchors.fill: parent
             radius: parent.radius
@@ -173,6 +195,27 @@ Item {
                 GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
                 GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
                 GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, root.lightInsetAlpha * root.insetFactor) }
+            }
+        }
+
+        // Inset-cue overlay (horizontal axis): dark band on left edge,
+        // light band on right edge. Weighted by horizontalInsetWeight so
+        // the vertical axis stays dominant (overhead-light bias). Together
+        // with the vertical overlay, this composites into the diagonal
+        // top-left-shadow / bottom-right-highlight neumorphic well that
+        // matches the reference.
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: "transparent"
+            visible: root.insetFactor > 0.01
+
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, root.darkInsetAlpha * root.horizontalInsetWeight * root.insetFactor) }
+                GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
+                GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
+                GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, root.lightInsetAlpha * root.horizontalInsetWeight * root.insetFactor) }
             }
         }
 

@@ -30,14 +30,19 @@ PillToggleSurface {
     property alias radiusAnim: radiusAnim
 
     property bool internalChecked
-    // Toggle buttons (toggle: true, non-Text) use a subtle lightening of the
-    // inactive surface for the active state — same matte family, just one
-    // tier brighter, so the "on" state reads as a brighter same-shape pill
-    // rather than a vivid color shift. Non-toggle Filled action buttons keep
-    // the original vivid lightened-primary fill (their state never flips).
+    // Toggle buttons (toggle: true, non-Text): pure-monochrome neumorphism.
+    // Body color is IDENTICAL to inactive — depth direction (inset vs
+    // raised) is the entire state signal, matching the reference where
+    // pressed-in elements share the surrounding surface color and only
+    // their inverted shadow defines them. The icon's `fill` change
+    // (outlined vs filled) provides a secondary cue.
+    //
+    // Non-toggle Filled action buttons keep the vivid lightened-primary fill
+    // (their state never flips, so the inset cue isn't available — they
+    // need color to communicate the action).
     property color activeColour: {
         if (toggle && type !== IconButton.Text)
-            return Qt.lighter(inactiveColour, 1.35);
+            return inactiveColour;
         return Qt.lighter(Colours.pillStyle(type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5);
     }
     property color inactiveColour: {

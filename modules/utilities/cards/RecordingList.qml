@@ -45,7 +45,13 @@ ColumnLayout {
 
             IconButton {
                 icon: root.props.recordingListExpanded ? "unfold_less" : "unfold_more"
-                type: IconButton.Text
+                // Tonal + raised: false-toggle pure-action button on the
+                // matte ContainerHigh pill body — same aesthetic as Quick
+                // Toggles' Settings entry. Sits cleanly on PillCard's
+                // dimmer ContainerLow surface.
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
                 label.animate: true
                 onClicked: root.props.recordingListExpanded = !root.props.recordingListExpanded
             }
@@ -109,7 +115,13 @@ ColumnLayout {
 
         Layout.fillWidth: true
         Layout.rightMargin: -Appearance.spacing.small
-        implicitHeight: (Appearance.font.size.larger + Appearance.padding.small) * (root.props.recordingListExpanded ? 10 : 3)
+        // Per-row stride mirrors IconButton's internal sum: icon font height
+        // + (padding.smaller * 2 vertical padding from the Tonal/raised pill).
+        // The previous `+ padding.small` value was tuned for the prior
+        // IconButton.Text variant (only padding.small / 2 per side); after
+        // moving the row's action buttons to raised pills, that formula
+        // undersized rows and truncated trailing entries inside `clip: true`.
+        implicitHeight: (Appearance.font.size.larger + Appearance.padding.smaller * 2) * (root.props.recordingListExpanded ? 10 : 3)
         clip: true
 
         StyledScrollBar.vertical: StyledScrollBar {
@@ -157,9 +169,16 @@ ColumnLayout {
                 elide: Text.ElideRight
             }
 
+            // Per-recording action pills. All three share the raised
+            // claymorphism aesthetic (matte ContainerHigh on the dimmer
+            // PillCard ContainerLow body). The destructive delete button
+            // keeps its m3error icon + ripple overrides — body fill
+            // recedes, icon color carries the danger signal.
             IconButton {
                 icon: "play_arrow"
-                type: IconButton.Text
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
                 onClicked: {
                     root.visibilities.utilities = false;
                     root.visibilities.sidebar = false;
@@ -169,7 +188,9 @@ ColumnLayout {
 
             IconButton {
                 icon: "folder"
-                type: IconButton.Text
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
                 onClicked: {
                     root.visibilities.utilities = false;
                     root.visibilities.sidebar = false;
@@ -179,7 +200,9 @@ ColumnLayout {
 
             IconButton {
                 icon: "delete_forever"
-                type: IconButton.Text
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
                 label.color: Colours.palette.m3error
                 stateLayer.color: Colours.palette.m3error
                 onClicked: root.props.recordingConfirmDelete = recording.filePath

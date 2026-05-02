@@ -7,7 +7,7 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+PillCard {
     id: root
 
     required property var props
@@ -16,8 +16,8 @@ StyledRect {
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + layout.anchors.margins * 2
 
-    radius: Appearance.rounding.normal
-    color: Colours.tPalette.m3surfaceContainer
+    // Default fill / radius come from PillCard. clipContent stays false so
+    // the SplitButton's dropdown menu can render past the card bottom.
 
     ColumnLayout {
         id: layout

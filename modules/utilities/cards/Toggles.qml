@@ -7,7 +7,7 @@ import Quickshell.Bluetooth
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+PillCard {
     id: root
 
     required property var visibilities
@@ -16,8 +16,7 @@ StyledRect {
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
 
-    radius: Appearance.rounding.normal
-    color: Colours.tPalette.m3surfaceContainer
+    // Default fill / radius come from PillCard's claymorphism recipe.
 
     ColumnLayout {
         id: layout

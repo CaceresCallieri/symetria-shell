@@ -5,15 +5,15 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+PillCard {
     id: root
 
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + (IdleInhibitor.enabled ? activeChip.implicitHeight + activeChip.anchors.topMargin : 0) + Appearance.padding.large * 2
 
-    radius: Appearance.rounding.normal
-    color: Colours.tPalette.m3surfaceContainer
-    clip: true
+    // Opt into clipping: the active-since chip slides off the bottom edge
+    // when Keep Awake is toggled off, and we want that overflow hidden.
+    clipContent: true
 
     RowLayout {
         id: layout
