@@ -11,40 +11,69 @@ Column {
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.updatesWidth
 
-    // Header
-    StyledText {
-        text: Updates.hasData
-            ? qsTr("Available Updates: %1").arg(Updates.pacmanUpdates + Updates.aurUpdates)
-            : qsTr("Checking for updates...")
-        font.weight: 500
-    }
-
-    // Update rows
-    UpdateRow {
-        icon: "󰮯"
-        label: qsTr("Pacman")
-        count: Updates.pacmanUpdates
-    }
-
-    UpdateRow {
-        icon: "󰣇"
-        label: qsTr("AUR")
-        count: Updates.aurUpdates
-    }
-
-    // Separator
-    Rectangle {
+    // Section 1 — Sources card: header text + per-source counts
+    // (Pacman, AUR). Replaces the prior bare-text-on-popout flow.
+    Item {
         width: parent.width
-        height: 1
-        color: Colours.palette.m3outline
+        implicitHeight: sourcesColumn.implicitHeight + Appearance.padding.normal * 2
+
+        PillCard {
+            anchors.fill: parent
+        }
+
+        Column {
+            id: sourcesColumn
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Appearance.padding.normal
+            anchors.rightMargin: Appearance.padding.normal
+            spacing: Appearance.spacing.small
+
+            StyledText {
+                text: Updates.hasData
+                    ? qsTr("Available Updates: %1").arg(Updates.pacmanUpdates + Updates.aurUpdates)
+                    : qsTr("Checking for updates...")
+                font.weight: 500
+            }
+
+            UpdateRow {
+                icon: "󰮯"
+                label: qsTr("Pacman")
+                count: Updates.pacmanUpdates
+            }
+
+            UpdateRow {
+                icon: "󰣇"
+                label: qsTr("AUR")
+                count: Updates.aurUpdates
+            }
+        }
     }
 
-    // Total row (emphasized)
-    UpdateRow {
-        icon: "󰒠"
-        label: qsTr("Total")
-        count: Updates.pacmanUpdates + Updates.aurUpdates
-        emphasized: true
+    // Section 2 — Total card: emphasized aggregate count, framed on its
+    // own to mirror the prior divider's visual hierarchy.
+    Item {
+        width: parent.width
+        implicitHeight: totalRow.implicitHeight + Appearance.padding.normal * 2
+
+        PillCard {
+            anchors.fill: parent
+        }
+
+        UpdateRow {
+            id: totalRow
+
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Appearance.padding.normal
+
+            icon: "󰒠"
+            label: qsTr("Total")
+            count: Updates.pacmanUpdates + Updates.aurUpdates
+            emphasized: true
+        }
     }
 
     // Reusable row component for update sources

@@ -145,7 +145,13 @@ JsonObject {
         property int batteryWidth: 250
         property int networkWidth: 320
         property int weatherWidth: 250
-        property int updatesWidth: 200  // Also used by Ram popout
+        property int updatesWidth: 200
+        // Wider than updatesWidth: the RAM popout's process list shows
+        // long executable names (e.g. claude-code, zen-browser) and a
+        // %-column on the right, which together over-elide the name
+        // column at 200px. 290px gives the name column ~90px more room
+        // without making the popout dominate the bar.
+        property int ramWidth: 290
         property int calendarWidth: 300
     }
 }
