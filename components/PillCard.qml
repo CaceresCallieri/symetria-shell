@@ -4,7 +4,7 @@ import QtQuick
 import QtQuick.Effects
 
 // Section-card container — CLAYMORPHISM half of the shell's two-tier
-// design hierarchy. Where PillSurface / PillToggleSurface use strict
+// design hierarchy. Where PillToggleSurface uses strict
 // dark-monochrome NEUMORPHISM (austere, depth-only state signaling),
 // PillCard leans warmly claymorphic: softer wider shadows, a top rim
 // highlight, and a faint bottom inner-shadow that gives the surface an
@@ -34,7 +34,7 @@ import QtQuick.Effects
 //      differentiation, same-tier nested pills would visually disappear
 //      into the card.
 //
-//   3. CLAYMORPHIC depth recipe (vs PillSurface's neumorphic recipe):
+//   3. CLAYMORPHIC depth recipe (vs PillToggleSurface's neumorphic recipe):
 //      larger softer shadows, visible top rim highlight, faint bottom
 //      inner-shadow. Cards are bigger surfaces and benefit from a warmer
 //      embedded feel; reducing the recipe to pure neumorphism would
