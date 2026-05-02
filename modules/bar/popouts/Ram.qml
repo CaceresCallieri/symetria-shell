@@ -88,8 +88,7 @@ Column {
         return Utils.Icons.romanize(workspace.id);
     }
 
-    // Section 1 — RAM summary card: memory_alt icon + used/total +
-    // percentage subline. Hero info, gets the smaller of the two cards.
+    // Section 1 — RAM summary.
     Item {
         width: parent.width
         implicitHeight: summaryRow.implicitHeight + Appearance.padding.normal * 2
@@ -138,8 +137,7 @@ Column {
         }
     }
 
-    // Section 2 — Top Memory Usage card: header text + scrollable
-    // process list. Replaces the prior divider+header+list flow.
+    // Section 2 — Top Memory Usage.
     Item {
         width: parent.width
         implicitHeight: processColumn.implicitHeight + Appearance.padding.normal * 2
@@ -158,7 +156,6 @@ Column {
             anchors.rightMargin: Appearance.padding.normal
             spacing: Appearance.spacing.small
 
-            // Header for process list
             StyledText {
                 width: parent.width
                 text: qsTr("Top Memory Usage")
@@ -167,7 +164,6 @@ Column {
                 horizontalAlignment: Text.AlignHCenter
             }
 
-            // Scrollable process list
             Item {
                 width: parent.width
                 height: ProcessMemory.topProcesses.length > 0

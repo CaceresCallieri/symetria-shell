@@ -6,22 +6,12 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-// Bar weather popout — two claymorphism PillCard sections replace the
-// prior dividers-between-sections layout. The header card carries the
-// hero info (condition icon, temperature, city, today's range); the
-// secondary card groups all the supporting numerics (feels-like,
-// humidity, wind, sunrise/sunset) into a single coherent block.
-// Dashboard's weather pane is unaffected (this file only powers the bar
-// popout).
 Column {
     id: root
 
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.weatherWidth
 
-    // Section 1 — Header card: condition icon + temperature + city +
-    // today's min/max range. The most prominent section, sized by the
-    // large temp glyph.
     Item {
         width: parent.width
         implicitHeight: headerRow.implicitHeight + Appearance.padding.normal * 2
@@ -63,7 +53,6 @@ Column {
                 }
             }
 
-            // Today's min/max range (right-aligned, subdued).
             Column {
                 visible: Weather.forecast.length > 0
                 Layout.alignment: Qt.AlignVCenter
@@ -75,11 +64,9 @@ Column {
         }
     }
 
-    // Section 2 — Secondary metrics card: groups feels-like / humidity /
-    // wind with the sunrise/sunset row inside a single frame. Keeping
-    // them in one card preserves the "supporting numerics" reading
-    // without re-introducing the divider hierarchy that the cards
-    // already replace.
+    // Section 2 — Secondary metrics: single card so sunrise/sunset
+    // stays grouped with the other numerics rather than getting its
+    // own card and re-introducing the divider hierarchy.
     Item {
         width: parent.width
         implicitHeight: detailsColumn.implicitHeight + Appearance.padding.normal * 2
@@ -122,7 +109,6 @@ Column {
             RowLayout {
                 width: parent.width
 
-                // Sunrise (left-aligned).
                 Row {
                     spacing: Appearance.spacing.small
 
@@ -140,12 +126,10 @@ Column {
                     }
                 }
 
-                // Spacer to push sunset to the right.
                 Item {
                     Layout.fillWidth: true
                 }
 
-                // Sunset (right-aligned).
                 Row {
                     spacing: Appearance.spacing.small
 
@@ -166,7 +150,6 @@ Column {
         }
     }
 
-    // Reusable detail row component
     component DetailRow: RowLayout {
         required property string icon
         required property string label

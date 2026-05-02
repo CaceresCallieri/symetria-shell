@@ -11,8 +11,7 @@ Column {
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.updatesWidth
 
-    // Section 1 — Sources card: header text + per-source counts
-    // (Pacman, AUR). Replaces the prior bare-text-on-popout flow.
+    // Section 1 — Sources card: Pacman + AUR counts.
     Item {
         width: parent.width
         implicitHeight: sourcesColumn.implicitHeight + Appearance.padding.normal * 2
@@ -52,8 +51,7 @@ Column {
         }
     }
 
-    // Section 2 — Total card: emphasized aggregate count, framed on its
-    // own to mirror the prior divider's visual hierarchy.
+    // Section 2 — Total: own card so it reads as a visual peer to the sources card.
     Item {
         width: parent.width
         implicitHeight: totalRow.implicitHeight + Appearance.padding.normal * 2
