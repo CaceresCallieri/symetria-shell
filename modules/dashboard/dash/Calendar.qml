@@ -83,7 +83,6 @@ CustomMouseArea {
                     implicitHeight: prevMonthText.implicitHeight + Appearance.padding.small * 2
 
                     StateLayer {
-                        id: prevMonthStateLayer
 
                         radius: Appearance.rounding.full
 
@@ -156,7 +155,6 @@ CustomMouseArea {
                     implicitHeight: nextMonthText.implicitHeight + Appearance.padding.small * 2
 
                     StateLayer {
-                        id: nextMonthStateLayer
 
                         radius: Appearance.rounding.full
 
