@@ -3,26 +3,42 @@ import qs.services
 import QtQuick
 import QtQuick.Effects
 
-// Section-card sibling to PillSurface — same visual family, different role.
+// Section-card container — CLAYMORPHISM half of the shell's two-tier
+// design hierarchy. Where PillSurface / PillToggleSurface use strict
+// dark-monochrome NEUMORPHISM (austere, depth-only state signaling),
+// PillCard leans warmly claymorphic: softer wider shadows, a top rim
+// highlight, and a faint bottom inner-shadow that gives the surface an
+// "embedded warm panel" feel.
 //
-// Where PillSurface frames a single interactive pill (button / toggle / badge),
-// PillCard frames a *group* of content (a panel section, a row of toggles,
-// a labeled card). Three deliberate differences from PillSurface:
+// Why two aesthetics, not one:
 //
-//   1. NO CLIPPING by default. Cards frequently host popovers (dropdown menus,
-//      animated overflow chips) that must render past the card bounds. Use
-//      `clipContent: true` to opt back in for cases like IdleInhibit's slide-
-//      out activity chip.
+//   The two styles complement each other along the visual hierarchy.
+//   The card draws the eye first (warm, glowing, rounded) and frames a
+//   content region. The pills inside are cooler and more austere, which
+//   makes them read clearly as INTERACTIVE elements against the card's
+//   ambient warmth. Active toggles' inset depressions only sell the
+//   "pressed" feel against a uniform same-color surface — that surface
+//   IS the claymorphism card. The two styles aren't competing; the card
+//   provides the stage, the pills perform the state.
 //
-//   2. Dimmer default fill (m3surfaceContainerLow vs ContainerHigh on pills).
-//      This preserves the visual hierarchy when pills are nested inside cards
-//      — the card recedes, the pills protrude. Without this differentiation,
-//      same-tier nested pills would visually disappear into the card.
+// Three deliberate differences from PillSurface:
 //
-//   3. Slightly more neumorphic dial: larger blur radii (cards are bigger
-//      surfaces, need softer shadows to read as one cohesive panel rather
-//      than a sharp button), modestly stronger top rim, and a faint bottom
-//      inner shadow that adds a subtle "embedded into the panel" feel.
+//   1. NO CLIPPING by default. Cards frequently host popovers (dropdown
+//      menus, animated overflow chips) that must render past the card
+//      bounds. Use `clipContent: true` to opt back in for cases like
+//      IdleInhibit's slide-out activity chip.
+//
+//   2. Dimmer default fill (m3surfaceContainerLow vs ContainerHigh on
+//      pills). This preserves the visual hierarchy when pills are nested
+//      inside cards — the card recedes, the pills protrude. Without this
+//      differentiation, same-tier nested pills would visually disappear
+//      into the card.
+//
+//   3. CLAYMORPHIC depth recipe (vs PillSurface's neumorphic recipe):
+//      larger softer shadows, visible top rim highlight, faint bottom
+//      inner-shadow. Cards are bigger surfaces and benefit from a warmer
+//      embedded feel; reducing the recipe to pure neumorphism would
+//      collapse them into "just another flat surface."
 //
 // Default radius is `rounding.normal` (not `.full`) — cards are not capsules.
 
@@ -40,29 +56,32 @@ Item {
     property color borderColor: _defaultStyle.border
     property real borderWidth: 1
 
-    // --- Two-shadow convex depth (neumorphism-derived) -------------------
-    // Tighter, shorter-range shadows — the previous wider blur read as an
-    // outer glow halo against the wallpaper backdrop rather than as a panel
-    // resting on the surface. Reference neumorphism keeps shadow extent
-    // proportionally close to the element edge so the depth cue reads as
-    // "embedded into a uniform surface," not "floating in glow."
-    property real darkShadowOffsetX: 2
-    property real darkShadowOffsetY: 3
-    property real darkShadowBlur: 10
-    property real darkShadowAlpha: 0.22
+    // --- Two-shadow convex depth (claymorphic) ---------------------------
+    // Wider blur and slightly larger offsets than the neumorphic pill
+    // primitives — claymorphism wants softer, more diffuse shadows that
+    // wrap the element in ambient depth rather than the contained, sharp-
+    // edged depth of neumorphism. Tuned to land between "too glowy"
+    // (original 18 blur was a halo against busy wallpaper) and "too austere"
+    // (the previous 10 blur stripped away the warmth we want for cards).
+    property real darkShadowOffsetX: 3
+    property real darkShadowOffsetY: 4
+    property real darkShadowBlur: 14
+    property real darkShadowAlpha: 0.28
 
-    property real lightShadowOffsetX: -2
-    property real lightShadowOffsetY: -2
-    property real lightShadowBlur: 8
-    property real lightShadowAlpha: 0.05
+    property real lightShadowOffsetX: -3
+    property real lightShadowOffsetY: -3
+    property real lightShadowBlur: 11
+    property real lightShadowAlpha: 0.07
 
     // --- Inner rim highlight (clay-derived) ------------------------------
-    // Dialed down toward pure neumorphism: minimal top rim, no bottom inner
-    // shadow. The reference aesthetic relies on dual outer shadows alone to
-    // define depth; the rim highlight was a claymorphism polish that made
-    // the surface look "wet/glossy" rather than the matte material we want.
-    property real highlightAlpha: 0.04
-    property real innerShadowAlpha: 0.0
+    // The defining claymorphism cues — a visible top rim that catches
+    // overhead light + a faint bottom inner-shadow that grounds the card
+    // as "embedded into the panel." These overlays are what differentiate
+    // the warm claymorphic card from the cool neumorphic pills inside it.
+    // Without them, the card would collapse into another neumorphic surface
+    // and lose its role as the visual frame.
+    property real highlightAlpha: 0.08
+    property real innerShadowAlpha: 0.03
 
     // --- Clipping --------------------------------------------------------
     // Default false: cards may host popovers that overflow card bounds

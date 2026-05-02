@@ -3,20 +3,33 @@ import qs.services
 import QtQuick
 import QtQuick.Effects
 
-// Shared visual primitive for every "pill" in the shell.
+// CLAYMORPHISM display-pill primitive — for STATIC display elements only.
 //
-// Current aesthetic: HYBRID (neumorphism depth + modern hairline polish)
+// Used by the top bar's clock, date, weather, workspaces, sys tray, system
+// indicators — anything that DISPLAYS information without state changes.
+// Also used as static icon containers inside cards (e.g. the Coffee /
+// screen_record icon circles in the utilities popup).
+//
+// Aesthetic: claymorphism (warm, decorative, ambient depth)
 //   - Two opposing outer shadows (light NW + dark SE) → convex extrusion
-//     read that neumorphism contributes
-//   - Hairline border → crisp edge definition even on transparent/wallpaper
-//     backgrounds where neumorphism alone would wash out
-//   - Subtle top rim highlight (inner gradient top half only) → "polished"
-//     feel without the heavy inner-bottom-shadow that made claymorphism
-//     read as dated
+//   - Hairline border → crisp edge definition that survives on busy
+//     backgrounds (top bar pills sit over the wallpaper directly)
+//   - Visible top rim highlight → "polished, lit-from-above" warmth
 //
-// This occupies the stylistic space of macOS Sonoma/Sequoia pill buttons,
-// Arc browser chrome, current Fluent UI: directional shadow + fine border
-// + light top rim.
+// Sister primitives — different roles, different aesthetics:
+//   - PillToggleSurface — INTERACTIVE controls (toggles, action buttons).
+//     Pure dark-monochrome NEUMORPHISM with raised↔inset state signaling.
+//     Standalone (doesn't extend PillSurface), so PillSurface tuning here
+//     does NOT affect interactive controls.
+//   - PillCard — CONTENT-FRAMING containers. Claymorphism with softer
+//     wider shadows and a faint bottom inner-shadow (more "embedded
+//     panel" than "raised chip").
+//
+// The boundary is STATIC vs INTERACTIVE, not visual-vs-functional. Static
+// elements have no state to signal, so neumorphism's depth-direction
+// vocabulary is wasted on them — claymorphism's decorative warmth is more
+// appropriate. Interactive elements EARN the strict neumorphic recipe
+// because they actually have state to communicate.
 //
 // To switch aesthetic later, edit this file; all pill consumers stay
 // untouched. Public property API is preserved across aesthetics so
@@ -53,34 +66,36 @@ Item {
     // Flat props (not a `border` group) so Item-based consumers can bind
     // and animate them directly: `Behavior on borderWidth { Anim {} }`.
     //
-    // Default 0: reference dark neumorphism uses dual shadows alone to
-    // define the silhouette — drawn outlines compete with the shadow-edge.
-    // Consumers that explicitly need a hairline (e.g. on transparent bars
-    // where shadows wash out) can opt back in via `borderWidth: 1`.
+    // Hairline 1px from the shared pill palette — defining feature of the
+    // claymorphism look here, and survives on busy backgrounds (top bar
+    // pills sit directly over the wallpaper). Without it, shadows alone
+    // wash out on bright wallpaper regions and the pill silhouette
+    // disappears.
     property color borderColor: _defaultStyle.border
-    property real borderWidth: 0
+    property real borderWidth: 1
 
-    // --- Two-shadow convex depth (neumorphism-derived) -------------------
-    // Reference-aligned: SHORT-RANGE blur (depth cue stays near the pill
-    // edge — no outer-glow halo) but STRONG alpha (so the depth reads
-    // clearly against PillCard's solid backdrop). Offsets stay slightly
-    // asymmetric (y > x on the dark shadow) for a natural overhead-light
-    // feel rather than a sterile perfect-diagonal.
+    // --- Two-shadow convex depth (claymorphic) ---------------------------
+    // Slightly asymmetric offsets (y > x on the dark shadow) mimic an
+    // overhead light source — feels more organic than a perfect diagonal.
+    // Wider blur than PillToggleSurface's interactive controls to lean
+    // claymorphic (warm ambient depth) rather than neumorphic (austere
+    // contained depth).
     property real darkShadowOffsetX: 2
     property real darkShadowOffsetY: 3
-    property real darkShadowBlur: 10
-    property real darkShadowAlpha: 0.45
+    property real darkShadowBlur: 12
+    property real darkShadowAlpha: 0.40
 
     property real lightShadowOffsetX: -2
     property real lightShadowOffsetY: -2
-    property real lightShadowBlur: 7
+    property real lightShadowBlur: 8
     property real lightShadowAlpha: 0.10
 
-    // --- Inner rim highlight (clay-derived, dialed back) -----------------
-    // Pulled back to near-zero — the reference relies on dual shadows
-    // alone, with no top rim. Keeping a faint trace so the pill doesn't
-    // feel completely matte/dead, but barely there.
-    property real highlightAlpha: 0.02
+    // --- Inner rim highlight (clay-derived) ------------------------------
+    // Visible top rim — defining claymorphism cue. The bottom inner shadow
+    // stays at 0 by default (heavy bottom-inner shadow makes pure
+    // claymorphism feel dated); consumers that want the full "embedded"
+    // feel can opt in by setting `innerShadowAlpha`.
+    property real highlightAlpha: 0.08
     property real innerShadowAlpha: 0.0
 
     // Default slot: children declared inside PillSurface { ... } get reparented
