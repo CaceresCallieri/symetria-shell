@@ -97,11 +97,12 @@ StyledRect {
     implicitWidth: size
     radius: Appearance.rounding.full
     color: glassStyle.background
-    // Neumorphic recipe: drop the border so the inset depression is the only
-    // state cue, matching PillToggleSurface's pressed-in look on the quick
-    // toggles. A drawn outline competes with shadow-defined edges.
+    // Neumorphic recipe: zero border so a drawn outline doesn't compete with
+    // the gradient-defined depression edges, matching PillToggleSurface's
+    // pressed-in look on the quick toggles. (border.color is omitted because
+    // width is hard-zero here — unlike PillToggleSurface, this indicator
+    // never animates the border up.)
     border.width: 0
-    border.color: glassStyle.border
 
     // Inset depression overlays — mirror PillToggleSurface's diagonal "well":
     // top-dark + bottom-light (vertical, full strength) composited with a
