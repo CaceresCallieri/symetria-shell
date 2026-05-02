@@ -18,6 +18,10 @@ Item {
         id: calendar
 
         state: calendarState
+        // Frame the navigation header and calendar body in claymorphism
+        // PillCards. The dashboard keeps panelMode: false because it has its
+        // own outer Rect frame.
+        panelMode: true
     }
 
     implicitWidth: Config.bar.sizes.calendarWidth
