@@ -89,22 +89,15 @@ Column {
     }
 
     // Section 1 — RAM summary.
-    Item {
+    PillCardSection {
         width: parent.width
-        implicitHeight: summaryRow.implicitHeight + Appearance.padding.normal * 2
-
-        PillCard {
-            anchors.fill: parent
-        }
+        contentMargins: Appearance.padding.normal
 
         RowLayout {
             id: summaryRow
 
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Appearance.padding.normal
-            anchors.rightMargin: Appearance.padding.normal
             spacing: Appearance.spacing.normal
 
             MaterialIcon {
@@ -138,22 +131,15 @@ Column {
     }
 
     // Section 2 — Top Memory Usage.
-    Item {
+    PillCardSection {
         width: parent.width
-        implicitHeight: processColumn.implicitHeight + Appearance.padding.normal * 2
-
-        PillCard {
-            anchors.fill: parent
-        }
+        contentMargins: Appearance.padding.normal
 
         Column {
             id: processColumn
 
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Appearance.padding.normal
-            anchors.rightMargin: Appearance.padding.normal
             spacing: Appearance.spacing.small
 
             StyledText {

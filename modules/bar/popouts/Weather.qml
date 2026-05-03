@@ -12,22 +12,15 @@ Column {
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.weatherWidth
 
-    Item {
+    PillCardSection {
         width: parent.width
-        implicitHeight: headerRow.implicitHeight + Appearance.padding.normal * 2
-
-        PillCard {
-            anchors.fill: parent
-        }
+        contentMargins: Appearance.padding.normal
 
         RowLayout {
             id: headerRow
 
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Appearance.padding.normal
-            anchors.rightMargin: Appearance.padding.normal
             spacing: Appearance.spacing.normal
 
             MaterialIcon {
@@ -67,22 +60,15 @@ Column {
     // Section 2 — Secondary metrics: single card so sunrise/sunset
     // stays grouped with the other numerics rather than getting its
     // own card and re-introducing the divider hierarchy.
-    Item {
+    PillCardSection {
         width: parent.width
-        implicitHeight: detailsColumn.implicitHeight + Appearance.padding.normal * 2
-
-        PillCard {
-            anchors.fill: parent
-        }
+        contentMargins: Appearance.padding.normal
 
         Column {
             id: detailsColumn
 
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Appearance.padding.normal
-            anchors.rightMargin: Appearance.padding.normal
             spacing: Appearance.spacing.small
 
             DetailRow {

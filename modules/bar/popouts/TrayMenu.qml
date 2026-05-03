@@ -98,27 +98,19 @@ StackView {
         Repeater {
             model: menu.groupedEntries
 
-            Item {
+            PillCardSection {
                 id: groupCard
 
                 // intentional var: array of QsMenuEntry — one separator-delimited section
                 required property var modelData
 
                 implicitWidth: Config.bar.sizes.trayMenuWidth
-                implicitHeight: groupColumn.implicitHeight + Appearance.padding.large * 2
-
-                PillCard {
-                    anchors.fill: parent
-                }
 
                 Column {
                     id: groupColumn
 
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Appearance.padding.large
-                    anchors.rightMargin: Appearance.padding.large
                     spacing: Appearance.spacing.small
 
                     Repeater {

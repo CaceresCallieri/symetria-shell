@@ -10,7 +10,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-Item {
+PillCardSection {
     id: root
 
     required property Item wrapper
@@ -24,20 +24,12 @@ Item {
     property bool showPasswordDialog: false
 
     implicitWidth: Config.bar.sizes.networkWidth
-    implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
-
-    PillCard {
-        anchors.fill: parent
-    }
 
     ColumnLayout {
         id: layout
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: Appearance.padding.large
-        anchors.rightMargin: Appearance.padding.large
         spacing: Appearance.spacing.small
 
         // Wireless section

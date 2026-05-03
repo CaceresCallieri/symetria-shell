@@ -7,24 +7,16 @@ import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 
-Item {
+PillCardSection {
     id: root
 
     implicitWidth: Config.bar.sizes.batteryWidth
-    implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
-
-    PillCard {
-        anchors.fill: parent
-    }
 
     ColumnLayout {
         id: layout
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: Appearance.padding.large
-        anchors.rightMargin: Appearance.padding.large
         spacing: Appearance.spacing.normal
 
         StyledText {

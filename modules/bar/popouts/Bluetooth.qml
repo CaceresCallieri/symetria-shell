@@ -11,26 +11,18 @@ import QtQuick
 import QtQuick.Layouts
 import "../../controlcenter/network"
 
-Item {
+PillCardSection {
     id: root
 
     required property Item wrapper
 
-    implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
-    implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
-
-    PillCard {
-        anchors.fill: parent
-    }
+    implicitWidth: layout.implicitWidth + root.contentMargins * 2
 
     ColumnLayout {
         id: layout
 
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: Appearance.padding.large
-        anchors.rightMargin: Appearance.padding.large
         spacing: Appearance.spacing.small
 
         StyledText {

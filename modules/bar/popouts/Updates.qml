@@ -12,22 +12,15 @@ Column {
     width: Config.bar.sizes.updatesWidth
 
     // Section 1 — Sources card: Pacman + AUR counts.
-    Item {
+    PillCardSection {
         width: parent.width
-        implicitHeight: sourcesColumn.implicitHeight + Appearance.padding.normal * 2
-
-        PillCard {
-            anchors.fill: parent
-        }
+        contentMargins: Appearance.padding.normal
 
         Column {
             id: sourcesColumn
 
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Appearance.padding.normal
-            anchors.rightMargin: Appearance.padding.normal
             spacing: Appearance.spacing.small
 
             StyledText {
@@ -52,20 +45,14 @@ Column {
     }
 
     // Section 2 — Total: own card so it reads as a visual peer to the sources card.
-    Item {
+    PillCardSection {
         width: parent.width
-        implicitHeight: totalRow.implicitHeight + Appearance.padding.normal * 2
-
-        PillCard {
-            anchors.fill: parent
-        }
+        contentMargins: Appearance.padding.normal
 
         UpdateRow {
             id: totalRow
 
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Appearance.padding.normal
 
             icon: "󰒠"
             label: qsTr("Total")
