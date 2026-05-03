@@ -369,9 +369,9 @@
         "systemctl",
         "poweroff"
       ],
-      "hibernate": [
+      "suspend": [
         "systemctl",
-        "hibernate"
+        "suspend"
       ],
       "reboot": [
         "systemctl",
