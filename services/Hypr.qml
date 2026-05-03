@@ -36,7 +36,7 @@ Singleton {
     property bool hadKeyboard
     property string _lastUrgentAddr: ""
     property real _lastUrgentTime: 0
-    property var _pendingUrgentRetries: []
+    property list<string> _pendingUrgentRetries: []
 
     signal configReloaded
 

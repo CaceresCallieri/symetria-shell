@@ -29,7 +29,8 @@ JsonObject {
         property bool clipboardCopied: true
         property bool windowUrgent: true
         // Window classes that should never produce an urgent toast.
-        // Empty string ("") matches windows whose class couldn't be resolved ("Unknown window").
+        // Note: empty string ("") has no effect — windows with unresolved class are
+        // dropped before the blocklist is checked (silent drop after the 250ms retry).
         property list<string> windowUrgentBlocklist: ["UnrealEditor"]
     }
 

@@ -100,6 +100,9 @@ class AgentBridge:
         "konsole", "gnome-terminal", "xfce4-terminal", "xterm",
         "terminator", "tilix", "sakura", "st", "urxvt",
     })
+    # Message types that carry per-client state mutations — used to detect
+    # desync (message from unregistered pid) and trigger resolicit recovery.
+    _DESYNC_TYPES: frozenset[str] = frozenset({"updated", "removed", "focus", "liveness", "added"})
 
     def __init__(self):
         # {nvim_pid: {buf: instance_data, ...}}
@@ -415,8 +418,7 @@ class AgentBridge:
         # handler which will log its own "unknown" warning. The next hello+
         # sync from the resolicit will re-establish the client and future
         # messages will work.
-        _DESYNC_TYPES = ("updated", "removed", "focus", "liveness", "added")
-        if msg_type in _DESYNC_TYPES and nvim_pid not in self._clients:
+        if msg_type in self._DESYNC_TYPES and nvim_pid not in self._clients:
             self.maybe_resolicit(nvim_pid)
 
         if msg_type == "hello":
@@ -527,6 +529,9 @@ class AgentBridge:
                 del self._clients[nvim_pid]
                 self._terminal_pids.pop(nvim_pid, None)
                 self._remote_clients.discard(nvim_pid)
+                # Clear per-pid counters so a reconnect from this pid starts fresh.
+                self._conn_count.pop(nvim_pid, None)
+                self._last_resolicit.pop(nvim_pid, None)
                 log.debug("  goodbye: removed client %s (remaining: %d)", nvim_pid, len(self._clients))
                 self._schedule_emit()
         else:
@@ -544,6 +549,12 @@ class AgentBridge:
             del self._clients[nvim_pid]
             self._terminal_pids.pop(nvim_pid, None)
             self._remote_clients.discard(nvim_pid)
+            # Clear the per-pid connection counter and resolicit throttle so
+            # a reconnect from this same pid starts fresh. Without this, a pid
+            # that reconnects within 10s of a clean disconnect would not trigger
+            # desync recovery (stale _last_resolicit blocks the RPC).
+            self._conn_count.pop(nvim_pid, None)
+            self._last_resolicit.pop(nvim_pid, None)
             self._schedule_emit()
         else:
             log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
@@ -652,6 +663,8 @@ class AgentBridge:
                 },
                 "warned_stuck": sorted(self._warned_stuck),
                 "subagent_depth": dict(self._subagent_depth),
+                "conn_count": dict(self._conn_count),
+                "last_resolicit": {str(k): v for k, v in self._last_resolicit.items()},
             }
             DIAGNOSTIC_DUMP_PATH.parent.mkdir(parents=True, exist_ok=True)
             tmp = DIAGNOSTIC_DUMP_PATH.with_suffix(".tmp")

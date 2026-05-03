@@ -307,7 +307,7 @@ CustomMouseArea {
                         // surfaces share an identical feel.
                         Rectangle {
                             anchors.fill: parent
-                            radius: parent.radius
+                            radius: todayIndicator.radius
                             color: "transparent"
 
                             gradient: Gradient {
@@ -323,7 +323,7 @@ CustomMouseArea {
                         // bottom-RIGHT brightest.
                         Rectangle {
                             anchors.fill: parent
-                            radius: parent.radius
+                            radius: todayIndicator.radius
                             color: "transparent"
 
                             gradient: Gradient {
