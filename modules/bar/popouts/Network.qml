@@ -223,7 +223,7 @@ Item {
                 anchors.centerIn: parent
                 strokeWidth: Appearance.padding.small / 2
                 bgColour: "transparent"
-                implicitHeight: parent.implicitHeight - Appearance.padding.smaller * 2
+                implicitHeight: rescanPill.implicitHeight - Appearance.padding.smaller * 2
                 running: NmcliWifi.scanning
             }
         }

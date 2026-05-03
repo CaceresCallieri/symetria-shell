@@ -34,7 +34,6 @@ Item {
         spacing: Appearance.spacing.small
 
         StyledText {
-            Layout.rightMargin: Appearance.padding.small
             text: qsTr("Bluetooth")
             font.weight: 500
         }
@@ -61,7 +60,6 @@ Item {
 
         StyledText {
             Layout.topMargin: Appearance.spacing.small
-            Layout.rightMargin: Appearance.padding.small
             text: {
                 const devices = Bluetooth.devices.values;
                 let available = qsTr("%1 device%2 available").arg(devices.length).arg(devices.length === 1 ? "" : "s");
@@ -86,7 +84,6 @@ Item {
                 readonly property bool loading: modelData.state === BluetoothDeviceState.Connecting || modelData.state === BluetoothDeviceState.Disconnecting
 
                 Layout.fillWidth: true
-                Layout.rightMargin: Appearance.padding.small
                 spacing: Appearance.spacing.small
 
                 opacity: 0
@@ -225,7 +222,6 @@ Item {
         property alias toggle: toggle
 
         Layout.fillWidth: true
-        Layout.rightMargin: Appearance.padding.small
         spacing: Appearance.spacing.normal
 
         StyledText {

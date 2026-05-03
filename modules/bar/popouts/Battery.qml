@@ -56,6 +56,7 @@ Item {
 
         Loader {
             Layout.alignment: Qt.AlignHCenter
+            Layout.preferredHeight: active ? (item?.implicitHeight ?? 0) : 0
 
             active: PowerProfiles.degradationReason !== PerformanceDegradationReason.None
             asynchronous: true
