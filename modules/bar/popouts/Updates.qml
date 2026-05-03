@@ -52,8 +52,6 @@ Column {
         UpdateRow {
             id: totalRow
 
-            anchors.left: parent.left
-
             icon: "󰒠"
             label: qsTr("Total")
             count: Updates.pacmanUpdates + Updates.aurUpdates

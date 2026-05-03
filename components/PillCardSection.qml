@@ -60,7 +60,7 @@ import QtQuick
 Item {
     id: root
 
-    property real contentMargins: Appearance.padding.large
+    property int contentMargins: Appearance.padding.large
     property alias card: card
 
     default property alias content: contentHolder.data
