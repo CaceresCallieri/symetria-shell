@@ -36,6 +36,7 @@ Singleton {
     property bool hadKeyboard
     property string _lastUrgentAddr: ""
     property real _lastUrgentTime: 0
+    property var _pendingUrgentRetries: []
 
     signal configReloaded
 
@@ -58,11 +59,26 @@ Singleton {
         const now = Date.now();
         if (addr === root._lastUrgentAddr && now - root._lastUrgentTime < 3000)
             return;
-        // Update dedup state before lookup — throttles spam even when window is unknown.
+        // Update dedup state before resolution — throttles spam even across deferred retries.
         root._lastUrgentAddr = addr;
         root._lastUrgentTime = now;
 
+        root._tryEmitUrgent(addr, false);
+    }
+
+    // Resolves the urgent window and emits a toast. If class resolution fails (common race:
+    // urgent arrives before Hyprland's toplevels model has registered the new window, e.g. on
+    // fresh terminal spawn), refresh the model and retry once after 250ms. Still unresolved →
+    // drop silently, since an unidentified toast can't be click-focused meaningfully.
+    function _tryEmitUrgent(addr: string, isRetry: bool): void {
         const fullAddr = "0x" + addr;
+
+        // Suppress urgent raised by the currently focused window — you can already see it.
+        // Use raw Hyprland.activeToplevel (not root.activeToplevel) to avoid the wayland-activation gate.
+        const activeAddr = Hyprland.activeToplevel?.lastIpcObject?.address ?? "";
+        if (activeAddr && activeAddr === fullAddr)
+            return;
+
         let windowClass = "";
         let windowTitle = "";
         for (const toplevel of Hyprland.toplevels.values) {
@@ -74,12 +90,25 @@ Singleton {
             }
         }
 
-        const displayName = windowClass || qsTr("Unknown window");
-        const displayMsg = windowTitle || qsTr("Window is requesting attention");
+        if (!windowClass) {
+            if (isRetry)
+                return;
+            Hyprland.refreshToplevels();
+            if (!root._pendingUrgentRetries.includes(addr))
+                root._pendingUrgentRetries.push(addr);
+            urgentRetryTimer.restart();
+            return;
+        }
+
+        // Class blocklist — suppress urgent from known offenders (e.g. Unreal Editor raising
+        // attention on internal sub-window navigation).
+        const blocklist = Config.utilities.toasts.windowUrgentBlocklist ?? [];
+        if (blocklist.includes(windowClass))
+            return;
 
         Toaster.toast(
-            displayName,
-            displayMsg,
+            windowClass,
+            windowTitle || qsTr("Window is requesting attention"),
             "notification_important",
             Toast.Warning,
             7000,
@@ -87,6 +116,18 @@ Singleton {
             "",
             function() { root.dispatch(`focuswindow address:${fullAddr}`); }
         );
+    }
+
+    Timer {
+        id: urgentRetryTimer
+        interval: 250
+        repeat: false
+        onTriggered: {
+            const queue = root._pendingUrgentRetries;
+            root._pendingUrgentRetries = [];
+            for (const addr of queue)
+                root._tryEmitUrgent(addr, true);
+        }
     }
 
     Component.onCompleted: reloadDynamicConfs()

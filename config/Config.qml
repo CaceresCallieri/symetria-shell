@@ -407,7 +407,8 @@ Singleton {
                 vpnChanged: utilities.toasts.vpnChanged,
                 nowPlaying: utilities.toasts.nowPlaying,
                 focusModeChanged: utilities.toasts.focusModeChanged,
-                windowUrgent: utilities.toasts.windowUrgent
+                windowUrgent: utilities.toasts.windowUrgent,
+                windowUrgentBlocklist: utilities.toasts.windowUrgentBlocklist
             },
             vpn: {
                 enabled: utilities.vpn.enabled,

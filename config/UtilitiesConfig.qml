@@ -28,6 +28,9 @@ JsonObject {
         property bool focusModeChanged: true
         property bool clipboardCopied: true
         property bool windowUrgent: true
+        // Window classes that should never produce an urgent toast.
+        // Empty string ("") matches windows whose class couldn't be resolved ("Unknown window").
+        property list<string> windowUrgentBlocklist: ["UnrealEditor"]
     }
 
     component Vpn: JsonObject {
