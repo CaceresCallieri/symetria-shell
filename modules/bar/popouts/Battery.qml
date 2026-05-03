@@ -5,223 +5,175 @@ import qs.services
 import qs.config
 import Quickshell.Services.UPower
 import QtQuick
+import QtQuick.Layouts
 
-Column {
+Item {
     id: root
 
-    spacing: Appearance.spacing.normal
-    width: Config.bar.sizes.batteryWidth
+    implicitWidth: Config.bar.sizes.batteryWidth
+    implicitHeight: layout.implicitHeight + Appearance.padding.large * 2
 
-    StyledText {
-        text: UPower.displayDevice.isLaptopBattery ? qsTr("Remaining: %1%").arg(Math.round(UPower.displayDevice.percentage * 100)) : qsTr("No battery detected")
+    PillCard {
+        anchors.fill: parent
     }
 
-    StyledText {
-        function formatSeconds(s: int, fallback: string): string {
-            const day = Math.floor(s / 86400);
-            const hr = Math.floor(s / 3600) % 60;
-            const min = Math.floor(s / 60) % 60;
+    ColumnLayout {
+        id: layout
 
-            let comps = [];
-            if (day > 0)
-                comps.push(`${day} days`);
-            if (hr > 0)
-                comps.push(`${hr} hours`);
-            if (min > 0)
-                comps.push(`${min} mins`);
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: Appearance.padding.large
+        anchors.rightMargin: Appearance.padding.large
+        spacing: Appearance.spacing.normal
 
-            return comps.join(", ") || fallback;
+        StyledText {
+            text: UPower.displayDevice.isLaptopBattery ? qsTr("Remaining: %1%").arg(Math.round(UPower.displayDevice.percentage * 100)) : qsTr("No battery detected")
         }
 
-        text: UPower.displayDevice.isLaptopBattery ? qsTr("Time %1: %2").arg(UPower.onBattery ? "remaining" : "until charged").arg(UPower.onBattery ? formatSeconds(UPower.displayDevice.timeToEmpty, "Calculating...") : formatSeconds(UPower.displayDevice.timeToFull, "Fully charged!")) : qsTr("Power profile: %1").arg(PowerProfile.toString(PowerProfiles.profile))
-    }
+        StyledText {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
 
-    Loader {
-        anchors.horizontalCenter: parent.horizontalCenter
+            function formatSeconds(s: int, fallback: string): string {
+                const day = Math.floor(s / 86400);
+                const hr = Math.floor(s / 3600) % 60;
+                const min = Math.floor(s / 60) % 60;
 
-        active: PowerProfiles.degradationReason !== PerformanceDegradationReason.None
-        asynchronous: true
+                let comps = [];
+                if (day > 0)
+                    comps.push(`${day} days`);
+                if (hr > 0)
+                    comps.push(`${hr} hours`);
+                if (min > 0)
+                    comps.push(`${min} mins`);
 
-        height: active ? (item?.implicitHeight ?? 0) : 0
+                return comps.join(", ") || fallback;
+            }
 
-        sourceComponent: StyledRect {
-            implicitWidth: child.implicitWidth + Appearance.padding.normal * 2
-            implicitHeight: child.implicitHeight + Appearance.padding.smaller * 2
+            text: UPower.displayDevice.isLaptopBattery ? qsTr("Time %1: %2").arg(UPower.onBattery ? "remaining" : "until charged").arg(UPower.onBattery ? formatSeconds(UPower.displayDevice.timeToEmpty, "Calculating...") : formatSeconds(UPower.displayDevice.timeToFull, "Fully charged!")) : qsTr("Power profile: %1").arg(PowerProfile.toString(PowerProfiles.profile))
+        }
 
-            color: Colours.palette.m3error
-            radius: Appearance.rounding.normal
+        Loader {
+            Layout.alignment: Qt.AlignHCenter
 
-            Column {
-                id: child
+            active: PowerProfiles.degradationReason !== PerformanceDegradationReason.None
+            asynchronous: true
 
-                anchors.centerIn: parent
+            sourceComponent: StyledRect {
+                implicitWidth: child.implicitWidth + Appearance.padding.normal * 2
+                implicitHeight: child.implicitHeight + Appearance.padding.smaller * 2
 
-                Row {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: Appearance.spacing.small
+                color: Colours.palette.m3error
+                radius: Appearance.rounding.normal
 
-                    MaterialIcon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: -font.pointSize / 10
+                Column {
+                    id: child
 
-                        text: "warning"
-                        color: Colours.palette.m3onError
+                    anchors.centerIn: parent
+
+                    Row {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: Appearance.spacing.small
+
+                        MaterialIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: -font.pointSize / 10
+
+                            text: "warning"
+                            color: Colours.palette.m3onError
+                        }
+
+                        StyledText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: qsTr("Performance Degraded")
+                            color: Colours.palette.m3onError
+                            font.family: Appearance.font.family.mono
+                            font.weight: 500
+                        }
+
+                        MaterialIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.verticalCenterOffset: -font.pointSize / 10
+
+                            text: "warning"
+                            color: Colours.palette.m3onError
+                        }
                     }
 
                     StyledText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("Performance Degraded")
-                        color: Colours.palette.m3onError
-                        font.family: Appearance.font.family.mono
-                        font.weight: 500
-                    }
+                        anchors.horizontalCenter: parent.horizontalCenter
 
-                    MaterialIcon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: -font.pointSize / 10
-
-                        text: "warning"
+                        text: qsTr("Reason: %1").arg(PerformanceDegradationReason.toString(PowerProfiles.degradationReason))
                         color: Colours.palette.m3onError
                     }
-                }
-
-                StyledText {
-                    anchors.horizontalCenter: parent.horizontalCenter
-
-                    text: qsTr("Reason: %1").arg(PerformanceDegradationReason.toString(PowerProfiles.degradationReason))
-                    color: Colours.palette.m3onError
-                }
-            }
-        }
-    }
-
-    StyledRect {
-        id: profiles
-
-        property string current: {
-            const p = PowerProfiles.profile;
-            if (p === PowerProfile.PowerSaver)
-                return saver.icon;
-            if (p === PowerProfile.Performance)
-                return perf.icon;
-            return balance.icon;
-        }
-
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        implicitWidth: saver.implicitHeight + balance.implicitHeight + perf.implicitHeight + Appearance.padding.normal * 2 + Appearance.spacing.large * 2
-        implicitHeight: Math.max(saver.implicitHeight, balance.implicitHeight, perf.implicitHeight) + Appearance.padding.small * 2
-
-        color: Colours.tPalette.m3surfaceContainer
-        radius: Appearance.rounding.full
-
-        StyledRect {
-            id: indicator
-
-            color: Colours.palette.m3primary
-            radius: Appearance.rounding.full
-            state: profiles.current
-
-            states: [
-                State {
-                    name: saver.icon
-
-                    Fill {
-                        item: saver
-                    }
-                },
-                State {
-                    name: balance.icon
-
-                    Fill {
-                        item: balance
-                    }
-                },
-                State {
-                    name: perf.icon
-
-                    Fill {
-                        item: perf
-                    }
-                }
-            ]
-
-            transitions: Transition {
-                AnchorAnimation {
-                    duration: Appearance.anim.durations.normal
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Appearance.anim.curves.emphasized
                 }
             }
         }
 
-        Profile {
-            id: saver
+        // Power profile selector — three independent neumorphic toggle
+        // pills replace the prior sliding-indicator track. Each pill's
+        // `active` binding lights only when its profile matches the
+        // current PowerProfiles.profile, so the selected profile reads
+        // as pressed-in (inset) while the others stay raised. This
+        // matches the shell's broader toggle language used elsewhere.
+        RowLayout {
+            Layout.topMargin: Appearance.spacing.small
+            Layout.fillWidth: true
+            spacing: Appearance.spacing.small
 
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: Appearance.padding.small
+            ProfilePill {
+                profile: PowerProfile.PowerSaver
+                icon: "energy_savings_leaf"
+            }
 
-            profile: PowerProfile.PowerSaver
-            icon: "energy_savings_leaf"
-        }
+            ProfilePill {
+                profile: PowerProfile.Balanced
+                icon: "balance"
+            }
 
-        Profile {
-            id: balance
-
-            anchors.centerIn: parent
-
-            profile: PowerProfile.Balanced
-            icon: "balance"
-        }
-
-        Profile {
-            id: perf
-
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
-            anchors.rightMargin: Appearance.padding.small
-
-            profile: PowerProfile.Performance
-            icon: "rocket_launch"
+            ProfilePill {
+                profile: PowerProfile.Performance
+                icon: "rocket_launch"
+            }
         }
     }
 
-    component Fill: AnchorChanges {
-        required property Item item
+    component ProfilePill: PillToggleSurface {
+        id: pill
 
-        target: indicator
-        anchors.left: item.left
-        anchors.right: item.right
-        anchors.top: item.top
-        anchors.bottom: item.bottom
-    }
-
-    component Profile: Item {
         required property string icon
         required property int profile
 
-        implicitWidth: icon.implicitHeight + Appearance.padding.small * 2
-        implicitHeight: icon.implicitHeight + Appearance.padding.small * 2
+        readonly property bool selected: PowerProfiles.profile === profile
+
+        Layout.fillWidth: true
+        implicitHeight: pillIcon.implicitHeight + Appearance.padding.normal * 2
+
+        active: selected
+        // Pure-monochrome neumorphism — same convention as the QuickToggles
+        // row (see IconButton.qml: `activeColour` returns `inactiveColour`
+        // for toggle-style buttons). The selected pill's depression + the
+        // icon's fill change carry the entire state signal; using a
+        // brighter accent fill would break the shell-wide toggle language.
+        activeColor: inactiveColor
 
         StateLayer {
-            radius: Appearance.rounding.full
-            color: profiles.current === parent.icon ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
+            color: Colours.palette.m3onSurface
 
             function onClicked(): void {
-                PowerProfiles.profile = parent.profile;
+                PowerProfiles.profile = pill.profile;
             }
         }
 
         MaterialIcon {
-            id: icon
+            id: pillIcon
 
             anchors.centerIn: parent
-
-            text: parent.icon
+            text: pill.icon
             font.pointSize: Appearance.font.size.large
-            color: profiles.current === text ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-            fill: profiles.current === text ? 1 : 0
+            color: Colours.palette.m3onSurface
+            fill: pill.selected ? 1 : 0
 
             Behavior on fill {
                 Anim {}
