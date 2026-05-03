@@ -203,6 +203,38 @@ The bridge's diagnostic dump shows the agent missing from `_activities` (i.e., i
 
 The QML `STUCK WORKING` log line proves QML is the source of truth for the displayed value.
 
+### Pattern 4 — Agent for project X never appears in the bar (FIXED 2026-04-26)
+
+Symptom: an entire project's agent group is missing from the agent bar even though `nvim` is running in that project's directory and the orchestrator is sending events. The bridge log around bridge-startup shows:
+
+```
+[py:bridge] CLIENT identified: nvim_pid=84840
+[py:bridge] CLIENT identified: nvim_pid=84840   ← second connection from same pid, ~1ms later
+[py:bridge] CLIENT EOF: nvim_pid=84840          ← one of them closes
+[py:bridge] remove_client: dropping pid=84840 (4 instances)   ← DESTROYS state for the still-alive sibling
+... (forever after) ...
+[py:bridge]   updated: unknown buf=10 for pid=84840 (known: [])
+[py:bridge]   focus: unknown pid=84840 (not registered)
+```
+
+Cause: during bridge restart, two parallel orchestrator connections briefly overlap (one from the bridge's `solicit_neovim_instances` RPC, one from the orchestrator's own auto-reconnect). Both register the client. When ONE closes, the bridge's `handle_client` finally-block called `remove_client(nvim_pid)` unconditionally — which wiped state for the still-alive sibling. All subsequent messages on that surviving connection arrived into a "client never registered" state and fell through silently.
+
+Fix: per-pid connection counter (`_conn_count`). `handle_client` increments on identification and decrements on close; `remove_client` only fires when the count reaches zero (true last-connection-closed). Combined with the desync safety net described next.
+
+### Self-healing desync recovery
+
+A general defense against any cause of orchestrator-bridge state desync:
+
+When a state-mutation message (`updated`/`removed`/`focus`/`liveness`/`added`) arrives for an `nvim_pid` that is NOT in `_clients`, the bridge logs:
+
+```
+DESYNC | pid=84840 sent message without prior hello/sync — soliciting reconnect
+```
+
+…and triggers a one-shot `solicit_neovim_instance` RPC asking the orchestrator to re-send `hello`+`sync`. The throttle is 10 seconds per pid so an unregistered orchestrator sending `liveness` every minute (or `updated` every second) doesn't spam the RPC.
+
+This catches not only the parallel-connection race but also any future cause of desync we haven't yet diagnosed: orchestrator restart while the bridge is alive, missed-RPC at bridge startup, transient socket failures, etc. If `DESYNC` ever appears in the log without a corresponding successful resolicit log line, the orchestrator's `bridge.reconnect()` itself is broken — that's a separate bug to investigate.
+
 ## Future work
 
 - **Automatic out-of-order suppression** once we have data confirming pattern 2 is the root cause. Implementation sketch: drop activity messages whose `event_ts_ns` is older than the current entry's, EXCEPT when the new state is `idle`/`offline` (terminal states should always be applied — late truth beats stale lie).

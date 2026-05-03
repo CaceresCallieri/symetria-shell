@@ -129,6 +129,24 @@ class AgentBridge:
         # we never observed its SubagentStart. Such events are dropped
         # rather than letting them resurrect a cleared activity entry.
         self._subagent_depth: dict[str, int] = {}
+        # Per-nvim_pid count of currently-open socket connections. The
+        # orchestrator can briefly hold TWO parallel connections during
+        # bridge restart (one from this bridge's RPC solicit, one from the
+        # orchestrator's own auto-reconnect). When one of those closes, we
+        # MUST NOT call remove_client() — the other connection is still
+        # alive and depends on the registered state. remove_client only
+        # fires when the count drops to zero (the last connection closes).
+        # Without this, a 1ms-overlapping race during reconnect destroys
+        # the agent for the entire bridge lifetime — the symptom is
+        # "agent in project X never appears in the bar".
+        self._conn_count: dict[int, int] = {}
+        # Per-nvim_pid timestamp of the last reconnect solicitation. Used
+        # to throttle the desync-recovery RPC: when an unregistered pid
+        # sends us a state-mutation message, we ask its orchestrator to
+        # re-send hello+sync. Without throttling, a still-alive but
+        # unregistered orchestrator would trigger one RPC per message
+        # (every ~1s for liveness/updated).
+        self._last_resolicit: dict[int, float] = {}
         # Emit coalescing: leading-edge + trailing-edge with 50ms cooldown.
         # Prevents stdout floods during startup reconnect bursts (30+ events → 2 emissions).
         self._emit_handle: asyncio.TimerHandle | None = None
@@ -281,7 +299,7 @@ class AgentBridge:
             # ignoring older events is always safe (e.g., a "Stop" arriving
             # late might still be the correct final state). The history
             # records the ooo flag so we can revisit this decision with data.
-            ooo = (event_ts_ns and prev_event_ts_ns and event_ts_ns < prev_event_ts_ns)
+            ooo = bool(event_ts_ns and prev_event_ts_ns and event_ts_ns < prev_event_ts_ns)
             if ooo:
                 lag_ms = (prev_event_ts_ns - event_ts_ns) / 1_000_000
                 log.warning(
@@ -388,6 +406,18 @@ class AgentBridge:
             return
 
         log.info("handle_message: type=%s nvim_pid=%s", msg_type, nvim_pid)
+
+        # Desync recovery: if a state-mutation message arrives for a pid we
+        # have no client entry for, the orchestrator is alive but we lost
+        # its registration (most commonly: a parallel-connection race during
+        # bridge restart wiped the state). Trigger a one-shot reconnect RPC
+        # (throttled). Don't drop the message — fall through to the normal
+        # handler which will log its own "unknown" warning. The next hello+
+        # sync from the resolicit will re-establish the client and future
+        # messages will work.
+        _DESYNC_TYPES = ("updated", "removed", "focus", "liveness", "added")
+        if msg_type in _DESYNC_TYPES and nvim_pid not in self._clients:
+            self.maybe_resolicit(nvim_pid)
 
         if msg_type == "hello":
             self._clients.setdefault(nvim_pid, {})
@@ -667,14 +697,52 @@ class AgentBridge:
         self._subagent_depth.pop(aid, None)
         self._warned_stuck.discard(aid)
 
+    def maybe_resolicit(self, nvim_pid: int) -> None:
+        """Trigger a reconnect-RPC to a desync'd orchestrator, throttled.
+
+        Called from handle_message when a state-mutation message arrives for
+        an nvim_pid we have no client entry for. The orchestrator is alive
+        (it's sending us messages) but has not registered (no hello/sync)
+        — so we ask it to re-send its full state. Throttled to once per
+        10 seconds per pid; without throttling, an unregistered orchestrator
+        sending updates every ~1s would trigger one RPC per message.
+
+        Silently no-ops if the nvim socket no longer exists (the process
+        died — desync is moot).
+        """
+        now = time.monotonic()
+        if now - self._last_resolicit.get(nvim_pid, 0) < 10:
+            return
+        socket_path = f"/run/user/{os.getuid()}/nvim.{nvim_pid}.0"
+        if not Path(socket_path).exists():
+            log.debug("maybe_resolicit: pid=%s socket missing, skipping", nvim_pid)
+            return
+        self._last_resolicit[nvim_pid] = now
+        log.warning(
+            "DESYNC | pid=%s sent message without prior hello/sync — soliciting reconnect",
+            nvim_pid,
+        )
+        asyncio.create_task(solicit_neovim_instance(socket_path))
+
+
 bridge = AgentBridge()
 
 
 async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    """Handle a single orchestrator connection."""
+    """Handle a single orchestrator connection.
+
+    The orchestrator can briefly hold multiple parallel connections from the
+    same nvim_pid — this happens routinely during bridge restart when the
+    bridge's solicit-RPC and the orchestrator's own auto-reconnect both fire
+    within milliseconds of each other. Per-pid connection counting (managed
+    via bridge._conn_count) ensures remove_client only fires when the LAST
+    connection closes; otherwise a 1ms-overlapping race destroys client
+    state for the entire bridge lifetime.
+    """
     peername = writer.get_extra_info("peername")
     log.info("CLIENT CONNECTED: peername=%s", peername)
     nvim_pid = None
+    counted = False  # True after we've incremented _conn_count for this connection
     try:
         async for line in reader:
             text = line.decode("utf-8", errors="replace").strip()
@@ -686,10 +754,18 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                 log.warning("CLIENT: bad JSON from pid=%s: %s", nvim_pid, text[:100])
                 continue
 
-            # Track nvim_pid from first message
+            # Track nvim_pid from first message AND increment the per-pid
+            # connection counter. A given physical connection contributes
+            # exactly one count regardless of how many messages it sends.
             if nvim_pid is None:
                 nvim_pid = msg.get("nvim_pid")
-                log.info("CLIENT identified: nvim_pid=%s", nvim_pid)
+                if nvim_pid is not None:
+                    bridge._conn_count[nvim_pid] = bridge._conn_count.get(nvim_pid, 0) + 1
+                    counted = True
+                    log.info("CLIENT identified: nvim_pid=%s (open conns now %d)",
+                             nvim_pid, bridge._conn_count[nvim_pid])
+                else:
+                    log.info("CLIENT identified: nvim_pid=None (ephemeral hook conn)")
 
             bridge.handle_message(msg)
         log.info("CLIENT EOF: nvim_pid=%s (reader exhausted)", nvim_pid)
@@ -700,8 +776,20 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
         writer.close()
-        if nvim_pid is not None:
-            bridge.remove_client(nvim_pid)
+        # Only call remove_client when the LAST connection from this pid
+        # closes. The previous behavior (unconditional remove_client on
+        # every connection close) destroyed state for any sibling
+        # connection still alive — the .dotfiles-agent-disappears bug.
+        if nvim_pid is not None and counted:
+            remaining = bridge._conn_count.get(nvim_pid, 1) - 1
+            if remaining <= 0:
+                bridge._conn_count.pop(nvim_pid, None)
+                log.info("CLIENT last-conn-closed | pid=%s, removing client state", nvim_pid)
+                bridge.remove_client(nvim_pid)
+            else:
+                bridge._conn_count[nvim_pid] = remaining
+                log.debug("CLIENT conn-closed | pid=%s, %d sibling(s) still open — keeping state",
+                          nvim_pid, remaining)
 
 
 async def solicit_neovim_instance(socket_path: str) -> bool:
