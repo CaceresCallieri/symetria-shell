@@ -135,6 +135,10 @@ StackView {
                             radius: Appearance.rounding.full
                             color: "transparent"
 
+                            // No active guard needed — separators are pre-filtered by
+                            // groupedEntries, so every entry reaching this Repeater is a
+                            // real menu item. (The original active: !isSeparator guard was
+                            // removed in the claymorphism refactor once filtering moved upstream.)
                             Loader {
                                 id: itemContent
 
@@ -157,12 +161,12 @@ StackView {
                                         function onClicked(): void {
                                             const entry = item.modelData;
                                             if (entry.hasChildren)
-                                                root.push(subMenuComp.createObject(null, {
+                                                root.push(subMenuComp.createObject(root, {
                                                     handle: entry,
                                                     isSubMenu: true
                                                 }));
                                             else {
-                                                item.modelData.triggered();
+                                                entry.triggered();
                                                 root.popouts.hasCurrent = false;
                                             }
                                         }
@@ -202,7 +206,9 @@ StackView {
                                         font.family: label.font.family
 
                                         elide: Text.ElideRight
-                                        elideWidth: item.width - (icon.active ? icon.implicitWidth + label.anchors.leftMargin : 0) - (expand.active ? expand.implicitWidth + Appearance.spacing.normal : 0)
+                                        // icon.implicitWidth is 0 until the async Loader finishes; gate on Ready to
+                                        // prevent the text from showing un-elided during the icon load frame.
+                                        elideWidth: item.width - (icon.active && icon.status === Loader.Ready ? icon.implicitWidth + label.anchors.leftMargin : 0) - (expand.active ? expand.implicitWidth + Appearance.spacing.normal : 0)
                                     }
 
                                     Loader {
