@@ -346,7 +346,15 @@ CustomMouseArea {
 
                             source: grid
                             sourceColor: Colours.palette.m3onSurface
-                            colorizationColor: Colours.palette.m3onPrimary
+                            // Tint to a light foreground rather than m3onPrimary.
+                            // The today pill is a translucent strong-glass base
+                            // overlaid with a top-dark depression gradient, so it
+                            // renders dark overall — m3onPrimary (#333 in the
+                            // warm-neutral dark scheme) tinted today's number
+                            // dark-on-dark, making it invisible. m3onSurface is
+                            // the bright "text on dark surface" colour and
+                            // contrasts with the depression.
+                            colorizationColor: Colours.palette.m3onSurface
                         }
 
                         Behavior on opacity {
