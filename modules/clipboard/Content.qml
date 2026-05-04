@@ -27,10 +27,12 @@ Item {
     // Tab indices for readability
     readonly property int tabText: 0
     readonly property int tabImages: 1
+    readonly property int tabTranscriptions: 2
 
     // Get all entries (search-filtered if searching, otherwise all loaded entries)
     readonly property var allFilteredEntries: {
         Clipboard.entries.length;  // Force reactive dependency on list changes
+        TranscriptionStore.entries.length;  // Re-evaluate when STT marks new transcriptions
         if (!searchBar.debouncedText) return Clipboard.entries;
 
         // Direct FZF/Fuzzysort search on clipboard entries
@@ -45,18 +47,25 @@ Item {
         }).find(searchBar.debouncedText).map(r => r.item);
     }
 
-    // All text entries from current search/filter — backing data for the ListModel
-    readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage)
-    // Whether more text entries can be loaded
+    // Text tab — non-image entries that are NOT tagged as transcriptions
+    readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage && !TranscriptionStore.has(e.preview))
+    // Transcriptions tab — non-image entries that ARE tagged as transcriptions
+    readonly property var allTranscriptionEntries: allFilteredEntries.filter(e => !e.isImage && TranscriptionStore.has(e.preview))
+
+    // Whether more entries can be loaded for each progressive model
     readonly property bool _hasMoreText: _textModel.count < allTextEntries.length
+    readonly property bool _hasMoreTranscriptions: _transcriptionsModel.count < allTranscriptionEntries.length
     readonly property int _pageSize: Config.clipboard.maxDisplayed
 
-    // Progressive ListModel: only holds the currently visible slice.
+    // Progressive ListModels: only hold the currently visible slice.
     // append() adds entries without disturbing existing delegates or scroll position.
     ListModel { id: _textModel }
+    ListModel { id: _transcriptionsModel }
 
-    // Sync model when backing data changes (search, new clipboard entries)
+    // Sync models when backing data changes (search, new clipboard entries,
+    // new STT transcriptions)
     onAllTextEntriesChanged: _resetTextEntries()
+    onAllTranscriptionEntriesChanged: _resetTranscriptionEntries()
     // Images use a ListModel from Clipboard — append() adds delegates
     // incrementally without destroying existing ones (progressive loading).
     readonly property var imageEntries: Clipboard.decodedImageEntries
@@ -121,25 +130,81 @@ Item {
         _appendTextEntries(_pageSize);
     }
 
+    function _resetTranscriptionEntries(): void {
+        _transcriptionsModel.clear();
+        _appendTranscriptionEntries(Config.clipboard.maxDisplayed);
+    }
+
+    function _appendTranscriptionEntries(count: int): void {
+        const start = _transcriptionsModel.count;
+        const end = Math.min(start + count, allTranscriptionEntries.length);
+        for (let i = start; i < end; i++)
+            _transcriptionsModel.append({ idx: i });
+    }
+
+    function _loadMoreTranscriptions(): void {
+        if (!_hasMoreTranscriptions) return;
+        _appendTranscriptionEntries(_pageSize);
+    }
+
+    // Active-pane helpers — used by the search bar and key handlers so the
+    // same controls drive the text or transcriptions list depending on tab.
+    readonly property var _activePane: {
+        if (root.state.currentTab === root.tabText) return textPane.item;
+        if (root.state.currentTab === root.tabTranscriptions) return transcriptionsPane.item;
+        return null;
+    }
+    readonly property var _activeModel: {
+        if (root.state.currentTab === root.tabText) return _textModel;
+        if (root.state.currentTab === root.tabTranscriptions) return _transcriptionsModel;
+        return null;
+    }
+    readonly property var _activeAllEntries: {
+        if (root.state.currentTab === root.tabText) return root.allTextEntries;
+        if (root.state.currentTab === root.tabTranscriptions) return root.allTranscriptionEntries;
+        return [];
+    }
+    readonly property bool _activeHasMore: {
+        if (root.state.currentTab === root.tabText) return root._hasMoreText;
+        if (root.state.currentTab === root.tabTranscriptions) return root._hasMoreTranscriptions;
+        return false;
+    }
+    function _activeLoadMore(): void {
+        if (root.state.currentTab === root.tabText) root._loadMoreText();
+        else if (root.state.currentTab === root.tabTranscriptions) root._loadMoreTranscriptions();
+    }
+
     // Track if we've incremented refCount to avoid double increment/decrement
     property bool _refCounted: false
 
     // Focus management: dynamic target based on current tab
+    // Search bar receives focus on text-style tabs (Text, Transcriptions);
+    // imageNavFocus on the Images tab.
     FocusManager {
         active: root.visibilities.clipboard
-        target: root.state.currentTab === root.tabText ? searchBar.focusTarget : imageNavFocus
+        target: root.state.currentTab === root.tabImages ? imageNavFocus : searchBar.focusTarget
         onOpen: () => {
             // Increment ref count on open
             if (!root._refCounted) {
                 root._refCounted = true;
                 Clipboard.refCount++;
             }
-            // Reset model to initial batch and list indices on open
+            // Lazy prune of orphan transcription markers — drop entries whose
+            // text no longer corresponds to any cliphist preview (rotated out,
+            // manually cleared). Built once per open and passed in as an array.
+            const previews = [];
+            for (let i = 0; i < Clipboard.entries.length; i++)
+                previews.push(Clipboard.entries[i].preview);
+            TranscriptionStore.pruneOrphans(previews);
+            // Reset models to initial batches and list indices on open
             root._resetTextEntries();
+            root._resetTranscriptionEntries();
             if (textPane.item)
                 textPane.item.currentIndex = 0;
             if (imagePane.item)
                 imagePane.item.currentIndex = 0;
+            if (transcriptionsPane.item)
+                transcriptionsPane.item.currentIndex = 0;
         }
         onClose: () => {
             // Decrement ref count on close
@@ -158,10 +223,10 @@ Item {
 
         function onCurrentTabChanged(): void {
             if (!root.visibilities.clipboard) return;
-            if (root.state.currentTab === root.tabText)
-                searchBar.focusTarget.forceActiveFocus();
-            else
+            if (root.state.currentTab === root.tabImages)
                 imageNavFocus.forceActiveFocus();
+            else
+                searchBar.focusTarget.forceActiveFocus();
         }
     }
 
@@ -288,6 +353,22 @@ Item {
                         maxHeight: contentWrapper.implicitHeight
                     }
                 }
+
+                // Transcriptions tab pane — reuses TextList with the
+                // transcriptions-only model.
+                Pane {
+                    id: transcriptionsPane
+                    index: 2
+                    sourceComponent: TextList {
+                        entries: _transcriptionsModel
+                        allEntries: root.allTranscriptionEntries
+                        hasMore: root._hasMoreTranscriptions
+                        loadMore: () => root._loadMoreTranscriptions()
+                        visibilities: root.visibilities
+                        searchQuery: searchBar.debouncedText
+                        maxHeight: contentWrapper.implicitHeight
+                    }
+                }
             }
 
             Behavior on contentX {
@@ -296,11 +377,12 @@ Item {
         }
     }
 
-    // Search bar at bottom — collapses on Images tab
+    // Search bar at bottom — collapses on Images tab.
+    // Drives whichever text-style pane (Text or Transcriptions) is active.
     ClipboardSearchBar {
         id: searchBar
 
-        isTextTab: root.state.currentTab === root.tabText
+        isTextTab: root.state.currentTab !== root.tabImages
         entryCount: Clipboard.entries.length
         padding: root.padding
         confirmTimeout: Config.clipboard.clearConfirmTimeout
@@ -313,10 +395,11 @@ Item {
         anchors.rightMargin: root.padding
 
         onAccepted: {
-            const textList = textPane.item;
-            if (!textList) return;
-            const idx = _textModel.get(textList.currentIndex)?.idx;
-            const entry = idx !== undefined ? root.allTextEntries[idx] : undefined;
+            const list = root._activePane;
+            if (!list) return;
+            const model = root._activeModel;
+            const idx = model?.get(list.currentIndex)?.idx;
+            const entry = idx !== undefined ? root._activeAllEntries[idx] : undefined;
             if (entry) {
                 Clipboard.restore(entry.id);
                 root.visibilities.clipboard = false;
@@ -324,24 +407,25 @@ Item {
         }
 
         onNavigateUp: {
-            const textList = textPane.item;
-            if (!textList) return;
-            if (textList.currentIndex > 0)
-                textList.currentIndex--;
+            const list = root._activePane;
+            if (!list) return;
+            if (list.currentIndex > 0)
+                list.currentIndex--;
         }
 
         onNavigateDown: {
-            const textList = textPane.item;
-            if (!textList) return;
-            if (textList.currentIndex < _textModel.count - 1) {
-                textList.currentIndex++;
-            } else if (root._hasMoreText) {
-                root._loadMoreText();
+            const list = root._activePane;
+            if (!list) return;
+            const model = root._activeModel;
+            if (list.currentIndex < (model?.count ?? 0) - 1) {
+                list.currentIndex++;
+            } else if (root._activeHasMore) {
+                root._activeLoadMore();
             }
         }
 
         onRequestClose: root.visibilities.clipboard = false
-        onRequestTabCycle: root.state.currentTab = (root.state.currentTab + 1) % 2
+        onRequestTabCycle: root.state.currentTab = (root.state.currentTab + 1) % tabs.count
         onClearAllRequested: Clipboard.clear()
     }
 
@@ -367,7 +451,7 @@ Item {
         Keys.onPressed: event => {
             // Tab key cycles between tabs
             if (event.key === Qt.Key_Tab) {
-                root.state.currentTab = (root.state.currentTab + 1) % 2;
+                root.state.currentTab = (root.state.currentTab + 1) % tabs.count;
                 event.accepted = true;
             }
         }

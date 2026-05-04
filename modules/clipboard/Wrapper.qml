@@ -14,7 +14,7 @@ DrawerVertical {
 
     // Persistent state for clipboard tabs (survives drawer close/open)
     readonly property PersistentProperties clipState: PersistentProperties {
-        property int currentTab: 0  // 0=Text, 1=Images
+        property int currentTab: 0  // 0=Text, 1=Images, 2=Transcriptions
         reloadableId: "clipboardState"
     }
 

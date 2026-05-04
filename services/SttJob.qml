@@ -839,6 +839,12 @@ QtObject {
                 return;
             }
 
+            // Tag the just-copied text as a transcription. cliphist captures
+            // it asynchronously via wl-paste --watch; by the time the entry
+            // surfaces in Clipboard.entries the marker is already in place,
+            // so the view-layer filter routes it to the Transcriptions tab.
+            TranscriptionStore.add(job._transcribedText);
+
             // Resolve effective delivery mode
             const effectiveMode = SttService._deliveryMode === "ask"
                 ? job._activeDeliveryChoice

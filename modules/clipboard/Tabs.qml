@@ -39,6 +39,11 @@ Item {
             iconName: "image"
             text: qsTr("Images")
         }
+
+        Tab {
+            iconName: "graphic_eq"
+            text: qsTr("Transcriptions")
+        }
     }
 
     Item {
