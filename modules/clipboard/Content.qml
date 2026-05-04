@@ -31,8 +31,11 @@ Item {
 
     // Get all entries (search-filtered if searching, otherwise all loaded entries)
     readonly property var allFilteredEntries: {
-        Clipboard.entries.length;  // Force reactive dependency on list changes
-        TranscriptionStore.entries.length;  // Re-evaluate when STT marks new transcriptions
+        // Reactive dependency touches — QML script bindings only track properties
+        // that are actually *read* in the expression. Bare reads register the
+        // dependency without affecting the return value.
+        Clipboard.entries.length;
+        TranscriptionStore.entries.length;
         if (!searchBar.debouncedText) return Clipboard.entries;
 
         // Direct FZF/Fuzzysort search on clipboard entries
@@ -47,10 +50,26 @@ Item {
         }).find(searchBar.debouncedText).map(r => r.item);
     }
 
+    // Partition non-image entries into text vs. transcription in a single pass,
+    // so TranscriptionStore.has() is called once per entry (not twice per entry
+    // from two separate .filter() calls).
+    readonly property var _partitioned: {
+        const text = [];
+        const transcriptions = [];
+        for (let i = 0; i < allFilteredEntries.length; i++) {
+            const e = allFilteredEntries[i];
+            if (e.isImage) continue;
+            if (TranscriptionStore.has(e.preview))
+                transcriptions.push(e);
+            else
+                text.push(e);
+        }
+        return { text, transcriptions };
+    }
     // Text tab — non-image entries that are NOT tagged as transcriptions
-    readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage && !TranscriptionStore.has(e.preview))
+    readonly property var allTextEntries: _partitioned.text
     // Transcriptions tab — non-image entries that ARE tagged as transcriptions
-    readonly property var allTranscriptionEntries: allFilteredEntries.filter(e => !e.isImage && TranscriptionStore.has(e.preview))
+    readonly property var allTranscriptionEntries: _partitioned.transcriptions
 
     // Whether more entries can be loaded for each progressive model
     readonly property bool _hasMoreText: _textModel.count < allTextEntries.length
@@ -383,7 +402,9 @@ Item {
         id: searchBar
 
         isTextTab: root.state.currentTab !== root.tabImages
-        entryCount: Clipboard.entries.length
+        entryCount: root.state.currentTab === root.tabTranscriptions
+            ? root.allTranscriptionEntries.length
+            : Clipboard.entries.length
         padding: root.padding
         confirmTimeout: Config.clipboard.clearConfirmTimeout
 

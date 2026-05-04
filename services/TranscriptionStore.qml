@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.utils
+import qs.config
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -24,10 +25,13 @@ Singleton {
     // bindings depending on `entries.length` re-evaluate.
     property var entries: []
 
-    // Set of full transcribed texts. Membership uses prefix-match in has()
-    // because cliphist truncates differently than Symmetria, so an exact
-    // key cannot reliably match Symmetria's `entry.preview`.
+    // Set of full transcribed texts — O(1) fast path for exact matches in has().
+    // Falls back to the prefix-match loop for entries truncated on either side.
     property var _lookupSet: new Set()
+
+    // Set of stored texts sliced to Config.clipboard.previewLength. Allows O(1)
+    // lookup when cliphist has truncated the entry and stored text > previewLength.
+    property var _lookupPrefixSet: new Set()
 
     // Whether the persisted JSON has been loaded from disk.
     property bool loaded: false
@@ -60,12 +64,19 @@ Singleton {
         if (!preview) return false;
         const stripped = preview.endsWith("…") ? preview.slice(0, -1) : preview;
         if (stripped.length === 0) return false;
-        // Fast path: exact match for short transcriptions where preview === text.
-        if (_lookupSet.has(stripped) || _lookupSet.has(preview))
+        // Fast path: O(1) exact match for entries whose full text fits within the
+        // preview length (stored text === stripped preview).
+        if (_lookupSet.has(stripped))
             return true;
-        // Fallback: prefix match against stored full texts.
+        // Fast path: stored text was longer than previewLength and got truncated
+        // by cliphist — check the sliced prefix set.
+        if (_lookupPrefixSet.has(stripped))
+            return true;
+        // Slow path: stored text is shorter than stripped preview (very rare —
+        // only when Symmetria's previewLength < cliphist's threshold). Fall back
+        // to a loop over entries to detect the reverse-prefix case.
         for (const e of entries) {
-            if (e.text.startsWith(stripped) || stripped.startsWith(e.text))
+            if (stripped.startsWith(e.text))
                 return true;
         }
         return false;
@@ -117,9 +128,15 @@ Singleton {
 
     function _rebuildLookup(): void {
         const set = new Set();
-        for (const e of entries)
+        const prefixSet = new Set();
+        const prefixLen = Config.clipboard.previewLength;
+        for (const e of entries) {
             set.add(e.text);
+            if (e.text.length > prefixLen)
+                prefixSet.add(e.text.slice(0, prefixLen));
+        }
         _lookupSet = set;
+        _lookupPrefixSet = prefixSet;
     }
 
     function _persist(): void {
@@ -146,7 +163,8 @@ Singleton {
                 return;
             }
             if (Array.isArray(data))
-                root.entries = data.filter(e => e && typeof e.text === "string");
+                root.entries = data.filter(e => e && typeof e.text === "string"
+                    && (e.addedAt === undefined || typeof e.addedAt === "number"));
             root._rebuildLookup();
             root.loaded = true;
         }
@@ -157,6 +175,12 @@ Singleton {
                 Quickshell.execDetached(["mkdir", "-p", `${Paths.state}/stt`]);
                 root.loaded = true;
                 setText("[]");
+            } else {
+                // Permission denied, I/O error, or other unexpected error.
+                // Degrade to in-memory-only mode so pruneOrphans and add()
+                // still work for this session, even if persistence is broken.
+                console.warn("TranscriptionStore: failed to load transcriptions.json (err=" + err + "), running in-memory only");
+                root.loaded = true;
             }
         }
     }
