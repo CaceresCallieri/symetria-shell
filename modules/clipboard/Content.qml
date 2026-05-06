@@ -282,143 +282,186 @@ Item {
     }
 
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
-    // padding * 3 = below-tabs gap + searchBar.anchors.topMargin + bottom margin
-    implicitHeight: tabs.implicitHeight + tabs.anchors.topMargin + contentWrapper.implicitHeight + searchBar.implicitHeight + padding * 3
+    // padding * 3            = below-tabs gap + searchBar.anchors.topMargin + bottom margin
+    // padding.normal * 4     = internal padding of the two PillCard frames (tabsCard + contentCard, top+bottom each)
+    implicitHeight: tabsCard.implicitHeight + tabsCard.anchors.topMargin + contentCard.implicitHeight + searchBar.implicitHeight + padding * 3
     // Note: on Images tab, searchBar collapses to 0 but its anchors.topMargin
     // (root.padding) remains, creating slightly more bottom padding. This is
     // intentional — changing it would break the constant-sum animation invariant.
 
-    // Tabs at top
-    Tabs {
-        id: tabs
+    // Tab strip card — claymorphism PillCard frame around the Text/Images/
+    // Transcriptions cycler. Mirrors `navSection` from Calendar.qml's panelMode
+    // path: outer Item hosts the PillCard, inner Tabs is inset by
+    // padding.normal so it breathes inside the clay frame.
+    Item {
+        id: tabsCard
 
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.topMargin: Appearance.padding.normal
-        anchors.margins: Appearance.padding.large
+        anchors.leftMargin: Appearance.padding.large
+        anchors.rightMargin: Appearance.padding.large
 
-        nonAnimWidth: root.implicitWidth - anchors.margins * 2
-        state: root.state
+        implicitHeight: tabs.implicitHeight + Appearance.padding.normal * 2
+
+        PillCard {
+            anchors.fill: parent
+        }
+
+        Tabs {
+            id: tabs
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Appearance.padding.normal
+            anchors.rightMargin: Appearance.padding.normal
+
+            // Tabs's indicator x-math reads nonAnimWidth as the available
+            // tab-row width. Inside the card, that's just our anchored width.
+            nonAnimWidth: tabs.width
+            state: root.state
+        }
     }
 
-    // Content area with horizontal swipe
-    ClippingRectangle {
-        id: contentWrapper
+    // Content card — claymorphism PillCard frame around the swipeable panes.
+    // The inner ClippingRectangle still owns the swipe clip; the card is the
+    // visual frame around it. Mirrors `bodySection` in Calendar.qml.
+    Item {
+        id: contentCard
 
-        anchors.top: tabs.bottom
+        anchors.top: tabsCard.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.topMargin: root.padding
         anchors.leftMargin: root.padding
         anchors.rightMargin: root.padding
 
-        height: implicitHeight
-        radius: Appearance.rounding.normal
-        color: "transparent"
+        implicitHeight: contentWrapper.implicitHeight + Appearance.padding.normal * 2
 
-        // Height expands on Images tab to reclaim collapsed search bar space
-        implicitHeight: root.state.currentTab === root.tabImages
-            ? root.maxHeight / 2 + searchBar.naturalHeight
-            : root.maxHeight / 2
-
-        Behavior on implicitHeight {
-            Anim {
-                duration: Appearance.anim.durations.large
-                easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
-            }
+        PillCard {
+            anchors.fill: parent
         }
 
-        Flickable {
-            id: view
+        // Content area with horizontal swipe
+        ClippingRectangle {
+            id: contentWrapper
 
-            readonly property int currentIndex: root.state.currentTab
-            readonly property Item currentItem: row.children[currentIndex]
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: Appearance.padding.normal
+            anchors.leftMargin: Appearance.padding.normal
+            anchors.rightMargin: Appearance.padding.normal
 
-            anchors.fill: parent
+            height: implicitHeight
+            radius: Appearance.rounding.normal
+            color: "transparent"
 
-            flickableDirection: Flickable.HorizontalFlick
+            // Height expands on Images tab to reclaim collapsed search bar space
+            implicitHeight: root.state.currentTab === root.tabImages
+                ? root.maxHeight / 2 + searchBar.naturalHeight
+                : root.maxHeight / 2
 
-            contentX: currentItem?.x ?? 0
-            contentWidth: row.implicitWidth
-            contentHeight: row.implicitHeight
-
-            // Swipe gesture handling
-            onContentXChanged: {
-                if (!moving || !currentItem)
-                    return;
-
-                const x = contentX - currentItem.x;
-                if (x > currentItem.implicitWidth / 2)
-                    root.state.currentTab = Math.min(root.state.currentTab + 1, tabs.count - 1);
-                else if (x < -currentItem.implicitWidth / 2)
-                    root.state.currentTab = Math.max(root.state.currentTab - 1, 0);
-            }
-
-            onDragEnded: {
-                if (!currentItem)
-                    return;
-
-                const x = contentX - currentItem.x;
-                if (x > currentItem.implicitWidth / 10)
-                    root.state.currentTab = Math.min(root.state.currentTab + 1, tabs.count - 1);
-                else if (x < -currentItem.implicitWidth / 10)
-                    root.state.currentTab = Math.max(root.state.currentTab - 1, 0);
-                else
-                    contentX = Qt.binding(() => currentItem?.x ?? 0);
-            }
-
-            RowLayout {
-                id: row
-
-                spacing: 0
-
-                // Text tab pane
-                Pane {
-                    id: textPane
-                    index: 0
-                    sourceComponent: TextList {
-                        entries: _textModel
-                        allEntries: root.allTextEntries
-                        hasMore: root._hasMoreText
-                        loadMore: () => root._loadMoreText()
-                        visibilities: root.visibilities
-                        searchQuery: searchBar.debouncedText
-                        maxHeight: contentWrapper.implicitHeight
-                    }
-                }
-
-                // Images tab pane
-                Pane {
-                    id: imagePane
-                    index: 1
-                    sourceComponent: ImageGrid {
-                        entries: root.imageEntries
-                        visibilities: root.visibilities
-                        searchQuery: ""  // Images don't support search
-                        maxHeight: contentWrapper.implicitHeight
-                    }
-                }
-
-                // Transcriptions tab pane — reuses TextList with the
-                // transcriptions-only model.
-                Pane {
-                    id: transcriptionsPane
-                    index: 2
-                    sourceComponent: TextList {
-                        entries: _transcriptionsModel
-                        allEntries: root.allTranscriptionEntries
-                        hasMore: root._hasMoreTranscriptions
-                        loadMore: () => root._loadMoreTranscriptions()
-                        visibilities: root.visibilities
-                        searchQuery: searchBar.debouncedText
-                        maxHeight: contentWrapper.implicitHeight
-                    }
+            Behavior on implicitHeight {
+                Anim {
+                    duration: Appearance.anim.durations.large
+                    easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
                 }
             }
 
-            Behavior on contentX {
-                Anim {}
+            Flickable {
+                id: view
+
+                readonly property int currentIndex: root.state.currentTab
+                readonly property Item currentItem: row.children[currentIndex]
+
+                anchors.fill: parent
+
+                flickableDirection: Flickable.HorizontalFlick
+
+                contentX: currentItem?.x ?? 0
+                contentWidth: row.implicitWidth
+                contentHeight: row.implicitHeight
+
+                // Swipe gesture handling
+                onContentXChanged: {
+                    if (!moving || !currentItem)
+                        return;
+
+                    const x = contentX - currentItem.x;
+                    if (x > currentItem.implicitWidth / 2)
+                        root.state.currentTab = Math.min(root.state.currentTab + 1, tabs.count - 1);
+                    else if (x < -currentItem.implicitWidth / 2)
+                        root.state.currentTab = Math.max(root.state.currentTab - 1, 0);
+                }
+
+                onDragEnded: {
+                    if (!currentItem)
+                        return;
+
+                    const x = contentX - currentItem.x;
+                    if (x > currentItem.implicitWidth / 10)
+                        root.state.currentTab = Math.min(root.state.currentTab + 1, tabs.count - 1);
+                    else if (x < -currentItem.implicitWidth / 10)
+                        root.state.currentTab = Math.max(root.state.currentTab - 1, 0);
+                    else
+                        contentX = Qt.binding(() => currentItem?.x ?? 0);
+                }
+
+                RowLayout {
+                    id: row
+
+                    spacing: 0
+
+                    // Text tab pane
+                    Pane {
+                        id: textPane
+                        index: 0
+                        sourceComponent: TextList {
+                            entries: _textModel
+                            allEntries: root.allTextEntries
+                            hasMore: root._hasMoreText
+                            loadMore: () => root._loadMoreText()
+                            visibilities: root.visibilities
+                            searchQuery: searchBar.debouncedText
+                            maxHeight: contentWrapper.implicitHeight
+                        }
+                    }
+
+                    // Images tab pane
+                    Pane {
+                        id: imagePane
+                        index: 1
+                        sourceComponent: ImageGrid {
+                            entries: root.imageEntries
+                            visibilities: root.visibilities
+                            searchQuery: ""  // Images don't support search
+                            maxHeight: contentWrapper.implicitHeight
+                        }
+                    }
+
+                    // Transcriptions tab pane — reuses TextList with the
+                    // transcriptions-only model.
+                    Pane {
+                        id: transcriptionsPane
+                        index: 2
+                        sourceComponent: TextList {
+                            entries: _transcriptionsModel
+                            allEntries: root.allTranscriptionEntries
+                            hasMore: root._hasMoreTranscriptions
+                            loadMore: () => root._loadMoreTranscriptions()
+                            visibilities: root.visibilities
+                            searchQuery: searchBar.debouncedText
+                            maxHeight: contentWrapper.implicitHeight
+                        }
+                    }
+                }
+
+                Behavior on contentX {
+                    Anim {}
+                }
             }
         }
     }
@@ -435,7 +478,10 @@ Item {
         padding: root.padding
         confirmTimeout: Config.clipboard.clearConfirmTimeout
 
-        anchors.top: contentWrapper.bottom
+        // Anchors to contentCard (the new outer card wrapper), not to
+        // contentWrapper directly — QML anchors must reference siblings or the
+        // parent, and contentWrapper now lives nested inside contentCard.
+        anchors.top: contentCard.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.topMargin: root.padding
