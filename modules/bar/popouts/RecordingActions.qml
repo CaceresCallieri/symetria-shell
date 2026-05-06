@@ -133,7 +133,9 @@ ColumnLayout {
                 case "resume":
                     pauseBtn.triggerPress(); break;
                 case "cancel":
-                    cancelBtn.triggerPress(); break;
+                    if (root.job?.state !== "error")
+                        cancelBtn.triggerPress();
+                    break;
                 case "stop":
                     submitBtn.triggerPress(); break;
             }
