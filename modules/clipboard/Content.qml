@@ -29,13 +29,14 @@ Item {
     readonly property int tabImages: 1
     readonly property int tabTranscriptions: 2
 
-    // Get all entries (search-filtered if searching, otherwise all loaded entries)
+    // Get all cliphist entries (search-filtered if searching, otherwise raw).
+    // Transcriptions are NOT in this list — they live in TranscriptionStore
+    // and are surfaced separately in `allTranscriptionEntries` below.
     readonly property var allFilteredEntries: {
-        // Reactive dependency touches — QML script bindings only track properties
-        // that are actually *read* in the expression. Bare reads register the
-        // dependency without affecting the return value.
+        // Reactive dependency touch — QML only tracks properties actually read
+        // in the expression. The bare read registers the dependency without
+        // affecting the return value.
         Clipboard.entries.length;
-        TranscriptionStore.entries.length;
         if (!searchBar.debouncedText) return Clipboard.entries;
 
         // Direct FZF/Fuzzysort search on clipboard entries
@@ -50,26 +51,36 @@ Item {
         }).find(searchBar.debouncedText).map(r => r.item);
     }
 
-    // Partition non-image entries into text vs. transcription in a single pass,
-    // so TranscriptionStore.has() is called once per entry (not twice per entry
-    // from two separate .filter() calls).
-    readonly property var _partitioned: {
-        const text = [];
-        const transcriptions = [];
-        for (let i = 0; i < allFilteredEntries.length; i++) {
-            const e = allFilteredEntries[i];
-            if (e.isImage) continue;
-            if (TranscriptionStore.has(e.preview))
-                transcriptions.push(e);
-            else
-                text.push(e);
+    // Text tab — every non-image cliphist entry. Transcriptions never enter
+    // cliphist under the wtype-based delivery flow, so no exclusion needed.
+    readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage)
+
+    // Transcriptions tab — fed directly from the authoritative
+    // TranscriptionStore. Each entry is mapped to a ClipboardItem-compatible
+    // shape (id, preview, isImage, _kind) so the existing TextList / delegate
+    // pipeline can render them without forking. `_kind: "transcription"` tells
+    // ClipboardItem to route the click through TranscriptionStore.paste()
+    // instead of Clipboard.restore().
+    readonly property var allTranscriptionEntries: {
+        const items = TranscriptionStore.entries.map(e => ({
+            id: e.id,
+            preview: e.text,
+            addedAt: e.addedAt,
+            isImage: false,
+            _kind: "transcription"
+        }));
+        if (!searchBar.debouncedText) return items;
+
+        const useFuzzy = Config.clipboard.useFuzzy;
+        if (useFuzzy) {
+            return Fuzzy.go(searchBar.debouncedText, items, {
+                key: "preview", all: true
+            }).map(r => r.obj);
         }
-        return { text, transcriptions };
+        return new Fzf.Finder(items, {
+            selector: e => e.preview
+        }).find(searchBar.debouncedText).map(r => r.item);
     }
-    // Text tab — non-image entries that are NOT tagged as transcriptions
-    readonly property var allTextEntries: _partitioned.text
-    // Transcriptions tab — non-image entries that ARE tagged as transcriptions
-    readonly property var allTranscriptionEntries: _partitioned.transcriptions
 
     // Whether more entries can be loaded for each progressive model
     readonly property bool _hasMoreText: _textModel.count < allTextEntries.length
@@ -132,9 +143,18 @@ Item {
         }
     }
 
+    // Incremental sync: adjust the progressive ListModel's count to match
+    // `allTextEntries.length` (capped at maxDisplayed) WITHOUT issuing a
+    // wholesale clear+append. The model only stores `{idx}` pointers; the
+    // delegate resolves content via `entry: root.allEntries[idx]` at render
+    // time, so existing delegates pick up new content automatically when
+    // the underlying array changes. Avoiding clear+append sidesteps a Qt
+    // ListView quirk where overlapping `remove` and `add` transitions can
+    // leave stale delegates in the scene (visible as duplicated entries
+    // after a new transcription lands while the drawer is open).
     function _resetTextEntries(): void {
-        _textModel.clear();
-        _appendTextEntries(Config.clipboard.maxDisplayed);
+        const target = Math.min(Config.clipboard.maxDisplayed, allTextEntries.length);
+        _syncProgressiveModel(_textModel, target);
     }
 
     function _appendTextEntries(count: int): void {
@@ -150,8 +170,8 @@ Item {
     }
 
     function _resetTranscriptionEntries(): void {
-        _transcriptionsModel.clear();
-        _appendTranscriptionEntries(Config.clipboard.maxDisplayed);
+        const target = Math.min(Config.clipboard.maxDisplayed, allTranscriptionEntries.length);
+        _syncProgressiveModel(_transcriptionsModel, target);
     }
 
     function _appendTranscriptionEntries(count: int): void {
@@ -164,6 +184,20 @@ Item {
     function _loadMoreTranscriptions(): void {
         if (!_hasMoreTranscriptions) return;
         _appendTranscriptionEntries(_pageSize);
+    }
+
+    // Bring `model` to exactly `target` items of shape {idx: i} for i in [0, target).
+    // Grows by appending; shrinks by removing the tail. Runs in O(|delta|).
+    function _syncProgressiveModel(model: ListModel, target: int): void {
+        const current = model.count;
+        if (current === target) return;
+        if (current < target) {
+            for (let i = current; i < target; i++)
+                model.append({ idx: i });
+        } else {
+            while (model.count > target)
+                model.remove(model.count - 1);
+        }
     }
 
     // Active-pane helpers — used by the search bar and key handlers so the
@@ -208,13 +242,6 @@ Item {
                 root._refCounted = true;
                 Clipboard.refCount++;
             }
-            // Lazy prune of orphan transcription markers — drop entries whose
-            // text no longer corresponds to any cliphist preview (rotated out,
-            // manually cleared). Built once per open and passed in as an array.
-            const previews = [];
-            for (let i = 0; i < Clipboard.entries.length; i++)
-                previews.push(Clipboard.entries[i].preview);
-            TranscriptionStore.pruneOrphans(previews);
             // Reset models to initial batches and list indices on open
             root._resetTextEntries();
             root._resetTranscriptionEntries();
@@ -422,7 +449,10 @@ Item {
             const idx = model?.get(list.currentIndex)?.idx;
             const entry = idx !== undefined ? root._activeAllEntries[idx] : undefined;
             if (entry) {
-                Clipboard.restore(entry.id);
+                if (entry._kind === "transcription")
+                    TranscriptionStore.paste(entry.id);
+                else
+                    Clipboard.restore(entry.id);
                 root.visibilities.clipboard = false;
             }
         }

@@ -147,6 +147,18 @@ QtObject {
     property bool _injectionDowngraded: false
     property bool _injectionSubmitted: false
 
+    // Whether wl-copy ran during this delivery. Drives the post-paste cliphist
+    // scrub: if we put text on the clipboard, cliphist captured it into the
+    // Text tab — we delete-query it back out after the paste lands so the
+    // Transcriptions tab is the only place STT outputs appear. False for
+    // RPC-only and clipboard (wtype) deliveries that never touch wl-copy.
+    property bool _ranWlCopy: false
+
+    // Text payload pending cliphist delete-query (after a small delay to let
+    // the wl-paste --watch daemon write the entry to its db before we try
+    // to remove it). Cleared once the timer fires.
+    property string _pendingCliphistDelete: ""
+
     // Set when _cleanupRecovery() is called while recoveryPersistProcess is
     // still running. The onExited handler re-runs cleanup so a cancel-during-
     // persist race ends with the file absent (honoring the cancel intent)
@@ -486,12 +498,98 @@ QtObject {
         transcribeProcess.running = true;
     }
 
-    /// Start the clipboard → inject delivery chain.
+    /// Start the delivery chain. Three paths:
+    ///
+    /// - "clipboard" mode → wtype direct injection. No wl-copy, no cliphist.
+    ///   Recorded in TranscriptionStore on wtypeProcess exit.
+    ///
+    /// - "inject" / "submit" mode + RPC eligible (terminal target with a
+    ///   resolved Neovim socket, e.g. Claude Code) → skip wl-copy entirely;
+    ///   stt-inject.sh writes directly to the buffer over the RPC socket,
+    ///   no clipboard touch. STT_RPC_ONLY=1 tells the script not to fall
+    ///   back to sendshortcut (which would need clipboard contents we never
+    ///   provided). Recorded in TranscriptionStore on injectProcess exit.
+    ///
+    /// - "inject" / "submit" mode + non-RPC target (browser, chat, etc.) →
+    ///   wl-copy + stt-inject.sh sendshortcut paste. cliphist briefly
+    ///   captures the entry; we schedule a delete-query in injectProcess
+    ///   onExited to scrub it once the paste has landed.
     function _startDeliveryChain(): void {
         _state = "delivering";
-        console.log("[STT:D11] → delivering, chaining wl-copy | id:", sessionId, "textLength:", _transcribedText.length);
-        clipboardProcess.command = ["wl-copy", _transcribedText];
-        clipboardProcess.running = true;
+
+        const effectiveMode = SttService._deliveryMode === "ask"
+            ? _activeDeliveryChoice
+            : SttService._deliveryMode;
+        Logger.log("qml", "stt", "delivery-start | id=" + sessionId + " mode=" + effectiveMode + " textLen=" + _transcribedText.length);
+
+        if (effectiveMode === "clipboard") {
+            console.log("[STT:D11] → delivering via wtype | id:", sessionId, "textLength:", _transcribedText.length);
+            _ranWlCopy = false;
+            wtypeProcess.command = ["wtype", "--", _transcribedText];
+            wtypeProcess.running = true;
+            return;
+        }
+
+        const rpcEligible = _targetWindowAddress !== ""
+            && _targetNvimSocket !== ""
+            && _isTerminalClass(_targetWindowClass);
+
+        if (rpcEligible) {
+            console.log("[STT:D11] → delivering via RPC-only (skipping wl-copy) | id:", sessionId, "textLength:", _transcribedText.length);
+            _ranWlCopy = false;
+            _spawnInjectProcess(true);
+        } else {
+            console.log("[STT:D11] → delivering via wl-copy + sendshortcut | id:", sessionId, "textLength:", _transcribedText.length);
+            _ranWlCopy = true;
+            clipboardProcess.command = ["wl-copy", _transcribedText];
+            clipboardProcess.running = true;
+        }
+    }
+
+    /// Whether the given window class is a terminal emulator. Mirrors the
+    /// is_terminal_class function in stt-inject.sh — the script's RPC path
+    /// only fires for terminal classes, so the QML pre-check must agree
+    /// (otherwise we'd skip wl-copy assuming RPC will fire, but the script
+    /// would fall through and fail on empty clipboard).
+    function _isTerminalClass(cls: string): bool {
+        if (!cls) return false;
+        const lc = cls.toLowerCase();
+        return /(?:ghostty|warp|wezterm|alacritty|kitty|foot|konsole|xterm|urxvt|termite|sakura|tilix|terminator|st-)/.test(lc);
+    }
+
+    /// Spawn injectProcess with the right args + env. Used by both the
+    /// post-wl-copy path (clipboardProcess.onExited) and the RPC-only path
+    /// (called directly from _startDeliveryChain). When `rpcOnly` is true,
+    /// the script will skip the sendshortcut fallback if RPC fails.
+    function _spawnInjectProcess(rpcOnly: bool): void {
+        if (_targetWindowAddress === "") {
+            console.log("[STT:D14] inject SKIPPED — no target | id:", sessionId);
+            _injectionPath = "";
+            _injectionDowngraded = false;
+            _injectionSubmitted = false;
+            _state = "success";
+            return;
+        }
+        if (_targetWindowClass === "")
+            console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
+        const effectiveMode = SttService._deliveryMode === "ask"
+            ? _activeDeliveryChoice
+            : SttService._deliveryMode;
+        const cmd = [_injectScript, _targetWindowAddress, _targetWindowClass];
+        if (effectiveMode === "submit") cmd.push("submit");
+        Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly);
+        // Prepend voice tag for agent-backed terminals (e.g. Claude Code)
+        // so the LLM knows the input is voice-transcribed.
+        const voicePrefix = (Config.stt?.voiceTag && _targetNvimSocket !== "")
+            ? Config.stt?.voiceTag : "";
+        injectProcess.environment = ({
+            STT_EXPECTED_TEXT: voicePrefix + _transcribedText,
+            STT_NVIM_SOCKET: _targetNvimSocket,
+            STT_NVIM_ACTIVE_BUF: _targetNvimActiveBuf.toString(),
+            STT_RPC_ONLY: rpcOnly ? "1" : ""
+        });
+        injectProcess.command = cmd;
+        injectProcess.running = true;
     }
 
     /// Delete temp files for this session.
@@ -595,6 +693,7 @@ QtObject {
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
         if (clipboardProcess.running) clipboardProcess.running = false;
+        if (wtypeProcess.running) wtypeProcess.running = false;
         if (injectProcess.running) injectProcess.running = false;
     }
 
@@ -829,7 +928,10 @@ QtObject {
         }
     }
 
-    // Clipboard delivery via wl-copy
+    // wl-copy delivery for non-RPC inject/submit. cliphist captures the
+    // entry while it's on the clipboard; we scrub it via cliphist
+    // delete-query in injectProcess.onExited once the paste has landed.
+    // RPC-eligible deliveries skip this Process entirely (no wl-copy).
     readonly property Process clipboardProcess: Process {
         onExited: (code, status) => {
             Logger.log("qml", "stt", "clipboard-done | id=" + job.sessionId + " code=" + code);
@@ -838,43 +940,28 @@ QtObject {
                 job._state = "success";
                 return;
             }
+            // TranscriptionStore.add() and cliphist scrub fire from
+            // injectProcess.onExited so both RPC-only and wl-copy paths
+            // share the same "delivery completed" hook.
+            job._spawnInjectProcess(false);
+        }
+    }
 
-            // Tag the just-copied text as a transcription. cliphist captures
-            // it asynchronously via wl-paste --watch; by the time the entry
-            // surfaces in Clipboard.entries the marker is already in place,
-            // so the view-layer filter routes it to the Transcriptions tab.
+    // wtype delivery for "clipboard" mode. Types the transcribed text directly
+    // into the focused window — no clipboard / cliphist involvement. The entry
+    // is recorded in TranscriptionStore on exit (regardless of wtype's exit
+    // code) so the user can re-paste from the Transcriptions tab or via Alt+V
+    // even if wtype itself failed in this particular target window.
+    readonly property Process wtypeProcess: Process {
+        onExited: (code, status) => {
+            Logger.log("qml", "stt", "wtype-done | id=" + job.sessionId + " code=" + code);
+            if (code !== 0)
+                console.error("[STT:WTYPE] wtype FAILED (exit", code + ") — text still recorded for re-paste");
             TranscriptionStore.add(job._transcribedText);
-
-            // Resolve effective delivery mode
-            const effectiveMode = SttService._deliveryMode === "ask"
-                ? job._activeDeliveryChoice
-                : SttService._deliveryMode;
-            Logger.log("qml", "stt", "delivery | id=" + job.sessionId + " mode=" + effectiveMode);
-
-            if (effectiveMode !== "clipboard" && job._targetWindowAddress !== "") {
-                if (job._targetWindowClass === "")
-                    console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
-                const cmd = [job._injectScript, job._targetWindowAddress, job._targetWindowClass];
-                if (effectiveMode === "submit") cmd.push("submit");
-                Logger.log("qml", "stt", "inject-start | id=" + job.sessionId + " target=" + job._targetWindowAddress);
-                // Prepend voice tag for agent-backed terminals (e.g. Claude Code)
-                // so the LLM knows the input is voice-transcribed.
-                const voicePrefix = (Config.stt?.voiceTag && job._targetNvimSocket !== "")
-                    ? Config.stt?.voiceTag : "";
-                injectProcess.environment = ({
-                    STT_EXPECTED_TEXT: voicePrefix + job._transcribedText,
-                    STT_NVIM_SOCKET: job._targetNvimSocket,
-                    STT_NVIM_ACTIVE_BUF: job._targetNvimActiveBuf.toString()
-                });
-                injectProcess.command = cmd;
-                injectProcess.running = true;
-            } else {
-                console.log("[STT:D14] inject SKIPPED | id:", job.sessionId);
-                job._injectionPath = "";
-                job._injectionDowngraded = false;
-                job._injectionSubmitted = false;
-                job._state = "success";
-            }
+            job._injectionPath = "wtype";
+            job._injectionDowngraded = false;
+            job._injectionSubmitted = false;
+            job._state = "success";
         }
     }
 
@@ -960,10 +1047,42 @@ QtObject {
         }
         onExited: (code, status) => {
             console.log("[STT:D16] injectProcess.onExited | id:", job.sessionId,
-                "| code:", code, "| path:", job._injectionPath);
+                "| code:", code, "| path:", job._injectionPath, "| ranWlCopy:", job._ranWlCopy);
             if (code !== 0)
-                console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal, clipboard still has text");
+                console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal");
+
+            // Single funnel for "delivery complete":
+            //   1. Record in TranscriptionStore (so the entry is reachable
+            //      from the Transcriptions tab and Alt+V regardless of
+            //      whether this delivery's inject step succeeded — text
+            //      may still be useful for re-paste).
+            //   2. If wl-copy ran, schedule a delayed cliphist delete-query
+            //      to scrub the entry from the Text tab. The delay (300 ms)
+            //      lets the wl-paste --watch daemon write the entry to
+            //      cliphist's db before we try to remove it. The
+            //      Transcriptions tab is unaffected — different store.
+            TranscriptionStore.add(job._transcribedText);
+            if (job._ranWlCopy) {
+                job._pendingCliphistDelete = job._transcribedText;
+                job.cliphistDeleteTimer.restart();
+            }
             job._state = "success";
+        }
+    }
+
+    // Delayed cliphist scrub. The wl-paste --watch daemon that backs
+    // cliphist writes captured entries to its db asynchronously (~tens of
+    // ms after the wl-copy change event). Firing delete-query immediately
+    // would race against that write. 300ms is comfortably above the
+    // observed capture latency without making the entry visible long
+    // enough for a human to notice in the Text tab.
+    readonly property Timer cliphistDeleteTimer: Timer {
+        interval: 300
+        onTriggered: {
+            if (job._pendingCliphistDelete === "") return;
+            Logger.log("qml", "stt", "cliphist-scrub | id=" + job.sessionId + " textLen=" + job._pendingCliphistDelete.length);
+            Quickshell.execDetached(["cliphist", "delete-query", job._pendingCliphistDelete]);
+            job._pendingCliphistDelete = "";
         }
     }
 }

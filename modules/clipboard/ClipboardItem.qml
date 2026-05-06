@@ -37,7 +37,14 @@ Item {
         radius: Appearance.rounding.normal
 
         function onClicked(): void {
-            Clipboard.restore(root.entry.id);
+            // Transcription entries (synthetic shape from Content.qml) carry
+            // a `_kind` tag. They route through TranscriptionStore.paste()
+            // (which spawns wtype) instead of Clipboard.restore() (which
+            // copies back through cliphist).
+            if (root.entry?._kind === "transcription")
+                TranscriptionStore.paste(root.entry.id);
+            else
+                Clipboard.restore(root.entry.id);
             root.visibilities.clipboard = false;
         }
     }

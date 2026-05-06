@@ -2,142 +2,97 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.utils
-import qs.config
 import Quickshell
 import Quickshell.Io
 import QtQuick
 
-/// Persistent store of STT transcription markers.
+/// Authoritative store of STT transcriptions, persisted to JSON.
 ///
-/// Tags STT-delivered text so the clipboard manager can route it to a separate
-/// "Transcriptions" tab instead of the regular "Text" tab. cliphist remains the
-/// single source of truth for the actual entries — this store only holds enough
-/// information (the truncated preview key) to identify which cliphist entries
-/// originated from STT.
+/// Unlike the previous marker-based design (which tagged cliphist entries),
+/// this store IS the data: STT delivery in "clipboard" mode no longer touches
+/// wl-copy / cliphist at all. Instead, the transcribed text is injected via
+/// `wtype` directly into the focused window and recorded here for later
+/// retrieval via the Transcriptions tab in the clipboard manager or the
+/// Alt+V "paste latest" keybind.
 ///
-/// Lookup uses the same truncation length cliphist uses for previews
-/// (Config.clipboard.previewLength), so a stored key matches an entry's
-/// `preview` field directly. has() is O(1) via _lookupSet.
+/// Each entry is `{ id, text, addedAt }`. `id` is generated client-side and
+/// used by the UI to identify entries for paste/remove operations via IPC.
 Singleton {
     id: root
 
-    // Array of {text, addedAt}. Reassigned (never mutated in place) so QML
-    // bindings depending on `entries.length` re-evaluate.
+    /// Array of {id, text, addedAt}. Reassigned (never mutated in place) so
+    /// QML bindings depending on `entries.length` re-evaluate.
     property var entries: []
 
-    // Set of full transcribed texts — O(1) fast path for exact matches in has().
-    // Falls back to the prefix-match loop for entries truncated on either side.
-    property var _lookupSet: new Set()
-
-    // Set of stored texts sliced to Config.clipboard.previewLength. Allows O(1)
-    // lookup when cliphist has truncated the entry and stored text > previewLength.
-    property var _lookupPrefixSet: new Set()
-
-    // Whether the persisted JSON has been loaded from disk.
+    /// Whether the persisted JSON has been loaded from disk.
     property bool loaded: false
+
+    /// Cap on retained entries — prevents unbounded growth of the JSON file.
+    /// Oldest entries beyond this cap are dropped on add().
+    readonly property int maxEntries: 200
 
     // ─────────────────────────────────────────────────────────────────────
     // Public API
     // ─────────────────────────────────────────────────────────────────────
 
-    /// Tag `text` as a transcription. Called by SttJob after wl-copy succeeds.
-    function add(text: string): void {
+    /// Record a new transcription. Returns the assigned id, or "" on empty input.
+    function add(text: string): string {
         if (!text || text.length === 0) {
             console.warn("[TranscriptionStore] add() called with empty text — ignoring");
-            return;
+            return "";
         }
-        // Skip duplicates — cliphist itself dedupes by content.
-        if (_lookupSet.has(text))
-            return;
-        entries = [...entries, { text: text, addedAt: Date.now() }];
-        _rebuildLookup();
+        const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const entry = { id: id, text: text, addedAt: Date.now() };
+        const next = [entry, ...entries];
+        if (next.length > maxEntries)
+            next.length = maxEntries;
+        entries = next;
+        _persist();
+        return id;
+    }
+
+    /// Remove a single entry by id. No-op if id is unknown.
+    function remove(id: string): void {
+        const filtered = entries.filter(e => e.id !== id);
+        if (filtered.length === entries.length) return;
+        entries = filtered;
         _persist();
     }
 
-    /// Whether the given clipboard `preview` corresponds to a stored
-    /// transcription. Uses prefix-match because Symmetria truncates long
-    /// previews to `previewLength + "…"` (Clipboard.qml:222-224) and cliphist
-    /// itself truncates with its own threshold and ellipsis. Either side may
-    /// be the truncated one, so we accept a match when one is a prefix of
-    /// the other (with trailing ellipsis stripped).
-    function has(preview: string): bool {
-        if (!preview) return false;
-        const stripped = preview.endsWith("…") ? preview.slice(0, -1) : preview;
-        if (stripped.length === 0) return false;
-        // Fast path: O(1) exact match for entries whose full text fits within the
-        // preview length (stored text === stripped preview).
-        if (_lookupSet.has(stripped))
-            return true;
-        // Fast path: stored text was longer than previewLength and got truncated
-        // by cliphist — check the sliced prefix set.
-        if (_lookupPrefixSet.has(stripped))
-            return true;
-        // Slow path: stored text is shorter than stripped preview (very rare —
-        // only when Symmetria's previewLength < cliphist's threshold). Fall back
-        // to a loop over entries to detect the reverse-prefix case.
-        for (const e of entries) {
-            if (stripped.startsWith(e.text))
-                return true;
-        }
-        return false;
+    /// Drop all entries.
+    function clear(): void {
+        if (entries.length === 0) return;
+        entries = [];
+        _persist();
     }
 
-    /// Drop entries whose stored text no longer corresponds to any preview
-    /// in `currentPreviews`. Called lazily when the clipboard drawer opens.
-    /// `currentPreviews` is an array of preview strings from Clipboard.entries.
-    ///
-    /// IMPORTANT: prune is destructive and races with two async pipelines:
-    /// (1) cliphist's `wl-paste --watch` capturing wl-copy'd text, and
-    /// (2) Clipboard.refresh() rebuilding the entries list.
-    /// We guard against both:
-    ///   - Bail if Clipboard.entries hasn't populated (would orphan everything).
-    ///   - Skip recently-added entries (cliphist may not have captured yet).
-    function pruneOrphans(currentPreviews: var): void {
-        if (!loaded || entries.length === 0)
-            return;
-        // Refresh likely hasn't completed — refuse to wipe anything based on
-        // an empty cliphist snapshot. This is the primary safeguard against
-        // shell-startup races where prune runs before Clipboard.entries fills.
-        if (!currentPreviews || currentPreviews.length === 0)
-            return;
-        // Strip ellipses once for efficient comparison.
-        const stripped = [];
-        for (let i = 0; i < currentPreviews.length; i++) {
-            const p = currentPreviews[i];
-            stripped.push(p.endsWith("…") ? p.slice(0, -1) : p);
+    /// Lookup by id. Returns null if no match.
+    function getById(id: string): var {
+        for (const e of entries)
+            if (e.id === id) return e;
+        return null;
+    }
+
+    /// Paste a transcription via wtype. If `id` is empty/null/undefined, the
+    /// most recent entry is used. No-op when the store is empty or the id
+    /// doesn't match.
+    function paste(id: string): void {
+        let entry = null;
+        if (id === undefined || id === null || id === "") {
+            entry = entries.length > 0 ? entries[0] : null;
+        } else {
+            entry = getById(id);
         }
-        // Grace period — cliphist captures wl-copy'd text asynchronously
-        // (typically <500ms). Anything added in the last minute is exempt
-        // from pruning so STT entries aren't nuked between add() and capture.
-        const now = Date.now();
-        const graceMs = 60000;
-        const kept = entries.filter(e => {
-            if (now - (e.addedAt ?? 0) < graceMs) return true;
-            return stripped.some(s => e.text.startsWith(s) || s.startsWith(e.text));
-        });
-        if (kept.length === entries.length)
+        if (!entry) {
+            console.warn("[TranscriptionStore] paste(): no matching entry for id =", id);
             return;
-        entries = kept;
-        _rebuildLookup();
-        _persist();
+        }
+        Quickshell.execDetached(["wtype", "--", entry.text]);
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // Internals
     // ─────────────────────────────────────────────────────────────────────
-
-    function _rebuildLookup(): void {
-        const set = new Set();
-        const prefixSet = new Set();
-        const prefixLen = Config.clipboard.previewLength;
-        for (const e of entries) {
-            set.add(e.text);
-            if (e.text.length > prefixLen)
-                prefixSet.add(e.text.slice(0, prefixLen));
-        }
-        _lookupSet = set;
-        _lookupPrefixSet = prefixSet;
-    }
 
     function _persist(): void {
         saveTimer.restart();
@@ -162,26 +117,53 @@ Singleton {
                 root.loaded = true;
                 return;
             }
-            if (Array.isArray(data))
-                root.entries = data.filter(e => e && typeof e.text === "string"
-                    && (e.addedAt === undefined || typeof e.addedAt === "number"));
-            root._rebuildLookup();
+            if (Array.isArray(data)) {
+                // Legacy marker entries (no `id`) are silently discarded —
+                // the previous design only stored {text, addedAt} markers
+                // that pointed at cliphist; they have no meaning under the
+                // authoritative-store model.
+                root.entries = data.filter(e =>
+                    e
+                    && typeof e.id === "string"
+                    && typeof e.text === "string"
+                    && typeof e.addedAt === "number"
+                );
+            }
             root.loaded = true;
         }
         onLoadFailed: err => {
             if (err === FileViewError.FileNotFound) {
-                // mkdir + seed empty file. setText auto-creates the file but
-                // not parent dirs, so we ensure ${Paths.state}/stt exists.
+                // setText auto-creates the file but not parent dirs; ensure
+                // ${Paths.state}/stt exists before the first write.
                 Quickshell.execDetached(["mkdir", "-p", `${Paths.state}/stt`]);
                 root.loaded = true;
                 setText("[]");
             } else {
-                // Permission denied, I/O error, or other unexpected error.
-                // Degrade to in-memory-only mode so pruneOrphans and add()
-                // still work for this session, even if persistence is broken.
+                // Permission denied / I/O error — degrade to in-memory mode
+                // so add() and paste() still work for this session.
                 console.warn("TranscriptionStore: failed to load transcriptions.json (err=" + err + "), running in-memory only");
                 root.loaded = true;
             }
+        }
+    }
+
+    IpcHandler {
+        target: "transcriptions"
+
+        function paste(id: string): void {
+            root.paste(id);
+        }
+
+        function pasteLatest(): void {
+            root.paste("");
+        }
+
+        function remove(id: string): void {
+            root.remove(id);
+        }
+
+        function clear(): void {
+            root.clear();
         }
     }
 }

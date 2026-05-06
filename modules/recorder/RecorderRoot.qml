@@ -146,6 +146,14 @@ Scope {
         function hints(): void {
             SttService.toggleVocabHints();
         }
+
+        // Paste the most recent transcription via wtype. Wired to Alt+V in
+        // the Hyprland keybinds — fast-path "paste latest dictation" without
+        // opening the clipboard manager. For a specific older entry, the
+        // user opens the manager and presses Enter on the highlighted row.
+        function pasteTranscription(): void {
+            TranscriptionStore.paste("");
+        }
     }
 
     // ── IPC: "recorder" target (shared actions) ───────────────────

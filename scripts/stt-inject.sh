@@ -183,11 +183,47 @@ fi
 stt_log "inject" "window-verified | addr=$ADDRESS"
 echo "[STT:INJ02] window exists" >&2
 
+CLASS_LOWER=$(echo "$WINDOW_CLASS" | tr '[:upper:]' '[:lower:]')
+
+# ── RPC-only fast path ──────────────────────────────────────────────────────
+# When STT_RPC_ONLY=1, the QML caller deliberately skipped wl-copy because
+# it expects RPC to handle delivery. There is no clipboard content to fall
+# back on — sendshortcut paste would either paste nothing or paste stale
+# content. Try RPC; on any failure, surface a clear error and bail. The
+# user can re-paste from the Transcriptions tab via Alt+V.
+if [ -n "${STT_RPC_ONLY:-}" ]; then
+    stt_log "inject" "rpc-only-mode"
+    echo "[STT:INJ-RPCONLY] STT_RPC_ONLY=1 — RPC required, no clipboard fallback" >&2
+
+    if ! is_terminal_class "$CLASS_LOWER"; then
+        echo "[STT:INJ-RPCONLY] target is not a terminal — RPC unavailable" >&2
+        notify_failure "STT Inject Failed" "RPC requires a terminal target. Use Alt+V to paste from Transcriptions."
+        emit_result "none" "false"
+        exit 0
+    fi
+    if [ -z "$EXPECTED_TEXT" ]; then
+        echo "[STT:INJ-RPCONLY] EXPECTED_TEXT empty — nothing to inject" >&2
+        emit_result "none" "false"
+        exit 0
+    fi
+
+    stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
+    if try_neovim_inject; then
+        stt_log "inject" "rpc-success"
+        echo "[STT:INJ-NVIM] Neovim injection succeeded (rpc-only)" >&2
+        emit_result "rpc" "true"
+        exit 0
+    fi
+    stt_log "inject" "rpc-failed | rpc-only=bail"
+    echo "[STT:INJ-RPCONLY] RPC failed and STT_RPC_ONLY set — no fallback" >&2
+    notify_failure "STT Inject Failed" "Voice → buffer (RPC) failed. Use Alt+V to paste from Transcriptions."
+    emit_result "rpc" "false"
+    exit 0
+fi
+
 # ── Try Neovim RPC injection for terminal windows ───────────────────────────
 # Bypass clipboard entirely by writing directly to Claude Code's terminal stdin
 # via Neovim's RPC socket. Only attempted for terminal emulator windows.
-
-CLASS_LOWER=$(echo "$WINDOW_CLASS" | tr '[:upper:]' '[:lower:]')
 
 if is_terminal_class "$CLASS_LOWER" && [ -n "$EXPECTED_TEXT" ]; then
     stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
