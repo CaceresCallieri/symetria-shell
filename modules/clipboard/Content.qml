@@ -431,7 +431,7 @@ Item {
         isTextTab: root.state.currentTab !== root.tabImages
         entryCount: root.state.currentTab === root.tabTranscriptions
             ? root.allTranscriptionEntries.length
-            : Clipboard.entries.length
+            : root.allTextEntries.length
         padding: root.padding
         confirmTimeout: Config.clipboard.clearConfirmTimeout
 

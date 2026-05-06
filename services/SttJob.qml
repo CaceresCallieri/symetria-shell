@@ -564,6 +564,9 @@ QtObject {
     function _spawnInjectProcess(rpcOnly: bool): void {
         if (_targetWindowAddress === "") {
             console.log("[STT:D14] inject SKIPPED — no target | id:", sessionId);
+            // Still record the transcription so it's reachable via the Transcriptions
+            // tab and Alt+V, even though we couldn't deliver to a target window.
+            TranscriptionStore.add(job._transcribedText);
             _injectionPath = "";
             _injectionDowngraded = false;
             _injectionSubmitted = false;
@@ -675,6 +678,7 @@ QtObject {
         processingTimeoutTimer.stop();
         autoRetryTimer.stop();
         _removalTimer.stop();
+        cliphistDeleteTimer.stop();
     }
 
     /// Trigger animated removal — called by SttService orchestrator.

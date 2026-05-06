@@ -31,7 +31,9 @@ Item {
     // Accessibility for screen readers
     Accessible.role: Accessible.Button
     Accessible.name: root.isImage ? qsTr("Image clipboard entry") : root.preview
-    Accessible.description: qsTr("Click to restore to clipboard")
+    Accessible.description: (root.entry?._kind === "transcription")
+        ? qsTr("Click to type via wtype")
+        : qsTr("Click to restore to clipboard")
 
     StateLayer {
         radius: Appearance.rounding.normal

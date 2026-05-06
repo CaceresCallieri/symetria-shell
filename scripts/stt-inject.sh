@@ -144,7 +144,7 @@ try_neovim_inject() {
 # Check if window class is a terminal emulator
 is_terminal_class() {
     case "$1" in
-        *ghostty*|*warp*|*wezterm*|*alacritty*|*kitty*|*foot*|*konsole*|xterm*|urxvt*|*termite*|*sakura*|*tilix*|*terminator*|st-*)
+        *ghostty*|*warp*|*wezterm*|*alacritty*|*kitty*|*foot*|*konsole*|*xterm*|*urxvt*|*termite*|*sakura*|*tilix*|*terminator*|st-*)
             return 0
             ;;
         *)
@@ -176,7 +176,13 @@ fi
 echo "[STT:INJ02] checking if window $ADDRESS still exists..." >&2
 if ! hyprctl clients -j 2>/dev/null | grep -qF "\"address\": \"$ADDRESS\""; then
     echo "[STT:INJ02] ABORT — target window $ADDRESS no longer exists" >&2
-    notify_failure "STT Inject Skipped" "Target window no longer exists. Text saved to clipboard."
+    # In RPC-only mode wl-copy was never run, so the text is NOT in the clipboard.
+    # Direct the user to Alt+V (Transcriptions tab re-paste) instead.
+    if [ -n "${STT_RPC_ONLY:-}" ]; then
+        notify_failure "STT Inject Skipped" "Target window no longer exists. Use Alt+V to paste from Transcriptions."
+    else
+        notify_failure "STT Inject Skipped" "Target window no longer exists. Text saved to clipboard."
+    fi
     emit_result "none" "false"
     exit 0
 fi
