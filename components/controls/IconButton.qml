@@ -61,6 +61,35 @@ PillToggleSurface {
 
     signal clicked
 
+    // Programmatic press feedback for IPC-driven state changes (e.g. external
+    // pause/cancel/stop fired from a keybind or remote source). Mirrors
+    // PillButton.triggerPress(). Direct user clicks already get StateLayer
+    // ripples + raised-pill depth feedback; this is purely for cases where
+    // the action originates outside the control itself.
+    function triggerPress(): void {
+        pressAnim.restart();
+    }
+
+    SequentialAnimation {
+        id: pressAnim
+
+        NumberAnimation {
+            target: root
+            property: "scale"
+            to: 0.85
+            duration: 80
+            easing.type: Easing.OutQuad
+        }
+
+        NumberAnimation {
+            target: root
+            property: "scale"
+            to: 1.0
+            duration: 150
+            easing.type: Easing.OutBack
+        }
+    }
+
     onCheckedChanged: internalChecked = checked
 
     // --- PillToggleSurface bindings -----------------------------------

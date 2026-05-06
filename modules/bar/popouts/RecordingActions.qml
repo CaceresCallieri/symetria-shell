@@ -31,14 +31,23 @@ ColumnLayout {
             && (root.job.state === "recording" || root.job.state === "paused")
             && !(root.mode === "stt" && SttService.vocabHintsVisible)
 
+        // Mirror of the drawer's hover-row action buttons (Content.qml). Same
+        // raised Tonal IconButton aesthetic so the same logical control reads
+        // identically whether the user is in merge mode (this popout) or
+        // non-merge mode (the drawer's expanded row). triggerPress() works
+        // because it was ported into IconButton; inactiveOnColour replaces
+        // the prior PillButton.iconColor API.
         RowLayout {
             spacing: Appearance.spacing.normal
 
-            PillButton {
+            IconButton {
                 id: pauseBtn
 
                 icon: root.job?.recording ? "pause" : "play_arrow"
-                iconColor: root.job?.recording ? Colours.palette.m3onSurfaceVariant : Colours.palette.m3primary
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
+                inactiveOnColour: root.job?.recording ? Colours.palette.m3onSurfaceVariant : Colours.palette.m3primary
                 onClicked: {
                     if (!root.job) return;
                     if (root.mode === "stt")
@@ -49,19 +58,25 @@ ColumnLayout {
             }
 
             // Restart (STT only)
-            PillButton {
+            IconButton {
                 id: restartBtn
 
                 visible: root.mode === "stt"
                 icon: "restart_alt"
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
                 onClicked: SttService.restart()
             }
 
-            PillButton {
+            IconButton {
                 id: cancelBtn
 
                 icon: "close"
-                iconColor: Colours.palette.m3error
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
+                inactiveOnColour: Colours.palette.m3error
                 onClicked: {
                     // Route through the service so SttService.cancel() clears
                     // _sessionVocabHints / vocabHintsVisible and emits
@@ -71,11 +86,14 @@ ColumnLayout {
                 }
             }
 
-            PillButton {
+            IconButton {
                 id: submitBtn
 
                 icon: "check"
-                iconColor: Colours.palette.m3confirm
+                type: IconButton.Tonal
+                toggle: false
+                raised: true
+                inactiveOnColour: Colours.palette.m3confirm
                 onClicked: {
                     if (root.mode === "stt")
                         root.job?.stop();

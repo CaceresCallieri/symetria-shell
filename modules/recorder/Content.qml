@@ -154,7 +154,7 @@ Item {
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + Appearance.padding.large
 
-    StyledRect {
+    Item {
         id: container
 
         anchors.top: parent.top
@@ -164,8 +164,15 @@ Item {
         implicitWidth: content.implicitWidth + Appearance.padding.large * 2
         implicitHeight: content.implicitHeight + Appearance.padding.large * 2
 
-        radius: Appearance.rounding.normal
-        color: "transparent"
+        // Claymorphism frame matching the clipboard popout's stacked cards
+        // and the calendar popout's panelMode sections. The recorder drawer
+        // previously sat on a transparent rect (only the drawer's outer pane
+        // provided visual containment); the card gives the timer/waveform/
+        // action-row cluster its own held surface so it reads as a coherent
+        // pill rather than text floating in the void.
+        PillCard {
+            anchors.fill: parent
+        }
 
         HoverHandler {
             id: cardHover
@@ -244,11 +251,18 @@ Item {
                     }
 
                     // ── STT mode: delivery mode button ────────────
-                    PillButton {
+                    // Raised Tonal IconButton matches the calendar popout's
+                    // chevrons and the utilities popup's pill aesthetic now
+                    // that the recorder content sits inside its own PillCard.
+                    // Plain PillButton would read as a flat pill-on-pill.
+                    IconButton {
                         id: modeBtn
 
                         visible: root.mode === "stt" && root.serviceIsAskMode
                         icon: RecordingSessionManager.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
                     }
 
@@ -290,10 +304,20 @@ Item {
                 RowLayout {
                     spacing: Appearance.spacing.normal
 
-                    PillButton {
+                    // Hover-row actions: raised Tonal IconButtons. Override
+                    // inactiveOnColour to map the prior PillButton.iconColor
+                    // semantics (pause→primary when paused, cancel→error,
+                    // submit→confirm) onto IconButton's coloring API.
+                    // triggerPress() was ported into IconButton specifically
+                    // for these consumers — IPC-driven pause/cancel/stop
+                    // events still squeeze the matching button.
+                    IconButton {
                         id: pauseBtn
                         icon: root.displayState === "paused" ? "play_arrow" : "pause"
-                        iconColor: root.displayState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: root.displayState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
                         onClicked: {
                             if (root.mode === "stt")
                                 root.job?.recording ? root.job.pause() : root.job.resume();
@@ -303,24 +327,33 @@ Item {
                     }
 
                     // Restart (STT only)
-                    PillButton {
+                    IconButton {
                         id: restartBtn
                         visible: root.mode === "stt"
                         icon: "restart_alt"
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
                         onClicked: SttService.restart()
                     }
 
-                    PillButton {
+                    IconButton {
                         id: cancelBtn
                         icon: "close"
-                        iconColor: Colours.palette.m3error
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: Colours.palette.m3error
                         onClicked: root.job?.cancel()
                     }
 
-                    PillButton {
+                    IconButton {
                         id: submitBtn
                         icon: "check"
-                        iconColor: Colours.palette.m3confirm
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: Colours.palette.m3confirm
                         onClicked: {
                             if (root.mode === "stt")
                                 root.job?.stop();

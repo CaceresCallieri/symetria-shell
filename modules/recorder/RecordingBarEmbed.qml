@@ -7,6 +7,14 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
+// The bar's recordingCenterContainer is transparent — there is no surrounding
+// claymorphism pill to embed against. We add our own PillCard backdrop here
+// so the timer/waveform/delivery cluster reads with sufficient contrast over
+// arbitrary wallpapers. Note: recordingCenterContainer enables `clip: true`
+// for the horizontal reveal animation, so PillCard's exterior shadows are
+// clipped at the embed's edges — the visible clay comes from the interior
+// rim/inner-shadow gradient + fill + border, not the outer halo.
+
 /// Compact recording indicator for the bar center (merge mode).
 ///
 /// Mode-aware: shows audio recording (mic icon) or STT (delivery mode
@@ -39,18 +47,38 @@ Item {
     // STT delivery mode
     readonly property bool isAskMode: mode === "stt" && SttService.isAskMode
 
-    // Flat structure: only one child is visible at a time.
+    // Padding around the visible child, sized so the PillCard frame has
+    // breathing room above/below the timer + waveform without making the
+    // bar embed feel chunky. Asymmetric (more horizontal than vertical)
+    // matches the natural pill shape we get with rounding.full.
+    readonly property real cardPadX: Appearance.padding.large
+    readonly property real cardPadY: Appearance.padding.smaller
+
+    // Flat structure: only one child is visible at a time. Add card padding
+    // to whichever child is active so the PillCard backdrop sits a comfortable
+    // margin away from the content.
     implicitWidth: {
-        if (compactRow.visible) return compactRow.implicitWidth;
-        if (successIcon.visible) return successIcon.implicitWidth;
-        if (errorIcon.visible) return errorIcon.implicitWidth;
+        if (compactRow.visible) return compactRow.implicitWidth + cardPadX * 2;
+        if (successIcon.visible) return successIcon.implicitWidth + cardPadX * 2;
+        if (errorIcon.visible) return errorIcon.implicitWidth + cardPadX * 2;
         return 0;
     }
     implicitHeight: {
-        if (compactRow.visible) return compactRow.implicitHeight;
-        if (successIcon.visible) return successIcon.implicitHeight;
-        if (errorIcon.visible) return errorIcon.implicitHeight;
+        if (compactRow.visible) return compactRow.implicitHeight + cardPadY * 2;
+        if (successIcon.visible) return successIcon.implicitHeight + cardPadY * 2;
+        if (errorIcon.visible) return errorIcon.implicitHeight + cardPadY * 2;
         return 0;
+    }
+
+    // Claymorphism backdrop. Capsule rounding (rounding.full = 1000) so the
+    // embed reads as a true pill against the transparent bar surface. Declared
+    // before the content children so it paints behind them.
+    PillCard {
+        anchors.fill: parent
+        radius: Appearance.rounding.full
+        // Hide when there's nothing to show — implicitWidth collapses to 0
+        // during idle/closed states, and an empty card would briefly flash.
+        visible: parent.implicitWidth > 0
     }
 
     // ── Compact row: [timer] · [waveform] · [mode icon] ─────
@@ -110,12 +138,17 @@ Item {
             font.pointSize: Appearance.font.size.small
         }
 
-        // STT mode: delivery mode icon (ask mode only)
-        PillButton {
+        // STT mode: delivery mode icon (ask mode only). Raised Tonal
+        // IconButton matches the drawer's modeBtn so the same control reads
+        // identically regardless of merge-mode surface.
+        IconButton {
             id: deliveryModeBtn
 
             visible: root.isAskMode
             icon: RecordingSessionManager.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"
+            type: IconButton.Tonal
+            toggle: false
+            raised: true
             onClicked: RecordingSessionManager.cycleDeliveryMode()
         }
 
