@@ -282,6 +282,7 @@ Item {
     }
 
     implicitWidth: Config.clipboard.sizes.itemWidth + padding * 2
+    // tabsCard.anchors.topMargin = Appearance.padding.normal  (above the tab strip card)
     // padding * 3            = below-tabs gap + searchBar.anchors.topMargin + bottom margin
     // padding.normal * 4     = internal padding of the two PillCard frames (tabsCard + contentCard, top+bottom each)
     implicitHeight: tabsCard.implicitHeight + tabsCard.anchors.topMargin + contentCard.implicitHeight + searchBar.implicitHeight + padding * 3
@@ -318,8 +319,11 @@ Item {
             anchors.leftMargin: Appearance.padding.normal
             anchors.rightMargin: Appearance.padding.normal
 
-            // Tabs's indicator x-math reads nonAnimWidth as the available
-            // tab-row width. Inside the card, that's just our anchored width.
+            // Tabs's indicator x-math uses nonAnimWidth as the available tab-row
+            // width. tabs.width (post-anchor resolution) exactly matches bar.width
+            // and replaces the old pre-computed `root.implicitWidth - margins*2`
+            // which was close but included large-padding margins instead of
+            // normal-padding margins. Using tabs.width is both simpler and precise.
             nonAnimWidth: tabs.width
             state: root.state
         }
