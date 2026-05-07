@@ -27,8 +27,13 @@ Item {
         target: dialog
     }
 
-    // Dialog container
-    StyledRect {
+    // Dialog container. Switched from StyledRect (transparent) to Item +
+    // PillCard backdrop so the prompt/password/buttons read against a warm
+    // claymorphism panel instead of floating directly on the wallpaper.
+    // Mirrors the RecordingBarEmbed treatment — same two-tier hierarchy:
+    // PillCard (m3surfaceContainerLow) hosts the inner password pill
+    // (m3surfaceContainer) so the field protrudes from the card frame.
+    Item {
         id: dialog
 
         anchors.top: parent.top
@@ -38,10 +43,15 @@ Item {
         implicitWidth: 350
         implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
-        radius: Appearance.rounding.normal
-        color: "transparent"
-
         readonly property bool showButtons: dialogHover.hovered
+
+        // Claymorphism backdrop. Default fill (m3surfaceContainerLow) +
+        // default radius (rounding.normal) intentional: this is a section
+        // card, not a capsule pill, so we want the warmer rim/inner-shadow
+        // recipe that PillCard's defaults already encode.
+        PillCard {
+            anchors.fill: parent
+        }
 
         HoverHandler {
             id: dialogHover
@@ -84,6 +94,11 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: Appearance.padding.normal
+            // Extra horizontal breathing room so the password pill and button
+            // row don't crowd the PillCard's rim. Vertical stays normal because
+            // the dialog's implicitHeight bakes padding.normal * 2 (line 44).
+            anchors.leftMargin: Appearance.padding.large
+            anchors.rightMargin: Appearance.padding.large
 
             spacing: Appearance.spacing.normal
 
