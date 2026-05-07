@@ -79,10 +79,11 @@ Item {
         }
     }
 
-    // Search input — converted from StyledRect to PillCard so the search
-    // bar reads as a sibling clay pill to the results card above it.
-    // Capsule rounding (rounding.full) keeps the existing pill silhouette;
-    // the claymorphic rim + bottom inner-shadow are the upgrade.
+    // Search input pill — capsule PillCard sibling to the result-list card
+    // above it. Two parallel Tier-1 clay frames separated by padding.large,
+    // each hosting its own content cluster. Capsule rounding keeps the
+    // search-bar silhouette; the claymorphic rim + bottom inner-shadow give
+    // it the same warm material as the result card.
     PillCard {
         id: searchWrapper
 
