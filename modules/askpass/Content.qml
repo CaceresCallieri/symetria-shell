@@ -27,12 +27,10 @@ Item {
         target: dialog
     }
 
-    // Dialog container. Switched from StyledRect (transparent) to Item +
-    // PillCard backdrop so the prompt/password/buttons read against a warm
-    // claymorphism panel instead of floating directly on the wallpaper.
-    // Mirrors the RecordingBarEmbed treatment — same two-tier hierarchy:
-    // PillCard (m3surfaceContainerLow) hosts the inner password pill
-    // (m3surfaceContainer) so the field protrudes from the card frame.
+    // Dialog container — bare Item wrapping a PillCard backdrop + content.
+    // Two-tier hierarchy: the card (m3surfaceContainerLow) frames the
+    // dialog and the inner password pill (m3surfaceContainer) plus the
+    // matte-glass Cancel/Authenticate pills protrude from it.
     Item {
         id: dialog
 
@@ -95,8 +93,9 @@ Item {
             anchors.top: parent.top
             anchors.margins: Appearance.padding.normal
             // Extra horizontal breathing room so the password pill and button
-            // row don't crowd the PillCard's rim. Vertical stays normal because
-            // the dialog's implicitHeight bakes padding.normal * 2 (line 44).
+            // row don't crowd the PillCard's rim. Vertical stays normal —
+            // dialog.implicitHeight already reserves padding.normal * 2 above
+            // and below this column.
             anchors.leftMargin: Appearance.padding.large
             anchors.rightMargin: Appearance.padding.large
 
