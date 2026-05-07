@@ -149,10 +149,16 @@ QtObject {
 
     // Whether wl-copy ran during this delivery. Drives the post-paste cliphist
     // scrub: if we put text on the clipboard, cliphist captured it into the
-    // Text tab — we delete-query it back out after the paste lands so the
-    // Transcriptions tab is the only place STT outputs appear. False for
-    // RPC-only and clipboard (wtype) deliveries that never touch wl-copy.
+    // Text tab — we delete-query it back out so the Transcriptions tab is
+    // the only place STT outputs appear. Only false for RPC-only deliveries
+    // that bypass the clipboard entirely.
     property bool _ranWlCopy: false
+
+    // Whether this delivery is clipboard-mode only (no inject chain). When
+    // true, clipboardProcess.onExited finalizes the delivery directly:
+    // record + scrub + state=success. When false, it chains to
+    // _spawnInjectProcess() for the sendshortcut Ctrl+V on a target window.
+    property bool _clipboardModeOnly: false
 
     // Text payload pending cliphist delete-query (after a small delay to let
     // the wl-paste --watch daemon write the entry to its db before we try
@@ -308,12 +314,12 @@ QtObject {
         _errorRaw = "";
     }
 
-    /// Capture the currently active window for inject delivery.
+    /// Capture the currently active window for inject / clipboard auto-paste
+    /// delivery. Captured at recording-start; subsequent focus changes don't
+    /// affect the target. For clipboard mode this gives us the window to
+    /// sendshortcut Ctrl+V into; for inject/submit it's the RPC or
+    /// sendshortcut target.
     function _captureTargetWindow(): void {
-        if (SttService._deliveryMode === "clipboard") {
-            console.log("[STT:D04] _captureTargetWindow() skipped — deliveryMode is clipboard");
-            return;
-        }
         // Prefer Hypr.activeToplevel (filtered by wayland activation), but fall back
         // to raw Hyprland.activeToplevel for fresh shell instances where the Wayland
         // activation event hasn't arrived yet. STT only needs the Hyprland-reported
@@ -498,10 +504,14 @@ QtObject {
         transcribeProcess.running = true;
     }
 
-    /// Start the delivery chain. Three paths:
+    /// Start the delivery chain. Three paths, all routed through
+    /// stt-inject.sh except RPC-only (which talks directly to nvim):
     ///
-    /// - "clipboard" mode → wtype direct injection. No wl-copy, no cliphist.
-    ///   Recorded in TranscriptionStore on wtypeProcess exit.
+    /// - "clipboard" mode → wl-copy + stt-inject.sh sendshortcut Ctrl+V on
+    ///   the captured target window. Always sendshortcut, never RPC, even
+    ///   in Claude Code terminals — clipboard mode is intentionally
+    ///   agent-unaware. cliphist briefly captures the entry; we scrub it
+    ///   in injectProcess onExited.
     ///
     /// - "inject" / "submit" mode + RPC eligible (terminal target with a
     ///   resolved Neovim socket, e.g. Claude Code) → skip wl-copy entirely;
@@ -511,9 +521,9 @@ QtObject {
     ///   provided). Recorded in TranscriptionStore on injectProcess exit.
     ///
     /// - "inject" / "submit" mode + non-RPC target (browser, chat, etc.) →
-    ///   wl-copy + stt-inject.sh sendshortcut paste. cliphist briefly
-    ///   captures the entry; we schedule a delete-query in injectProcess
-    ///   onExited to scrub it once the paste has landed.
+    ///   wl-copy + stt-inject.sh sendshortcut paste. Same flow as clipboard
+    ///   mode but the script is allowed to attempt RPC if a socket happens
+    ///   to be available.
     function _startDeliveryChain(): void {
         _state = "delivering";
 
@@ -523,12 +533,15 @@ QtObject {
         Logger.log("qml", "stt", "delivery-start | id=" + sessionId + " mode=" + effectiveMode + " textLen=" + _transcribedText.length);
 
         if (effectiveMode === "clipboard") {
-            console.log("[STT:D11] → delivering via wtype | id:", sessionId, "textLength:", _transcribedText.length);
-            _ranWlCopy = false;
-            wtypeProcess.command = ["wtype", "--", _transcribedText];
-            wtypeProcess.running = true;
+            console.log("[STT:D11] → delivering via wl-copy + sendshortcut (clipboard mode, no RPC) | id:", sessionId, "textLength:", _transcribedText.length);
+            _ranWlCopy = true;
+            _clipboardModeOnly = true;
+            clipboardProcess.command = ["wl-copy", _transcribedText];
+            clipboardProcess.running = true;
             return;
         }
+
+        _clipboardModeOnly = false;
 
         const rpcEligible = _targetWindowAddress !== ""
             && _targetNvimSocket !== ""
@@ -537,7 +550,7 @@ QtObject {
         if (rpcEligible) {
             console.log("[STT:D11] → delivering via RPC-only (skipping wl-copy) | id:", sessionId, "textLength:", _transcribedText.length);
             _ranWlCopy = false;
-            _spawnInjectProcess(true);
+            _spawnInjectProcess(true, false);
         } else {
             console.log("[STT:D11] → delivering via wl-copy + sendshortcut | id:", sessionId, "textLength:", _transcribedText.length);
             _ranWlCopy = true;
@@ -557,11 +570,22 @@ QtObject {
         return /(?:ghostty|warp|wezterm|alacritty|kitty|foot|konsole|xterm|urxvt|termite|sakura|tilix|terminator|st-)/.test(lc);
     }
 
-    /// Spawn injectProcess with the right args + env. Used by both the
-    /// post-wl-copy path (clipboardProcess.onExited) and the RPC-only path
-    /// (called directly from _startDeliveryChain). When `rpcOnly` is true,
-    /// the script will skip the sendshortcut fallback if RPC fails.
-    function _spawnInjectProcess(rpcOnly: bool): void {
+    /// Spawn injectProcess with the right args + env. Three call sites converge
+    /// here, distinguished by the (rpcOnly, forceSendshortcut) tuple:
+    ///
+    ///   (true,  false) — RPC-eligible inject/submit. Script tries RPC; on
+    ///                    failure it surfaces an error (no sendshortcut
+    ///                    fallback because we never put text on the clipboard).
+    ///   (false, false) — Non-RPC inject/submit fallback. wl-copy already ran;
+    ///                    script tries RPC if a socket is set, falls through
+    ///                    to sendshortcut Ctrl+V otherwise.
+    ///   (false, true)  — Clipboard mode auto-paste. wl-copy already ran;
+    ///                    socket is blanked out so the script unconditionally
+    ///                    uses sendshortcut Ctrl+V (no RPC even if a socket
+    ///                    was resolved). This preserves "clipboard mode is
+    ///                    agent-unaware" semantics — RPC-style smart routing
+    ///                    is reserved for the inject/submit modes.
+    function _spawnInjectProcess(rpcOnly: bool, forceSendshortcut: bool): void {
         if (_targetWindowAddress === "") {
             console.log("[STT:D14] inject SKIPPED — no target | id:", sessionId);
             // Still record the transcription so it's reachable via the Transcriptions
@@ -580,15 +604,20 @@ QtObject {
             : SttService._deliveryMode;
         const cmd = [_injectScript, _targetWindowAddress, _targetWindowClass];
         if (effectiveMode === "submit") cmd.push("submit");
-        Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly);
+        Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly + " forceSendshortcut=" + forceSendshortcut);
+        // Effective socket: blanked when forcing sendshortcut so the script
+        // can't accidentally take the RPC path even if _targetNvimSocket was
+        // resolved earlier.
+        const effectiveSocket = forceSendshortcut ? "" : _targetNvimSocket;
         // Prepend voice tag for agent-backed terminals (e.g. Claude Code)
-        // so the LLM knows the input is voice-transcribed.
-        const voicePrefix = (Config.stt?.voiceTag && _targetNvimSocket !== "")
+        // so the LLM knows the input is voice-transcribed. Suppressed when
+        // we're forcing sendshortcut (clipboard mode = no agent awareness).
+        const voicePrefix = (Config.stt?.voiceTag && effectiveSocket !== "")
             ? Config.stt?.voiceTag : "";
         injectProcess.environment = ({
             STT_EXPECTED_TEXT: voicePrefix + _transcribedText,
-            STT_NVIM_SOCKET: _targetNvimSocket,
-            STT_NVIM_ACTIVE_BUF: _targetNvimActiveBuf.toString(),
+            STT_NVIM_SOCKET: effectiveSocket,
+            STT_NVIM_ACTIVE_BUF: forceSendshortcut ? "-1" : _targetNvimActiveBuf.toString(),
             STT_RPC_ONLY: rpcOnly ? "1" : ""
         });
         injectProcess.command = cmd;
@@ -697,7 +726,6 @@ QtObject {
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
         if (clipboardProcess.running) clipboardProcess.running = false;
-        if (wtypeProcess.running) wtypeProcess.running = false;
         if (injectProcess.running) injectProcess.running = false;
     }
 
@@ -932,40 +960,28 @@ QtObject {
         }
     }
 
-    // wl-copy delivery for non-RPC inject/submit. cliphist captures the
-    // entry while it's on the clipboard; we scrub it via cliphist
-    // delete-query in injectProcess.onExited once the paste has landed.
-    // RPC-eligible deliveries skip this Process entirely (no wl-copy).
+    // wl-copy delivery for clipboard mode and inject/submit non-RPC fallback.
+    // Both paths chain to _spawnInjectProcess() afterwards; the difference is
+    // the forceSendshortcut flag — clipboard mode forces sendshortcut Ctrl+V
+    // (no RPC), inject/submit lets the script attempt RPC if a socket is set.
+    // injectProcess.onExited handles record + scrub + state. RPC-eligible
+    // inject/submit deliveries bypass this Process entirely.
     readonly property Process clipboardProcess: Process {
         onExited: (code, status) => {
-            Logger.log("qml", "stt", "clipboard-done | id=" + job.sessionId + " code=" + code);
+            Logger.log("qml", "stt", "clipboard-done | id=" + job.sessionId + " code=" + code + " clipboardOnly=" + job._clipboardModeOnly);
             if (code !== 0) {
                 console.error("[STT:D12] wl-copy FAILED (exit", code + ")");
+                // Record so the entry is reachable from Transcriptions / Alt+V
+                // even if wl-copy itself failed in this particular run.
+                TranscriptionStore.add(job._transcribedText);
                 job._state = "success";
                 return;
             }
-            // TranscriptionStore.add() and cliphist scrub fire from
-            // injectProcess.onExited so both RPC-only and wl-copy paths
-            // share the same "delivery completed" hook.
-            job._spawnInjectProcess(false);
-        }
-    }
-
-    // wtype delivery for "clipboard" mode. Types the transcribed text directly
-    // into the focused window — no clipboard / cliphist involvement. The entry
-    // is recorded in TranscriptionStore on exit (regardless of wtype's exit
-    // code) so the user can re-paste from the Transcriptions tab or via Alt+V
-    // even if wtype itself failed in this particular target window.
-    readonly property Process wtypeProcess: Process {
-        onExited: (code, status) => {
-            Logger.log("qml", "stt", "wtype-done | id=" + job.sessionId + " code=" + code);
-            if (code !== 0)
-                console.error("[STT:WTYPE] wtype FAILED (exit", code + ") — text still recorded for re-paste");
-            TranscriptionStore.add(job._transcribedText);
-            job._injectionPath = "wtype";
-            job._injectionDowngraded = false;
-            job._injectionSubmitted = false;
-            job._state = "success";
+            // forceSendshortcut tracks _clipboardModeOnly: clipboard mode is
+            // agent-unaware (always sendshortcut Ctrl+V, never RPC); the
+            // non-RPC inject fallback may still escalate to RPC if a socket
+            // happens to be set. injectProcess.onExited finalizes both paths.
+            job._spawnInjectProcess(false, job._clipboardModeOnly);
         }
     }
 

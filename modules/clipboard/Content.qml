@@ -51,8 +51,10 @@ Item {
         }).find(searchBar.debouncedText).map(r => r.item);
     }
 
-    // Text tab — every non-image cliphist entry. Transcriptions never enter
-    // cliphist under the wtype-based delivery flow, so no exclusion needed.
+    // Text tab — every non-image cliphist entry. Transcriptions briefly land
+    // in cliphist when delivered via wl-copy, but the SttJob / TranscriptionStore
+    // delete-query scrub (~300ms after copy) removes them before the clipboard
+    // manager renders, so no client-side exclusion is needed.
     readonly property var allTextEntries: allFilteredEntries.filter(e => !e.isImage)
 
     // Transcriptions tab — fed directly from the authoritative

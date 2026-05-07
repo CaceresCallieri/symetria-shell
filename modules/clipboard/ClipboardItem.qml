@@ -32,7 +32,7 @@ Item {
     Accessible.role: Accessible.Button
     Accessible.name: root.isImage ? qsTr("Image clipboard entry") : root.preview
     Accessible.description: (root.entry?._kind === "transcription")
-        ? qsTr("Click to type via wtype")
+        ? qsTr("Click to copy transcription to clipboard")
         : qsTr("Click to restore to clipboard")
 
     StateLayer {
@@ -41,8 +41,9 @@ Item {
         function onClicked(): void {
             // Transcription entries (synthetic shape from Content.qml) carry
             // a `_kind` tag. They route through TranscriptionStore.paste()
-            // (which spawns wtype) instead of Clipboard.restore() (which
-            // copies back through cliphist).
+            // (wl-copy + cliphist delete-query scrub) so the user can paste
+            // immediately with Ctrl+V without polluting the Text tab.
+            // Clipboard.restore() is the cliphist round-trip path.
             if (root.entry?._kind === "transcription")
                 TranscriptionStore.paste(root.entry.id);
             else

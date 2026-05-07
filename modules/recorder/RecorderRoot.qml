@@ -147,10 +147,12 @@ Scope {
             SttService.toggleVocabHints();
         }
 
-        // Paste the most recent transcription via wtype. Wired to Alt+V in
-        // the Hyprland keybinds — fast-path "paste latest dictation" without
-        // opening the clipboard manager. For a specific older entry, the
-        // user opens the manager and presses Enter on the highlighted row.
+        // Copy the most recent transcription to the clipboard so the user
+        // can paste it instantly with Ctrl+V (cliphist scrub keeps the entry
+        // out of the Text tab). Wired to Alt+V in the Hyprland keybinds —
+        // fast-path "grab latest dictation" without opening the clipboard
+        // manager. For a specific older entry, the user opens the manager
+        // and presses Enter on the highlighted row.
         function pasteTranscription(): void {
             TranscriptionStore.paste("");
         }
