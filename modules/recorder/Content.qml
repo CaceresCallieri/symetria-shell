@@ -90,7 +90,13 @@ Item {
         },
         "success": {
             icon: root.mode === "audio" ? "audio_file" : "check_circle",
-            iconColor: root.mode === "audio" ? Colours.palette.m3confirm : Colours.palette.m3primary
+            // M3 "on surface" foreground for both modes — collapses the prior
+            // split (audio: m3confirm green / STT: m3primary accent) into a
+            // unified white success indicator that reads consistently against
+            // the claymorphism card. Status icons get the neutral on-surface
+            // role; only action-intent buttons (the hover-row submit ✓) keep
+            // their semantic color (m3confirm).
+            iconColor: Colours.palette.m3onSurface
         },
         "idle": {
             icon: "mic",

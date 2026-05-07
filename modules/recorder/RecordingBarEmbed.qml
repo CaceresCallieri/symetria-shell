@@ -170,7 +170,13 @@ Item {
         anchors.centerIn: parent
         visible: root.displayState === "success"
         text: root.mode === "audio" ? "audio_file" : "check_circle"
-        color: Colours.palette.m3confirm
+        // M3 "on surface" foreground role — near-white in dark mode, theme-
+        // adaptive in light mode. Replaces the prior m3confirm (green) so the
+        // success status reads as crisp white against the claymorphism capsule
+        // rather than a green-on-tinted-green blend. The submit button (also
+        // ✓ check, hover row) keeps m3confirm because it's an action-intent
+        // color, not a status color — different UI role.
+        color: Colours.palette.m3onSurface
         font.pointSize: Appearance.font.size.large
         opacity: visible ? 1 : 0
 
