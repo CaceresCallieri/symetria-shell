@@ -594,6 +594,13 @@ QtObject {
             _injectionPath = "";
             _injectionDowngraded = false;
             _injectionSubmitted = false;
+            // Schedule cliphist scrub if wl-copy ran — no injectProcess will
+            // fire for this path, so we must scrub here. Without this, the
+            // transcription entry lingers permanently in the clipboard Text tab.
+            if (_ranWlCopy) {
+                _pendingCliphistDelete = _transcribedText;
+                cliphistDeleteTimer.restart();
+            }
             _state = "success";
             return;
         }
@@ -973,14 +980,16 @@ QtObject {
                 console.error("[STT:D12] wl-copy FAILED (exit", code + ")");
                 // Record so the entry is reachable from Transcriptions / Alt+V
                 // even if wl-copy itself failed in this particular run.
+                // _injectionPath/_Down/_Submitted keep their defaults — this job
+                // is freshly created and no inject step ran.
                 TranscriptionStore.add(job._transcribedText);
                 job._state = "success";
                 return;
             }
-            // forceSendshortcut tracks _clipboardModeOnly: clipboard mode is
-            // agent-unaware (always sendshortcut Ctrl+V, never RPC); the
-            // non-RPC inject fallback may still escalate to RPC if a socket
-            // happens to be set. injectProcess.onExited finalizes both paths.
+            // forceSendshortcut === _clipboardModeOnly: clipboard mode forces
+            // sendshortcut Ctrl+V (no RPC); non-RPC inject/submit lets the
+            // script attempt RPC if a socket is set. injectProcess.onExited
+            // finalizes both paths (record + scrub + state).
             job._spawnInjectProcess(false, job._clipboardModeOnly);
         }
     }
