@@ -55,6 +55,17 @@ Item {
         anchors.bottom: searchWrapper.top
         anchors.bottomMargin: root.padding
 
+        // Claymorphism backdrop for the results list. Tracks `list`'s
+        // geometry so it auto-resizes when ContentList swaps between full
+        // app rows and the centered "No results" empty state — both share
+        // the same card frame. Hidden when list collapses to 0 height so
+        // we don't paint an empty clay sliver above the search pill.
+        PillCard {
+            anchors.fill: list
+            radius: root.rounding
+            visible: list.height > 0
+        }
+
         ContentList {
             id: list
 
@@ -68,10 +79,13 @@ Item {
         }
     }
 
-    StyledRect {
+    // Search input — converted from StyledRect to PillCard so the search
+    // bar reads as a sibling clay pill to the results card above it.
+    // Capsule rounding (rounding.full) keeps the existing pill silhouette;
+    // the claymorphic rim + bottom inner-shadow are the upgrade.
+    PillCard {
         id: searchWrapper
 
-        color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
         radius: Appearance.rounding.full
 
         anchors.left: parent.left
