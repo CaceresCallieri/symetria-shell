@@ -150,7 +150,10 @@ Item {
 
             sourceText: root.preview
             searchQuery: root.searchQuery
-            font.pointSize: Appearance.font.size.normal
+            // Smaller body size so more characters survive ElideRight per row,
+            // letting the user scan more clipboard / transcription content at
+            // a glance. Icon at .large stays as the row's visual anchor.
+            font.pointSize: Appearance.font.size.small
             elide: Text.ElideRight
             maximumLineCount: 1
         }
