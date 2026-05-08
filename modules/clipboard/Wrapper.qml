@@ -15,6 +15,11 @@ DrawerVertical {
     // Persistent state for clipboard tabs (survives drawer close/open)
     readonly property PersistentProperties clipState: PersistentProperties {
         property int currentTab: 0  // 0=Text, 1=Images, 2=Transcriptions
+        // Image being previewed at full-size (Space → set, Escape → clear).
+        // Lives at the Wrapper level so the panels-level ImagePreview overlay
+        // (mounted in modules/drawers/Panels.qml) can read it without reaching
+        // through the DrawerVertical Loader.
+        property var previewEntry: null
         reloadableId: "clipboardState"
     }
 

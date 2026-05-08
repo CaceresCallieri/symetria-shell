@@ -262,6 +262,8 @@ Item {
             }
             // Clear search and reset state
             searchBar.clear();
+            // Clear any open image preview so reopening the drawer starts clean
+            root.state.previewEntry = null;
         }
     }
 
@@ -275,6 +277,16 @@ Item {
                 imageNavFocus.forceActiveFocus();
             else
                 searchBar.focusTarget.forceActiveFocus();
+        }
+
+        // When the image preview closes (Escape), return focus to the grid so
+        // arrow keys / Space work again. ImagePreview.qml grabs focus on open;
+        // this handler is the reverse path.
+        function onPreviewEntryChanged(): void {
+            if (!root.visibilities.clipboard) return;
+            if (root.state.previewEntry === null
+                && root.state.currentTab === root.tabImages)
+                imageNavFocus.forceActiveFocus();
         }
     }
 
@@ -550,6 +562,21 @@ Item {
         Keys.onReturnPressed: root._imageNavConfirm()
 
         Keys.onEscapePressed: root.visibilities.clipboard = false
+
+        // Space opens a maximized preview of the currently selected image.
+        // The preview overlay lives in modules/drawers/Panels.qml and reads
+        // root.state.previewEntry; setting it triggers the open animation
+        // and shifts keyboard focus to the overlay.
+        Keys.onSpacePressed: event => {
+            if (root.imageEntries.count === 0 || imagePane.item === null) {
+                event.accepted = true;
+                return;
+            }
+            const entry = root.imageEntries.get(imagePane.item.currentIndex)?.entry;
+            if (entry)
+                root.state.previewEntry = entry;
+            event.accepted = true;
+        }
 
         Keys.onPressed: event => {
             // Tab key cycles between tabs

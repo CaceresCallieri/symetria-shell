@@ -92,6 +92,23 @@ Item {
         anchors.bottomMargin: launcher.height > 0 ? launcher.height + Appearance.spacing.large : 0
     }
 
+    // Maximized image preview for the clipboard's Images tab. Sized to fill
+    // the entire inter-bar area when active so the screenshot can dominate
+    // without covering the top bar / agentBar. Lives at this level (not inside
+    // the clipboard drawer) because the drawer's bounds are too small.
+    // Declared AFTER clipboard so it renders on top in z-order.
+    ClipboardModule.ImagePreview {
+        id: clipboardPreview
+
+        clipState: clipboard.clipState
+
+        // Only anchor the corner — width/height are bound inside the component
+        // so they collapse to 0 when closed (mask-region hygiene). Setting
+        // anchors.fill here would override those bindings.
+        anchors.top: parent.top
+        anchors.left: parent.left
+    }
+
     CalculatorModule.Wrapper {
         id: calculator
 
