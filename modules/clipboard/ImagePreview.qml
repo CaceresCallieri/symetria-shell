@@ -31,6 +31,9 @@ Item {
 
     readonly property var previewEntry: clipState?.previewEntry ?? null
     readonly property bool isOpen: previewEntry !== null
+    // Raw filesystem path — used to build the file:// URL for Image.source.
+    // Kept as string because it mirrors entry.imagePath (string in Clipboard service)
+    // and feeds a template literal rather than being assigned to source directly.
     readonly property string imagePath: previewEntry?.imagePath ?? ""
 
     // Full-resolution cache lives under the existing clipboard cache dir. That
@@ -40,14 +43,33 @@ Item {
 
     // Set by the decode Process once the full-res file is ready. Empty until
     // then, which keeps `fullImage` invisible and the thumbnail showing through.
-    property string fullImagePath: ""
+    // Declared as url so Image.source receives a proper QUrl directly (no runtime
+    // QUrl construction on every binding evaluation).
+    property url fullImagePath: ""
 
-    // Region subtraction: when closed, collapse to 0×0 so the drawer window's
-    // input mask doesn't make the entire inter-bar area click-through. Mirrors
-    // the pattern used by clipboard/launcher/etc. elsewhere in Panels.qml.
+    // Region subtraction: when closed, animate to 0×0 so the drawer window's
+    // input mask doesn't make the entire inter-bar area click-through. The
+    // Behaviors ensure the collapse is gradual, keeping `visible: width > 0`
+    // true long enough for the scrim / imageHolder close animations to play.
+    // Note: children use anchors.fill so they shrink in lockstep — they play
+    // their own opacity/scale animations simultaneously.
     width: isOpen ? parent.width : 0
     height: isOpen ? parent.height : 0
     visible: width > 0
+
+    Behavior on width {
+        Anim {
+            duration: Appearance.anim.durations.large
+            easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+        }
+    }
+
+    Behavior on height {
+        Anim {
+            duration: Appearance.anim.durations.large
+            easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+        }
+    }
 
     // Drive focus + decode on every previewEntry change. Both open (null →
     // entry) and same-session entry switches go through here; the close edge
@@ -75,7 +97,6 @@ Item {
         // Hold off on flipping fullImagePath until the file actually exists —
         // setting it now would cause the Image element to fail-load and not
         // retry once the decode finishes.
-        fullImagePath = "";
         fullDecoder.entryId = id;
         fullDecoder.outputPath = out;
         fullDecoder.command = [
@@ -87,6 +108,11 @@ Item {
             id,
             out
         ];
+        // Kill any in-flight decode before starting a new one. QuickShell's
+        // Process silently ignores running=true while already running
+        // (startProcessIfReady() returns early when this->process != nullptr),
+        // so rapid entry switches would otherwise leave the new entry undecoded.
+        fullDecoder.running = false;
         fullDecoder.running = true;
     }
 
@@ -108,7 +134,7 @@ Item {
             // path if it still corresponds to what's on screen.
             if (root.previewEntry?.id !== entryId)
                 return;
-            root.fullImagePath = outputPath;
+            root.fullImagePath = Qt.url(`file://${outputPath}`);
         }
 
         stderr: StdioCollector {
@@ -196,6 +222,11 @@ Item {
             mipmap: true
             asynchronous: true
             cache: true
+            // Thumbnail is produced at 512×512 by cliphist-decode-image.sh —
+            // cap GPU-side decode to that size so no memory is wasted scaling
+            // up to the display rect.
+            sourceSize.width: 512
+            sourceSize.height: 512
         }
 
         // Full-resolution layer — fades in once `cliphist decode` finishes
@@ -206,16 +237,16 @@ Item {
             id: fullImage
 
             anchors.fill: parent
-            source: root.fullImagePath ? `file://${root.fullImagePath}` : ""
+            source: root.fullImagePath
             fillMode: Image.PreserveAspectFit
             smooth: true
             mipmap: true
             asynchronous: true
             cache: true
 
-            // Don't downsample — the whole point is full resolution. The Image
-            // element will still scale its rendered output to the displayed
-            // size at draw time (with mipmap smoothing).
+            // Don't set sourceSize — the whole point is full resolution. The
+            // Image element scales its rendered output to the display rect at
+            // draw time (mipmap smoothing handles the downscale).
 
             opacity: status === Image.Ready ? 1 : 0
 
