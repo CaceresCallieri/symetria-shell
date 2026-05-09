@@ -56,9 +56,10 @@ Item {
     //     `transformOrigin: Item.Center` honest (the visual grows from the
     //     middle of the screen, not from the top-left).
     //   • On close — keep `_renderOpen` true for one animation duration so
-    //     scrim fade / imageHolder scale-down can play, then collapse the
-    //     geometry to 0×0 so the drawer window's XOR mask stops subtracting
-    //     this region (otherwise the inter-bar area would stay click-capture).
+    //     `imageHolder`'s scale-down + opacity fade can play, then collapse
+    //     the geometry to 0×0 so the drawer window's XOR mask stops
+    //     subtracting this region (otherwise the inter-bar area would stay
+    //     click-capture).
     //
     // Why not animate width/height directly: with anchors at top-left, an
     // animated 0→full width grows rightward from x=0 (and 0→full height
