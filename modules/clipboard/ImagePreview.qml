@@ -73,7 +73,7 @@ Item {
 
     onIsOpenChanged: {
         if (isOpen) {
-            closeTimer.stop();
+            closeTimer.stop(); // Cancel pending geometry collapse (rapid reopen during close animation).
             _renderOpen = true;
         } else {
             // Defer the geometry collapse so child animations can finish.
@@ -215,6 +215,10 @@ Item {
 
         // Soft drop shadow lifts the image off the scrim. Applied at the
         // holder level so it matches whichever layer is currently visible.
+        // Note: layer.enabled stays on while the preview is open (not just
+        // during the scale animation) because the shadow is a content effect,
+        // not a transition effect. The off-screen FBO cost is accepted for the
+        // full open duration — acceptable given this is a single full-screen item.
         layer.enabled: root.isOpen
         layer.effect: MultiEffect {
             shadowEnabled: true
