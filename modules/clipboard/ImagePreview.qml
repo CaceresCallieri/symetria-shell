@@ -47,29 +47,43 @@ Item {
     // QUrl construction on every binding evaluation).
     property url fullImagePath: ""
 
-    // Region subtraction: when closed, animate to 0×0 so the drawer window's
-    // input mask doesn't make the entire inter-bar area click-through. The
-    // Behaviors ensure the collapse is gradual, keeping `visible: width > 0`
-    // true long enough for the scrim / imageHolder close animations to play.
-    // Note: children use anchors.fill so they shrink in lockstep — they play
-    // their own opacity/scale animations simultaneously.
-    width: isOpen ? parent.width : 0
-    height: isOpen ? parent.height : 0
-    visible: width > 0
+    // Render gating decoupled from `isOpen`:
+    //   • On open  — flip `_renderOpen` true synchronously so root snaps to
+    //     full size in a single frame. Children then animate scale/opacity
+    //     from a fully-sized parent, which keeps `imageHolder`'s default
+    //     `transformOrigin: Item.Center` honest (the visual grows from the
+    //     middle of the screen, not from the top-left).
+    //   • On close — keep `_renderOpen` true for one animation duration so
+    //     scrim fade / imageHolder scale-down can play, then collapse the
+    //     geometry to 0×0 so the drawer window's XOR mask stops subtracting
+    //     this region (otherwise the inter-bar area would stay click-capture).
+    //
+    // Why not animate width/height directly: with anchors at top-left, an
+    // animated 0→full width grows rightward from x=0 (and 0→full height
+    // grows downward from y=0). That made the entire overlay appear to pour
+    // out of the top-left corner, even though `imageHolder.scale` was
+    // centered. Snapping size + animating only the children fixes that.
+    property bool _renderOpen: false
 
-    Behavior on width {
-        Anim {
-            duration: Appearance.anim.durations.large
-            easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
+    Timer {
+        id: closeTimer
+        interval: Appearance.anim.durations.large
+        onTriggered: root._renderOpen = false
+    }
+
+    onIsOpenChanged: {
+        if (isOpen) {
+            closeTimer.stop();
+            _renderOpen = true;
+        } else {
+            // Defer the geometry collapse so child animations can finish.
+            closeTimer.restart();
         }
     }
 
-    Behavior on height {
-        Anim {
-            duration: Appearance.anim.durations.large
-            easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
-        }
-    }
+    width: _renderOpen ? parent.width : 0
+    height: _renderOpen ? parent.height : 0
+    visible: _renderOpen
 
     // Drive focus + decode on every previewEntry change. Both open (null →
     // entry) and same-session entry switches go through here; the close edge
