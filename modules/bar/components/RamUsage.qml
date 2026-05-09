@@ -70,6 +70,6 @@ MouseArea {
 
     Tooltip {
         target: root
-        text: `RAM Used: ${root.memUsedFormatted.value.toFixed(1)} ${root.memUsedFormatted.unit}\nTotal: ${root.memTotalFormatted.value.toFixed(1)} ${root.memTotalFormatted.unit}\nUsage: ${root.memUsagePercent}%`
+        text: `RAM Used: ${root.memUsedFormatted.value.toFixed(1)} ${root.memUsedFormatted.unit}\nTotal: ${root.memTotalFormatted.value.toFixed(1)} ${root.memTotalFormatted.unit}\nUsage: ${root.memUsagePercent}%\nGaming Readiness: ${SystemUsage.gamingReadiness}`
     }
 }

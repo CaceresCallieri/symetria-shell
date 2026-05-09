@@ -130,7 +130,79 @@ Column {
         }
     }
 
-    // Section 2 — Top Memory Usage.
+    // Section 2 — Gaming Readiness.
+    PillCardSection {
+        width: parent.width
+        contentMargins: Appearance.padding.normal
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Appearance.spacing.small
+
+            StyledText {
+                width: parent.width
+                text: qsTr("Gaming Readiness: %1").arg(SystemUsage.gamingReadiness)
+                font.weight: 500
+                opacity: 0.8
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            RowLayout {
+                width: parent.width
+                spacing: Appearance.spacing.normal
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: qsTr("Disk swap")
+                    opacity: 0.8
+                }
+                StyledText {
+                    text: SystemUsage.diskSwapMib >= 1024
+                        ? `${(SystemUsage.diskSwapMib / 1024).toFixed(1)} GiB`
+                        : `${Math.round(SystemUsage.diskSwapMib)} MiB`
+                    font.family: Appearance.font.family.mono
+                    font.pointSize: Appearance.font.size.small
+                }
+            }
+
+            RowLayout {
+                width: parent.width
+                spacing: Appearance.spacing.normal
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: qsTr("zram")
+                    opacity: 0.8
+                }
+                StyledText {
+                    text: `${Math.round(SystemUsage.zramFillPerc)}%`
+                    font.family: Appearance.font.family.mono
+                    font.pointSize: Appearance.font.size.small
+                }
+            }
+
+            RowLayout {
+                width: parent.width
+                spacing: Appearance.spacing.normal
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: qsTr("Available")
+                    opacity: 0.8
+                }
+                StyledText {
+                    // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
+                    readonly property var avail: SystemUsage.formatKib(SystemUsage.memTotal - SystemUsage.memUsed)
+                    text: `${avail.value.toFixed(1)} ${avail.unit}`
+                    font.family: Appearance.font.family.mono
+                    font.pointSize: Appearance.font.size.small
+                }
+            }
+        }
+    }
+
+    // Section 3 — Top Memory Usage.
     PillCardSection {
         width: parent.width
         contentMargins: Appearance.padding.normal
