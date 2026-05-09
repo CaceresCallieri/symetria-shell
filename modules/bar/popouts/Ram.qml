@@ -138,6 +138,11 @@ Column {
         Column {
             anchors.left: parent.left
             anchors.right: parent.right
+            // Sections 1 and 3 inherit a left inset from their leading icon
+            // (memory_alt / workspace icon column). Section 2 has no leading
+            // glyph, so add explicit horizontal margin to match their feel.
+            anchors.leftMargin: Appearance.padding.small
+            anchors.rightMargin: Appearance.padding.small
             spacing: Appearance.spacing.small
 
             StyledText {
