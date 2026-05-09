@@ -17,14 +17,14 @@ Singleton {
     property real memUsed
     property real memTotal
     readonly property real memPerc: memTotal > 0 ? memUsed / memTotal : 0
-    property real diskSwapMib
+    property real fileSwapMib
     property real zramFillPerc
     readonly property string gamingReadiness: {
         // MemAvailable in KiB; thresholds 8 GiB / 4 GiB → 8388608 / 4194304 KiB.
         const availKib = memTotal - memUsed;
-        if (diskSwapMib > 512 || zramFillPerc >= 95 || availKib < 4194304)
+        if (fileSwapMib > 512 || zramFillPerc >= 95 || availKib < 4194304)
             return "Stutter risk";
-        if (diskSwapMib > 0 || zramFillPerc >= 80 || availKib < 8388608)
+        if (fileSwapMib > 0 || zramFillPerc >= 80 || availKib < 8388608)
             return "Caution";
         return "Ready";
     }
@@ -135,7 +135,7 @@ Singleton {
                     zramUsed += used;
                 }
             }
-            root.diskSwapMib = diskKib / 1024;
+            root.fileSwapMib = diskKib / 1024;
             root.zramFillPerc = zramSize > 0 ? (zramUsed / zramSize) * 100 : 0;
         }
     }

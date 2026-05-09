@@ -154,13 +154,13 @@ Column {
 
                 StyledText {
                     Layout.fillWidth: true
-                    text: qsTr("Disk swap")
+                    text: qsTr("Swap file")
                     opacity: 0.8
                 }
                 StyledText {
-                    text: SystemUsage.diskSwapMib >= 1024
-                        ? `${(SystemUsage.diskSwapMib / 1024).toFixed(1)} GiB`
-                        : `${Math.round(SystemUsage.diskSwapMib)} MiB`
+                    text: SystemUsage.fileSwapMib >= 1024
+                        ? `${(SystemUsage.fileSwapMib / 1024).toFixed(1)} GiB`
+                        : `${Math.round(SystemUsage.fileSwapMib)} MiB`
                     font.family: Appearance.font.family.mono
                     font.pointSize: Appearance.font.size.small
                 }
