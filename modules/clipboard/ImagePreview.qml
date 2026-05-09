@@ -7,7 +7,6 @@ import qs.config
 import Quickshell
 import Quickshell.Io
 import QtQuick
-import QtQuick.Effects
 
 /// Maximized clipboard image preview. Mounted as a sibling of the clipboard
 /// drawer inside modules/drawers/Panels.qml so it can fill the entire area
@@ -162,29 +161,16 @@ Item {
         }
     }
 
-    // Backdrop scrim — dims the panels-level area without touching the bars.
-    // Opacity is intentionally low so the underlying Hyprland window stays
-    // clearly readable behind the focal image; the user wants context, not a
-    // blackout. Corner radius matches Config.border.rounding so the scrim
-    // tucks behind the shell's existing rounded inner edges (left corners are
-    // rounded by modules/drawers/Border.qml; matching all four keeps the
-    // overlay visually coherent with the rest of the shell).
-    StyledRect {
-        anchors.fill: parent
-        color: Colours.palette.m3scrim
-        radius: Config.border.rounding
-        opacity: root.isOpen ? 0.4 : 0
+    // No backdrop scrim and no drop shadow — earlier iterations dimmed the
+    // inter-bar area with m3scrim and lifted the image with a MultiEffect
+    // shadow. Both turned out to fight the user's mental model: the scrim
+    // read as "the window behind disappeared" on dark content, and the
+    // shadow's soft edge created a visible halo around the image. Per user
+    // preference, the focal image now sits flat on the underlying Hyprland
+    // window — only its scale-up animation distinguishes it visually.
 
-        Behavior on opacity {
-            Anim {
-                duration: Appearance.anim.durations.large
-                easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
-            }
-        }
-    }
-
-    // Catch clicks anywhere on the scrim so they don't fall through to other
-    // panel children. Clicking dismisses the preview as a UX bonus.
+    // Catch clicks anywhere in the overlay area so they don't fall through to
+    // panel children below. Clicking dismisses the preview as a UX bonus.
     MouseArea {
         anchors.fill: parent
         enabled: root.isOpen
@@ -214,20 +200,6 @@ Item {
                 duration: Appearance.anim.durations.large
                 easing.bezierCurve: Appearance.anim.curves.emphasizedDecel
             }
-        }
-
-        // Soft drop shadow lifts the image off the scrim. Applied at the
-        // holder level so it matches whichever layer is currently visible.
-        // Note: layer.enabled stays on while the preview is open (not just
-        // during the scale animation) because the shadow is a content effect,
-        // not a transition effect. The off-screen FBO cost is accepted for the
-        // full open duration — acceptable given this is a single full-screen item.
-        layer.enabled: root.isOpen
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowBlur: 1.0
-            shadowVerticalOffset: 8
-            shadowColor: Qt.alpha(Colours.palette.m3shadow, 0.6)
         }
 
         // Thumbnail layer — instantly visible during the open animation. Stays
