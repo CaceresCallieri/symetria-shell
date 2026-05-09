@@ -29,7 +29,10 @@ Item {
     /// state and is mutated to close the preview.
     required property PersistentProperties clipState
 
-    readonly property var previewEntry: clipState?.previewEntry ?? null
+    // ClipboardEntry is an inline `component` declared inside services/Clipboard.qml.
+    // Qt 6.2+ resolves singleton-nested inline components via the `Singleton.Inner`
+    // syntax — gives qmlcachegen + QML-LS visibility instead of opaque `var`.
+    readonly property Clipboard.ClipboardEntry previewEntry: clipState?.previewEntry ?? null
     readonly property bool isOpen: previewEntry !== null
     // Raw filesystem path — used to build the file:// URL for Image.source.
     // Kept as string because it mirrors entry.imagePath (string in Clipboard service)
