@@ -324,3 +324,18 @@ function activate(addr) {
 **Diagnosis hint:** if you log the dispatch and verify the same `hyprctl dispatch` works from the CLI, but the QML version "does nothing", suspect this race.
 
 Found in: `services/WindowOverviewService.qml:activateAddr()` for the Window Overview feature.
+
+## ScreencopyView captures off-screen surfaces as empty buffers
+
+`ScreencopyView` captures from a wayland surface's most recently committed buffer. **A surface that is currently off-screen has no recent commit, so the capture is empty (black).** This happens systematically with Hyprland's scrolling layout — windows past the viewport edge stop painting until they're scrolled back into view.
+
+There is **no client-side fix.** Only the compositor can force off-screen surfaces to render. That is precisely how compositor-internal exposé tools (`hyprexpo`, KWin Present Windows) work — they trigger renders from inside the compositor's render loop. As an external Quickshell client we have no equivalent capability.
+
+**Do not spend time trying:**
+- Toggling `live: true` momentarily — the surface still doesn't paint when off-screen
+- Calling `Hyprland.refreshToplevels()` — only refreshes IPC state, has no effect on rendering
+- Repositioning the off-screen window briefly — visible to the user, brittle, breaks scrolling state
+
+**The right fix:** show a fallback view (app icon + class name + title) so the tile is always identifiable even without a thumbnail. See `modules/windowoverview/Tile.qml` for the reference implementation.
+
+Found in: Window Overview tiles for windows scrolled off the visible viewport.

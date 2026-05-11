@@ -2,9 +2,11 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
+import qs.utils
 import qs.config
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Widgets
 import QtQuick
 
 /// One tile in the Window Overview grid.
@@ -67,6 +69,42 @@ Item {
             }
         }
 
+        // No centered fallback — the always-visible top-center IconImage (appBadge,
+        // declared outside this Rectangle) already identifies the window visually,
+        // and the bottom title strip carries the textual identity. For empty
+        // captures (off-screen windows in Hyprland's scrolling layout, etc.),
+        // the class name shown below the badge keeps the empty area informative
+        // without duplicating the icon. See docs/qml-pitfalls.md
+        // "ScreencopyView captures off-screen surfaces as empty buffers".
+
+        // Title strip at the bottom — always visible, helps identify tiles
+        // even when the thumbnail is recognizable. Semi-transparent dark band
+        // so it overlays cleanly on captured content.
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: titleText.implicitHeight + Appearance.padding.small * 2
+            color: Qt.rgba(0, 0, 0, 0.6)
+
+            StyledText {
+                id: titleText
+
+                anchors.fill: parent
+                anchors.leftMargin: Appearance.padding.normal
+                anchors.rightMargin: Appearance.padding.normal
+                verticalAlignment: Text.AlignVCenter
+
+                text: {
+                    const lipc = root.tileData?.repClient?.lastIpcObject;
+                    return lipc?.title || lipc?.class || qsTr("Unknown");
+                }
+                color: "white"
+                font.pointSize: Appearance.font.size.small
+                elide: Text.ElideMiddle
+            }
+        }
+
         // Subtle border for tile separation against the dim scrim.
         Rectangle {
             anchors.fill: parent
@@ -83,6 +121,39 @@ Item {
             cursorShape: Qt.PointingHandCursor
             onClicked: WindowOverviewService.activateAddr(root.tileData?.addr ?? "")
         }
+    }
+
+    // App-icon badge — top-center of the tile frame, always visible.
+    // Helps identify the window at a glance even when the thumbnail is recognizable
+    // (especially useful for instances of the same app — e.g. multiple browsers).
+    IconImage {
+        id: appBadge
+
+        anchors.horizontalCenter: frame.horizontalCenter
+        anchors.top: frame.top
+        anchors.topMargin: Appearance.padding.normal
+
+        implicitSize: 84
+        source: Icons.resolveWindowIcon(
+            root.tileData?.repClient?.lastIpcObject?.class ?? "",
+            root.tileData?.repClient?.lastIpcObject?.title ?? ""
+        )
+    }
+
+    // Class name below the badge — only shown when the screencopy is empty
+    // (off-screen window with no recent surface commit, etc.). Fills the
+    // otherwise empty tile body with identifying info; redundant when the
+    // thumbnail renders so we hide it then.
+    StyledText {
+        visible: !capture.hasContent
+
+        anchors.horizontalCenter: appBadge.horizontalCenter
+        anchors.top: appBadge.bottom
+        anchors.topMargin: Appearance.spacing.small
+
+        text: root.tileData?.repClient?.lastIpcObject?.class ?? ""
+        color: Colours.palette.m3onSurfaceVariant
+        font.pointSize: Appearance.font.size.normal
     }
 
     // Letter pill — top-left corner of the tile frame.
