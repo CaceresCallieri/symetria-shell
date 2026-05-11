@@ -43,6 +43,13 @@ Singleton {
     // intentional var: JS Map<string, string>
     property var labelMap: new Map()
 
+    /// Cached AppIconsProcessor result. Compared via modelsEqual to short-circuit
+    /// no-op rebuilds (e.g., focus-only events that don't change layout) — without
+    /// this, every Hyprland event burst destroys and recreates all ScreencopyView
+    /// instances, causing thumbnail flicker.
+    // intentional var: JS array of { isGroup, clients[] } from AppIconsProcessor
+    property var _cachedProcessedModel: []
+
     /// 16-slot label sequence: home row first (slots 1-8), top row second (9-16).
     /// Skips index-finger stretches (G/H, T/Y) and pinky reaches.
     /// Bottom row reserved for a future tier-3 extension to 24 slots.
@@ -90,6 +97,7 @@ Singleton {
         targetWorkspaceId = -1;
         tiles = [];
         labelMap = new Map();
+        _cachedProcessedModel = [];
     }
 
     function toggle(): void {
@@ -126,11 +134,11 @@ Singleton {
     /// Calls AppIconsProcessor.processClients() — the SAME function the bar
     /// uses to order app icons — so labels match bar icon positions by
     /// construction. Tab groups collapse to one tile (clients[0] as
-    /// representative; step 8 refines to active-tab resolution). Swallowed
-    /// windows are excluded by AppIconsProcessor itself.
+    /// representative; active-tab resolution is a known future improvement).
+    /// Swallowed windows are excluded by AppIconsProcessor itself.
     ///
     /// First 16 entries get labels from labelSequence; 17+ render unlabeled
-    /// (visible but unreachable from the keyboard in v1).
+    /// (visible but only reachable via click, not keyboard).
     function _rebuildTiles(): void {
         const newTiles = [];
         const newLabelMap = new Map();
@@ -138,10 +146,19 @@ Singleton {
         if (targetWorkspaceId === -1) {
             tiles = newTiles;
             labelMap = newLabelMap;
+            _cachedProcessedModel = [];
             return;
         }
 
         const model = AppIconsProcessor.processClients(targetWorkspaceId, Hypr.toplevels.values);
+
+        // Short-circuit no-op rebuilds — same guard pattern as WorkspaceAppIcons.
+        // Prevents Repeater churn (and thumbnail recapture flicker) on layout-irrelevant
+        // events like activewindowv2 firing without a topology change.
+        if (AppIconsProcessor.modelsEqual(model, _cachedProcessedModel))
+            return;
+        _cachedProcessedModel = model;
+
         const seq = labelSequence;
 
         for (let i = 0; i < model.length; i++) {
@@ -186,9 +203,8 @@ Singleton {
 
     /// Reactive tile rebuild on window layout events while overview is open.
     /// Debounced 50ms to coalesce rapid event bursts (Hyprland emits multiple
-    /// events for a single window operation). modelsEqual check inside
-    /// _rebuildTiles short-circuits no-op rebuilds — see the cachedModel
-    /// pattern in components/WorkspaceAppIcons.qml for the same approach.
+    /// events for a single window operation). _rebuildTiles short-circuits
+    /// via modelsEqual when the topology hasn't changed.
     Timer {
         id: rebuildDebounce
         interval: 50

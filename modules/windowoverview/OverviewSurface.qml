@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
 import qs.components.containers
 import qs.components.misc
 import qs.services
@@ -16,8 +15,9 @@ import QtQuick
 /// WindowOverviewService.targetMonitor sets shouldShow=true and maps; the rest
 /// stay unmapped at zero cost.
 ///
-/// v1 skeleton: opaque dimmed scrim, Esc-dismiss only. Tiles arrive in step 5;
-/// key dispatch in step 6; reactivity + auto-close in step 7.
+/// Full feature: dimmed scrim, letter-label tile grid, keyboard dispatch (A–P +
+/// Return for 16 slots), click-to-focus for overflow tiles, Esc-dismiss, and
+/// reactive tile rebuild with auto-close on workspace/monitor change.
 Scope {
     id: root
 
@@ -94,7 +94,7 @@ Scope {
                 // Dimmed scrim — pushes tiles to visual focus.
                 Rectangle {
                     anchors.fill: parent
-                    color: "#000000"
+                    color: Colours.palette.m3scrim
                     opacity: 0.65
                 }
 

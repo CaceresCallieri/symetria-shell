@@ -7,7 +7,7 @@ import Quickshell.Io
 /// IPC entry point for the Window Overview feature.
 ///
 /// Routes `symmetria shell overview {show,hide,toggle}` to WindowOverviewService.
-/// The actual overlay rendering lives in OverviewSurface.qml (added in step 3),
+/// The actual overlay rendering lives in OverviewSurface.qml,
 /// which is mounted separately in shell.qml and reads its state from the singleton.
 Scope {
     id: root

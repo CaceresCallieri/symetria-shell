@@ -9,11 +9,11 @@ import QtQuick
 
 /// One tile in the Window Overview grid.
 ///
-/// Captures the repClient's surface via ScreencopyView (snapshot in v1) and
-/// preserves source aspect ratio inside the cell. Letter pill in the corner
-/// is the only key hint — title strip is deferred to step 8.
+/// Captures the repClient's surface via ScreencopyView (frozen snapshot, not live)
+/// and preserves source aspect ratio inside the cell. Letter pill in the corner
+/// shows the keyboard shortcut. Title strip is a known future improvement.
 ///
-/// Tiles with empty label (overflow past 16) still render but have no pill.
+/// Tiles with empty label (overflow past 16 windows) still render but have no pill.
 Item {
     id: root
 
