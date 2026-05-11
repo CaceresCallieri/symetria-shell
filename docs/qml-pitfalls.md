@@ -294,3 +294,33 @@ height: smoothedHeight
 This runs at render framerate, interpolating between sparse data points and naturally tracking rapidly-changing computed targets.
 
 **Prevention:** Never use `Behavior on height` when the bound property changes every frame. Use `FrameAnimation` for continuous value tracking.
+
+## Layer-shell focus restoration race
+
+When a layer-shell window holds `WlrKeyboardFocus.Exclusive` and is unmapped (e.g., `visible: false` or `active = false`), wlroots **atomically restores keyboard focus to whichever window held it before the layer mapped**. This restoration is part of the protocol cleanup, not a request — it cannot be intercepted.
+
+**The trap:** if you dispatch `focuswindow` (or any focus-changing Hyprland command) *synchronously* with the unmap, both events land in Hyprland's queue but the unmap's restoration wins. The user sees focus snap back to the pre-overlay window instead of your chosen target.
+
+**Wrong (focus dispatch loses to restoration):**
+```qml
+function activate(addr) {
+    Hypr.dispatch(`focuswindow address:${addr}`);
+    hide();  // unmaps the layer-shell — wlroots restores prior focus AFTER our dispatch
+}
+```
+
+**Correct (defer dispatch one event-loop tick):**
+```qml
+function activate(addr) {
+    hide();                                                       // unmap first
+    Qt.callLater(() => Hypr.dispatch(`focuswindow address:${addr}`));  // dispatch after restoration
+}
+```
+
+`Qt.callLater` pushes the dispatch to the next event-loop tick, by which point the unmap has propagated through Wayland and wlroots has performed its focus restoration. Our `focuswindow` then lands cleanly on top.
+
+**Why `KillConfirmOverlay` doesn't have this bug:** `killwindow` is destructive — the target dies, so post-unmap focus restoration to some other window is irrelevant (no "wrong focus" outcome exists). Only non-destructive focus actions (`focuswindow`, `movetoworkspace`, etc.) hit this race.
+
+**Diagnosis hint:** if you log the dispatch and verify the same `hyprctl dispatch` works from the CLI, but the QML version "does nothing", suspect this race.
+
+Found in: `services/WindowOverviewService.qml:activateAddr()` for the Window Overview feature.

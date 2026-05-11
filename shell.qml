@@ -16,6 +16,7 @@ import "modules/recorder"
 import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
 import "modules/killconfirm" as KillConfirmModule
+import "modules/windowoverview" as WindowOverviewModule
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -54,6 +55,8 @@ ShellRoot {
     KillConfirmModule.KillConfirmOverlay {
         handler: killConfirm
     }
+    WindowOverviewModule.Wrapper {}
+    WindowOverviewModule.OverviewSurface {}
     Lock {
         id: lock
     }
