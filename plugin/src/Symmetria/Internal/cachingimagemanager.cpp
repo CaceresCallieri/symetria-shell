@@ -149,7 +149,13 @@ void CachingImageManager::updateSource(const QString& path) {
         // clang-format on
 
         const QUrl cache = m_cacheDir.resolved(QUrl(filename));
-        if (m_cachePath == cache) {
+        // Skip only if BOTH our tracked cache path matches AND the Image's
+        // actual source still holds it. Consumers (e.g. Wallpaper.qml focus
+        // mode) may clear Image.source externally to free the GPU texture;
+        // without this check we'd never re-assign source on reload and the
+        // Image would stay blank.
+        const QUrl currentSource = m_item->property("source").toUrl();
+        if (m_cachePath == cache && currentSource == cache) {
             watcher->deleteLater();
             return;
         }
