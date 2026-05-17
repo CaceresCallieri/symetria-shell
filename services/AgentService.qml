@@ -59,6 +59,19 @@ Singleton {
     readonly property int sttTargetTerminalPid: _sttTargetTerminalPid
     readonly property int sttTargetBufId: _sttTargetBufId  // -1 = representative agent
 
+    // True while the active STT job is in any post-recording phase
+    // (processing / transcribed / delivering). Mirrors the same predicate
+    // the recorder widget uses (modules/recorder/RecordingBarEmbed.qml and
+    // Content.qml coalesce these three into a user-visible "processing"
+    // state). AgentChip uses this to swap the looping sound-wave sprite
+    // for a left-to-right transcribing sprite during this window.
+    readonly property bool sttIsTranscribing: {
+        const j = SttService.job;
+        if (!j) return false;
+        const s = j.state;
+        return s === "processing" || s === "transcribed" || s === "delivering";
+    }
+
     // Internal state — always reassigned (never mutated in-place) so QML
     // bindings on agents/agentCount fire correctly. Do not use .push()/.splice().
     // intentional var: heterogeneous JS objects from bridge JSON

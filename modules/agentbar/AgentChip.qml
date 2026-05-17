@@ -36,10 +36,14 @@ Item {
         // Key permission morph (generic tool approval)
         if (root._keyMorphActive) return "key-morph";
         if (root._keyEmerging) return "starting";
-        // STT wave/morph
+        // STT wave/morph. Once morph completes (_sttWaving), pick the looping
+        // wave variant: center-pulse during active recording, left-to-right
+        // sweep while the captured audio is processing/transcribing/delivering.
+        // AgentService.sttIsTranscribing mirrors the same coalesced phase the
+        // recorder widget shows (modules/recorder/RecordingBarEmbed.qml).
         if (root.isSttTarget) {
             if (root._sttEmerging) return "starting";
-            if (root._sttWaving) return "stt-wave";
+            if (root._sttWaving) return AgentService.sttIsTranscribing ? "stt-transcribe" : "stt-wave";
             return "stt-morph";
         }
         if (root._isClosing || root._blinkClosing || root._startClosing)

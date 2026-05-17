@@ -12,6 +12,9 @@ import QtQuick
 /// - "stopping": 12-frame full-to-dot collapse, 1824ms one-shot then holds at dormant dot.
 /// - "stt-morph": 12-frame sparkle-to-soundwave morph, one-shot then holds at bars.
 /// - "stt-wave": 12-frame looping center-pulse wave (bars ripple outward from center).
+/// - "stt-transcribe": 12-frame looping left-to-right traveling wave (used while
+///   the captured audio is processing/transcribed/delivering — distinct from the
+///   center-pulse stt-wave that plays during active recording).
 /// - "key-morph": 12-frame sparkle-to-key morph, one-shot then holds at key shape.
 /// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
@@ -20,7 +23,7 @@ Item {
 
     required property color color
     property bool running: true
-    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "key-morph" | "ask-morph" | "plan-morph" | "asking" | "planning"
+    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "stt-transcribe" | "key-morph" | "ask-morph" | "plan-morph" | "asking" | "planning"
     property real speedFactor: 1.0 // Multiplier for frame interval (< 1 = faster)
 
     /// Emitted when a one-shot animation (starting/stopping) reaches its final frame.
@@ -37,11 +40,11 @@ Item {
     property int _currentFrame: 0
     property bool _oneShotComplete: false
     readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
-        // stt-wave intentionally omitted — it loops like working/thinking
+        // stt-wave and stt-transcribe intentionally omitted — they loop like working/thinking
 
     readonly property int _frameCount: root.mode === "asking" || root.mode === "planning" ? 1
         : root.mode === "thinking" || root.mode === "starting" ? 9
-        : root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 12
+        : root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 12
         : 8
 
     readonly property string _spriteAsset: root.mode === "asking"
@@ -55,6 +58,7 @@ Item {
         : root.mode === "stt-morph" ? "claude-sparkle-stt-morph-sprite"
         : root.mode === "key-morph" ? "claude-sparkle-key-morph-sprite"
         : root.mode === "stt-wave" ? "claude-sparkle-stt-wave-2-sprite"
+        : root.mode === "stt-transcribe" ? "claude-sparkle-stt-transcribe-sprite"
         : "claude-sparkle-sprite"
 
     onModeChanged: {
@@ -62,10 +66,10 @@ Item {
         root._oneShotComplete = false
         console.assert(root.mode === "working" || root.mode === "thinking"
             || root.mode === "starting" || root.mode === "stopping"
-            || root.mode === "stt-morph" || root.mode === "stt-wave"
+            || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe"
             || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
             || root.mode === "asking" || root.mode === "planning",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "key-morph", "asking", or "planning"`)
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "key-morph", "asking", or "planning"`)
     }
 
     /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
@@ -99,7 +103,7 @@ Item {
     Timer {
         running: root.running && root.visible && !root._oneShotComplete
         interval: Math.round((root.mode === "stopping" ? 152
-            : root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 80
+            : root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 80
             : 101) * root.speedFactor)
         repeat: true
         onTriggered: {
