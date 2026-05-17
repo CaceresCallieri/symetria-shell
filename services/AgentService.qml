@@ -60,11 +60,17 @@ Singleton {
     readonly property int sttTargetBufId: _sttTargetBufId  // -1 = representative agent
 
     // True while the active STT job is in any post-recording phase
-    // (processing / transcribed / delivering). Mirrors the same predicate
-    // the recorder widget uses (modules/recorder/RecordingBarEmbed.qml and
-    // Content.qml coalesce these three into a user-visible "processing"
-    // state). AgentChip uses this to swap the looping sound-wave sprite
-    // for a left-to-right transcribing sprite during this window.
+    // (processing / transcribed / delivering), per the SttJob state machine
+    // (SttJob.qml:18). AgentChip uses this to swap the looping center-pulse
+    // sprite for the left-to-right traveling wave during the transcribing window.
+    // "success" and "error" are intentionally excluded — the chip stops showing
+    // the STT animation before the job reaches those terminal states (clearSttTarget
+    // fires on success/error, which sets isSttTarget = false → _sttWaving = false).
+    // NOTE: This creates a circular singleton read: AgentService → SttService,
+    // while SttJob (owned by SttService) already calls back into AgentService
+    // (setSttTarget / clearSttTarget). QML resolves all qs.services singletons
+    // before any binding evaluates, so the circular read is safe at runtime —
+    // but be aware of this coupling when refactoring either service.
     readonly property bool sttIsTranscribing: {
         const j = SttService.job;
         if (!j) return false;

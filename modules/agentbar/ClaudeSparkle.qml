@@ -39,12 +39,23 @@ Item {
 
     property int _currentFrame: 0
     property bool _oneShotComplete: false
-    readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
-        // stt-wave and stt-transcribe intentionally omitted — they loop like working/thinking
+    // Modes that play once and hold at the final frame (looping modes omitted).
+    // stt-wave and stt-transcribe intentionally omitted — they loop like working/thinking.
+    readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping"
+        || root.mode === "stt-morph" || root.mode === "key-morph"
+        || root.mode === "ask-morph" || root.mode === "plan-morph"
+    // Modes that use the 80ms tick (vs 101ms default / 152ms stopping).
+    readonly property bool _isFastTick: root.mode === "stt-morph" || root.mode === "stt-wave"
+        || root.mode === "stt-transcribe" || root.mode === "key-morph"
+        || root.mode === "ask-morph" || root.mode === "plan-morph"
+    // Modes with 12-frame sprite sheets (vs 9-frame thinking/starting / 8-frame working / 1-frame static).
+    readonly property bool _is12Frame: root.mode === "stopping" || root.mode === "stt-morph"
+        || root.mode === "stt-wave" || root.mode === "stt-transcribe" || root.mode === "key-morph"
+        || root.mode === "ask-morph" || root.mode === "plan-morph"
 
     readonly property int _frameCount: root.mode === "asking" || root.mode === "planning" ? 1
         : root.mode === "thinking" || root.mode === "starting" ? 9
-        : root.mode === "stopping" || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 12
+        : root._is12Frame ? 12
         : 8
 
     readonly property string _spriteAsset: root.mode === "asking"
@@ -69,7 +80,7 @@ Item {
             || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe"
             || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
             || root.mode === "asking" || root.mode === "planning",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "key-morph", "asking", or "planning"`)
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "key-morph", "ask-morph", "plan-morph", "asking", or "planning"`)
     }
 
     /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
@@ -103,7 +114,7 @@ Item {
     Timer {
         running: root.running && root.visible && !root._oneShotComplete
         interval: Math.round((root.mode === "stopping" ? 152
-            : root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe" || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph" ? 80
+            : root._isFastTick ? 80
             : 101) * root.speedFactor)
         repeat: true
         onTriggered: {
