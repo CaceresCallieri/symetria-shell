@@ -25,13 +25,19 @@ Searcher {
     // CachingImage source is cleared and the texture is dropped. Re-enabled
     // immediately when focus mode turns off so Qt can async-load before the
     // fade-in starts. See modules/background/Wallpaper.qml for the consumer.
-    property bool wallpaperLoaded: !focusMode
+    //
+    // Managed imperatively by onFocusModeChanged and FileView.onLoaded — NOT a
+    // live binding. Initial value is true (focusMode defaults false; onLoaded
+    // corrects it synchronously before the first frame if restored from disk).
+    property bool wallpaperLoaded: true
 
-    // Buffer beyond Appearance.anim.durations.normal (400ms at scale=1) to
-    // guarantee the wrapper Item opacity reaches 0 before we drop the texture.
+    // Buffer beyond Appearance.anim.durations.normal to guarantee the wrapper
+    // Item opacity reaches 0 before we drop the texture. Bound to the actual
+    // animation duration so custom anim.scale values (e.g. scale=2 for slow
+    // motion / accessibility) don't cause the texture to pop mid-fade.
     Timer {
         id: focusUnloadTimer
-        interval: 450
+        interval: Appearance.anim.durations.normal + 50
         onTriggered: root.wallpaperLoaded = false
     }
 
@@ -83,14 +89,21 @@ Searcher {
                 console.warn("[Wallpapers] Failed to parse wallpaper-state.json:", e);
             }
             // wallpaperLoaded must mirror the restored focusMode synchronously —
-            // onFocusModeChanged would otherwise schedule a 450 ms unload delay
-            // before the texture is even loaded for the first time.
+            // onFocusModeChanged would have started focusUnloadTimer (for the focus=true
+            // case) before we could correct wallpaperLoaded here. Stop it now: we've
+            // already applied the correct value directly, no deferred unload needed.
             root.wallpaperLoaded = !root.focusMode;
+            focusUnloadTimer.stop();
             root._focusModeLoadedFromDisk = true;
         }
         onLoadFailed: err => {
             if (err === FileViewError.FileNotFound) {
                 setText(JSON.stringify({ focusMode: false }));
+                root._focusModeLoadedFromDisk = true;
+            } else {
+                // Non-FileNotFound errors (permission denied, IO error, etc.) must still
+                // set the flag so toasts and disk saves work for the rest of the session.
+                console.warn("[Wallpapers] Failed to load wallpaper-state.json:", err);
                 root._focusModeLoadedFromDisk = true;
             }
         }
