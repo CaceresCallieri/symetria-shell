@@ -15,6 +15,18 @@ import QtQuick
 /// - "stt-transcribe": 12-frame looping left-to-right traveling wave (used while
 ///   the captured audio is processing/transcribed/delivering — distinct from the
 ///   center-pulse stt-wave that plays during active recording).
+/// - "stt-wave-to-transcribe-morph": 12-frame one-shot bridge between stt-wave
+///   and stt-transcribe. Collapses the bars to a flat baseline (frames 0-5),
+///   then re-emerges into stt-transcribe's first frame (frames 6-11) so the
+///   eye perceives a "settles down, then a new wave starts" transition rather
+///   than a hot-swap between two unrelated loop phases.
+/// - "stt-sparkle-morph": exit morph that reuses claude-sparkle-stt-morph-sprite
+///   played in REVERSE — soundwave bars collapse back into the Claude sparkle
+///   starburst. Lands on frame 0 of stt-morph, which is the same sparkle
+///   geometry that working/starting/stopping all begin with, so the handoff
+///   to whatever mode follows (working starburst spin, dormant-dot collapse)
+///   is visually seamless. No dedicated sprite — leverages stt-morph's
+///   existing geometry via reverse playback.
 /// - "key-morph": 12-frame sparkle-to-key morph, one-shot then holds at key shape.
 /// All modes use identical frame-cycling mechanics for consistent hand-drawn feel.
 /// Original assets from claude.ai (Anthropic) — used with attribution.
@@ -23,8 +35,15 @@ Item {
 
     required property color color
     property bool running: true
-    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "stt-transcribe" | "key-morph" | "ask-morph" | "plan-morph" | "asking" | "planning"
+    property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "stt-transcribe" | "stt-wave-to-transcribe-morph" | "stt-sparkle-morph" | "key-morph" | "ask-morph" | "plan-morph" | "asking" | "planning"
     property real speedFactor: 1.0 // Multiplier for frame interval (< 1 = faster)
+    /// Modes that play their sprite from the last frame backwards to frame 0.
+    /// Derived from `mode` (not exposed as an external prop) so that the
+    /// playback direction updates atomically with `mode` — otherwise two
+    /// separate external bindings (mode + reverse) on the same source race
+    /// each other and onModeChanged can read a stale reverse value, leading
+    /// to the sprite snapping straight to its endpoint instead of animating.
+    readonly property bool _reverse: root.mode === "stt-sparkle-morph"
 
     /// Emitted when a one-shot animation (starting/stopping) reaches its final frame.
     signal animationComplete()
@@ -42,15 +61,22 @@ Item {
     // Modes that play once and hold at the final frame (looping modes omitted).
     // stt-wave and stt-transcribe intentionally omitted — they loop like working/thinking.
     readonly property bool _isOneShot: root.mode === "starting" || root.mode === "stopping"
-        || root.mode === "stt-morph" || root.mode === "key-morph"
+        || root.mode === "stt-morph" || root.mode === "stt-wave-to-transcribe-morph"
+        || root.mode === "stt-sparkle-morph"
+        || root.mode === "key-morph"
         || root.mode === "ask-morph" || root.mode === "plan-morph"
     // Modes that use the 80ms tick (vs 101ms default / 152ms stopping).
     readonly property bool _isFastTick: root.mode === "stt-morph" || root.mode === "stt-wave"
-        || root.mode === "stt-transcribe" || root.mode === "key-morph"
+        || root.mode === "stt-transcribe" || root.mode === "stt-wave-to-transcribe-morph"
+        || root.mode === "stt-sparkle-morph"
+        || root.mode === "key-morph"
         || root.mode === "ask-morph" || root.mode === "plan-morph"
     // Modes with 12-frame sprite sheets (vs 9-frame thinking/starting / 8-frame working / 1-frame static).
     readonly property bool _is12Frame: root.mode === "stopping" || root.mode === "stt-morph"
-        || root.mode === "stt-wave" || root.mode === "stt-transcribe" || root.mode === "key-morph"
+        || root.mode === "stt-wave" || root.mode === "stt-transcribe"
+        || root.mode === "stt-wave-to-transcribe-morph"
+        || root.mode === "stt-sparkle-morph"
+        || root.mode === "key-morph"
         || root.mode === "ask-morph" || root.mode === "plan-morph"
 
     readonly property int _frameCount: root.mode === "asking" || root.mode === "planning" ? 1
@@ -70,17 +96,22 @@ Item {
         : root.mode === "key-morph" ? "claude-sparkle-key-morph-sprite"
         : root.mode === "stt-wave" ? "claude-sparkle-stt-wave-2-sprite"
         : root.mode === "stt-transcribe" ? "claude-sparkle-stt-transcribe-sprite"
+        : root.mode === "stt-wave-to-transcribe-morph" ? "claude-sparkle-stt-wave-to-transcribe-morph-sprite"
+        // Exit morph reuses the sparkle→bars sprite — AgentChip sets reverse: true
+        // so it plays frames 11→0 (bars back to sparkle).
+        : root.mode === "stt-sparkle-morph" ? "claude-sparkle-stt-morph-sprite"
         : "claude-sparkle-sprite"
 
     onModeChanged: {
-        root._currentFrame = 0
+        root._currentFrame = root._reverse ? root._frameCount - 1 : 0
         root._oneShotComplete = false
         console.assert(root.mode === "working" || root.mode === "thinking"
             || root.mode === "starting" || root.mode === "stopping"
             || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe"
+            || root.mode === "stt-wave-to-transcribe-morph" || root.mode === "stt-sparkle-morph"
             || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
             || root.mode === "asking" || root.mode === "planning",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "key-morph", "ask-morph", "plan-morph", "asking", or "planning"`)
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "stt-wave-to-transcribe-morph", "stt-sparkle-morph", "key-morph", "ask-morph", "plan-morph", "asking", or "planning"`)
     }
 
     /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
@@ -118,18 +149,25 @@ Item {
             : 101) * root.speedFactor)
         repeat: true
         onTriggered: {
-            const next = root._currentFrame + 1
+            const step = root._reverse ? -1 : 1
+            const next = root._currentFrame + step
             if (root._isOneShot) {
-                if (next >= root._frameCount) {
-                    root._currentFrame = root._frameCount - 1
+                // Done when we step past either end: forward overflows _frameCount,
+                // reverse underflows below 0. Hold at the terminal frame (last for
+                // forward, first for reverse — which is the landing baseline shape).
+                const overshot = root._reverse ? next < 0 : next >= root._frameCount
+                if (overshot) {
+                    root._currentFrame = root._reverse ? 0 : root._frameCount - 1
                     root._oneShotComplete = true
                     root.animationComplete()
                 } else {
                     root._currentFrame = next
                 }
             } else {
-                // Working/thinking loop indefinitely
-                root._currentFrame = next % root._frameCount
+                // Looping modes (working/thinking/stt-wave/stt-transcribe): wrap
+                // via modulo. reverse + looping is supported by the same arithmetic
+                // because (-1 % N) in JS returns -1, so we add N before %.
+                root._currentFrame = (next + root._frameCount) % root._frameCount
             }
         }
         // Reset to first frame on pause so re-shows start cleanly.

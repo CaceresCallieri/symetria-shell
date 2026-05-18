@@ -19,6 +19,8 @@ Item {
     property bool _startClosing: false // true from the stopping phase of a start-blink until activityState leaves "starting"
     property bool _sttEmerging: false // true during the starting phase before stt-morph
     property bool _sttWaving: false // true after stt-morph completes → looping wave
+    property bool _sttTranscribeMorphing: false // true while playing the one-shot wave→transcribe bridge sprite
+    property bool _sttSparkleMorphing: false // true while playing the reverse exit morph (bars → sparkle starburst)
     property bool _keyEmerging: false // true during dot → starburst emerge before key morph
     property bool _keyMorphActive: false // true while key-morph sprite is playing or held at key shape
 
@@ -36,13 +38,27 @@ Item {
         // Key permission morph (generic tool approval)
         if (root._keyMorphActive) return "key-morph";
         if (root._keyEmerging) return "starting";
+        // STT exit morph: bars → sparkle starburst (reverse playback of
+        // stt-morph). Plays after the agent stops being the STT target while
+        // the wave was looping, so the chip lands back on the same sparkle
+        // frame that working/stopping/starting begin with — seamless handoff
+        // to whatever mode follows. Highest priority among STT branches
+        // because by this point isSttTarget is already false.
+        if (root._sttSparkleMorphing) return "stt-sparkle-morph";
         // STT wave/morph. Once morph completes (_sttWaving), pick the looping
         // wave variant: center-pulse during active recording, left-to-right
         // sweep while the captured audio is processing/transcribing/delivering.
         // AgentService.sttIsTranscribing mirrors the same coalesced phase the
         // recorder widget shows (modules/recorder/RecordingBarEmbed.qml).
+        // _sttTranscribeMorphing takes priority over the looping selection:
+        // when the recording→transcribing transition is detected (see the
+        // Connections block below), this flag plays a one-shot bridge sprite
+        // that collapses the wave to a flat baseline and re-emerges into
+        // stt-transcribe's first frame, so the eye sees a clean handoff
+        // rather than a hot-swap between two unrelated loop phases.
         if (root.isSttTarget) {
             if (root._sttEmerging) return "starting";
+            if (root._sttTranscribeMorphing) return "stt-wave-to-transcribe-morph";
             if (root._sttWaving) return AgentService.sttIsTranscribing ? "stt-transcribe" : "stt-wave";
             return "stt-morph";
         }
@@ -77,11 +93,43 @@ Item {
         if (root.isSttTarget && !root.isBusy) {
             // Agent was idle (dormant dot) — emerge first, then morph
             root._sttEmerging = true
+        } else if (!root.isSttTarget && root._sttWaving) {
+            // Target just cleared while the chip was looping the wave/transcribe.
+            // Play the exit morph (reverse stt-morph: bars → sparkle starburst)
+            // before the chip falls through to its natural next mode. Lands
+            // on the same sparkle frame working/stopping/starting begin with.
+            // Clear other in-flight STT flags so the exit morph wins outright.
+            root._sttSparkleMorphing = true
+            root._sttEmerging = false
+            root._sttTranscribeMorphing = false
+            // _sttWaving stays true intentionally — it's the marker that we
+            // were in a wave state and therefore owe an exit morph. Cleared
+            // together with _sttSparkleMorphing on animationComplete.
         } else {
-            // Either busy (jump directly to stt-morph — no emerge needed
-            // from active starburst) or un-targeted — clear both flags.
+            // Becoming the target while already busy (skip emerge), or
+            // un-targeted while not waving (no exit morph needed — chip
+            // was in starting/morph/etc., not yet looping). Clear flags.
             root._sttEmerging = false
             root._sttWaving = false
+            root._sttTranscribeMorphing = false
+        }
+    }
+
+    // Detect the recording→transcribing handoff: when AgentService flips
+    // sttIsTranscribing true while we're already in the looping wave state,
+    // play the one-shot bridge morph before the looping LTR transcribe takes
+    // over. The guard on _sttWaving ensures we only morph from the wave (not
+    // mid-emerge or mid-stt-morph — those paths fall directly into the
+    // correct looping mode based on sttIsTranscribing at completion time).
+    Connections {
+        target: AgentService
+        function onSttIsTranscribingChanged() {
+            if (AgentService.sttIsTranscribing
+                && root.isSttTarget
+                && root._sttWaving
+                && !root._sttTranscribeMorphing) {
+                root._sttTranscribeMorphing = true
+            }
         }
     }
 
@@ -117,6 +165,9 @@ Item {
         // Total clear-blink: ~545ms + ~1094ms ≈ 1640ms at 0.6×.
         speedFactor: (root._sttEmerging || root._keyEmerging || root.activityState === "clearing" || root._startClosing) ? 0.6 : 1.0
         mode: root._sparkleMode
+        // Note: reverse playback for stt-sparkle-morph is derived internally
+        // by ClaudeSparkle from mode itself — must NOT be set as an external
+        // binding here, or it races with mode and the morph snaps instantly.
         // Handle initial state on creation (no animation — skip to final frame)
         Component.onCompleted: {
             if (root.activityTool === "Asking" || root.activityTool === "Planning") {
@@ -146,6 +197,22 @@ Item {
             } else if (root.isSttTarget && !root._sttWaving) {
                 root._sttWaving = true
             // Safe: stt-wave is looping (not one-shot) so animationComplete never fires during wave.
+            // Wave→transcribe bridge morph completes → drop the flag so
+            // _sparkleMode falls through to the looping stt-transcribe.
+            // If sttIsTranscribing flipped false mid-morph (rare — would
+            // require the STT job to error or complete within ~960ms of
+            // the user stopping recording), we land on stt-wave instead.
+            // Visually surprising but harmless: the chip almost always
+            // unmounts immediately after via clearSttTarget anyway.
+            } else if (root.isSttTarget && root._sttTranscribeMorphing) {
+                root._sttTranscribeMorphing = false
+            // STT exit morph completes — clear all STT flags so _sparkleMode
+            // falls through to whatever the agent is now doing (working /
+            // stopping / etc.). Lands on the sparkle starburst, which is
+            // frame 0 of those modes — visually seamless handoff.
+            } else if (root._sttSparkleMorphing) {
+                root._sttSparkleMorphing = false
+                root._sttWaving = false
             // Start-blink: starting completes during "starting" → transition to stopping
             } else if (root.activityState === "starting" && !root._startClosing) {
                 root._startClosing = true
