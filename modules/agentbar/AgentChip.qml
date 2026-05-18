@@ -105,10 +105,16 @@ Item {
             // _sttWaving stays true intentionally — it's the marker that we
             // were in a wave state and therefore owe an exit morph. Cleared
             // together with _sttSparkleMorphing on animationComplete.
+        } else if (root.isSttTarget) {
+            // Becoming the target while already busy — skip the dormant-dot emerge
+            // and jump straight to stt-morph. No flags needed; _sparkleMode will
+            // return "stt-morph" because isSttTarget is true and _sttWaving is false.
+            root._sttEmerging = false
+            root._sttWaving = false
+            root._sttTranscribeMorphing = false
         } else {
-            // Becoming the target while already busy (skip emerge), or
-            // un-targeted while not waving (no exit morph needed — chip
-            // was in starting/morph/etc., not yet looping). Clear flags.
+            // Un-targeted while not yet waving (chip was in starting/emerge/morph
+            // phase, not the looping wave). No exit morph — just clear STT flags.
             root._sttEmerging = false
             root._sttWaving = false
             root._sttTranscribeMorphing = false
@@ -127,7 +133,8 @@ Item {
             if (AgentService.sttIsTranscribing
                 && root.isSttTarget
                 && root._sttWaving
-                && !root._sttTranscribeMorphing) {
+                && !root._sttTranscribeMorphing
+                && !root._sttSparkleMorphing) {
                 root._sttTranscribeMorphing = true
             }
         }
@@ -193,7 +200,9 @@ Item {
             // STT emerge: starting completes → transition to stt-morph
             } else if (root.isSttTarget && root._sttEmerging) {
                 root._sttEmerging = false
-            // STT morph: morph completes → transition to looping stt-wave
+            // STT morph: stt-morph one-shot completes → transition to looping stt-wave.
+            // (stt-morph is the only mode that satisfies isSttTarget && !_sttWaving here
+            // because _sttEmerging is cleared above and stt-wave never fires animationComplete.)
             } else if (root.isSttTarget && !root._sttWaving) {
                 root._sttWaving = true
             // Safe: stt-wave is looping (not one-shot) so animationComplete never fires during wave.

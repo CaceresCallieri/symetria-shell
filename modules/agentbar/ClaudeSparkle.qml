@@ -97,8 +97,8 @@ Item {
         : root.mode === "stt-wave" ? "claude-sparkle-stt-wave-2-sprite"
         : root.mode === "stt-transcribe" ? "claude-sparkle-stt-transcribe-sprite"
         : root.mode === "stt-wave-to-transcribe-morph" ? "claude-sparkle-stt-wave-to-transcribe-morph-sprite"
-        // Exit morph reuses the sparkle→bars sprite — AgentChip sets reverse: true
-        // so it plays frames 11→0 (bars back to sparkle).
+        // Exit morph reuses the sparkle→bars sprite. _reverse (derived from mode)
+        // makes the Timer step backward, so frames 11→0 (bars back to sparkle).
         : root.mode === "stt-sparkle-morph" ? "claude-sparkle-stt-morph-sprite"
         : "claude-sparkle-sprite"
 
@@ -120,9 +120,10 @@ Item {
         root._oneShotComplete = true
     }
 
-    /// Restart the current animation from frame 0 (useful for looping one-shot previews).
+    /// Restart the current animation from its start frame (frame 0 for forward modes, last frame
+    /// for reverse modes). Useful for looping one-shot previews in SpritePreview.qml.
     function restart() {
-        root._currentFrame = 0
+        root._currentFrame = root._reverse ? root._frameCount - 1 : 0
         root._oneShotComplete = false
     }
 
@@ -170,8 +171,10 @@ Item {
                 root._currentFrame = (next + root._frameCount) % root._frameCount
             }
         }
-        // Reset to first frame on pause so re-shows start cleanly.
-        // Side effect: if agentbar hides mid-animation (including stt-wave loop), it replays from frame 0 on next show.
-        onRunningChanged: if (!running && !root._oneShotComplete) root._currentFrame = 0
+        // Reset to start position on pause so re-shows begin cleanly. For reverse modes,
+        // "start" is the last frame (they play last→0). Side effect: if agentbar hides
+        // mid-animation (including stt-wave loop or stt-sparkle-morph), it replays from
+        // the beginning on next show.
+        onRunningChanged: if (!running && !root._oneShotComplete) root._currentFrame = root._reverse ? root._frameCount - 1 : 0
     }
 }
