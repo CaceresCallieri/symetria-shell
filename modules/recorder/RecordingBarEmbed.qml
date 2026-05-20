@@ -10,10 +10,10 @@ import QtQuick.Layouts
 // The bar's recordingCenterContainer is transparent — there is no surrounding
 // claymorphism pill to embed against. We add our own PillCard backdrop here
 // so the timer/waveform/delivery cluster reads with sufficient contrast over
-// arbitrary wallpapers. Note: recordingCenterContainer enables `clip: true`
-// for the horizontal reveal animation, so PillCard's exterior shadows are
-// clipped at the embed's edges — the visible clay comes from the interior
-// rim/inner-shadow gradient + fill + border, not the outer halo.
+// arbitrary wallpapers. Note: the container no longer clips its children
+// (clip was removed when the scale-overshoot animation replaced the horizontal
+// clip-reveal), so PillCard's full claymorphism — including the outer halo —
+// is visible.
 
 /// Compact recording indicator for the bar center (merge mode).
 ///
@@ -153,9 +153,6 @@ Item {
         }
 
         // Inline vocab-hint count, placed after the delivery pill.
-        // Must stay inline because the parent recordingCenterContainer
-        // in Bar.qml uses clip: true for its horizontal reveal animation,
-        // which kills any child trying to float above the compact row.
         // See Content.qml for the matching drawer placement.
         VocabHintBadge {
             id: vocabBadge
@@ -187,7 +184,6 @@ Item {
         font.pointSize: Appearance.font.size.large
         transformOrigin: Item.Center
         scale: _show ? 1.0 : 0.0
-        opacity: _show ? 1 : 0
 
         Behavior on scale {
             NumberAnimation {
@@ -196,7 +192,6 @@ Item {
                 easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
             }
         }
-        Behavior on opacity { Anim {} }
     }
 
     // ── Compact error indicator ─────────────────────────────
@@ -212,7 +207,6 @@ Item {
         font.pointSize: Appearance.font.size.large
         transformOrigin: Item.Center
         scale: _show ? 1.0 : 0.0
-        opacity: _show ? 1 : 0
 
         Behavior on scale {
             NumberAnimation {
@@ -221,6 +215,5 @@ Item {
                 easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
             }
         }
-        Behavior on opacity { Anim {} }
     }
 }
