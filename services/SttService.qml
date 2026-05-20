@@ -379,11 +379,11 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     // Delay between setting closing=true on the old job and swapping in the
-    // new job. Matched to the bar embed's implicitWidth Behavior duration
-    // (expressiveDefaultSpatial = 500ms) so the close animation has fully
-    // played out before the new job triggers the open animation. The lock
-    // isn't released during this window because _pendingOldJob keeps _job
-    // non-null (see restart()).
+    // new job. Matched to the bar embed's scale Behavior duration
+    // (expressiveDefaultSpatial = 500ms) so the close (scale → 0) animation
+    // has fully played out before the new job triggers the open (scale → 1)
+    // animation. The lock isn't released during this window because
+    // _pendingOldJob keeps _job non-null (see restart()).
     Timer {
         id: restartDelayTimer
         interval: Appearance.anim.durations.expressiveDefaultSpatial

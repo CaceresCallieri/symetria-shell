@@ -332,12 +332,15 @@ Item {
     }
 
     // Recording bar embed — unified center embed for both STT and audio recording.
-    // Clip-reveals from center outward: container grows horizontally while
-    // content stays centered, so the middle portion appears first.
+    // Scales from 0 → 1 with a slight overshoot when opening (and 1 → 0 when
+    // closing), so the pill "pops" in/out at the bar center instead of being
+    // revealed via a horizontal clip. The container's reserved layout width
+    // follows the embed's visible scale (clamped at 1) so neighboring bar
+    // sections reflow smoothly without being pushed by the overshoot peak.
     //
     // Animation is decoupled from service active states (which linger ~450ms
     // for the drawer hide animation) — instead, the job's `closing` signal
-    // triggers the reverse clip animation immediately on cancel/restart.
+    // triggers the reverse scale animation immediately on cancel/restart.
     Item {
         id: recordingCenterContainer
 
@@ -357,8 +360,8 @@ Item {
         // re-raise the embed). Deriving _showEmbed as a binding means it
         // re-evaluates whenever ANY source changes, so there's no "forgot to
         // flip it" failure mode. The close/open animations still play
-        // correctly because the Behavior on implicitWidth animates whenever
-        // the bound value changes.
+        // correctly because the Behavior on the embed's scale animates
+        // whenever the bound value changes.
         readonly property bool _showEmbed:
             RecordingSessionManager.active && !(_activeJob?.closing ?? false)
 
@@ -366,13 +369,19 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        clip: true
 
-        // visible must be true BEFORE width > 0 so children compute
-        // layout sizes (Qt Quick Layouts defer when ancestors are invisible).
-        // clip: true + width: 0 naturally hides content until the reveal animation.
-        visible: _shouldBeActive || width > 0
-        implicitWidth: _shouldBeActive ? recordingEmbed.implicitWidth : 0
+        // visible must be true BEFORE width > 0 so children compute layout
+        // sizes (Qt Quick Layouts defer when ancestors are invisible). The
+        // embed.scale > epsilon term keeps us painted through the shrink
+        // animation; once scale reaches 0 the container collapses to zero
+        // width and we naturally hide.
+        visible: _shouldBeActive || recordingEmbed.scale > 0.001
+
+        // Reserve layout width proportional to the visible scale so the bar
+        // collapses smoothly when scale-out completes. Clamped at 1.0 so the
+        // overshoot peak (scale ≈ 1.05) doesn't push neighboring sections
+        // outward — only the visual transform overflows, not the layout.
+        implicitWidth: recordingEmbed.implicitWidth * Math.min(recordingEmbed.scale, 1.0)
         implicitHeight: recordingEmbed.implicitHeight
         width: implicitWidth
         height: implicitHeight
@@ -380,19 +389,21 @@ Item {
         RecorderModule.RecordingBarEmbed {
             id: recordingEmbed
 
-            x: (recordingCenterContainer.width - implicitWidth) / 2
-            width: implicitWidth
-        }
+            anchors.centerIn: parent
+            transformOrigin: Item.Center
+            scale: recordingCenterContainer._shouldBeActive ? 1.0 : 0.0
 
-        // NOTE: duration is coupled to SttService.restartDelayTimer.interval.
-        // The STT restart animation relies on the close animation finishing
-        // before _startInternal swaps _job to the new job (which triggers the
-        // open animation). If you change either duration, change both — they
-        // must reference the same Appearance.anim.durations value.
-        Behavior on implicitWidth {
-            Anim {
-                duration: Appearance.anim.durations.expressiveDefaultSpatial
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            // NOTE: duration is coupled to SttService.restartDelayTimer.interval.
+            // The STT restart animation relies on the close (scale → 0) animation
+            // finishing before _startInternal swaps _job to the new job (which
+            // triggers the open scale → 1). If you change either duration, change
+            // both — they must reference the same Appearance.anim.durations value.
+            Behavior on scale {
+                NumberAnimation {
+                    duration: Appearance.anim.durations.expressiveDefaultSpatial
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                }
             }
         }
 

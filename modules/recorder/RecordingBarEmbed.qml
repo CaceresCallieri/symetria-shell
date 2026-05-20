@@ -164,11 +164,18 @@ Item {
     }
 
     // ── Compact success indicator ───────────────────────────
+    // Scales 0 → 1 with the expressive overshoot curve when the success
+    // state is entered, matching the bar embed's open/close motion vocabulary
+    // and the drawer's SttSuccessCard pop-in. The visible guard keeps the
+    // icon painted while scale shrinks back to 0 so the exit animation has
+    // something to render — visible flips false only after scale reaches 0.
     MaterialIcon {
         id: successIcon
 
+        readonly property bool _show: root.displayState === "success"
+
         anchors.centerIn: parent
-        visible: root.displayState === "success"
+        visible: _show || scale > 0.001
         text: root.mode === "audio" ? "audio_file" : "check_circle"
         // M3 "on surface" foreground role — near-white in dark mode, theme-
         // adaptive in light mode. Replaces the prior m3confirm (green) so the
@@ -178,8 +185,17 @@ Item {
         // color, not a status color — different UI role.
         color: Colours.palette.m3onSurface
         font.pointSize: Appearance.font.size.large
-        opacity: visible ? 1 : 0
+        transformOrigin: Item.Center
+        scale: _show ? 1.0 : 0.0
+        opacity: _show ? 1 : 0
 
+        Behavior on scale {
+            NumberAnimation {
+                duration: Appearance.anim.durations.expressiveDefaultSpatial
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            }
+        }
         Behavior on opacity { Anim {} }
     }
 
@@ -187,13 +203,24 @@ Item {
     MaterialIcon {
         id: errorIcon
 
+        readonly property bool _show: root.displayState === "error"
+
         anchors.centerIn: parent
-        visible: root.displayState === "error"
+        visible: _show || scale > 0.001
         text: "error"
         color: Colours.palette.m3error
         font.pointSize: Appearance.font.size.large
-        opacity: visible ? 1 : 0
+        transformOrigin: Item.Center
+        scale: _show ? 1.0 : 0.0
+        opacity: _show ? 1 : 0
 
+        Behavior on scale {
+            NumberAnimation {
+                duration: Appearance.anim.durations.expressiveDefaultSpatial
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            }
+        }
         Behavior on opacity { Anim {} }
     }
 }
