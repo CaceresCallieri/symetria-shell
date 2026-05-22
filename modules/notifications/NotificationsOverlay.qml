@@ -60,12 +60,36 @@ Scope {
             }
             readonly property real barHeight: barRef?.implicitHeight ?? 0
 
-            // Notifications content — top-right aligned, below bar
+            // Popout reference for collision-avoidance: when a system tray (or any
+            // bar) popout is open at the top of the screen, notifications slide
+            // down by its height so the popout's content stays clickable.
+            //
+            // We bind directly to the popout's `implicitHeight` (which is already
+            // animated by the popout's own Behavior on implicitHeight). NO local
+            // Behavior on topMargin — adding one would chase a moving target and
+            // cause visible lag (~1.1s observed). Direct binding gives frame-by-frame
+            // 1:1 sync with the popout animation, both on open and on close.
+            //
+            // The `hasCurrent` flag is intentionally NOT gated: it flips to false
+            // the instant a close starts, but `implicitHeight` still has to animate
+            // down to 0. Gating on hasCurrent would teleport the notification up
+            // while the popout is still visibly closing.
+            //
+            // Skipped in detached mode (control-center / window-info) — there the
+            // popout fills the entire screen and a full-height push would shove
+            // notifications offscreen.
+            readonly property Item popoutRef: {
+                void Visibilities.popoutsVersion;
+                return Visibilities.popouts.get(modelData) ?? null;
+            }
+            readonly property real popoutHeight: (popoutRef && !popoutRef._detachedFull) ? popoutRef.implicitHeight : 0
+
+            // Notifications content — top-right aligned, below bar (and any open popout)
             Item {
                 id: notifContent
 
                 anchors.top: parent.top
-                anchors.topMargin: win.barHeight
+                anchors.topMargin: win.barHeight + win.popoutHeight
                 anchors.right: parent.right
                 anchors.rightMargin: 0
 

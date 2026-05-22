@@ -1,5 +1,6 @@
 import qs.components
 import qs.config
+import qs.services
 import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.bar.popouts as BarPopouts
@@ -177,6 +178,17 @@ Item {
             return Math.max(off, 0);
         }
         y: 0
+
+        Component.onCompleted: {
+            Visibilities.popouts.set(root.screen, popouts);
+            Visibilities.popoutsVersion++;
+        }
+        Component.onDestruction: {
+            if (Visibilities.popouts.get(root.screen) === popouts) {
+                Visibilities.popouts.delete(root.screen);
+                Visibilities.popoutsVersion++;
+            }
+        }
     }
 
     Utilities.Wrapper {

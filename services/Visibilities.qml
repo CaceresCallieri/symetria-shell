@@ -7,6 +7,7 @@ Singleton {
     property var bars: new Map()
     property var osdOverlays: new Map()
     property var agentBars: new Map()
+    property var popouts: new Map()
 
     // Reactive counter - increments when screens map changes.
     // Include this in bindings that use screens.get() to force re-evaluation.
@@ -18,6 +19,10 @@ Singleton {
 
     // Reactive counter - increments when agentBars map changes.
     property int agentBarsVersion: 0
+
+    // Reactive counter - increments when popouts map changes.
+    // Read this inside bindings on popouts.get() so they re-evaluate on register/unregister.
+    property int popoutsVersion: 0
 
     function load(screen: ShellScreen, visibilities: var): void {
         screens.set(Hypr.monitorFor(screen), visibilities);
