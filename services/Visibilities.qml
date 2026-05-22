@@ -8,6 +8,9 @@ Singleton {
     property var osdOverlays: new Map()
     property var agentBars: new Map()
     property var popouts: new Map()
+    // Per-screen Utilities.Wrapper references — named *Panels to avoid confusion
+    // with screens.get(monitor).utilities (a boolean visibility flag).
+    property var utilitiesPanels: new Map()
 
     // Reactive counter - increments when screens map changes.
     // Include this in bindings that use screens.get() to force re-evaluation.
@@ -23,6 +26,9 @@ Singleton {
     // Reactive counter - increments when popouts map changes.
     // Read this inside bindings on popouts.get() so they re-evaluate on register/unregister.
     property int popoutsVersion: 0
+
+    // Reactive counter - increments when utilitiesPanels map changes.
+    property int utilitiesPanelsVersion: 0
 
     function load(screen: ShellScreen, visibilities: var): void {
         screens.set(Hypr.monitorFor(screen), visibilities);

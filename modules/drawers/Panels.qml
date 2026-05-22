@@ -200,6 +200,17 @@ Item {
 
         anchors.bottom: parent.bottom
         anchors.right: parent.right
+
+        Component.onCompleted: {
+            Visibilities.utilitiesPanels.set(root.screen, utilities);
+            Visibilities.utilitiesPanelsVersion++;
+        }
+        Component.onDestruction: {
+            if (Visibilities.utilitiesPanels.get(root.screen) === utilities) {
+                Visibilities.utilitiesPanels.delete(root.screen);
+                Visibilities.utilitiesPanelsVersion++;
+            }
+        }
     }
 
     Utilities.RecordingIndicator {

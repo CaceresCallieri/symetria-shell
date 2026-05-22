@@ -57,11 +57,27 @@ Scope {
             }
             readonly property real agentBarHeight: agentBarRef?.implicitHeight ?? 0
 
+            // Utilities panel reference for collision-avoidance: when the utilities
+            // dashboard expands upward from the bottom-right, toasts slide UP by its
+            // height so the dashboard content stays unobscured. Mirrors the
+            // notifications-overlay popout pattern (see NotificationsOverlay.qml).
+            //
+            // Bind directly to the panel's `implicitHeight` — it's already animated
+            // via the Wrapper's state transitions (0 ↔ contentHeight). NO local
+            // Behavior on bottomMargin: stacking a second animation over an animated
+            // source causes chase-target lag (same root cause documented in
+            // NotificationsOverlay.qml). Direct binding gives frame-by-frame sync.
+            readonly property Item utilitiesPanelRef: {
+                void Visibilities.utilitiesPanelsVersion;
+                return Visibilities.utilitiesPanels.get(modelData) ?? null;
+            }
+            readonly property real utilitiesHeight: utilitiesPanelRef?.implicitHeight ?? 0
+
             Item {
                 id: toastContent
 
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: win.agentBarHeight
+                anchors.bottomMargin: win.agentBarHeight + win.utilitiesHeight
                 anchors.right: parent.right
                 anchors.rightMargin: 0
 
