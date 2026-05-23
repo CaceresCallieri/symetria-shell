@@ -99,12 +99,16 @@ Item {
                     }
                 }
 
-                ClippingRectangle {
+                // Plain Item (not ClippingRectangle) — Notification is a PillCard
+                // whose two-shadow claymorphism extends ~17px outside cardBody bounds.
+                // A flush ClippingRectangle would clip those shadows; we let the
+                // outer StyledListView do the clipping for slide-in/out animations
+                // instead. The slot dimensions still match the notif body so the
+                // ListView layout (height-based) is unaffected.
+                Item {
                     anchors.top: parent.top
                     anchors.topMargin: wrapper.idx === 0 ? 0 : Appearance.spacing.smaller
 
-                    color: "transparent"
-                    radius: notif.radius
                     implicitWidth: notif.implicitWidth
                     implicitHeight: notif.implicitHeight
 

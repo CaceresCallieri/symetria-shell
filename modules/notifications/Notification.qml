@@ -11,7 +11,7 @@ import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+PillCard {
     id: root
 
     required property Notifs.Notif modelData
@@ -35,10 +35,10 @@ StyledRect {
 
     color: cardStyle.background
     radius: Appearance.rounding.normal
-    border.width: 1
-    border.color: cardStyle.border
+    borderWidth: 1
+    borderColor: cardStyle.border
 
-    Behavior on border.color {
+    Behavior on borderColor {
         CAnim {}
     }
 
@@ -73,7 +73,11 @@ StyledRect {
                 root.modelData.timer.start();
         }
 
-        drag.target: parent
+        // drag.target: root (NOT parent) — PillCard's default slot reparents
+        // children into contentHolder, so `parent` here resolves to contentHolder
+        // (which is anchors.fill: parent and can't be moved). The slide-to-dismiss
+        // gesture must move the PillCard root itself.
+        drag.target: root
         drag.axis: Drag.XAxis
 
         onPressed: event => {

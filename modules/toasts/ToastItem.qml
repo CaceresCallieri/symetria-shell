@@ -7,7 +7,7 @@ import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+PillCard {
     id: root
 
     required property Toast modelData
@@ -45,16 +45,13 @@ StyledRect {
 
     radius: Appearance.rounding.normal
     color: toastStyle.background
-    border.width: 1
-    border.color: toastStyle.border
+    borderWidth: 1
+    borderColor: toastStyle.border
 
-    Elevation {
-        anchors.fill: parent
-        radius: parent.radius
-        opacity: parent.opacity
-        z: -1
-        level: 3
-    }
+    // Note: previously had `Elevation { level: 3 }` for shadow. PillCard already
+    // provides the claymorphism shadow recipe (two opposing soft shadows + top
+    // rim highlight + faint bottom inner-shadow), so the Elevation would stack
+    // and read as a muddy double-shadow.
 
     ColumnLayout {
         id: layout
@@ -145,7 +142,7 @@ StyledRect {
         CAnim {}
     }
 
-    Behavior on border.color {
+    Behavior on borderColor {
         CAnim {}
     }
 }
