@@ -27,9 +27,14 @@ PillCard {
     readonly property int nonAnimHeight: summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height) + inner.anchors.margins * 2
     property bool expanded: Config.notifs.openExpanded
 
-    readonly property color cardBaseColor: root.modelData.urgency === NotificationUrgency.Critical
-        ? Colours.palette.m3error
-        : Colours.palette.m3surfaceContainerHigh
+    readonly property bool isCritical: root.modelData.urgency === NotificationUrgency.Critical
+    // Card body is ALWAYS neutral surfaceContainerHigh regardless of urgency.
+    // Critical urgency is signaled by the left accent stripe (declared after
+    // the MouseArea below), NOT by tinting the whole card. The previous
+    // full-card m3error treatment was visually jarring and clashed with
+    // onSurface text/icon colors (which weren't recomputed for the red bg).
+    // Do not re-add the urgency branch here — the stripe is the signal.
+    readonly property color cardBaseColor: Colours.palette.m3surfaceContainerHigh
     readonly property var cardStyle: Colours.pillStyle(cardBaseColor, Colours.glass.medium)
     readonly property var foregroundContainerStyle: Colours.pillStyle(cardBaseColor, Colours.glass.strong)
 
@@ -488,6 +493,37 @@ PillCard {
                     }
                 }
             }
+        }
+    }
+
+    // Critical-urgency left accent stripe. Moves the urgency signal from
+    // "tint the whole card body" to "4px red bar at the left edge", which is
+    // far less visually jarring while still distinguishing critical from
+    // normal at a glance. The outer ClippingRectangle clips the stripe to
+    // the cardBody's rounded shape so it conforms to the top-left and
+    // bottom-left corner curves — anchoring a plain Rectangle here without
+    // the rounded clip would render a square stub poking past those curves.
+    // z: 1 keeps it above the MouseArea's content so future layout changes
+    // can't accidentally occlude it.
+    ClippingRectangle {
+        anchors.fill: parent
+        color: "transparent"
+        radius: root.radius
+        visible: root.isCritical
+        z: 1
+
+        Rectangle {
+            width: 6
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            // m3powerButton (saturated coral-red, same hue as the bar's power
+            // icon), NOT m3error: m3error is the MD3 token for error *text*
+            // on dark surfaces and resolves to pale pink (#ffb4ab) — which
+            // read as dim against the dark card body. m3powerButton (#E0685F)
+            // is the scheme's designated high-visibility accent and stays
+            // theme-correct on rescheme.
+            color: Colours.palette.m3powerButton
         }
     }
 
