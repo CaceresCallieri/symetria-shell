@@ -497,7 +497,7 @@ PillCard {
     }
 
     // Critical-urgency left accent stripe. Moves the urgency signal from
-    // "tint the whole card body" to "4px red bar at the left edge", which is
+    // "tint the whole card body" to "6px red bar at the left edge", which is
     // far less visually jarring while still distinguishing critical from
     // normal at a glance. The outer ClippingRectangle clips the stripe to
     // the cardBody's rounded shape so it conforms to the top-left and

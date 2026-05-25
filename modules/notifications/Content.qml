@@ -126,8 +126,6 @@ Item {
                     RectangularShadow {
                         anchors.fill: notif
                         radius: notif.radius
-                        offset.x: 0
-                        offset.y: 0
                         blur: 14
                         spread: 2
                         color: Qt.rgba(1, 1, 1, 0.5)
