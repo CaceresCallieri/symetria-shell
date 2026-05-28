@@ -68,7 +68,7 @@ Variants {
                     return 0;
 
                 const thresholds = [];
-                for (const panel of ["launcher", "session", "sidebar"])
+                for (const panel of ["launcher", "sidebar"])
                     if (Config[panel].enabled)
                         thresholds.push(Config[panel].dragThreshold);
                 return Math.max(...thresholds);

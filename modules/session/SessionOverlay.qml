@@ -101,6 +101,7 @@ Scope {
             // shortcut/IPC mutate, so external state stays consistent.
             MouseArea {
                 anchors.fill: parent
+                visible: win.dialogOpacity > 0
                 enabled: win.shouldShow
                 onClicked: {
                     if (win.visibilities)
@@ -111,8 +112,6 @@ Scope {
             // Centered session menu. Loader is active during the close
             // animation so the dialog can fade/scale out before unloading.
             Loader {
-                id: contentLoader
-
                 anchors.centerIn: parent
                 active: win.shouldShow || win.dialogOpacity > 0
 
