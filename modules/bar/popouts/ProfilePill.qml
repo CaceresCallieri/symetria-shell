@@ -24,7 +24,7 @@ PillToggleSurface {
     implicitHeight: pillIcon.implicitHeight + Appearance.padding.normal * 2
 
     active: selected
-    activeColor: inactiveColor
+    activeColor: inactiveColor // Same color — neumorphic toggle; state signaled by inset shadow, not fill
 
     StateLayer {
         color: Colours.palette.m3onSurface

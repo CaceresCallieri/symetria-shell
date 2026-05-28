@@ -39,7 +39,7 @@ PillCardSection {
                 implicitWidth: child.implicitWidth + Appearance.padding.normal * 2
                 implicitHeight: child.implicitHeight + Appearance.padding.smaller * 2
 
-                color: Colours.palette.m3error
+                color: Colours.palette.m3powerButton
                 radius: Appearance.rounding.normal
 
                 Row {

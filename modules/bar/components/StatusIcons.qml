@@ -10,11 +10,6 @@ import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 
-// Power-profile cycle order — keep in sync with the three ProfilePill slots
-// in popouts/PowerProfile.qml and popouts/Battery.qml so the dedicated icon
-// click-to-cycle visits profiles in the same visual left-to-right order the
-// popout displays them.
-
 // Status icons pill - shows system status indicators (audio, network, bluetooth, battery, etc.).
 // Uses PillContainer base for consistent styling with other bar pills.
 
@@ -23,6 +18,15 @@ PillContainer {
 
     // Use secondary color to distinguish status pills from info pills (tertiary).
     property color colour: Colours.palette.m3secondary
+
+    // Cycles profiles in the same left-to-right order the ProfilePill row displays them.
+    function nextProfile(current: int): int {
+        if (current === PowerProfile.PowerSaver)
+            return PowerProfile.Balanced;
+        if (current === PowerProfile.Balanced)
+            return PowerProfile.Performance;
+        return PowerProfile.PowerSaver;
+    }
 
     // Popout interface: container with named WrappedLoader children (each has 'name' property)
     iconContainer: iconColumn
@@ -255,18 +259,9 @@ PillContainer {
                 implicitWidth: profileIcon.implicitWidth
                 implicitHeight: profileIcon.implicitHeight
 
-                cursorShape: Qt.PointingHandCursor
                 hoverEnabled: false
 
-                onClicked: {
-                    // Cycle PowerSaver → Balanced → Performance → PowerSaver
-                    if (PowerProfiles.profile === PowerProfile.PowerSaver)
-                        PowerProfiles.profile = PowerProfile.Balanced;
-                    else if (PowerProfiles.profile === PowerProfile.Balanced)
-                        PowerProfiles.profile = PowerProfile.Performance;
-                    else
-                        PowerProfiles.profile = PowerProfile.PowerSaver;
-                }
+                onClicked: PowerProfiles.profile = root.nextProfile(PowerProfiles.profile)
 
                 MaterialIcon {
                     id: profileIcon
@@ -280,7 +275,7 @@ PillContainer {
                             return "rocket_launch";
                         return "balance";
                     }
-                    color: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Colours.palette.m3error : root.colour
+                    color: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Colours.palette.m3powerButton : root.colour
                     fill: 1
                 }
             }
@@ -289,7 +284,9 @@ PillContainer {
         // Battery icon
         PillContainer.WrappedLoader {
             name: "battery"
-            active: Config.bar.status.showBattery
+            // Hide on non-laptop hardware when the dedicated power-profile icon is shown — both
+            // icons would otherwise display the same profile glyph simultaneously.
+            active: Config.bar.status.showBattery && (UPower.displayDevice.isLaptopBattery || !Config.bar.status.showPowerProfile)
 
             sourceComponent: MaterialIcon {
                 animate: true
