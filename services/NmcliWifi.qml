@@ -661,7 +661,11 @@ Singleton {
     Timer {
         id: connectionCheckTimer
 
-        interval: 4000
+        // 12s tolerates real-world wifi: DHCP, captive-portal redirect, 5GHz
+        // association on bar/cafe APs. The previous 4s value declared timeout
+        // before slow networks could finish associating, which then triggered
+        // forgetNetwork(ssid) and destroyed the in-flight profile.
+        interval: 12000
         onTriggered: {
             if (root.pendingConnection) {
                 const connected = root.active && root.active.ssid === root.pendingConnection.ssid;
