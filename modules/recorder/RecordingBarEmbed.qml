@@ -79,6 +79,17 @@ Item {
         // Hide when there's nothing to show — implicitWidth collapses to 0
         // during idle/closed states, and an empty card would briefly flash.
         visible: parent.implicitWidth > 0
+
+        // Shadow tail trimmed to match PillSurface (top-bar info pills). The
+        // default PillCard tail (offset 4, blur 14 → ~18px past the body) was
+        // bleeding 2-3px more shadow past the bar's bottom edge than the
+        // neighboring claymorphism pills, producing a visibly larger downward
+        // "bump" under the STT pill specifically. Floating PillCard consumers
+        // (popouts, clipboard cards) keep the full softer shadow via the
+        // type's defaults — this trim is local to the bar-embed context.
+        darkShadowOffsetY: 3
+        darkShadowBlur: 12
+        darkShadowAlpha: 0.40
     }
 
     // ── Compact row: [timer] · [waveform] · [mode icon] ─────
@@ -141,6 +152,12 @@ Item {
         // STT mode: delivery mode icon (ask mode only). Raised Tonal
         // IconButton matches the drawer's modeBtn so the same control reads
         // identically regardless of merge-mode surface.
+        //
+        // Icon size dropped one step from MaterialIcon's default (larger=15)
+        // to normal=13. Default is visibly taller than the date/system/tray
+        // pills next to it in the bar; small=11 reads as undersized. Padding
+        // stays at the IconButton.Tonal default (smaller=7) so the affordance
+        // doesn't feel cramped.
         IconButton {
             id: deliveryModeBtn
 
@@ -149,6 +166,7 @@ Item {
             type: IconButton.Tonal
             toggle: false
             raised: true
+            font.pointSize: Appearance.font.size.normal
             onClicked: RecordingSessionManager.cycleDeliveryMode()
         }
 
