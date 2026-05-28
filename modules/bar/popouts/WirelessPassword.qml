@@ -19,7 +19,7 @@ ColumnLayout {
 
     Connections {
         target: root.wrapper
-        function onCurrentNameChanged() {
+        function onCurrentNameChanged(): void {
             if (root.wrapper.currentName === "wirelesspassword") {
                 // Force focus to password container when popout becomes active.
                 // Network is set by Content.qml's reactive binding.
@@ -61,6 +61,10 @@ ColumnLayout {
             // appear stuck in "Connecting…" with a disabled Connect button.
             connectButton.hasError = false;
             connectButton.connecting = false;
+            // Restore the declarative binding severed by the imperative `enabled = false`
+            // at connection start. Without this, the Connect button stays permanently
+            // disabled even after `connecting` is reset above.
+            connectButton.enabled = Qt.binding(() => passwordField.password.length > 0 && !connectButton.connecting);
             connectButton.text = qsTr("Connect");
             connectionMonitor.stop();
             focusTimer.start();
@@ -333,7 +337,7 @@ ColumnLayout {
 
     Connections {
         target: NmcliWifi
-        function onActiveChanged() {
+        function onActiveChanged(): void {
             if (root.shouldBeVisible) {
                 root.checkConnectionStatus();
             }

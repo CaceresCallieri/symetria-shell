@@ -197,6 +197,10 @@ Item {
                                 // didn't go through closeDialog (e.g. dismissed
                                 // externally while connecting).
                                 connectButton.connecting = false;
+                                // Restore the declarative binding severed by the imperative
+                                // `enabled = false` at connection start. Without this the
+                                // Connect button stays permanently disabled on reopen.
+                                connectButton.enabled = Qt.binding(() => passwordContainer.passwordBuffer.length > 0 && !connectButton.connecting);
                                 connectButton.text = qsTr("Connect");
                                 connectionMonitor.stop();
                             });
@@ -490,7 +494,7 @@ Item {
 
     Connections {
         target: NmcliWifi
-        function onActiveChanged() {
+        function onActiveChanged(): void {
             if (root.visible) {
                 checkConnectionStatus();
             }
