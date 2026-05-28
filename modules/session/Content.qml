@@ -21,24 +21,36 @@ Row {
         target: logout
     }
 
+    // Dismiss the overlay after dispatching an action. Previously the menu
+    // closed as a side effect of `onHasFullscreenChanged` in the drawers
+    // wrapper — suspend → lockscreen → hasFullscreen flips → session cleared.
+    // After moving onto WlrLayer.Overlay (commit dd99df85) that suppression
+    // path is gone, so the action keys must clear visibility themselves;
+    // otherwise the overlay lingers on resume. Same reasoning applies to
+    // SessionButton's Enter/Return/click handlers below.
+    function _runAndClose(cmd: list<string>): void {
+        Quickshell.execDetached(cmd);
+        root.visibilities.session = false;
+    }
+
     Keys.onPressed: event => {
         if (event.modifiers !== Qt.NoModifier)
             return;
         switch (event.key) {
         case Qt.Key_L:
-            Quickshell.execDetached(Config.session.commands.logout);
+            root._runAndClose(Config.session.commands.logout);
             event.accepted = true;
             break;
         case Qt.Key_P:
-            Quickshell.execDetached(Config.session.commands.shutdown);
+            root._runAndClose(Config.session.commands.shutdown);
             event.accepted = true;
             break;
         case Qt.Key_S:
-            Quickshell.execDetached(Config.session.commands.suspend);
+            root._runAndClose(Config.session.commands.suspend);
             event.accepted = true;
             break;
         case Qt.Key_R:
-            Quickshell.execDetached(Config.session.commands.reboot);
+            root._runAndClose(Config.session.commands.reboot);
             event.accepted = true;
             break;
         }
@@ -98,8 +110,8 @@ Row {
             ? Colours.pillStyle(Colours.palette.m3secondaryContainer, Colours.glass.subtle)
             : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
-        Keys.onEnterPressed: Quickshell.execDetached(button.command)
-        Keys.onReturnPressed: Quickshell.execDetached(button.command)
+        Keys.onEnterPressed: root._runAndClose(button.command)
+        Keys.onReturnPressed: root._runAndClose(button.command)
         Keys.onEscapePressed: root.visibilities.session = false
         Keys.onPressed: event => {
             // Tab/Backtab are universal accessibility navigation — not vim-specific.
@@ -144,7 +156,7 @@ Row {
             color: button.activeFocus ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
 
             function onClicked(): void {
-                Quickshell.execDetached(button.command);
+                root._runAndClose(button.command);
             }
         }
 
