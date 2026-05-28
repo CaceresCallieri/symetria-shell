@@ -156,6 +156,7 @@
       "showNetwork": true,
       "showBluetooth": true,
       "showBattery": true,
+      "showPowerProfile": true,
       "showLockStatus": true
     },
     "clock": {

@@ -10,6 +10,11 @@ import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 
+// Power-profile cycle order — keep in sync with the three ProfilePill slots
+// in popouts/PowerProfile.qml and popouts/Battery.qml so the dedicated icon
+// click-to-cycle visits profiles in the same visual left-to-right order the
+// popout displays them.
+
 // Status icons pill - shows system status indicators (audio, network, bluetooth, battery, etc.).
 // Uses PillContainer base for consistent styling with other bar pills.
 
@@ -233,6 +238,51 @@ PillContainer {
 
             Behavior on Layout.preferredWidth {
                 Anim {}
+            }
+        }
+
+        // Power profile icon — dedicated slot. Icon mirrors the active
+        // PowerProfiles.profile (energy_savings_leaf / balance / rocket_launch).
+        // Hover triggers the "powerprofile" popout via Bar.qml:checkPopout; the
+        // inner MouseArea handles click-to-cycle without consuming hover events
+        // (hoverEnabled stays false) so the screen-wide Interactions area still
+        // drives popout detection.
+        PillContainer.WrappedLoader {
+            name: "powerprofile"
+            active: Config.bar.status.showPowerProfile
+
+            sourceComponent: MouseArea {
+                implicitWidth: profileIcon.implicitWidth
+                implicitHeight: profileIcon.implicitHeight
+
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: false
+
+                onClicked: {
+                    // Cycle PowerSaver → Balanced → Performance → PowerSaver
+                    if (PowerProfiles.profile === PowerProfile.PowerSaver)
+                        PowerProfiles.profile = PowerProfile.Balanced;
+                    else if (PowerProfiles.profile === PowerProfile.Balanced)
+                        PowerProfiles.profile = PowerProfile.Performance;
+                    else
+                        PowerProfiles.profile = PowerProfile.PowerSaver;
+                }
+
+                MaterialIcon {
+                    id: profileIcon
+
+                    anchors.centerIn: parent
+                    animate: true
+                    text: {
+                        if (PowerProfiles.profile === PowerProfile.PowerSaver)
+                            return "energy_savings_leaf";
+                        if (PowerProfiles.profile === PowerProfile.Performance)
+                            return "rocket_launch";
+                        return "balance";
+                    }
+                    color: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Colours.palette.m3error : root.colour
+                    fill: 1
+                }
             }
         }
 

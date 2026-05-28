@@ -131,46 +131,4 @@ PillCardSection {
             }
         }
     }
-
-    component ProfilePill: PillToggleSurface {
-        id: pill
-
-        required property string icon
-        required property int profile
-
-        readonly property bool selected: PowerProfiles.profile === profile
-
-        Layout.fillWidth: true
-        implicitHeight: pillIcon.implicitHeight + Appearance.padding.normal * 2
-
-        active: selected
-        // Pure-monochrome neumorphism — same convention as the QuickToggles
-        // row (see IconButton.qml: `activeColour` returns `inactiveColour`
-        // for toggle-style buttons). The selected pill's depression + the
-        // icon's fill change carry the entire state signal; using a
-        // brighter accent fill would break the shell-wide toggle language.
-        activeColor: inactiveColor
-
-        StateLayer {
-            color: Colours.palette.m3onSurface
-
-            function onClicked(): void {
-                PowerProfiles.profile = pill.profile;
-            }
-        }
-
-        MaterialIcon {
-            id: pillIcon
-
-            anchors.centerIn: parent
-            text: pill.icon
-            font.pointSize: Appearance.font.size.large
-            color: Colours.palette.m3onSurface
-            fill: pill.selected ? 1 : 0
-
-            Behavior on fill {
-                Anim {}
-            }
-        }
-    }
 }

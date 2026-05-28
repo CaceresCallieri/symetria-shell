@@ -224,6 +224,7 @@ Singleton {
                 showNetwork: bar.status.showNetwork,
                 showBluetooth: bar.status.showBluetooth,
                 showBattery: bar.status.showBattery,
+                showPowerProfile: bar.status.showPowerProfile,
                 showLockStatus: bar.status.showLockStatus
             },
             clock: {
