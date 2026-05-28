@@ -20,41 +20,19 @@ Item {
     readonly property bool multiMonitor: Quickshell.screens.length > 1
     readonly property bool isMonitorFocused: multiMonitor && (Hypr.monitorFor(screen)?.focused ?? false)
 
-    // intentional var: JS object used as hash map ({ [wsId]: bool }) built via .reduce()
-    readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
-        acc[curr.id] = curr.lastIpcObject.windows > 0;
-        return acc;
-    }, {})
+    // intentional var: JS object used as hash map ({ [wsId]: bool }).
+    // Computation centralized in Hypr.occupiedMap() — shared with merged agentbar.
+    readonly property var occupied: Hypr.occupiedMap()
     readonly property int groupOffset: Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown
 
+    // In fixed mode return a static [1..shown] window; otherwise delegate to the
+    // shared Hypr.displayedWorkspaceIds() (special workspaces excluded — the top
+    // bar handles them via SpecialWorkspaces.qml overlay, not inline slots).
     readonly property list<int> displayedWorkspaces: {
         if (!Config.bar.workspaces.showOnlyOccupied) {
-            // Legacy fixed mode - return array [1, 2, ..., shown]
             return Array.from({length: Config.bar.workspaces.shown}, (_, i) => groupOffset + i + 1)
         }
-
-        // Dynamic mode - occupied + active + named workspaces
-        // Exclude special workspaces (name starts with "special:") but keep named workspaces (which also have negative IDs)
-        const validWorkspaces = Hypr.workspaces.values.filter(w => !w.name.startsWith("special:"))
-        const occupiedWs = validWorkspaces.filter(w => w.lastIpcObject.windows > 0)
-        const activeId = root.activeWsId
-
-        // Get configured named workspace names
-        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)
-
-        // Find named workspaces (always show these even if empty)
-        const namedWs = validWorkspaces.filter(w => namedWsNames.includes(w.name))
-
-        // Collect workspace IDs: occupied + named
-        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])]
-
-        // Ensure active workspace is included even if empty
-        if (!ids.includes(activeId)) {
-            ids.push(activeId)
-        }
-
-        // Sort ascending: negative IDs (named workspaces) first, then positive IDs
-        return ids.sort((a, b) => a - b)
+        return Hypr.displayedWorkspaceIds(false, root.activeWsId)
     }
 
     property real blur: onSpecial ? 1 : 0

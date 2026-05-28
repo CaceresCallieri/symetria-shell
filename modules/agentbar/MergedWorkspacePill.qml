@@ -37,9 +37,11 @@ Item {
     // Workspace state
     readonly property bool isOccupied: occupied[ws] ?? false
 
-    // Special workspace detection
+    // Special workspace detection.
+    // Hypr.workspaceById() centralizes the .find() pattern shared with the
+    // top-bar Workspace.qml and AgentService.
     // intentional var: Hyprland workspace proxy from .find() — nullable, identity-unstable
-    readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
+    readonly property var currentWorkspace: Hypr.workspaceById(root.ws)
     readonly property string currentWorkspaceName: currentWorkspace?.name ?? ""  // "" when workspace not yet reported by Hyprland
     readonly property bool isSpecial: currentWorkspaceName.startsWith("special:")
 
@@ -167,6 +169,13 @@ Item {
                 animateGroupWidth: false
             }
         }
+
+        // Fullscreen/Maximize indicator - shared with the top-bar Workspace.qml.
+        // Sits at the trailing edge of the active workspace slot, after app icons.
+        WorkspaceFullscreenIndicator {
+            wsId: root.ws
+            isActive: root.isActive
+        }
     }
 
     // Click handling: workspace label area switches/toggles workspace, rest focuses agent terminal.
@@ -183,7 +192,7 @@ Item {
                     Hypr.dispatch(`togglespecialworkspace ${name}`);
                 } else if (!root.isActive) {
                     if (root.ws < 0) {
-                        const wsObj = Hypr.workspaces.values.find(w => w.id === root.ws);
+                        const wsObj = Hypr.workspaceById(root.ws);
                         if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
                     } else {
                         Hypr.dispatch(`workspace ${root.ws}`);

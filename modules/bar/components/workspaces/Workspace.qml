@@ -34,9 +34,11 @@ Item {
     readonly property bool isOccupied: occupied[ws] ?? false
     readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && isActive
 
-    // Cached workspace reference to avoid repeated find() lookups
+    // Cached workspace reference to avoid repeated find() lookups.
+    // Hypr.workspaceById() centralizes the .find() pattern shared with the
+    // merged agentbar pill and AgentService.
     // intentional var: Hyprland workspace proxy from .find() — nullable, identity-unstable
-    readonly property var currentWorkspace: Hypr.workspaces.values.find(w => w.id === root.ws) ?? null
+    readonly property var currentWorkspace: Hypr.workspaceById(root.ws)
 
     // Icon resolution: named workspace icon → first letter → roman numeral
     readonly property string rawIcon: {
@@ -77,7 +79,7 @@ Item {
             if (!root.isActive) {
                 // Named workspaces (negative IDs) need "workspace name:<name>" syntax
                 if (root.ws < 0) {
-                    const wsObj = Hypr.workspaces.values.find(w => w.id === root.ws);
+                    const wsObj = Hypr.workspaceById(root.ws);
                     if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
                 } else {
                     Hypr.dispatch(`workspace ${root.ws}`);
@@ -108,42 +110,10 @@ Item {
             animateWindowsWidth: false  // Root RowLayout animates width; inner animation would double-ease
         }
 
-        // Fullscreen/Maximize indicator - shows at end of active workspace
-        MaterialIcon {
-            id: fullscreenIndicator
-
-            // Detect maximize mode (fullscreen 1) on this workspace
-            // Note: Intentionally excludes true fullscreen (mode 2) as those typically hide the bar
-            readonly property bool hasMaximized: {
-                // Use cached workspace with explicit null safety
-                if (!root.currentWorkspace?.toplevels?.values) return false;
-
-                // Manual iteration for better reactivity and null safety
-                for (const toplevel of root.currentWorkspace.toplevels.values) {
-                    if (toplevel?.lastIpcObject?.fullscreen === 1) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-
-            // Combined condition for cleaner bindings
-            readonly property bool shouldShow: hasMaximized && root.isActive
-
-            Layout.alignment: Qt.AlignVCenter
-            Layout.leftMargin: shouldShow ? Appearance.spacing.small : 0
-
-            visible: hasMaximized  // Only allocate layout space when needed
-            scale: shouldShow ? 1 : 0
-            opacity: shouldShow ? 1 : 0
-
-            text: "fullscreen"
-            color: Colours.palette.m3onSurface
-            font.pointSize: Appearance.font.size.small
-
-            Behavior on opacity { Anim {} }
-            Behavior on scale { Anim {} }
-            Behavior on Layout.leftMargin { Anim {} }
+        // Fullscreen/Maximize indicator - shared with the merged agentbar pill.
+        WorkspaceFullscreenIndicator {
+            wsId: root.ws
+            isActive: root.isActive
         }
     }
 

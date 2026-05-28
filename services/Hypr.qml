@@ -48,6 +48,87 @@ Singleton {
         return Hyprland.monitorFor(screen);
     }
 
+    // ── Workspace lookup helpers ─────────────────────────────────────
+    //
+    // Single source of truth for the .find() lookups that previously lived
+    // duplicated across Workspace.qml, MergedWorkspacePill.qml,
+    // MergedBarContent.qml, and AgentService.qml. The Hyprland workspace
+    // proxy returned by .find() is identity-unstable (a fresh object may
+    // appear after refresh), so callers must continue to dereference it
+    // each time rather than caching the object across frames.
+    //
+    // intentional var return: Hyprland workspace proxy is nullable and
+    // identity-unstable, so it does not fit a stable QML type alias.
+    function workspaceById(id: int): var {
+        return Hyprland.workspaces.values.find(w => w.id === id) ?? null;
+    }
+
+    function workspaceByName(name: string): var {
+        return Hyprland.workspaces.values.find(w => w.name === name) ?? null;
+    }
+
+    // Build the { [wsId]: hasWindows } occupancy map. Both the top-bar and
+    // merged-bar parents (Workspaces.qml, MergedBarContent.qml) need this,
+    // so it lives here to keep the .reduce() out of two places.
+    function occupiedMap(): var {
+        return Hyprland.workspaces.values.reduce((acc, w) => {
+            acc[w.id] = w.lastIpcObject.windows > 0;
+            return acc;
+        }, {});
+    }
+
+    // Compute the sorted workspace ID list rendered in dynamic mode.
+    // - includeSpecial: when true, appends special workspaces and sorts them last
+    //   (used by the merged agentbar); when false, omits them entirely (top bar).
+    // - activeWsId: ensured to appear even if empty, so the active slot never
+    //   collapses out of the pill.
+    //
+    // Sort order: named (negative, non-special) → regular (positive) → special.
+    // This matches both consumers; the simple ascending sort the top bar used
+    // before is preserved because named (negative) IDs naturally precede
+    // positive ones, and excludeSpecial keeps category-2 out.
+    function displayedWorkspaceIds(includeSpecial: bool, activeWsId: int): var {
+        const all = Hyprland.workspaces.values;
+        const regularAndNamed = [];
+        const specialWs = [];
+        for (const w of all) {
+            if (w.name.startsWith("special:")) specialWs.push(w);
+            else regularAndNamed.push(w);
+        }
+
+        const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0);
+        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name);
+        const namedWs = regularAndNamed.filter(w => namedWsNames.includes(w.name));
+
+        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])];
+
+        if (!ids.includes(activeWsId))
+            ids.push(activeWsId);
+
+        if (includeSpecial) {
+            for (const sw of specialWs)
+                ids.push(sw.id);
+            ids = [...new Set(ids)];
+        }
+
+        const nameById = {};
+        for (const w of all)
+            nameById[w.id] = w.name;
+
+        return ids.sort((a, b) => {
+            const catA = _wsSortCategory(a, nameById[a] ?? "");
+            const catB = _wsSortCategory(b, nameById[b] ?? "");
+            if (catA !== catB) return catA - catB;
+            return a - b;
+        });
+    }
+
+    function _wsSortCategory(wsId: int, wsName: string): int {
+        if (wsName.startsWith("special:")) return 2;
+        if (wsId < 0) return 0;
+        return 1;
+    }
+
     function reloadDynamicConfs(): void {
         extras.batchMessage(["keyword bindlni ,Caps_Lock,global,symmetria:refreshDevices", "keyword bindlni ,Num_Lock,global,symmetria:refreshDevices"]);
     }

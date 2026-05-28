@@ -211,7 +211,7 @@ Singleton {
     /// special ws → getSpecialWsIcon, named ws → getNamedWsIcon, numbered → romanize
     function workspaceIconForWsId(wsId: int): string {
         // Look up workspace object from Hyprland for name-based resolution
-        const ws = Hypr.workspaces.values.find(w => w.id === wsId) ?? null;
+        const ws = Hypr.workspaceById(wsId);
 
         if (ws) {
             // Special workspaces (negative ID, name starts with "special:")
