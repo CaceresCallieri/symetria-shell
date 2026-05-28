@@ -1,7 +1,6 @@
 import qs.components
 import qs.config
 import qs.services
-import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
@@ -23,7 +22,6 @@ Item {
     required property Item agentBar
 
     readonly property alias osd: osd
-    readonly property alias session: session
     readonly property alias launcher: launcher
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
@@ -61,14 +59,8 @@ Item {
         anchors.rightMargin: sidebar.width
     }
 
-    Session.Wrapper {
-        id: session
-
-        visibilities: root.visibilities
-        panels: root
-
-        anchors.centerIn: parent
-    }
+    // Session menu lives in modules/session/SessionOverlay.qml (mounted from
+    // shell.qml) on WlrLayer.Overlay so it appears above fullscreen clients.
 
     Launcher.Wrapper {
         id: launcher

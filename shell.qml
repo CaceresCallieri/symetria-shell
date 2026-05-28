@@ -9,6 +9,7 @@ import "modules/background" as BackgroundModule
 import "modules/areapicker" as AreaPickerModule
 import "modules/osd" as OsdModule
 import "modules/notifications" as NotifsModule
+import "modules/session" as SessionModule
 import "modules/toasts" as ToastsModule
 import "modules/lock"
 import "modules/askpass"
@@ -43,6 +44,7 @@ ShellRoot {
     AreaPickerModule.Wrapper {}
     OsdModule.OsdOverlay {}
     NotifsModule.NotificationsOverlay {}
+    SessionModule.SessionOverlay {}
     ToastsModule.ToastsOverlay {}
     Askpass {}
     RecorderRoot {}

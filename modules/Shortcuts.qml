@@ -107,8 +107,8 @@ Scope {
         name: "session"
         description: "Toggle session menu"
         onPressed: {
-            if (root.hasFullscreen)
-                return;
+            // Session menu renders on WlrLayer.Overlay (SessionOverlay.qml),
+            // so it works above fullscreen clients — no hasFullscreen guard.
             const visibilities = Visibilities.getForActive();
             visibilities.session = !visibilities.session;
         }
@@ -162,7 +162,9 @@ Scope {
             }
 
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages"].includes(drawer))
+                // session is omitted — its overlay is on WlrLayer.Overlay and
+                // remains usable above fullscreen clients.
+                if (root.hasFullscreen && ["launcher", "clipboard", "calculator", "packages"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard
