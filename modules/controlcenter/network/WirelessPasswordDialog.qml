@@ -193,6 +193,12 @@ Item {
                                 passwordContainer.forceActiveFocus();
                                 passwordContainer.passwordBuffer = "";
                                 connectButton.hasError = false;
+                                // Reset stale state from a previous attempt that
+                                // didn't go through closeDialog (e.g. dismissed
+                                // externally while connecting).
+                                connectButton.connecting = false;
+                                connectButton.text = qsTr("Connect");
+                                connectionMonitor.stop();
                             });
                         }
                     }
@@ -431,7 +437,9 @@ Item {
         }
 
         if (NmcliWifi.pendingConnection === null && connectButton.connecting) {
-            if (connectionMonitor.repeatCount > 10) {
+            // Backup teardown — primary failure path is NmcliWifi.connectionCheckTimer
+            // (12s). Sit beyond that so the callback gets first chance to react.
+            if (connectionMonitor.repeatCount > 15) {
                 connectionMonitor.stop();
                 connectButton.connecting = false;
                 connectButton.hasError = true;

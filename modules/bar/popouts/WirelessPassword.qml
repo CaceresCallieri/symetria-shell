@@ -55,7 +55,14 @@ ColumnLayout {
 
     onShouldBeVisibleChanged: {
         if (shouldBeVisible) {
+            // Reset any stale state from a previous attempt that may have ended
+            // without going through closeDialog (e.g. popout navigated away
+            // externally while connecting). Without this the next open can
+            // appear stuck in "Connecting…" with a disabled Connect button.
             connectButton.hasError = false;
+            connectButton.connecting = false;
+            connectButton.text = qsTr("Connect");
+            connectionMonitor.stop();
             focusTimer.start();
         }
     }
@@ -266,8 +273,10 @@ ColumnLayout {
 
         // Check for connection failures - if pending connection was cleared but we're not connected
         if (NmcliWifi.pendingConnection === null && connectButton.connecting) {
-            // Wait a bit more before giving up (allow time for connection to establish)
-            if (connectionMonitor.repeatCount > 10) {
+            // Backup teardown — the primary failure path is the timeout callback
+            // from NmcliWifi.connectionCheckTimer (12s). This threshold sits
+            // beyond that so the callback gets first chance to react.
+            if (connectionMonitor.repeatCount > 15) {
                 connectionMonitor.stop();
                 connectButton.connecting = false;
                 connectButton.hasError = true;
