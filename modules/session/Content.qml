@@ -21,13 +21,11 @@ Row {
         target: logout
     }
 
-    // Dismiss the overlay after dispatching an action. Previously the menu
-    // closed as a side effect of `onHasFullscreenChanged` in the drawers
-    // wrapper — suspend → lockscreen → hasFullscreen flips → session cleared.
-    // After moving onto WlrLayer.Overlay (commit dd99df85) that suppression
-    // path is gone, so the action keys must clear visibility themselves;
-    // otherwise the overlay lingers on resume. Same reasoning applies to
-    // SessionButton's Enter/Return/click handlers below.
+    // Dismiss the overlay when an action is dispatched. The drawers wrapper's
+    // onHasFullscreenChanged used to clear visibilities.session as a side
+    // effect (suspend → lockscreen → hasFullscreen flips), but that path was
+    // removed when the menu moved onto WlrLayer.Overlay (dd99df85); without
+    // this explicit close the overlay lingers on resume.
     function _runAndClose(cmd: list<string>): void {
         Quickshell.execDetached(cmd);
         root.visibilities.session = false;
