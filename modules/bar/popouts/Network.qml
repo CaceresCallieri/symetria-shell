@@ -345,6 +345,16 @@ PillCardSection {
             }
         }
 
+        // Clear the row-level spinner when the in-flight connection fails (wrong
+        // password, timeout, etc.). Without this the row stays "loading" and
+        // unclickable forever — the only previous clear path was a successful
+        // active-network match.
+        function onConnectionFailed(ssid: string): void {
+            if (root.connectingToSsid === ssid) {
+                root.connectingToSsid = "";
+            }
+        }
+
         function onScanningChanged(): void {
             if (!NmcliWifi.scanning)
                 scanIcon.rotation = 0;
