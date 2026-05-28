@@ -20,14 +20,35 @@ DeviceList {
     readonly property bool smallDiscoverable: width <= 540
     readonly property bool smallPairable: width <= 480
 
-    title: qsTr("Devices (%1)").arg(Bluetooth.devices.values.length)
-    description: qsTr("All available bluetooth devices")
+    // Anonymous = BLE advertiser with no Local Name field; BlueZ falls back to using
+    // the MAC as the display name (with ":" rewritten to "-"). These are radio chatter
+    // (rotating RPAs, beacons, neighbours' phones) that the user can almost never connect to.
+    property bool showAnonymous: false
+    function isAnonymous(d: var): bool {
+        if (!d || !d.name || !d.address)
+            return true;
+        return d.name === d.address || d.name === d.address.replace(/:/g, "-");
+    }
+    readonly property int anonymousCount: Bluetooth.devices.values.filter(d => root.isAnonymous(d)).length
+
+    title: qsTr("Devices (%1)").arg(deviceModel.values.length)
+    description: {
+        if (root.anonymousCount === 0)
+            return qsTr("All available bluetooth devices");
+        if (root.showAnonymous)
+            return qsTr("Showing all devices including %1 anonymous").arg(root.anonymousCount);
+        return qsTr("Hiding %1 anonymous device%2").arg(root.anonymousCount).arg(root.anonymousCount === 1 ? "" : "s");
+    }
     activeItem: session.bt.active
 
     model: ScriptModel {
         id: deviceModel
 
-        values: [...Bluetooth.devices.values].sort((a, b) => (b.connected - a.connected) || (b.paired - a.paired) || a.name.localeCompare(b.name))
+        values: {
+            const all = [...Bluetooth.devices.values];
+            const filtered = root.showAnonymous ? all : all.filter(d => !root.isAnonymous(d));
+            return filtered.sort((a, b) => (b.connected - a.connected) || (b.paired - a.paired) || (a.name || "").localeCompare(b.name || ""));
+        }
     }
 
     headerComponent: Component {
@@ -106,6 +127,18 @@ DeviceList {
                     if (adapter)
                         adapter.discovering = !adapter.discovering;
                 }
+            }
+
+            ToggleButton {
+                toggled: root.showAnonymous
+                icon: root.showAnonymous ? "visibility" : "visibility_off"
+                iconSize: Appearance.font.size.normal
+                horizontalPadding: Appearance.padding.normal
+                verticalPadding: Appearance.padding.smaller
+                tooltip: root.showAnonymous ? qsTr("Hide anonymous devices") : qsTr("Show %1 anonymous device%2").arg(root.anonymousCount).arg(root.anonymousCount === 1 ? "" : "s")
+                visible: root.anonymousCount > 0
+
+                onClicked: root.showAnonymous = !root.showAnonymous
             }
 
             ToggleButton {
