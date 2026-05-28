@@ -104,31 +104,5 @@ PillCardSection {
             }
         }
 
-        // Power profile selector — three independent neumorphic toggle
-        // pills replace the prior sliding-indicator track. Each pill's
-        // `active` binding lights only when its profile matches the
-        // current PowerProfiles.profile, so the selected profile reads
-        // as pressed-in (inset) while the others stay raised. This
-        // matches the shell's broader toggle language used elsewhere.
-        RowLayout {
-            Layout.topMargin: Appearance.spacing.small
-            Layout.fillWidth: true
-            spacing: Appearance.spacing.small
-
-            ProfilePill {
-                profile: PowerProfile.PowerSaver
-                icon: "energy_savings_leaf"
-            }
-
-            ProfilePill {
-                profile: PowerProfile.Balanced
-                icon: "balance"
-            }
-
-            ProfilePill {
-                profile: PowerProfile.Performance
-                icon: "rocket_launch"
-            }
-        }
     }
 }
