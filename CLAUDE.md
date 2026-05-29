@@ -157,6 +157,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Electron tray icons are unthemeable from QML** — Discord, Heroic, Altus, and other Electron apps all register with SNI id `chrome_status_icon_1` and ship embedded pixmap bytes (no file path). They are indistinguishable from each other at the QML layer because `SystemTrayItem` exposes neither bus name nor PID. Do NOT attempt to auto-theme them via id heuristics — it cannot work. Users must override via `iconSubs` or live with the raw pixmap. → `docs/tray-icon-theming.md`
 
+**Property contract drift across containers** — If a child exposes a height-like property a parent sums (e.g. `Notification.nonAnimHeight` summed by `Content.qml` for the popup stack), that property has an external contract. Refactoring its semantics inside the child (e.g. "moving margins out for cleaner math") silently under-allocates the parent — visible as last-in-stack body clipping. Grep for the property name before changing what it represents; maintain the invariant explicitly in code comments. → `docs/qml-pitfalls.md`
+
 ## Deep Dives
 
 Detailed documentation in `docs/` — read on-demand when working on specific areas:

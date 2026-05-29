@@ -339,3 +339,40 @@ There is **no client-side fix.** Only the compositor can force off-screen surfac
 **The right fix:** show a fallback view (app icon + class name + title) so the tile is always identifiable even without a thumbnail. See `modules/windowoverview/Tile.qml` for the reference implementation.
 
 Found in: Window Overview tiles for windows scrolled off the visible viewport.
+
+## Property Contract Drift Across Container/Item Boundaries
+
+When a child component exposes a height-like property that a parent container sums or reads to size itself, that property has a **contract**: it must report the child's actual rendered external dimensions. Changing what the property represents (e.g. excluding margins to "simplify" the math inside the child) silently breaks every parent that depends on the previous semantics.
+
+**The notification stack incident** (Notification.qml ↔ Content.qml):
+
+`Notification.qml` exposed `nonAnimHeight` as "the height the card will animate to, including margins." `modules/notifications/Content.qml` sums `nonAnimHeight` across visible cards inside a `ClippingWrapperRectangle` to set the overlay stack's `implicitHeight`. A reasonable-looking refactor split the height calculation:
+
+```qml
+// Refactor — looks cleaner, breaks the contract:
+readonly property int nonAnimHeight: Math.max(textContent, iconSize)  // content only
+implicitHeight: inner.implicitHeight + inner.anchors.margins * 2       // margins added externally
+```
+
+The card still rendered at the correct height. But `Content.qml`'s summation now under-allocated by `margins*2` per card. The clipping rectangle cropped the bottom card's body — symptom looked like "the older card is cut off; new cards arrive fine" because re-flowing the list when a new notification arrived briefly re-fired the height bindings, masking the bug on the freshest delegate.
+
+**Why this is hard to catch:**
+
+1. The child component renders correctly in isolation — `implicitHeight` is right.
+2. The bug only shows up when the property is *consumed* by a parent that sums it.
+3. The symptom (intermittent clipping of older cards) suggests a timing or animation issue, not a property-contract issue.
+4. QML's late binding hides the divergence: `notif.implicitHeight` and `notif.nonAnimHeight` returning different values is legal QML; there's no compile-time signal that they were supposed to match.
+
+**The fix pattern:** when a property is part of an external contract, *name it for what consumers need*, and derive the internal pieces from it (or expose both with explicit names). The corrected `Notification.qml` keeps two distinct properties:
+
+```qml
+readonly property int contentInnerHeight: Math.max(textContent, iconSize)              // internal use
+readonly property int nonAnimHeight: contentInnerHeight + inner.anchors.margins * 2    // external contract — Content.qml depends on this
+implicitHeight: inner.implicitHeight + inner.anchors.margins * 2                       // MUST equal nonAnimHeight
+```
+
+The invariant `root.implicitHeight === nonAnimHeight` is now load-bearing: any change that breaks it re-introduces the stack-clipping bug. The comments at both definitions call this out so future edits don't quietly drift apart.
+
+**Generalizable rule:** if you change *what a property represents* (its semantics), you must audit every reader, not just verify the local component still looks right. Grep the codebase for the property name before refactoring — if any reader is in a different file, the property has a contract and the rename/restructure needs to land everywhere atomically.
+
+Found in: notifications popup stack — bottom card's body clipped when 2+ cards were visible, especially under non-default `appearance.padding.scale`. Compounded by the Symmetria-specific issue that compact padding scales (e.g. 0.6) magnify the per-card under-allocation as a fraction of total card height.

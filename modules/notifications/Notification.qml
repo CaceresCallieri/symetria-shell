@@ -24,7 +24,32 @@ PillCard {
                icon.startsWith("file://") ||
                icon.startsWith("~/");
     }
-    readonly property int nonAnimHeight: summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height) + inner.anchors.margins * 2
+    // System-icon resolution check. When the sender passes an icon name
+    // that no installed theme provides (e.g. Kanata sends "kanata" but no
+    // theme ships that icon), Quickshell.iconPath returns "" and ColouredIcon
+    // would render an empty disc. We detect that here and route to the
+    // MaterialIcon fallback (same path that fires when hasAppIcon is false)
+    // so the disc always has a glyph instead of looking like a blank pill.
+    readonly property string resolvedSystemIconPath: hasAppIcon && !hasTransparentIcon
+        ? Quickshell.iconPath(modelData.appIcon)
+        : ""
+    readonly property bool systemIconResolves: resolvedSystemIconPath.length > 0
+    // Inner content height (no card margins). Grows to the LARGER of (text
+    // content) and (icon reservation) so the card never collapses below the
+    // icon's height when the body is short. Used as inner Item's
+    // implicitHeight; the card's full external height is exposed separately
+    // as `nonAnimHeight` below (which Content.qml's stack-height summation
+    // depends on — getting these two confused under-allocates the stack
+    // and clips the bottom card's body).
+    readonly property int contentInnerHeight: Math.max(
+        summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height),
+        Config.notifs.sizes.image
+    )
+    // Full external card height (animation target). MUST equal the height
+    // that the card actually renders at — Content.qml sums this across
+    // visible cards to size the notifications stack, and any divergence
+    // clips the last card.
+    readonly property int nonAnimHeight: contentInnerHeight + inner.anchors.margins * 2
     property bool expanded: Config.notifs.openExpanded
 
     readonly property bool isCritical: root.modelData.urgency === NotificationUrgency.Critical
@@ -48,7 +73,11 @@ PillCard {
     }
 
     implicitWidth: Config.notifs.sizes.width
-    implicitHeight: inner.implicitHeight
+    // Card height = inner content + top/bottom margins. inner is only top-
+    // anchored (no bottom anchor), so we add the bottom margin here at the
+    // root level. nonAnimHeight (the stable animation target) MUST equal
+    // this — Content.qml sums it for stack sizing.
+    implicitHeight: inner.implicitHeight + inner.anchors.margins * 2
 
     x: Config.notifs.sizes.width
     Component.onCompleted: {
@@ -124,7 +153,9 @@ PillCard {
             anchors.top: parent.top
             anchors.margins: Appearance.padding.normal
 
-            implicitHeight: root.nonAnimHeight
+            // Use contentInnerHeight (no margins) — margins are applied at
+            // root level so root.implicitHeight = contentInnerHeight + margins*2.
+            implicitHeight: root.contentInnerHeight
 
             Behavior on implicitHeight {
                 Anim {
@@ -139,8 +170,13 @@ PillCard {
                 active: root.hasImage
                 asynchronous: true
 
+                // Vertically center against the inner content area so the
+                // icon sits in the visual midline of the card regardless of
+                // text length. Combined with contentInnerHeight's Math.max,
+                // this means the icon stays centered when text is shorter
+                // than the icon AND when expanded text is taller than it.
                 anchors.left: parent.left
-                anchors.top: parent.top
+                anchors.verticalCenter: parent.verticalCenter
                 width: Config.notifs.sizes.image
                 height: Config.notifs.sizes.image
                 visible: root.hasImage || root.hasAppIcon
@@ -182,7 +218,10 @@ PillCard {
                     Loader {
                         id: icon
 
-                        active: root.hasAppIcon
+                        // Skip when the sender gave a system icon name that
+                        // didn't resolve — the MaterialIcon fallback below
+                        // takes over so the disc isn't blank.
+                        active: root.hasAppIcon && (root.hasTransparentIcon || root.systemIconResolves)
                         asynchronous: true
 
                         anchors.centerIn: parent
@@ -220,14 +259,21 @@ PillCard {
 
                         ColouredIcon {
                             anchors.fill: parent
-                            source: Quickshell.iconPath(root.modelData.appIcon)
+                            // Reuse the root-level resolved path so we don't
+                            // re-run the icon-theme lookup on every paint.
+                            source: root.resolvedSystemIconPath
                             colour: Colours.palette.m3onSurface
                             layer.enabled: root.modelData.appIcon.endsWith("symbolic")
                         }
                     }
 
                     Loader {
-                        active: !root.hasAppIcon
+                        // Active when the notification provided no icon at
+                        // all OR provided a system icon name that didn't
+                        // resolve against any installed theme. Without the
+                        // second clause, unresolved names (e.g. Kanata's
+                        // "kanata") render as a blank white disc.
+                        active: !root.hasAppIcon || (!root.hasTransparentIcon && !root.systemIconResolves)
                         asynchronous: true
                         anchors.centerIn: parent
                         anchors.horizontalCenterOffset: -Appearance.font.size.large * 0.02
@@ -237,7 +283,12 @@ PillCard {
                             text: Icons.getNotifIcon(root.modelData.summary, root.modelData.urgency)
 
                             color: Colours.palette.m3onSurface
-                            font.pointSize: Appearance.font.size.large
+                            // Use `larger` (15pt default) rather than `large`
+                            // (18pt) to fit the smaller default disc (24px
+                            // visible from a 32px reservation). 18pt would
+                            // hug the disc edges; 15pt lands at ~62% disc
+                            // fill which matches the previous design ratio.
+                            font.pointSize: Appearance.font.size.larger
                         }
                     }
                 }
