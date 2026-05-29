@@ -368,7 +368,7 @@ The card still rendered at the correct height. But `Content.qml`'s summation now
 ```qml
 readonly property int contentInnerHeight: Math.max(textContent, iconSize)              // internal use
 readonly property int nonAnimHeight: contentInnerHeight + inner.anchors.margins * 2    // external contract — Content.qml depends on this
-implicitHeight: inner.implicitHeight + inner.anchors.margins * 2                       // MUST equal nonAnimHeight
+implicitHeight: inner.implicitHeight + inner.anchors.margins * 2  // inner.implicitHeight = contentInnerHeight; this sum MUST equal nonAnimHeight
 ```
 
 The invariant `root.implicitHeight === nonAnimHeight` is now load-bearing: any change that breaks it re-introduces the stack-clipping bug. The comments at both definitions call this out so future edits don't quietly drift apart.

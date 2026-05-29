@@ -26,12 +26,16 @@ PillCard {
     }
     // System-icon resolution check. When the sender passes an icon name
     // that no installed theme provides (e.g. Kanata sends "kanata" but no
-    // theme ships that icon), Quickshell.iconPath returns "" and ColouredIcon
+    // theme ships that icon), the resolved path is empty and ColouredIcon
     // would render an empty disc. We detect that here and route to the
     // MaterialIcon fallback (same path that fires when hasAppIcon is false)
     // so the disc always has a glyph instead of looking like a blank pill.
-    readonly property string resolvedSystemIconPath: hasAppIcon && !hasTransparentIcon
-        ? Quickshell.iconPath(modelData.appIcon)
+    //
+    // Uses Icons.safeIconPath (which calls Quickshell.iconPath with check=true)
+    // rather than raw Quickshell.iconPath so missing-icon attempts don't spam
+    // warnings into the shell log on every notification with an unknown name.
+    readonly property url resolvedSystemIconPath: hasAppIcon && !hasTransparentIcon
+        ? Icons.safeIconPath(modelData.appIcon, "")
         : ""
     readonly property bool systemIconResolves: resolvedSystemIconPath.length > 0
     // Inner content height (no card margins). Grows to the LARGER of (text
@@ -268,12 +272,12 @@ PillCard {
                     }
 
                     Loader {
-                        // Active when the notification provided no icon at
-                        // all OR provided a system icon name that didn't
-                        // resolve against any installed theme. Without the
-                        // second clause, unresolved names (e.g. Kanata's
-                        // "kanata") render as a blank white disc.
-                        active: !root.hasAppIcon || (!root.hasTransparentIcon && !root.systemIconResolves)
+                        // Active when the icon Loader above is not active
+                        // (no icon provided, or system icon name that didn't
+                        // resolve against any installed theme). Binding to
+                        // !icon.active makes the inverse relationship explicit
+                        // and keeps both Loaders in sync automatically.
+                        active: !icon.active
                         asynchronous: true
                         anchors.centerIn: parent
                         anchors.horizontalCenterOffset: -Appearance.font.size.large * 0.02
