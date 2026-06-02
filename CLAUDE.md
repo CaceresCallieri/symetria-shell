@@ -151,6 +151,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Qt HTTP/2 protocol errors** — Qt 6's `QNetworkAccessManager` enables HTTP/2 by default. Some servers (notably `ipinfo.io`) cause silent protocol errors that break the entire weather init chain. Disable per-request with `Http2AllowedAttribute = false`. → `docs/qt-http2-pitfall.md`
 
+**STT `gpt-4o-transcribe` silently truncates long audio** — The model emits the transcript as output tokens and caps around ~2000 tokens (~10 min of speech), returning HTTP 200 with a truncated result — the pipeline can't tell it's incomplete. Long recordings are auto-routed to `whisper-1` (chunks internally, no truncation) above `Config.stt.longAudioThresholdSec`. Successful audio is now retained on disk (`stt/history/`) for `cache.retainSuccessHours` as a recovery net, since the source WAV lives in tmpfs and was previously deleted on success. → `docs/stt-design-decisions.md`
+
 **Hypr.activeToplevel null on fresh start** — The Wayland activation guard in `Hypr.qml` may filter out the active toplevel at shell startup before the `activated` protocol event arrives. Fall back to raw `Hyprland.activeToplevel` when you only need Hyprland window identity (address, class, PID) rather than confirmed Wayland activation. → `docs/qml-pitfalls.md`
 
 **Layer-shell focus restoration race** — A layer-shell window with `WlrKeyboardFocus.Exclusive` triggers focus restoration on unmap (wlroots restores whoever held focus before the layer mapped). Synchronous `focuswindow` dispatches lose to the restoration. Always `hide()` first, then `Qt.callLater(() => Hypr.dispatch(...))`. Dispatchers that don't require an active focus target (e.g. `killwindow`) are unaffected. → `docs/qml-pitfalls.md`

@@ -5,6 +5,19 @@ JsonObject {
     property string apiKey: ""
     property string backend: "openai"
     property string model: "gpt-4o-transcribe"
+
+    // Long-audio model routing. gpt-4o-transcribe is an LLM that follows the
+    // verbatim/paragraph prompt and is more accurate for short dictation, but
+    // it silently truncates output at its ~2000-token ceiling (~10 min of
+    // speech). whisper-1 chunks audio internally and never truncates, at the
+    // cost of ignoring prompt instructions (no paragraph formatting). So
+    // recordings longer than longAudioThresholdSec are routed to
+    // longAudioModel instead of `model`. Set longAudioThresholdSec to 0 to
+    // disable routing and always use `model`. For a blanket switch, set
+    // `model` itself to "whisper-1".
+    property string longAudioModel: "whisper-1"
+    property int longAudioThresholdSec: 420
+
     property int autoHideDelay: 1500
     property int processingTimeout: 120000
     // Valid values: "clipboard" | "inject" | "submit" | "ask"
@@ -29,5 +42,17 @@ JsonObject {
         property bool enabled: true
         property int maxEntries: 10
         property bool deleteOnSuccess: true
+
+        // Successful-transcription retention. When retainSuccessHours > 0, the
+        // source audio (and a transcript sidecar) is copied to an on-disk
+        // history dir on success instead of being lost when the tmpfs working
+        // copy is cleaned. This is a safety net against silent truncation /
+        // bad transcriptions (e.g. gpt-4o-transcribe cutting off long audio):
+        // the original recording stays recoverable for a while. Set to 0 to
+        // restore the old behaviour (delete-on-success, nothing retained).
+        // maxSuccessEntries is a count backstop so a busy day can't fill disk
+        // even before the age sweep runs. WAV at 16kHz mono is ~1.9 MB/min.
+        property int retainSuccessHours: 24
+        property int maxSuccessEntries: 50
     }
 }

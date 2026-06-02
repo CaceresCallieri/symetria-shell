@@ -84,6 +84,23 @@ Singleton {
     // Lives under XDG_STATE_HOME so it survives shell restart and logout
     // (unlike _tempDir, which is tmpfs). Created on startup below.
     readonly property string _recoveryDir: `${Paths.state}/stt/recoverable`
+    // Persistent storage for *successful* recordings, retained as a safety net
+    // against silent truncation / bad transcriptions (see SttConfig.cache).
+    // Also on disk so the "keep for a day" window survives logout/reboot.
+    // Pruned by age (Config.stt.cache.retainSuccessHours) and count.
+    readonly property string _historyDir: `${Paths.state}/stt/history`
+
+    // Delete retained successful-recording entries older than the configured
+    // window. Called at startup (sweeps stale files from previous days even if
+    // no new recording happens) and after each successful persist. Fire-and-
+    // forget — a transient failure just defers cleanup to the next call.
+    function _pruneHistory(): void {
+        const hours = Config.stt?.cache?.retainSuccessHours ?? 24;
+        if (hours <= 0) return;
+        const mins = Math.round(hours * 60);
+        Quickshell.execDetached(["find", _historyDir, "-maxdepth", "1",
+            "-name", "session_*", "-mmin", `+${mins}`, "-delete"]);
+    }
 
     // Delivery mode from config: "clipboard" (default), "inject", "submit", or "ask"
     readonly property string _deliveryMode: {
@@ -412,6 +429,9 @@ Singleton {
     // also `mkdir -p` defensively, so a transient failure here is non-fatal.
     Component.onCompleted: {
         Quickshell.execDetached(["mkdir", "-p", root._recoveryDir]);
+        Quickshell.execDetached(["mkdir", "-p", root._historyDir]);
+        // Sweep retained successful recordings that have aged out since last run.
+        root._pruneHistory();
     }
 
     // ─────────────────────────────────────────────────────────────────────────

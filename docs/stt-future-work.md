@@ -130,6 +130,16 @@ Each backend implements this contract. `SttService` calls the active backend wit
 
 ---
 
+## Client-Side Chunking for Long Audio (keep gpt-4o on long takes)
+
+**Priority:** Medium
+**Complexity:** Medium
+**Purpose:** Transcribe long recordings with `gpt-4o-transcribe` without hitting its silent output-token truncation (~10 min), preserving its accuracy and paragraph formatting.
+
+Current mitigation routes long recordings to `whisper-1` (see `stt-design-decisions.md` → *Model Selection & Long-Audio Truncation*), which is complete but loses paragraph formatting and is slightly less accurate. A better long-term path: split the recorded WAV into <10-min chunks (e.g. via `ffmpeg -f segment`, ideally on silence boundaries to avoid mid-word cuts), transcribe each chunk with gpt-4o-transcribe, and concatenate. The multi-segment ffmpeg-concat infra in `SttJob` exists for pause/resume and could be adapted for *size*-based splitting. Caveats: chunk boundaries can drop/duplicate a word; per-chunk prompt priming needs care for cross-chunk continuity.
+
+---
+
 ## Live Transcription Preview (Streaming)
 
 **Priority:** Low

@@ -119,6 +119,10 @@ QtObject {
     property int _segmentCounter: 0
     property list<string> _segmentFiles: []
     property string _currentAudioFile: ""
+    // Model actually used for the last transcription attempt (may differ from
+    // Config.stt.model when long-audio routing kicked in). Recorded in the
+    // history sidecar so a recovered recording shows which model produced it.
+    property string _lastModelUsed: ""
 
     // Target window for inject delivery (captured at start-time)
     property string _targetWindowAddress: ""
@@ -484,8 +488,19 @@ QtObject {
     /// Spawn the transcription helper script.
     function _startTranscription(audioFile: string): void {
         processingTimeoutTimer.restart();
-        const model = Config.stt?.model ?? "gpt-4o-transcribe";
-        Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile);
+        // Route long recordings to longAudioModel: gpt-4o-transcribe silently
+        // truncates past its output-token ceiling (~10 min), whereas whisper-1
+        // chunks internally and stays complete. elapsedSeconds holds the full
+        // recording duration by this point (set at stop in onJobChanged).
+        let model = Config.stt?.model ?? "gpt-4o-transcribe";
+        const longThreshold = Config.stt?.longAudioThresholdSec ?? 420;
+        const longModel = Config.stt?.longAudioModel ?? "whisper-1";
+        if (longThreshold > 0 && longModel !== "" && elapsedSeconds > longThreshold) {
+            Logger.log("qml", "stt", "long-audio | id=" + sessionId + " elapsed=" + Math.round(elapsedSeconds) + "s model=" + model + "→" + longModel);
+            model = longModel;
+        }
+        _lastModelUsed = model;
+        Logger.log("qml", "stt", "api-call | id=" + sessionId + " file=" + audioFile + " model=" + model);
 
         // Merge persistent config hints with per-session hints (deduplicated).
         // Use _snapshotVocabHints (captured at stop-time) rather than
@@ -677,6 +692,45 @@ QtObject {
             MAX_ENTRIES: maxEntries.toString()
         };
         recoveryPersistProcess.running = true;
+    }
+
+    /// Copy the successfully-transcribed audio to the persistent history dir
+    /// with a sidecar holding the transcript we received. This is a safety net
+    /// against silent truncation / bad transcriptions: the source recording
+    /// stays recoverable for `cache.retainSuccessHours`. Distinct from
+    /// _persistRecovery() (which fires only on final FAILURE for retry); this
+    /// fires on SUCCESS and carries the delivered text, not error fields.
+    /// Prunes by age + count so disk stays bounded. The tmpfs working copy is
+    /// removed afterwards in historyPersistProcess.onExited.
+    function _persistHistory(): void {
+        if (sessionId === "" || _currentAudioFile === "") return;
+        if (!(Config.stt?.cache?.enabled ?? true)) return;
+        if (historyPersistProcess.running) return;
+
+        const sidecar = {
+            sessionId: sessionId,
+            createdAt: new Date().toISOString(),
+            audioFile: `session_${sessionId}.wav`,
+            model: _lastModelUsed || (Config.stt?.model ?? "gpt-4o-transcribe"),
+            durationSec: Math.round(elapsedSeconds),
+            charCount: _transcribedText.length,
+            deliveryMode: SttService._deliveryMode,
+            targetWindowClass: _targetWindowClass,
+            transcript: _transcribedText
+        };
+        const sidecarB64 = Qt.btoa(JSON.stringify(sidecar, null, 2));
+        const retainHours = Config.stt?.cache?.retainSuccessHours ?? 24;
+        const maxEntries = Config.stt?.cache?.maxSuccessEntries ?? 50;
+
+        historyPersistProcess.environment = {
+            HISTORY_DIR: SttService._historyDir,
+            SRC_AUDIO: _currentAudioFile,
+            SESSION_ID: sessionId,
+            SIDECAR_B64: sidecarB64,
+            RETAIN_MIN: Math.round(retainHours * 60).toString(),
+            MAX_ENTRIES: maxEntries.toString()
+        };
+        historyPersistProcess.running = true;
     }
 
     /// Remove any persisted recovery copy for this session. Safe to call
@@ -948,7 +1002,16 @@ QtObject {
             if (code === 0 && job._transcribedText !== "") {
                 // Mark as transcribed and signal readiness for delivery
                 job._state = "transcribed";
-                if (Config.stt?.cache?.deleteOnSuccess ?? true)
+                // Retention safety net: when enabled, copy the source audio +
+                // transcript to disk BEFORE clearing the tmpfs working copy, so
+                // a silently-truncated/bad transcription stays recoverable for
+                // ~a day. historyPersistProcess.onExited handles the tmpfs
+                // cleanup after the copy lands. When retention is off, fall
+                // back to the old immediate delete.
+                if ((Config.stt?.cache?.retainSuccessHours ?? 24) > 0
+                        && (Config.stt?.cache?.enabled ?? true))
+                    job._persistHistory();
+                else if (Config.stt?.cache?.deleteOnSuccess ?? true)
                     job._cleanupTempFiles();
                 // Always clean up any persistent recovery copy on success —
                 // the user clearly didn't need it. Safe even if nothing was
@@ -1029,6 +1092,40 @@ QtObject {
             // Honor a cancel that arrived while persistence was in flight.
             if (job._pendingRecoveryCleanup)
                 job._cleanupRecovery();
+        }
+    }
+
+    // Persist audio + transcript sidecar to the history dir after SUCCESS, then
+    // remove the tmpfs working copy. Single `sh -c` so steps stay ordered
+    // (mkdir → cp → sidecar → age-prune → count-cap) without chaining Processes.
+    readonly property Process historyPersistProcess: Process {
+        command: [
+            "sh", "-c",
+            'set -e\n' +
+            'mkdir -p "$HISTORY_DIR"\n' +
+            // Write to a temp name then atomically rename, so a job destroyed
+            // mid-copy can't leave a truncated .wav that looks complete.
+            'cp -f "$SRC_AUDIO" "$HISTORY_DIR/.session_$SESSION_ID.wav.tmp"\n' +
+            'mv -f "$HISTORY_DIR/.session_$SESSION_ID.wav.tmp" "$HISTORY_DIR/session_$SESSION_ID.wav"\n' +
+            'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$HISTORY_DIR/session_$SESSION_ID.json"\n' +
+            // Age sweep: drop anything older than the retention window. Done here
+            // (not just at startup) so a long-running shell still prunes.
+            'find "$HISTORY_DIR" -maxdepth 1 -name \'session_*\' -mmin +"$RETAIN_MIN" -delete 2>/dev/null || true\n' +
+            // Count backstop: evict oldest pairs beyond MAX_ENTRIES so a busy
+            // day can\'t fill disk before the age sweep catches up.
+            'ls -t "$HISTORY_DIR"/session_*.json 2>/dev/null | tail -n +$((MAX_ENTRIES + 1)) | while read -r f; do rm -f "$f" "${f%.json}.wav"; done\n'
+        ]
+        onExited: (code, status) => {
+            if (code === 0)
+                Logger.log("qml", "stt", "history-saved | id=" + job.sessionId + " path=" + SttService._historyDir + "/session_" + job.sessionId + ".wav");
+            else
+                Logger.log("qml", "stt", "history-persist-failed | id=" + job.sessionId + " code=" + code);
+            // Now safe to clear the tmpfs working copy — the disk copy exists
+            // (or persist failed and we don't want to leak the tmpfs file).
+            // Honor deleteOnSuccess: if the user disabled it, keep the tmpfs
+            // copy too until logout.
+            if ((Config.stt?.cache?.deleteOnSuccess ?? true) && job.sessionId !== "")
+                job._cleanupTempFiles();
         }
     }
 
