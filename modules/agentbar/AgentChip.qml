@@ -280,12 +280,24 @@ Item {
     // implicit size (bound to sparkle) is unaffected.
     readonly property bool _showOpenCodeStt: root._isOpenCode && root.isSttTarget
 
+    // The OpenCode grid has no start-blink intro like the Claude sparkle, so the
+    // session-lifecycle states "starting"/"clearing" must NOT drive the comet —
+    // otherwise a freshly-opened chat animates as if working before the user has
+    // sent anything (the plugin emits "starting" on session.start). Only
+    // working/thinking are genuine activity here; everything else shows the
+    // dormant idle square. (The OpenCode plugin never emits "clearing"; excluding
+    // it is parity with the Claude state set, not a live case.) This is why the
+    // grid uses its own predicate instead of the broader root.isBusy, which the
+    // Claude sparkle and STT emerge logic still legitimately depend on.
+    readonly property bool _openCodeBusy: root.activityState === "working"
+        || root.activityState === "thinking"
+
     OpenCodeGrid {
         anchors.centerIn: parent
         opacity: (root._isOpenCode && !root._showOpenCodeStt) ? 1 : 0
         visible: opacity > 0
         color: root._accentColor
-        busy: root.isBusy
+        busy: root._openCodeBusy
 
         Behavior on opacity {
             NumberAnimation { duration: Appearance.anim.durations.normal; easing.type: Easing.OutCubic }
