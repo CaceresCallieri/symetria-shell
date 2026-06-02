@@ -17,10 +17,16 @@ Item {
     /// string (legacy/unknown reporters) is treated as Claude — see _accentColor.
     property string agentType: ""
 
-    // Per-backend accent — the ONLY visual differentiation between agent types
-    // (color only, for now). Single source of truth so every chip maps identity
-    // → hue identically. Both values are fixed brand colors, intentionally NOT
-    // themed (they identify the backend, not the active scheme).
+    /// OpenCode agents render an entirely different indicator (OpenCodeGrid — a
+    /// blocky 3×3 grid with an orbiting comet) instead of the Claude sparkle.
+    /// Claude (and unknown/legacy "") keeps the sparkle. The two components are
+    /// mutually-exclusive siblings toggled on this flag; see the visuals below.
+    readonly property bool _isOpenCode: root.agentType === "opencode"
+
+    // Per-backend accent. Single source of truth so every chip maps identity →
+    // hue identically. Both values are fixed brand colors, intentionally NOT
+    // themed (they identify the backend, not the active scheme). Color is shared
+    // by both indicator forms (sparkle tint / grid cell fill).
     readonly property color _accentColor: root.agentType === "opencode"
         ? "#6f9bd6"   // OpenCode — soft azure blue (muted, cool contrast vs Claude)
         : "#d97757"   // Claude — brand orange (also the default for "" / unknown)
@@ -174,11 +180,15 @@ Item {
         }
     }
 
-    // ── Claude sparkle (always visible — dormant dot when idle, animates when busy) ──
+    // ── Claude sparkle (dormant dot when idle, animates when busy) ──
+    // Shown for Claude and unknown/legacy agents. Hidden for OpenCode, which
+    // uses OpenCodeGrid below instead. When hidden, ClaudeSparkle's internal
+    // Timer (gated on its own `visible`) stops, so this costs nothing for
+    // OpenCode agents — no need for a Loader.
     ClaudeSparkle {
         id: sparkle
-        // Accent is per-backend (Claude orange / OpenCode azure) — see
-        // root._accentColor. Intentionally fixed brand colors, not themed.
+        visible: !root._isOpenCode
+        // Accent tint — Claude orange (root._accentColor). Fixed brand color, not themed.
         color: root._accentColor
         // 0.6× for STT/key emerge and both clear-blink phases (activityState stays
         // "clearing" through starting AND stopping). stt-morph/stt-wave/key-morph run at 1.0.
@@ -253,6 +263,20 @@ Item {
             // true (keeping mode at "stopping" / dormant dot) until activityState
             // changes away from "clearing" — handled by onActivityStateChanged.
         }
+    }
+
+    // ── OpenCode grid (blocky 3×3 — idle square when dormant, orbiting comet when busy) ──
+    // Mutually exclusive with the sparkle above. The grid only reacts to the
+    // base busy signal — the STT-wave, key/ask/plan permission morphs handled by
+    // the sparkle's state machine remain Claude-only for now (an OpenCode agent
+    // that is the STT target or awaiting permission falls back to its idle/busy
+    // grid; the project pill's border still flags permission). Same _size as the
+    // sparkle, so AgentChip's implicit size (bound to sparkle) is unaffected.
+    OpenCodeGrid {
+        anchors.centerIn: parent
+        visible: root._isOpenCode
+        color: root._accentColor
+        busy: root.isBusy
     }
 
 }
