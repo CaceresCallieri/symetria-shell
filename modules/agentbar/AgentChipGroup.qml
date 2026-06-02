@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
+import Quickshell
 import QtQuick
 
 /// One project's agent chips, optionally preceded by the project-name label.
@@ -42,7 +43,18 @@ Row {
     }
 
     Repeater {
-        model: root.agents
+        // ScriptModel keyed on the stable agent id (NOT a plain JS array). AgentService
+        // replaces _agents with freshly-parsed objects on every bridge emission; a plain
+        // array is opaque to Qt, forcing a FULL model reset (all delegates destroyed +
+        // recreated) each time. During each reset, idle siblings' delegates are recreated
+        // and briefly flash a busy sparkle — most visible with OpenCode, which re-emits on
+        // every tool call. objectProp:"id" lets ScriptModel match same-id objects across
+        // emissions and update delegates in place, so a churning agent never re-renders its
+        // idle siblings. See docs/qml-pitfalls.md (agent-chip delegate identity).
+        model: ScriptModel {
+            values: root.agents
+            objectProp: "id"
+        }
 
         AgentChipFor {
             // intentional var: heterogeneous agent JS object from bridge JSON

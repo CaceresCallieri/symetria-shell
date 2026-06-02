@@ -4,6 +4,7 @@ import qs.components
 import qs.services
 import qs.utils
 import qs.config
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
@@ -203,19 +204,23 @@ PillSurface {
             font.pointSize: Appearance.font.size.small
         }
 
-        // Agent chips
+        // Agent chips. Use AgentChipFor (not a bare AgentChip) so the agent→chip
+        // field mapping — including the backend agent_type that drives the accent
+        // color — lives in exactly one place and can't drift between callsites.
         Repeater {
-            model: root.agents
+            // ScriptModel keyed on the stable agent id — see AgentChipGroup for the full
+            // rationale. A plain JS array forces a full delegate reset on every bridge
+            // emission (fresh-parsed objects), flashing busy sparkles onto idle siblings.
+            model: ScriptModel {
+                values: root.agents
+                objectProp: "id"
+            }
 
-            AgentChip {
+            AgentChipFor {
                 required property var modelData
 
                 Layout.alignment: Qt.AlignVCenter
-
-                active: modelData.active ?? false
-                activityState: modelData.activity_state ?? ""
-                activityTool: modelData.activity_tool ?? ""
-                isSttTarget: AgentService.isAgentSttTarget(modelData)
+                agent: modelData
             }
         }
 

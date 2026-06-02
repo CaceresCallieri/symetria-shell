@@ -195,9 +195,14 @@ Item {
                 }
             }
 
-            // Orphan agents (no workspace mapping) — inline chips
+            // Orphan agents (no workspace mapping) — inline chips. ScriptModel keyed on the
+            // stable agent id (see AgentChipGroup) so a churning orphan agent doesn't force a
+            // full delegate reset that flashes busy sparkles onto its idle siblings.
             Repeater {
-                model: root.hasOrphans ? root.orphanAgents : []
+                model: ScriptModel {
+                    values: root.hasOrphans ? root.orphanAgents : []
+                    objectProp: "id"
+                }
 
                 AgentChipFor {
                     required property var modelData

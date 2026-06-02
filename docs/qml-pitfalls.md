@@ -376,3 +376,40 @@ The invariant `root.implicitHeight === nonAnimHeight` is now load-bearing: any c
 **Generalizable rule:** if you change *what a property represents* (its semantics), you must audit every reader, not just verify the local component still looks right. Grep the codebase for the property name before refactoring — if any reader is in a different file, the property has a contract and the rename/restructure needs to land everywhere atomically.
 
 Found in: notifications popup stack — bottom card's body clipped when 2+ cards were visible, especially under non-default `appearance.padding.scale`. Compounded by the Symmetria-specific issue that compact padding scales (e.g. 0.6) magnify the per-card under-allocation as a fraction of total card height.
+
+---
+
+## Repeater over a freshly-rebuilt JS array resets ALL delegates every update
+
+A `Repeater` (or any delegate model) whose `model:` is a **plain JavaScript array** cannot diff updates — a JS array is opaque to Qt. Every time you assign a *new* array, Qt performs a **full model reset**: all delegates are destroyed and recreated, even for items that are logically "the same" as before.
+
+This is invisible for static lists, but becomes a real bug when:
+1. The backing data is **re-parsed/rebuilt on every update** (so object references are never stable — e.g. `JSON.parse` of a bridge snapshot), AND
+2. The delegate holds **animation/visual state** that depends on per-item data, AND
+3. Updates arrive **frequently** (so the constant teardown/rebuild is visible).
+
+**Symptom seen in the agent bar:** with multiple agent chips sharing one Repeater, a *busy* sibling (notably an OpenCode agent, which re-emits state on every tool call) caused the *idle* sibling chips to flash their busy sparkle animation. Each emission replaced `AgentService._agents` with freshly-parsed objects → full Repeater reset → idle delegates recreated → their `activityState` bindings briefly resolved through transient/wrong data during the rebuild → busy sparkle on an idle chip. Claude agents didn't trigger it because they emit a clean `Stop→idle` with no churn.
+
+**Why the obvious theories are wrong:**
+- It is **not** "stale imperative animation flags." In `AgentChip.qml`, the busy modes (`working`/`thinking`) are gated on `isBusy`, which derives *purely* from `activityState`. The imperative flags (`_isClosing`, `_blinkClosing`, …) can only ever select `stopping`/morph variants — they cannot fabricate a busy animation. So a busy animation on an idle chip means the **`activityState` binding itself resolved to the wrong agent**, i.e. a delegate-identity problem, not a flag problem.
+- Stable *ordering* does not save you: the reset happens regardless of whether the array order changed, because Qt never compares contents.
+
+**The fix — give the model a stable identity key.** Wrap the array in Quickshell's `ScriptModel` and set `objectProp` to a property that uniquely and stably identifies each item across rebuilds:
+
+```qml
+import Quickshell
+// ...
+Repeater {
+    model: ScriptModel {
+        values: root.agents      // freshly-parsed array each emission
+        objectProp: "id"         // stable per-agent key ("<nvim_pid>_<buf>")
+    }
+    AgentChipFor { required property var modelData; agent: modelData }
+}
+```
+
+With `objectProp`, ScriptModel treats two different object instances sharing the same key value as the **same row**: it updates the existing delegate in place (emitting `dataChanged`) instead of destroying and recreating it. Unchanged siblings are never touched when one item churns. This is the established convention across the bar (`Workspaces`, `StatusIcons`, `Network`, `OccupiedBg`, …) — agent-chip Repeaters were the outliers using plain arrays.
+
+**Rule of thumb:** any `Repeater`/delegate model bound to an array that is *rebuilt* (not mutated in place) on updates should use `ScriptModel { values; objectProp }` keyed on a stable id — especially if the delegate animates. Plain-array models are fine only for build-once / rarely-changing lists.
+
+Found in: agent bar — idle Claude chips animated as "thinking" while an OpenCode sibling worked. Fixed by keying `AgentChipGroup`, `ProjectGroup`, and the orphan-agent Repeater (`MergedBarContent`) on `objectProp: "id"`.

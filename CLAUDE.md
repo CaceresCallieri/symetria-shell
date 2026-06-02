@@ -161,6 +161,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Property contract drift across containers** — If a child exposes a property whose value a parent reads in layout calculations (e.g. `Notification.nonAnimHeight` read by `Content.qml` to size the popup stack), that property has an external contract. Refactoring its semantics inside the child (e.g. "moving margins out for cleaner math") silently under-allocates the parent — visible as last-in-stack body clipping. Grep the whole codebase for that property name to find all consumers before changing its semantics; add a comment on or immediately above the property declaration stating the contract, e.g. `// CONTRACT: nonAnimHeight = full card height including margins (read by Content.qml stack)`. → `docs/qml-pitfalls.md`
 
+**Repeater over a rebuilt JS array resets all delegates** — A `Repeater` whose `model:` is a plain JS array cannot diff updates: every reassignment is a full reset (all delegates destroyed + recreated). When the array is re-parsed each update (e.g. bridge snapshots) and the delegate animates, frequent updates flash transient/wrong state onto unchanged siblings. Symptom: idle agent chips animated "busy" whenever an OpenCode sibling churned. Fix: wrap in `ScriptModel { values; objectProp: "id" }` to key delegates on a stable id so they update in place. Use this for any animated Repeater bound to a rebuilt array. → `docs/qml-pitfalls.md`
+
 ## Deep Dives
 
 Detailed documentation in `docs/` — read on-demand when working on specific areas:
