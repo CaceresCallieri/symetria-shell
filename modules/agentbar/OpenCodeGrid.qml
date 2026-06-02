@@ -70,10 +70,21 @@ Item {
         duration: root.sweepMs * 2
         easing.type: Easing.Linear
     }
-    // Continuous head position along the 9-cell path (0..8), bouncing at each end.
-    readonly property real _cometPos: _phase <= 1 ? _phase * 8 : (2 - _phase) * 8
+
+    // Robotic cadence — snap the continuous phase to a low frame rate so the comet
+    // *ticks* cell-to-cell like a machine scan instead of gliding. This is the
+    // OpenCode personality: mechanical, where Claude's 60fps sparkle is soft. The
+    // animation still runs at 60fps; we read a floored copy so each frame holds
+    // until the next boundary (true stop-motion). steps derived from robotFps so
+    // the tick rate stays stable if sweepMs is retuned.
+    property int robotFps: 10
+    readonly property int _steps: Math.max(2, Math.round(root.sweepMs * 2 / 1000 * root.robotFps))
+    readonly property real _qPhase: Math.floor(root._phase / 2 * root._steps) / root._steps * 2
+
+    // Quantized head position along the 9-cell path (0..8), bouncing at each end.
+    readonly property real _cometPos: _qPhase <= 1 ? _qPhase * 8 : (2 - _qPhase) * 8
     // +1 while sweeping forward (0→8), -1 while returning (8→0).
-    readonly property int _dir: _phase <= 1 ? 1 : -1
+    readonly property int _dir: _qPhase <= 1 ? 1 : -1
 
     // Fade the whole grid in/out as busy toggles. Behavior lives HERE (on a
     // single property), NOT on each cell's opacity — a Behavior on cell.opacity

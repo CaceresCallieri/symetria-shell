@@ -265,18 +265,45 @@ Item {
         }
     }
 
-    // ── OpenCode grid (blocky 3×3 — idle square when dormant, orbiting comet when busy) ──
-    // Mutually exclusive with the sparkle above. The grid only reacts to the
-    // base busy signal — the STT-wave, key/ask/plan permission morphs handled by
-    // the sparkle's state machine remain Claude-only for now (an OpenCode agent
-    // that is the STT target or awaiting permission falls back to its idle/busy
-    // grid; the project pill's border still flags permission). Same _size as the
-    // sparkle, so AgentChip's implicit size (bound to sparkle) is unaffected.
+    // ── OpenCode visuals — grid (busy/idle) and soundwave (STT) ──
+    // Mutually exclusive with the sparkle above, and with each other. The chip
+    // morphs between two OpenCode forms the way Claude morphs sparkle→soundwave:
+    //   • OpenCodeGrid     — blocky 3×3 comet (busy) / idle square (dormant)
+    //   • OpenCodeSoundwave — five square bars (the STT recording/transcribing
+    //     indicator; square-bar azure reskin of the Claude stt-wave motion)
+    // STT takes over whenever this agent is the STT target. Cross-faded by
+    // opacity so the swap is smooth. STT targeting + chan_send delivery are
+    // already backend-agnostic (AgentChipFor sets isSttTarget for every agent);
+    // only the on-chip indicator was missing for OpenCode. The key/ask/plan
+    // permission morphs remain Claude-only for now (the project pill's border
+    // still flags permission). All three forms share _size, so AgentChip's
+    // implicit size (bound to sparkle) is unaffected.
+    readonly property bool _showOpenCodeStt: root._isOpenCode && root.isSttTarget
+
     OpenCodeGrid {
         anchors.centerIn: parent
-        visible: root._isOpenCode
+        opacity: (root._isOpenCode && !root._showOpenCodeStt) ? 1 : 0
+        visible: opacity > 0
         color: root._accentColor
         busy: root.isBusy
+
+        Behavior on opacity {
+            NumberAnimation { duration: Appearance.anim.durations.normal; easing.type: Easing.OutCubic }
+        }
+    }
+
+    OpenCodeSoundwave {
+        anchors.centerIn: parent
+        opacity: root._showOpenCodeStt ? 1 : 0
+        visible: opacity > 0
+        color: root._accentColor
+        // Recording vs processing — same coalesced phase the sparkle uses to
+        // swap stt-wave → stt-transcribe.
+        transcribing: AgentService.sttIsTranscribing
+
+        Behavior on opacity {
+            NumberAnimation { duration: Appearance.anim.durations.normal; easing.type: Easing.OutCubic }
+        }
     }
 
 }
