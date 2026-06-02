@@ -7,7 +7,7 @@
 # stderr: ERROR:<http_code>:<message> (on failure)
 # Exit:   0=success, 1=API error, 2=network error, 3=missing args
 
-set -e
+set -euo pipefail
 
 command -v curl >/dev/null 2>&1 || {
     echo "Error: required command 'curl' not found" >&2
@@ -35,8 +35,12 @@ fi
 
 stt_log "transcribe" "started | file=$AUDIO_FILE model=$MODEL"
 
-# Temp file for response body
+# Temp file for response body. CURL_ERR is created later (just before the curl
+# call) but must be pre-declared: the EXIT trap references it, and under
+# `set -u` an exit between here and that assignment would make the trap fault
+# on an unbound variable (leaking RESP_BODY). Empty is safe — `rm -f ""` no-ops.
 RESP_BODY=$(mktemp)
+CURL_ERR=""
 trap 'rm -f "$RESP_BODY" "$CURL_ERR"' EXIT
 
 # Verbatim prompt prevents the LLM-based models (gpt-4o-transcribe) from

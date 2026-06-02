@@ -491,7 +491,8 @@ QtObject {
         // Route long recordings to longAudioModel: gpt-4o-transcribe silently
         // truncates past its output-token ceiling (~10 min), whereas whisper-1
         // chunks internally and stays complete. elapsedSeconds holds the full
-        // recording duration by this point (set at stop in onJobChanged).
+        // recording duration by this point (finalized in recordProcess.onExited for the
+        // submit path, or by the last elapsedTimer tick for the paused-then-stopped path).
         let model = Config.stt?.model ?? "gpt-4o-transcribe";
         const longThreshold = Config.stt?.longAudioThresholdSec ?? 420;
         const longModel = Config.stt?.longAudioModel ?? "whisper-1";
@@ -1008,6 +1009,12 @@ QtObject {
                 // ~a day. historyPersistProcess.onExited handles the tmpfs
                 // cleanup after the copy lands. When retention is off, fall
                 // back to the old immediate delete.
+                // NOTE: The outer guard here is load-bearing — when retention is
+                // off, _persistHistory() is never called so historyPersistProcess
+                // never fires, meaning _cleanupTempFiles() in its onExited is
+                // never triggered. The else-if branch provides the immediate delete
+                // in that case. _persistHistory() has a redundant internal guard as
+                // defence-in-depth only.
                 if ((Config.stt?.cache?.retainSuccessHours ?? 24) > 0
                         && (Config.stt?.cache?.enabled ?? true))
                     job._persistHistory();
@@ -1105,9 +1112,9 @@ QtObject {
             'mkdir -p "$HISTORY_DIR"\n' +
             // Write to a temp name then atomically rename, so a job destroyed
             // mid-copy can't leave a truncated .wav that looks complete.
-            'cp -f "$SRC_AUDIO" "$HISTORY_DIR/.session_$SESSION_ID.wav.tmp"\n' +
-            'mv -f "$HISTORY_DIR/.session_$SESSION_ID.wav.tmp" "$HISTORY_DIR/session_$SESSION_ID.wav"\n' +
-            'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$HISTORY_DIR/session_$SESSION_ID.json"\n' +
+            'cp -f "$SRC_AUDIO" "$HISTORY_DIR/session_$SESSION_ID.wav.tmp"\n' +
+            'mv -f "$HISTORY_DIR/session_$SESSION_ID.wav.tmp" "$HISTORY_DIR/session_$SESSION_ID.wav"\n' +
+            'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$HISTORY_DIR/session_$SESSION_ID.json.tmp" && mv -f "$HISTORY_DIR/session_$SESSION_ID.json.tmp" "$HISTORY_DIR/session_$SESSION_ID.json"\n' +
             // Age sweep: drop anything older than the retention window. Done here
             // (not just at startup) so a long-running shell still prunes.
             'find "$HISTORY_DIR" -maxdepth 1 -name \'session_*\' -mmin +"$RETAIN_MIN" -delete 2>/dev/null || true\n' +
