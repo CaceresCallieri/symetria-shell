@@ -60,8 +60,11 @@ Singleton {
     ]
 
     /// Hyprland events that mutate window layout — drive reactive rebuilds while open.
-    /// Mirrored from components/WorkspaceWindowModel.qml (the shared window-model provider)
-    /// so the overview's reactivity matches the bar's exactly.
+    /// Duplicated from components/WorkspaceWindowModel._windowLayoutEvents (the shared window-model
+    /// provider) so the overview's reactivity matches the bar's exactly. The two owners are
+    /// intentionally separate (different lifecycles and update paths), so the set can't be
+    /// shared as a singleton. Keep in sync: if a new event is added to WorkspaceWindowModel,
+    /// add it here too — a missing event means the overview won't rebuild on that topology change.
     // intentional var: JS Set for O(1) event-name lookup
     readonly property var _windowLayoutEvents: new Set([
         "openwindow", "closewindow",

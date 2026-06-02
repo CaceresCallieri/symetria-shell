@@ -26,6 +26,12 @@ Row {
     /// animates total width (the merged pill does), to avoid double-easing.
     property bool animateGroupWidth: true
 
+    // Shared headless provider — same window model the top bar uses.
+    // Declared first: _agentsByPid and unmatchedAgents both bind to windowModel.model.
+    readonly property WorkspaceWindowModel windowModel: WorkspaceWindowModel {
+        workspaceId: root.workspaceId
+    }
+
     // pid → agent[], for placing each agent's chip next to its host window.
     // intentional var: JS object used as hash map (pid → agent[])
     readonly property var _agentsByPid: {
@@ -44,6 +50,11 @@ Row {
     /// Agents whose host window is not in the current model (terminal swallowed, window
     /// closed, or not on this workspace). Surfaced by the parent as a trailing cluster so
     /// an agent never silently disappears just because its window icon isn't shown.
+    ///
+    /// Assumes lastIpcObject.pid is stable for a window's lifetime as seen by this model —
+    /// i.e., pid does not silently change without triggering a window layout event that causes
+    /// WorkspaceWindowModel to rebuild. This holds because Hyprland does not reassign pids
+    /// mid-session, and the workspace model is rebuilt on all open/close/move events.
     // intentional var: JS array of agent objects
     readonly property var unmatchedAgents: {
         const shownPids = new Set();
@@ -54,11 +65,6 @@ Row {
                     shownPids.add(pid);
             }
         return root.agents.filter(a => !(a.terminal_pid > 0 && shownPids.has(a.terminal_pid)));
-    }
-
-    // Shared headless provider — same window model the top bar uses.
-    readonly property WorkspaceWindowModel windowModel: WorkspaceWindowModel {
-        workspaceId: root.workspaceId
     }
 
     spacing: Appearance.padding.small

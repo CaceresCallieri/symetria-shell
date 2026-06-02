@@ -61,20 +61,19 @@ Item {
     // Color: active uses onSurface, inactive uses muted variant
     readonly property color labelColor: isActive ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
 
-    // Group agents by project for display: [{project: "foo", agents: [...]}]
-    // intentional var: JS array of heterogeneous objects built with .map()
-    readonly property var _projectGroups: {
-        const groups = {};
+    // Unique project names on this workspace, in first-seen order.
+    // intentional var: JS string[]
+    readonly property var _projectNames: {
+        const seen = new Set();
         const order = [];
         for (const agent of root.agents) {
             const p = agent.project ?? "unknown";
-            if (!groups[p]) {
-                groups[p] = [];
+            if (!seen.has(p)) {
+                seen.add(p);
                 order.push(p);
             }
-            groups[p].push(agent);
         }
-        return order.map(p => ({ project: p, agents: groups[p] }));
+        return order;
     }
 
     implicitHeight: content.implicitHeight
@@ -122,18 +121,18 @@ Item {
         // currentWorkspaceName is "" until Hyprland reports the workspace — the label always
         // shows in that transient state.
         Repeater {
-            model: root._projectGroups
+            model: root._projectNames
 
             StyledText {
-                // intentional var: JS object { project: string, agents: [] } from _projectGroups
+                // intentional var: project name string from _projectNames
                 required property var modelData
 
                 Layout.alignment: Qt.AlignVCenter
-                text: modelData.project
+                text: modelData
                 color: Colours.palette.m3primary
                 font.weight: Font.Bold
                 font.pointSize: Appearance.font.size.small
-                visible: modelData.project !== root.currentWorkspaceName
+                visible: modelData !== root.currentWorkspaceName
             }
         }
 
