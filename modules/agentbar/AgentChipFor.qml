@@ -15,5 +15,8 @@ AgentChip {
     active: root.agent.active ?? false
     activityState: root.agent.activity_state ?? ""
     activityTool: root.agent.activity_tool ?? ""
+    // Backend identity ("claude" | "opencode") — drives the chip accent color.
+    // Absent/"" (legacy snapshots) falls through to the Claude default in AgentChip.
+    agentType: root.agent.agent_type ?? ""
     isSttTarget: AgentService.isAgentSttTarget(root.agent)
 }

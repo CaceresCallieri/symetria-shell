@@ -263,6 +263,11 @@ def main():
     activity_msg = json.dumps({
         "type": "activity",
         "agent_id": agent_id,
+        # This hook ONLY ever runs for Claude Code (it's wired into Claude's
+        # hooks system), so the backend identity is hardcoded here rather than
+        # threaded through orchestrator.nvim. Keep the field name/values in sync
+        # with the OpenCode reporter (~/.config/opencode/plugin/symmetria-agent.js).
+        "agent_type": "claude",
         "state": state,
         "tool": tool,
         "in_plan_mode": plan_mode,

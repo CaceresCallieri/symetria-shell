@@ -118,6 +118,13 @@ class AgentBridge:
         # socket. ts is the bridge-side monotonic receipt time used for the
         # stuck-state watchdog and staleness reaping.
         self._activities: dict[str, dict] = {}
+        # Per-agent backend identity ("claude" | "opencode"), reported by the
+        # activity reporters (Claude hook / OpenCode plugin). Kept SEPARATE from
+        # _activities because it's an IDENTITY, not an ephemeral state: when an
+        # agent goes idle its _activities entry is popped, but its backend type
+        # must persist so the dashboard keeps the right accent color. Cleared
+        # only when the instance is fully torn down (_clear_agent_state).
+        self._agent_types: dict[str, str] = {}
         # Per-agent ring buffer of recent state transitions for postmortem
         # diagnostics. Each entry: {ts, event_ts_ns, hook_event, state, tool,
         # ooo} where ooo is True if this update arrived out-of-order.
@@ -231,6 +238,11 @@ class AgentBridge:
                     "spawned_at": inst.get("spawned_at", 0),
                     "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
                     "remote": nvim_pid in self._remote_clients,
+                    # Backend identity drives the dashboard accent color. Read
+                    # from the sticky _agent_types map (NOT activity) so it
+                    # survives idle, when the activity entry is gone. "" →
+                    # treated as Claude downstream (backward-compatible).
+                    "agent_type": self._agent_types.get(agent_id, ""),
                     "activity_state": activity.get("state", ""),
                     "activity_tool": activity.get("tool", ""),
                     "in_plan_mode": activity.get("in_plan_mode", False),
@@ -288,6 +300,13 @@ class AgentBridge:
             state = msg.get("state", "")
             tool = msg.get("tool", "")
             plan = msg.get("in_plan_mode", False)
+            # Sticky backend identity: only overwrite when the reporter actually
+            # supplies it, so a stray message without the field never wipes a
+            # known type. Absent for legacy/unknown reporters → "" → the QML
+            # dashboard treats it as Claude (backward-compatible default).
+            agent_type = msg.get("agent_type", "")
+            if agent_type:
+                self._agent_types[agent_id] = agent_type
             hook_event = msg.get("hook_event", "")
             event_ts_ns = int(msg.get("event_ts_ns", 0) or 0)
 
@@ -706,6 +725,7 @@ class AgentBridge:
         teardown so new dicts only need to be added here.
         """
         self._activities.pop(aid, None)
+        self._agent_types.pop(aid, None)
         self._activity_history.pop(aid, None)
         self._subagent_depth.pop(aid, None)
         self._warned_stuck.discard(aid)

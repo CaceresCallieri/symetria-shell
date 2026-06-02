@@ -13,6 +13,17 @@ Item {
     required property string activityState
     required property string activityTool
     required property bool isSttTarget
+    /// Backend identity from the bridge snapshot ("claude" | "opencode"). Empty
+    /// string (legacy/unknown reporters) is treated as Claude — see _accentColor.
+    property string agentType: ""
+
+    // Per-backend accent — the ONLY visual differentiation between agent types
+    // (color only, for now). Single source of truth so every chip maps identity
+    // → hue identically. Both values are fixed brand colors, intentionally NOT
+    // themed (they identify the backend, not the active scheme).
+    readonly property color _accentColor: root.agentType === "opencode"
+        ? "#6f9bd6"   // OpenCode — soft azure blue (muted, cool contrast vs Claude)
+        : "#d97757"   // Claude — brand orange (also the default for "" / unknown)
 
     property bool _isClosing: false
     property bool _blinkClosing: false // true from the stopping phase of a clear-blink until activityState leaves "clearing"
@@ -166,7 +177,9 @@ Item {
     // ── Claude sparkle (always visible — dormant dot when idle, animates when busy) ──
     ClaudeSparkle {
         id: sparkle
-        color: "#d97757" // Claude brand orange — intentionally fixed, not themed
+        // Accent is per-backend (Claude orange / OpenCode indigo) — see
+        // root._accentColor. Intentionally fixed brand colors, not themed.
+        color: root._accentColor
         // 0.6× for STT/key emerge and both clear-blink phases (activityState stays
         // "clearing" through starting AND stopping). stt-morph/stt-wave/key-morph run at 1.0.
         // Total clear-blink: ~545ms + ~1094ms ≈ 1640ms at 0.6×.
