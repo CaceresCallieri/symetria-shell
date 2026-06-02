@@ -11,7 +11,9 @@ import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
 
-/// Per-workspace slot in the merged bar: workspace label + project names + agent chips + app icons.
+/// Per-workspace slot in the merged bar: workspace label, then window icons each followed by
+/// their hosted agent's project label + chip ([icon] (name) ⭐), plus a trailing cluster for
+/// agents with no shown window (and all agents on inactive workspaces).
 /// Handles both regular and special workspaces — special workspaces use different icon resolution
 /// (getSpecialWsIcon) and click behavior (togglespecialworkspace instead of workspace switch).
 /// No background — the outer MergedBarContent container provides the glass pill,
@@ -61,19 +63,60 @@ Item {
     // Color: active uses onSurface, inactive uses muted variant
     readonly property color labelColor: isActive ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
 
-    // Unique project names on this workspace, in first-seen order.
-    // intentional var: JS string[]
-    readonly property var _projectNames: {
-        const seen = new Set();
+    // Agents shown in the trailing cluster (those NOT interleaved next to a window icon):
+    //  - active workspace: only agents whose host window isn't displayed (swallowed/closed).
+    //  - inactive workspace (no window icons): all of this workspace's agents.
+    // intentional var: JS array of agent objects
+    readonly property var _clusterAgents: root.windowsVisible
+        ? (hostedRow.item?.unmatchedAgents ?? [])
+        : root.agents
+
+    // Cluster agents grouped by project so each group's chips carry their project name via
+    // AgentChipGroup — matching the interleaved layout's [icon] (name) ⭐.
+    //
+    // Project order MUST match the active interleaved row, which follows AppIconsProcessor's
+    // window position sort. Grouping in bridge/first-seen order instead made an inactive
+    // workspace's projects appear inverted relative to when it's active. So we sort projects
+    // by their host window's index in the SAME processor output the active row consumes —
+    // identical ordering by construction. Windows on inactive workspaces still report
+    // positions via Hypr.toplevels, so this works even when no icons are rendered here.
+    // intentional var: JS array of agent-arrays, one per project
+    readonly property var _clusterGroups: {
+        const groups = {};
         const order = [];
-        for (const agent of root.agents) {
+        for (const agent of root._clusterAgents) {
             const p = agent.project ?? "unknown";
-            if (!seen.has(p)) {
-                seen.add(p);
+            if (!groups[p]) {
+                groups[p] = [];
                 order.push(p);
             }
+            groups[p].push(agent);
         }
-        return order;
+
+        // pid → position index from the canonical window sort for this workspace.
+        const model = AppIconsProcessor.processClients(root.ws, Hypr.toplevels.values);
+        const idxForPid = {};
+        for (let i = 0; i < model.length; i++) {
+            for (const c of model[i].clients) {
+                const pid = c.lastIpcObject?.pid;
+                if (pid !== undefined && pid !== null)
+                    idxForPid[pid] = i;
+            }
+        }
+        // A project's index = the earliest position among its agents' host windows;
+        // projects whose window isn't found sort to the end (stable among themselves).
+        const idxForProject = p => {
+            let min = Infinity;
+            for (const agent of groups[p]) {
+                const idx = idxForPid[agent.terminal_pid];
+                if (idx !== undefined && idx < min)
+                    min = idx;
+            }
+            return min === Infinity ? Number.MAX_SAFE_INTEGER : min;
+        };
+        order.sort((a, b) => idxForProject(a) - idxForProject(b));
+
+        return order.map(p => groups[p]);
     }
 
     implicitHeight: content.implicitHeight
@@ -115,30 +158,10 @@ Item {
             }
         }
 
-        // Project name labels (no chips — chips now ride next to their host window icon).
-        // One label per project present on this workspace; hidden when the project name
-        // matches the workspace name (the workspace icon already identifies it).
-        // currentWorkspaceName is "" until Hyprland reports the workspace — the label always
-        // shows in that transient state.
-        Repeater {
-            model: root._projectNames
-
-            StyledText {
-                // intentional var: project name string from _projectNames
-                required property var modelData
-
-                Layout.alignment: Qt.AlignVCenter
-                text: modelData
-                color: Colours.palette.m3primary
-                font.weight: Font.Bold
-                font.pointSize: Appearance.font.size.small
-                visible: modelData !== root.currentWorkspaceName
-            }
-        }
-
-        // Window icons with each agent's chip interleaved immediately to the right of its
-        // host window (matched by terminal_pid → window pid) — the "where the agent lives"
-        // layout. Active + occupied workspace only.
+        // Window icons with each agent's project label + chip interleaved immediately to the
+        // right of its host window (matched by terminal_pid → window pid): [icon] (name) ⭐.
+        // The project name rides next to the agent it describes — not in a detached front
+        // cluster — so multi-project workspaces stay legible. Active + occupied workspace only.
         // animateGroupWidth: false — the outer Layout.preferredWidth Behavior in
         // MergedBarContent.qml is the canonical width animator for the pill; inner group
         // animations would double-ease (same rationale as the old WorkspaceAppIcons usage).
@@ -152,25 +175,25 @@ Item {
             sourceComponent: MergedWindowAgentRow {
                 workspaceId: root.ws
                 agents: root.agents
+                workspaceName: root.currentWorkspaceName
                 animateGroupWidth: false
             }
         }
 
-        // Trailing agent chips:
+        // Trailing agent chips, grouped by project with their name label (AgentChipGroup):
         //  - active workspace: only agents whose host window isn't shown (swallowed/closed/
         //    not on this workspace) — so they never silently vanish.
-        //  - inactive workspace (no window icons): all of this workspace's agents, clustered.
+        //  - inactive workspace (no window icons): all of this workspace's agents.
         Repeater {
-            model: root.windowsVisible
-                ? (hostedRow.item?.unmatchedAgents ?? [])
-                : root.agents
+            model: root._clusterGroups
 
-            AgentChipFor {
-                // intentional var: heterogeneous agent JS object from bridge JSON
+            AgentChipGroup {
+                // intentional var: JS array of one project's agents from _clusterGroups
                 required property var modelData
 
                 Layout.alignment: Qt.AlignVCenter
-                agent: modelData
+                agents: modelData
+                workspaceName: root.currentWorkspaceName
             }
         }
 

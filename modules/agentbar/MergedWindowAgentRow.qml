@@ -21,6 +21,8 @@ Row {
     required property int workspaceId
     // intentional var: heterogeneous agent JS objects from AgentService bridge JSON
     required property var agents
+    /// Workspace name, forwarded to each HostedAgentIcon for the project-label visibility rule.
+    required property string workspaceName
 
     /// See WorkspaceAppIcons.animateGroupWidth: false when an outer container already
     /// animates total width (the merged pill does), to avoid double-easing.
@@ -98,6 +100,7 @@ Row {
                 HostedAgentIcon {
                     client: modelData.clients[0]
                     hostedAgents: root._agentsByPid[modelData.clients[0]?.lastIpcObject?.pid] ?? []
+                    workspaceName: root.workspaceName
                 }
             }
 
@@ -144,6 +147,7 @@ Row {
 
                                 client: modelData
                                 hostedAgents: root._agentsByPid[modelData?.lastIpcObject?.pid] ?? []
+                                workspaceName: root.workspaceName
                                 animateEntry: false
                             }
                         }
