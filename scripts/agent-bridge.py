@@ -214,6 +214,24 @@ class AgentBridge:
             self._remote_clients.add(nvim_pid)
             log.info("  remote client detected (pid %s not in /proc)", nvim_pid)
 
+    def _seed_agent_type(self, nvim_pid: int, buf: int, inst: dict) -> None:
+        """Seed the sticky backend identity from a registration payload.
+
+        Backend identity ("claude" | "opencode") now travels with the
+        orchestrator's sync/added registration, not only the ephemeral activity
+        channel. Seeding here makes a freshly-restarted bridge (it dies with the
+        shell, wiping _agent_types) type every agent correctly from the first
+        snapshot — without this, all agents default to "claude" until their next
+        activity event fires.
+
+        Only seeds when the payload carries a non-empty agent_type, matching the
+        sticky semantics of the activity path: an older orchestrator that doesn't
+        report the field leaves any existing/activity-derived type untouched.
+        """
+        agent_type = inst.get("agent_type", "")
+        if agent_type:
+            self._agent_types[f"{nvim_pid}_{buf}"] = agent_type
+
     def _emit(self) -> None:
         """Write consolidated state to stdout (consumed by QML SplitParser)."""
         agents = []
@@ -459,6 +477,7 @@ class AgentBridge:
                 buf = inst.get("buf")
                 if buf is not None:
                     instances[buf] = inst
+                    self._seed_agent_type(nvim_pid, buf, inst)
             self._clients[nvim_pid] = instances
             # Detect remote on sync too (covers reconnect after bridge restart)
             self._ensure_remote_detected(nvim_pid)
@@ -474,6 +493,7 @@ class AgentBridge:
             buf = inst.get("buf")
             if buf is not None:
                 self._clients.setdefault(nvim_pid, {})[buf] = inst
+                self._seed_agent_type(nvim_pid, buf, inst)
                 log.debug("  added: buf=%s active=%s from pid %s", buf, inst.get("active"), nvim_pid)
                 self._schedule_emit()
             else:
