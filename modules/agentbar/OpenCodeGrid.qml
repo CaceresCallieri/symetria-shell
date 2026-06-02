@@ -56,7 +56,7 @@ Item {
     //   0 1 2      path: TL(0) TC(1) TR(2) MR(3) MC(4) ML(5) BL(6) BC(7) BR(8)
     //   3 4 5      i.e. grid 0,1,2,5,4,3,6,7,8 — top L→R, middle R→L, bottom L→R.
     //   6 7 8
-    readonly property var _pathIndex: [0, 1, 2, 5, 4, 3, 6, 7, 8]
+    readonly property list<int> _pathIndex: [0, 1, 2, 5, 4, 3, 6, 7, 8]
 
     // Single linear phase 0→2 drives the ping-pong: 0→1 is the forward sweep,
     // 1→2 the return. Head position (triangle wave) and travel direction are
