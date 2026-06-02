@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import qs.config
 import QtQuick
 
-/// OpenCode STT soundwave: five square vertical bars in the backend accent.
+/// OpenCode STT soundwave: four square vertical bars in the backend accent.
 ///
 /// Reuses the MOTION of ClaudeSparkle's STT soundwave (the stt-wave / stt-transcribe
 /// sprites — a 5-bar wave, center tallest) but renders it as continuous-height
@@ -39,7 +39,7 @@ Item {
     // more robotic. Width and gap DERIVE from it (bars always fill _barFill of the
     // footprint, gaps the rest), so dropping the count auto-widens each bar with
     // no manual retuning.
-    property int _barCount: 4
+    readonly property int _barCount: 4
     readonly property real _barFill: 0.66   // fraction of the width occupied by bars (rest is gaps)
     readonly property real _barWidth: _size * _barFill / _barCount
     readonly property real _gap: _barCount > 1 ? _size * (1 - _barFill) / (_barCount - 1) : 0
@@ -63,6 +63,10 @@ Item {
     property int recordingMs: 1000   // one full center-pulse breath
     property int transcribeMs: 1150  // one full left→right pass
 
+    // Duration of the active pattern. Extracted once so NumberAnimation.duration and
+    // _steps share a single source of truth rather than repeating the same ternary.
+    readonly property int _periodMs: root.transcribing ? root.transcribeMs : root.recordingMs
+
     // Single looping phase drives both patterns; period depends on the sub-mode.
     property real _phase: 0
     NumberAnimation on _phase {
@@ -70,18 +74,20 @@ Item {
         loops: Animation.Infinite
         from: 0
         to: 1
-        duration: root.transcribing ? root.transcribeMs : root.recordingMs
+        duration: root._periodMs
         easing.type: Easing.Linear
     }
 
     // Robotic cadence — same mechanism as OpenCodeGrid: floor the phase to a low
     // frame rate so the bars tick between discrete heights instead of flowing,
     // giving OpenCode's STT a mechanical feel against Claude's smooth soundwave.
-    property int robotFps: 10
-    readonly property int _steps: Math.max(2, Math.round((root.transcribing ? root.transcribeMs : root.recordingMs) / 1000 * root.robotFps))
+    // NOTE: keep in sync with OpenCodeGrid.robotFps — both must share the same
+    // mechanical tick rate to maintain a coherent OpenCode identity.
+    readonly property int robotFps: 10
+    readonly property int _steps: Math.max(2, Math.round(root._periodMs / 1000 * root.robotFps))
     readonly property real _qPhase: Math.floor(root._phase * root._steps) / root._steps
 
-    /// Height of bar `i` (0..4) at the current (quantized) phase.
+    /// Height of bar `i` (0..3) at the current (quantized) phase.
     function _barHeight(i: int): real {
         if (root.transcribing) {
             // Traveling bump: a tall bar at the sweep head, sharp falloff to the

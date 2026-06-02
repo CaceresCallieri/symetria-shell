@@ -77,7 +77,9 @@ Item {
     // animation still runs at 60fps; we read a floored copy so each frame holds
     // until the next boundary (true stop-motion). steps derived from robotFps so
     // the tick rate stays stable if sweepMs is retuned.
-    property int robotFps: 10
+    // NOTE: keep in sync with OpenCodeSoundwave.robotFps — both must share the same
+    // mechanical tick rate to maintain a coherent OpenCode identity.
+    readonly property int robotFps: 10
     readonly property int _steps: Math.max(2, Math.round(root.sweepMs * 2 / 1000 * root.robotFps))
     readonly property real _qPhase: Math.floor(root._phase / 2 * root._steps) / root._steps * 2
 
