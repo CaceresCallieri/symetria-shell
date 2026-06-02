@@ -63,16 +63,12 @@ Item {
     // Color: active uses onSurface, inactive uses muted variant
     readonly property color labelColor: isActive ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
 
-    // Agents shown in the trailing cluster (those NOT interleaved next to a window icon):
-    //  - active workspace: only agents whose host window isn't displayed (swallowed/closed).
-    //  - inactive workspace (no window icons): all of this workspace's agents.
-    // intentional var: JS array of agent objects
-    readonly property var _clusterAgents: root.windowsVisible
-        ? (hostedRow.item?.unmatchedAgents ?? [])
-        : root.agents
-
     // Cluster agents grouped by project so each group's chips carry their project name via
     // AgentChipGroup — matching the interleaved layout's [icon] (name) ⭐.
+    //
+    // Agents in scope: active workspace → only unmatched agents (host window not shown);
+    // inactive workspace → all of this workspace's agents. (Inlined from the former
+    // _clusterAgents intermediate property, which had a single consumer here.)
     //
     // Project order MUST match the active interleaved row, which follows AppIconsProcessor's
     // window position sort. Grouping in bridge/first-seen order instead made an inactive
@@ -82,9 +78,13 @@ Item {
     // positions via Hypr.toplevels, so this works even when no icons are rendered here.
     // intentional var: JS array of agent-arrays, one per project
     readonly property var _clusterGroups: {
+        const clusterAgents = root.windowsVisible
+            ? (hostedRow.item?.unmatchedAgents ?? [])
+            : root.agents;
+
         const groups = {};
         const order = [];
-        for (const agent of root._clusterAgents) {
+        for (const agent of clusterAgents) {
             const p = agent.project ?? "unknown";
             if (!groups[p]) {
                 groups[p] = [];
@@ -94,29 +94,40 @@ Item {
         }
 
         // pid → position index from the canonical window sort for this workspace.
-        const model = AppIconsProcessor.processClients(root.ws, Hypr.toplevels.values);
+        // HACK: calls processClients() directly instead of going through WorkspaceWindowModel,
+        // bypassing the 50ms debounce that coalesces rapid Hyprland events. This fires on
+        // every agent/toplevel change for every inactive workspace pill currently visible —
+        // during rapid window moves, this can execute tens of times per second. The clean fix
+        // is to instantiate a WorkspaceWindowModel for root.ws and read its .model here, but
+        // that adds one extra QtObject per pill slot and is deferred as a separate refactor.
+        const windowModel = AppIconsProcessor.processClients(root.ws, Hypr.toplevels.values);
         const idxForPid = {};
-        for (let i = 0; i < model.length; i++) {
-            for (const c of model[i].clients) {
+        for (let i = 0; i < windowModel.length; i++) {
+            for (const c of windowModel[i].clients) {
                 const pid = c.lastIpcObject?.pid;
                 if (pid !== undefined && pid !== null)
                     idxForPid[pid] = i;
             }
         }
-        // A project's index = the earliest position among its agents' host windows;
-        // projects whose window isn't found sort to the end (stable among themselves).
-        const idxForProject = p => {
-            let min = Infinity;
-            for (const agent of groups[p]) {
-                const idx = idxForPid[agent.terminal_pid];
-                if (idx !== undefined && idx < min)
-                    min = idx;
-            }
-            return min === Infinity ? Number.MAX_SAFE_INTEGER : min;
-        };
-        order.sort((a, b) => idxForProject(a) - idxForProject(b));
+        order.sort((a, b) => root._projectSortIndex(a, groups, idxForPid) - root._projectSortIndex(b, groups, idxForPid));
 
         return order.map(p => groups[p]);
+    }
+
+    /// Computes a project's sort index = earliest position among its agents' host windows.
+    /// Projects whose host window isn't in the pid→index map sort to the end.
+    function _projectSortIndex(projectName: string, groupsMap: var, pidIndexMap: var): int {
+        // INT_MAX sentinel (fits a 32-bit QML int). Number.MAX_SAFE_INTEGER would be
+        // ToInt32-coerced to -1 by the `: int` return type, wrongly sorting an unmatched
+        // project (host window swallowed/closed) to the FRONT. Window indices are tiny,
+        // so INT_MAX reliably sorts unmatched projects to the end.
+        let min = 2147483647;
+        for (const agent of groupsMap[projectName]) {
+            const idx = pidIndexMap[agent.terminal_pid];
+            if (idx !== undefined && idx < min)
+                min = idx;
+        }
+        return min;
     }
 
     implicitHeight: content.implicitHeight

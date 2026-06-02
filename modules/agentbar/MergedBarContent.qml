@@ -96,7 +96,9 @@ Item {
     readonly property var remoteAgents: _agentGrouping.remote
     readonly property bool hasRemote: remoteAgents.length > 0
 
-    // Group remote agents by project for display: [{project: "foo", agents: [...]}]
+    // Group remote agents by project — Array<agentArray>, one inner array per project.
+    // Shape matches MergedWorkspacePill._clusterGroups so the same AgentChipGroup Repeater
+    // pattern can be used: agents: modelData, workspaceName: "" (always show label for remote).
     readonly property var _remoteProjectGroups: {
         const groups = {};
         const order = [];
@@ -108,7 +110,7 @@ Item {
             }
             groups[p].push(agent);
         }
-        return order.map(p => ({ project: p, agents: groups[p] }));
+        return order.map(p => groups[p]);
     }
 
     // Outer pill — shared claymorphism surface, matches the top-bar workspace pill.
@@ -176,36 +178,18 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    // Per-project groups: project name + agent chips
+                    // Per-project groups: reuse AgentChipGroup (project label + chips).
+                    // workspaceName: "" → always show the label (remote has no local workspace).
                     Repeater {
                         model: root._remoteProjectGroups
 
-                        RowLayout {
+                        AgentChipGroup {
+                            // intentional var: JS array of one project's agents from _remoteProjectGroups
                             required property var modelData
-                            // Alias to avoid shadowing by inner Repeater's modelData
-                            readonly property var groupData: modelData
 
                             Layout.alignment: Qt.AlignVCenter
-                            spacing: Appearance.spacing.smaller
-
-                            StyledText {
-                                Layout.alignment: Qt.AlignVCenter
-                                text: groupData.project
-                                color: Colours.palette.m3primary
-                                font.weight: Font.Bold
-                                font.pointSize: Appearance.font.size.small
-                            }
-
-                            Repeater {
-                                model: groupData.agents
-
-                                AgentChipFor {
-                                    required property var modelData
-
-                                    Layout.alignment: Qt.AlignVCenter
-                                    agent: modelData
-                                }
-                            }
+                            agents: modelData
+                            workspaceName: ""
                         }
                     }
                 }

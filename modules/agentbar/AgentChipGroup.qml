@@ -21,6 +21,9 @@ Row {
     /// Workspace name to compare against; "" means "always show the label".
     property string workspaceName: ""
 
+    // All agents in the array belong to the same project (the caller — _clusterGroups or
+    // _agentsByPid — groups them by project before passing them here). Reading [0].project
+    // is therefore representative; the value does not change within the group.
     readonly property string project: root.agents.length > 0 ? (root.agents[0].project ?? "") : ""
     readonly property bool showName: root.project !== "" && root.project !== root.workspaceName
 
