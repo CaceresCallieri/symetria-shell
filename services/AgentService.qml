@@ -304,7 +304,16 @@ Singleton {
     // and terminal_pid. We add workspace info from _workspaceMap and spawn
     // notify-send. This replaces the old claude-notify.sh shell script.
 
-    readonly property string _notifIcon: `${Paths.home}/.dotfiles/scripts/claude-icon.svg`
+    // Backend-specific notification icons — mirror the agentbar identities
+    // (Claude sparkle vs OpenCode 3×3 grid) so a glance at a popup says which
+    // agent it came from. _notifIconFor() picks by agent_type; absent/"" → Claude
+    // (backward-compatible: pre-agent_type notifications and Claude agents).
+    readonly property string _claudeNotifIcon: `${Paths.home}/.dotfiles/scripts/claude-icon.svg`
+    readonly property string _openCodeNotifIcon: `${Paths.home}/.dotfiles/scripts/opencode-icon.svg`
+
+    function _notifIconFor(agentType: string): string {
+        return agentType === "opencode" ? root._openCodeNotifIcon : root._claudeNotifIcon;
+    }
 
     function _handleNotification(notif: var): void {
         const project = notif.project ?? "unknown";
@@ -328,17 +337,23 @@ Singleton {
 
         const message = notif.message ?? "";
         const urgency = notif.urgency ?? "normal";
+        const agentType = notif.agent_type ?? "";
 
-        Logger.log("qml", "agent", `notify | title="${title}" msg="${message}" urgency=${urgency}`);
-        _sendNotification(title, message, urgency);
+        Logger.log("qml", "agent", `notify | title="${title}" msg="${message}" urgency=${urgency} type=${agentType || "claude"}`);
+        _sendNotification(title, message, urgency, agentType);
     }
 
-    function _sendNotification(title: string, message: string, urgency: string): void {
+    function _sendNotification(title: string, message: string, urgency: string, agentType: string): void {
+        // App name AND icon both track the backend: the notification center groups
+        // by app name (Notifs.closeGroup), so a distinct name keeps OpenCode and
+        // Claude popups in separate stacks, each showing its own glyph. Empty/
+        // unknown agentType falls back to Claude — see _notifIconFor.
+        const appName = agentType === "opencode" ? "OpenCode" : "Claude Code";
         Quickshell.execDetached([
             "notify-send",
-            "--app-name=Claude Code",
+            `--app-name=${appName}`,
             `--urgency=${urgency}`,
-            `--icon=${root._notifIcon}`,
+            `--icon=${root._notifIconFor(agentType)}`,
             "--expire-time=15000",
             title,
             message,

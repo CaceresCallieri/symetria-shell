@@ -431,10 +431,18 @@ class AgentBridge:
                 project = self._clients[nvim_pid][buf].get("project", "unknown")
             terminal_pid = self._terminal_pids.get(nvim_pid, 0)
 
-            enriched = {**msg, "project": project, "terminal_pid": terminal_pid}
+            # Stamp the backend identity onto the notification so the QML layer
+            # can pick the matching icon (Claude sparkle vs OpenCode grid). The
+            # plugin's notification payload doesn't carry agent_type, so seed it
+            # from the bridge's sticky _agent_types map — the authoritative source
+            # that survives idle (it's what agent snapshots also report). Absent →
+            # "" which the QML treats as Claude (backward-compatible).
+            agent_type = self._agent_types.get(agent_id, "")
+            enriched = {**msg, "project": project, "terminal_pid": terminal_pid,
+                        "agent_type": agent_type}
             line = json.dumps(enriched)
-            log.debug("handle_message: notification pass-through agent_id=%s project=%s terminal_pid=%d",
-                       agent_id, project, terminal_pid)
+            log.debug("handle_message: notification pass-through agent_id=%s project=%s terminal_pid=%d type=%s",
+                       agent_id, project, terminal_pid, agent_type or "claude")
             sys.stdout.write(line + "\n")
             sys.stdout.flush()
             return
