@@ -177,7 +177,7 @@ Item {
     // ── Claude sparkle (always visible — dormant dot when idle, animates when busy) ──
     ClaudeSparkle {
         id: sparkle
-        // Accent is per-backend (Claude orange / OpenCode indigo) — see
+        // Accent is per-backend (Claude orange / OpenCode azure) — see
         // root._accentColor. Intentionally fixed brand colors, not themed.
         color: root._accentColor
         // 0.6× for STT/key emerge and both clear-blink phases (activityState stays

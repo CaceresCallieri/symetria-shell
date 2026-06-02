@@ -513,14 +513,14 @@ class AgentBridge:
                 if agent_id in self._activities:
                     log.info("  liveness: clearing DEAD agent %s (was %s)",
                              agent_id, self._activities[agent_id].get("state"))
-                    self._activities.pop(agent_id)
+                    self._clear_agent_state(agent_id)
                     cleared_any = True
             for buf in quiet_bufs:
                 agent_id = f"{nvim_pid}_{buf}"
                 if agent_id in self._activities:
                     log.info("  liveness: clearing QUIET agent %s (was %s, terminal silent 60s+)",
                              agent_id, self._activities[agent_id].get("state"))
-                    self._activities.pop(agent_id)
+                    self._clear_agent_state(agent_id)
                     cleared_any = True
             if cleared_any:
                 self._schedule_emit()
@@ -681,6 +681,7 @@ class AgentBridge:
                     aid: list(hist) for aid, hist in self._activity_history.items()
                 },
                 "warned_stuck": sorted(self._warned_stuck),
+                "agent_types": dict(self._agent_types),
                 "subagent_depth": dict(self._subagent_depth),
                 "conn_count": dict(self._conn_count),
                 "last_resolicit": {str(k): v for k, v in self._last_resolicit.items()},
