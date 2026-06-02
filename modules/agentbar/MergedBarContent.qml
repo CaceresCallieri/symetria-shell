@@ -199,15 +199,11 @@ Item {
                             Repeater {
                                 model: groupData.agents
 
-                                AgentChip {
+                                AgentChipFor {
                                     required property var modelData
 
                                     Layout.alignment: Qt.AlignVCenter
-
-                                    active: modelData.active ?? false
-                                    activityState: modelData.activity_state ?? ""
-                                    activityTool: modelData.activity_tool ?? ""
-                                    isSttTarget: AgentService.isAgentSttTarget(modelData)
+                                    agent: modelData
                                 }
                             }
                         }
@@ -219,15 +215,11 @@ Item {
             Repeater {
                 model: root.hasOrphans ? root.orphanAgents : []
 
-                AgentChip {
+                AgentChipFor {
                     required property var modelData
 
                     Layout.alignment: Qt.AlignVCenter
-
-                    active: modelData.active ?? false
-                    activityState: modelData.activity_state ?? ""
-                    activityTool: modelData.activity_tool ?? ""
-                    isSttTarget: AgentService.isAgentSttTarget(modelData)
+                    agent: modelData
                 }
             }
         }

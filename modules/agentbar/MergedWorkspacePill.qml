@@ -37,6 +37,13 @@ Item {
     // Workspace state
     readonly property bool isOccupied: occupied[ws] ?? false
 
+    // Whether window icons render in this slot: active + occupied workspace, respecting the
+    // special-workspace window-visibility flag. Same gate the old WorkspaceAppIcons Loader used.
+    // Drives whether agent chips interleave with window icons (true) or fall back to a trailing
+    // cluster (false — e.g. inactive workspaces, which show no window icons).
+    readonly property bool windowsVisible: root.isActive && root.isOccupied
+        && (root.isSpecial ? Config.bar.workspaces.showWindowsOnSpecialWorkspaces : Config.bar.workspaces.showWindows)
+
     // Special workspace detection.
     // Hypr.workspaceById() centralizes the .find() pattern shared with the
     // top-bar Workspace.qml and AgentService.
@@ -109,64 +116,62 @@ Item {
             }
         }
 
-        // Agent groups: project name + chips, grouped by project
+        // Project name labels (no chips — chips now ride next to their host window icon).
+        // One label per project present on this workspace; hidden when the project name
+        // matches the workspace name (the workspace icon already identifies it).
+        // currentWorkspaceName is "" until Hyprland reports the workspace — the label always
+        // shows in that transient state.
         Repeater {
             model: root._projectGroups
 
-            RowLayout {
+            StyledText {
                 // intentional var: JS object { project: string, agents: [] } from _projectGroups
                 required property var modelData
 
                 Layout.alignment: Qt.AlignVCenter
-                spacing: Appearance.spacing.smaller
-
-                // Project name label — hidden when project matches workspace (icon already identifies it)
-                StyledText {
-                    Layout.alignment: Qt.AlignVCenter
-                    text: modelData.project
-                    color: Colours.palette.m3primary
-                    font.weight: Font.Bold
-                    font.pointSize: Appearance.font.size.small
-                    // Visible when project name adds info: hidden when it matches workspace name (icon already identifies it).
-                    // currentWorkspaceName is "" until Hyprland reports the workspace — always shows label in that transient state.
-                    visible: modelData.project !== root.currentWorkspaceName
-                }
-
-                // Agent chips for this project
-                Repeater {
-                    model: modelData.agents
-
-                    AgentChip {
-                        // intentional var: heterogeneous agent JS object from bridge JSON
-                        required property var modelData
-
-                        Layout.alignment: Qt.AlignVCenter
-
-                        active: modelData.active ?? false
-                        activityState: modelData.activity_state ?? ""
-                        activityTool: modelData.activity_tool ?? ""
-                        isSttTarget: AgentService.isAgentSttTarget(modelData)
-                    }
-                }
+                text: modelData.project
+                color: Colours.palette.m3primary
+                font.weight: Font.Bold
+                font.pointSize: Appearance.font.size.small
+                visible: modelData.project !== root.currentWorkspaceName
             }
         }
 
-        // App icons (active workspace only).
-        // visible must track active so the RowLayout collapses the slot to zero width.
-        // Special workspaces use a separate config flag (showWindowsOnSpecialWorkspaces).
-        // Note: animateGroupWidth: false — the outer Layout.preferredWidth Behavior in
-        // MergedBarContent.qml is the canonical width animator for the pill. Inner group
-        // animations would double-ease (same rationale as WorkspaceContent.qml's
-        // animateWindowsWidth: false for the bar).
+        // Window icons with each agent's chip interleaved immediately to the right of its
+        // host window (matched by terminal_pid → window pid) — the "where the agent lives"
+        // layout. Active + occupied workspace only.
+        // animateGroupWidth: false — the outer Layout.preferredWidth Behavior in
+        // MergedBarContent.qml is the canonical width animator for the pill; inner group
+        // animations would double-ease (same rationale as the old WorkspaceAppIcons usage).
         Loader {
+            id: hostedRow
+
             Layout.alignment: Qt.AlignVCenter
-            active: root.isActive && root.isOccupied
-                && (root.isSpecial ? Config.bar.workspaces.showWindowsOnSpecialWorkspaces : Config.bar.workspaces.showWindows)
+            active: root.windowsVisible
             visible: active
 
-            sourceComponent: WorkspaceAppIcons {
+            sourceComponent: MergedWindowAgentRow {
                 workspaceId: root.ws
+                agents: root.agents
                 animateGroupWidth: false
+            }
+        }
+
+        // Trailing agent chips:
+        //  - active workspace: only agents whose host window isn't shown (swallowed/closed/
+        //    not on this workspace) — so they never silently vanish.
+        //  - inactive workspace (no window icons): all of this workspace's agents, clustered.
+        Repeater {
+            model: root.windowsVisible
+                ? (hostedRow.item?.unmatchedAgents ?? [])
+                : root.agents
+
+            AgentChipFor {
+                // intentional var: heterogeneous agent JS object from bridge JSON
+                required property var modelData
+
+                Layout.alignment: Qt.AlignVCenter
+                agent: modelData
             }
         }
 

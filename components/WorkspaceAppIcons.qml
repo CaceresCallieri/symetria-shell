@@ -2,14 +2,14 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
-import qs.utils
 import qs.config
 import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 
 /// Shared workspace app icons for bar and agentbar.
-/// Delegates window processing to AppIconsProcessor; handles event-driven updates.
+/// The window model (grouping, sorting, event-driven refresh) is provided by the shared
+/// headless WorkspaceWindowModel; this component owns only the visual row + animations.
 Row {
     id: root
 
@@ -20,53 +20,16 @@ Row {
     /// agentbar's MergedBarContent Layout.preferredWidth Behavior), to avoid double-easing.
     property bool animateGroupWidth: true
 
+    // Shared headless provider: AppIconsProcessor call + debounced event-driven refresh
+    // + modelsEqual churn-gate. Single source of truth, also consumed by the agentbar's
+    // MergedWindowAgentRow.
+    readonly property WorkspaceWindowModel windowModel: WorkspaceWindowModel {
+        workspaceId: root.workspaceId
+    }
+
     spacing: Appearance.padding.small
-    visible: cachedModel.length > 0
+    visible: root.windowModel.model.length > 0
     height: Config.bar.sizes.indicatorHeight
-
-    // Events that affect window positions, lifecycle, grouping, or fullscreen state (Set for O(1) lookup).
-    // activewindowv2 included because Hyprland 0.54+ doesn't emit togglegroup events;
-    // focus changes are the closest proxy. modelsEqual() prevents unnecessary rerenders.
-    // fullscreen included to trigger re-sort when entering/exiting fullscreen — ensures
-    // the tiled order cache in AppIconsProcessor is populated and position sort resumes promptly.
-    readonly property var windowLayoutEvents: new Set([ // intentional var: JS Set for O(1) event name lookup (no QML Set type)
-        "openwindow", "closewindow",
-        "movewindow", "movewindowv2",
-        "togglegroup", "moveintogroup", "moveoutofgroup",
-        "activewindowv2", "changegroupactive",
-        "fullscreen"
-    ])
-
-    property var cachedModel: [] // intentional var: JS array of { isGroup: bool, clients: HyprlandToplevel[] } from AppIconsProcessor
-
-    function updateClients(): void {
-        const result = AppIconsProcessor.processClients(root.workspaceId, Hypr.toplevels.values);
-        if (!AppIconsProcessor.modelsEqual(result, root.cachedModel))
-            root.cachedModel = result;
-    }
-
-    // Use debounce for all initialization paths to prevent race conditions
-    Component.onCompleted: updateDebounce.restart()
-    onWorkspaceIdChanged: updateDebounce.restart()
-
-    // Debounce timer - coalesces rapid Hyprland events into single update
-    // 50ms chosen empirically: fast enough for responsive UI, slow enough to batch
-    // rapid event bursts (e.g., togglegroup emits multiple events in quick succession)
-    Timer {
-        id: updateDebounce
-        interval: 50
-        onTriggered: root.updateClients()
-    }
-
-    // Listen to Hyprland events - only update on relevant events
-    Connections {
-        target: Hyprland
-
-        function onRawEvent(event: HyprlandEvent): void {
-            if (root.windowLayoutEvents.has(event.name))
-                updateDebounce.restart();
-        }
-    }
 
     // Move animation only - entry animation handled by individual icons via animateEntry
     // (Grouped containers are recreated on model change, so Row add transition would
@@ -79,7 +42,7 @@ Row {
 
     Repeater {
         model: ScriptModel {
-            values: root.cachedModel
+            values: root.windowModel.model
         }
 
         // Delegate: conditionally render grouped container or single icon
