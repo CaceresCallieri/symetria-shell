@@ -51,7 +51,7 @@ Item {
     // only (see onIsBusyChanged), so it's stable for the whole busy period — no
     // mid-turn flipping as activityState cycles working/thinking. Initialised at
     // creation so a chip born already-busy still gets a random style.
-    readonly property var _workingVariantPool: ["working", "working-reverse", "thinking"]
+    readonly property list<string> _workingVariantPool: ["working", "working-reverse", "thinking"]
     property string _workingVariant: root._workingVariantPool[Math.floor(Math.random() * root._workingVariantPool.length)]
     function _rollWorkingVariant(): void {
         root._workingVariant = root._workingVariantPool[Math.floor(Math.random() * root._workingVariantPool.length)]

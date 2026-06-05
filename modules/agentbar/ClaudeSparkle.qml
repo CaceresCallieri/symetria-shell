@@ -155,10 +155,13 @@ Item {
         root._oneShotComplete = true
     }
 
-    /// Restart the current animation from its start frame (frame 0 for forward modes, last frame
-    /// for reverse modes). Useful for looping one-shot previews in SpritePreview.qml.
+    /// Restart the current animation from its start frame. Delegates to _loopStartFrame so that
+    /// desynced looping modes (working/thinking/working-reverse with desyncLoop set) restart at
+    /// the chip's own random phase rather than always at frame 0. For reverse one-shot modes,
+    /// _loopStartFrame returns _frameCount - 1 (same as before). Useful for looping one-shot
+    /// previews in SpritePreview.qml.
     function restart() {
-        root._currentFrame = root._reverse ? root._frameCount - 1 : 0
+        root._currentFrame = root._loopStartFrame
         root._oneShotComplete = false
     }
 
