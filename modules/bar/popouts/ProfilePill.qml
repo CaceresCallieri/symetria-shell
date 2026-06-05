@@ -3,22 +3,22 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
-import Quickshell.Services.UPower
 import QtQuick
 import QtQuick.Layouts
 
-// Single power-profile toggle pill — neumorphic depress/raise carries state,
-// monochrome (no accent fill) to match the shell-wide toggle language used
-// in QuickToggles (see IconButton.qml: activeColour returns inactiveColour
-// for toggle-style buttons). Used by the Battery popout and the dedicated
-// PowerProfile popout.
+// Single power-mode toggle pill — a pure view of one PowerMode entry. Neumorphic
+// depress/raise carries state, monochrome (no accent fill) to match the
+// shell-wide toggle language used in QuickToggles (see IconButton.qml:
+// activeColour returns inactiveColour for toggle-style buttons). All mode
+// semantics (which is active, what clicking does) live in PowerMode, so this
+// stays a dumb delegate — drive it from PowerMode.modes via a Repeater.
 PillToggleSurface {
     id: pill
 
-    required property string icon
-    required property int profile
+    // One entry from PowerMode.modes ({ silent, profile, icon, label }).
+    required property var mode
 
-    readonly property bool selected: PowerProfiles.profile === profile
+    readonly property bool selected: PowerMode.isActive(pill.mode)
 
     Layout.fillWidth: true
     implicitHeight: pillIcon.implicitHeight + Appearance.padding.normal * 2
@@ -30,7 +30,7 @@ PillToggleSurface {
         color: Colours.palette.m3onSurface
 
         function onClicked(): void {
-            PowerProfiles.profile = pill.profile;
+            PowerMode.apply(pill.mode);
         }
     }
 
@@ -38,7 +38,7 @@ PillToggleSurface {
         id: pillIcon
 
         anchors.centerIn: parent
-        text: pill.icon
+        text: pill.mode.icon
         font.pointSize: Appearance.font.size.large
         color: Colours.palette.m3onSurface
         fill: pill.selected ? 1 : 0

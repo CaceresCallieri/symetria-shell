@@ -8,8 +8,8 @@ import QtQuick
 import QtQuick.Layouts
 
 // Compact popout for the dedicated power-profile status icon. Just a label
-// showing the current profile name plus the three neumorphic ProfilePill
-// toggles. Visual language matches the selector inside the Battery popout
+// showing the current profile name plus the four neumorphic ProfilePill
+// toggles (Silent + the three PPD profiles). Visual language matches the selector inside the Battery popout
 // (intentional — same component, no drift) but trimmed of battery-specific
 // telemetry so the icon's purpose is unambiguous.
 PillCardSection {
@@ -25,7 +25,7 @@ PillCardSection {
         spacing: Appearance.spacing.normal
 
         StyledText {
-            text: qsTr("Power profile: %1").arg(PowerProfile.toString(PowerProfiles.profile))
+            text: qsTr("Power profile: %1").arg(PowerMode.activeMode.label)
         }
 
         Loader {
@@ -70,19 +70,18 @@ PillCardSection {
             Layout.fillWidth: true
             spacing: Appearance.spacing.small
 
-            ProfilePill {
-                profile: PowerProfile.PowerSaver
-                icon: "energy_savings_leaf"
-            }
+            // Pills are generated from PowerMode.modes (the single source of
+            // truth shared with the bar icon's cycle), so a new mode appears
+            // here automatically. The list is a stable literal, so a plain
+            // Repeater is fine — no ScriptModel keying needed.
+            Repeater {
+                model: PowerMode.modes
 
-            ProfilePill {
-                profile: PowerProfile.Balanced
-                icon: "balance"
-            }
+                ProfilePill {
+                    required property var modelData
 
-            ProfilePill {
-                profile: PowerProfile.Performance
-                icon: "rocket_launch"
+                    mode: modelData
+                }
             }
         }
     }
