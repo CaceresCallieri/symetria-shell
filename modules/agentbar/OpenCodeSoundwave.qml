@@ -114,7 +114,13 @@ Item {
             width: root._barWidth
             height: root._barHeight(index)
             x: index * (root._barWidth + root._gap)
-            anchors.verticalCenter: parent.verticalCenter // bars grow symmetrically about the midline
+            // Center each bar about the row midline so it grows symmetrically.
+            // Computed against the stable `root` id rather than anchored to
+            // `parent.verticalCenter`: a Repeater reparents its delegates AFTER
+            // construction, so `parent` is briefly null and the anchor binding
+            // floods the log with "Cannot read property 'verticalCenter' of null".
+            // (root.height == _size; equivalent to the old parent anchor, no null.)
+            y: (root.height - height) / 2
             radius: 0 // square bars — the whole point of the rework
             color: root.color
         }

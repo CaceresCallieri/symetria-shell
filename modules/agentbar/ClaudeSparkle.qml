@@ -7,6 +7,9 @@ import QtQuick
 
 /// Claude sparkle: multi-mode sprite-sheet animation.
 /// - "working": 8-frame starburst rotation, 810ms cycle (same as claude.ai streaming).
+/// - "working-reverse": the "working" sprite played backwards — an inverted spin.
+///   Same sprite/frames/tick; only the loop step flips (see _reverse). Used by the
+///   per-turn working-variety roll in AgentChip for visual variety across chips.
 /// - "thinking": 9-frame dot-to-starburst breathing, 909ms cycle (same as claude.ai thinking).
 /// - "starting": 9-frame seed-to-full emergence, 909ms one-shot then holds open.
 /// - "stopping": 12-frame full-to-dot collapse, 1824ms one-shot then holds at dormant dot.
@@ -37,13 +40,36 @@ Item {
     property bool running: true
     property string mode: "working" // "thinking" | "working" | "starting" | "stopping" | "stt-morph" | "stt-wave" | "stt-transcribe" | "stt-wave-to-transcribe-morph" | "stt-sparkle-morph" | "key-morph" | "ask-morph" | "plan-morph" | "asking" | "planning"
     property real speedFactor: 1.0 // Multiplier for frame interval (< 1 = faster)
-    /// Modes that play their sprite from the last frame backwards to frame 0.
-    /// Derived from `mode` (not exposed as an external prop) so that the
-    /// playback direction updates atomically with `mode` — otherwise two
-    /// separate external bindings (mode + reverse) on the same source race
-    /// each other and onModeChanged can read a stale reverse value, leading
-    /// to the sprite snapping straight to its endpoint instead of animating.
-    readonly property bool _reverse: root.mode === "stt-sparkle-morph"
+    /// Modes that step the sprite backwards. "stt-sparkle-morph" plays last→0
+    /// once (a one-shot exit morph); "working-reverse" loops in reverse (the
+    /// inverted starburst spin). Derived from `mode` (not exposed as an external
+    /// prop) so that the playback direction updates atomically with `mode` —
+    /// otherwise two separate external bindings (mode + reverse) on the same
+    /// source race each other and onModeChanged can read a stale reverse value,
+    /// leading to the sprite snapping straight to its endpoint instead of animating.
+    readonly property bool _reverse: root.mode === "stt-sparkle-morph" || root.mode === "working-reverse"
+
+    /// Per-instance random phase for the looping working/thinking modes, so that
+    /// several chips animating at once don't tick in visual lockstep. Two forces
+    /// otherwise lock them together: every reset point below seeds _currentFrame
+    /// to 0, and Qt's default CoarseTimer coalesces same-interval timers onto
+    /// shared wakeup boundaries (a power-saving optimisation) so they also FIRE
+    /// together. Seeding each instance's loop at a stable random frame breaks the
+    /// *visual* sync without fighting the coalescing — the timers may still tick
+    /// in unison, but each chip DISPLAYS a different frame. Opt-in (default
+    /// false): one-shot, STT, and preview modes must start at their semantic
+    /// frame, so they are excluded via _desyncMode below.
+    property bool desyncLoop: false
+    // Math.random() has no binding dependencies, so this evaluates exactly once
+    // at creation and stays stable for the instance's lifetime.
+    readonly property real _loopPhaseFraction: Math.random()
+    // Only the looping working-variety modes are desynced; every other mode keeps
+    // its exact prior start frame (0 forward, last frame for reverse playback).
+    readonly property bool _desyncMode: root.mode === "working" || root.mode === "thinking"
+        || root.mode === "working-reverse"
+    readonly property int _loopStartFrame: root.desyncLoop && root._desyncMode
+        ? Math.floor(root._loopPhaseFraction * root._frameCount)
+        : (root._reverse ? root._frameCount - 1 : 0)
 
     /// Emitted when a one-shot animation (starting/stopping) reaches its final frame.
     signal animationComplete()
@@ -103,16 +129,25 @@ Item {
         : "claude-sparkle-sprite"
 
     onModeChanged: {
-        root._currentFrame = root._reverse ? root._frameCount - 1 : 0
+        // _loopStartFrame == the old `_reverse ? last : 0` for every mode except
+        // working/thinking with desyncLoop set, where it's a stable random frame.
+        root._currentFrame = root._loopStartFrame
         root._oneShotComplete = false
-        console.assert(root.mode === "working" || root.mode === "thinking"
+        console.assert(root.mode === "working" || root.mode === "working-reverse" || root.mode === "thinking"
             || root.mode === "starting" || root.mode === "stopping"
             || root.mode === "stt-morph" || root.mode === "stt-wave" || root.mode === "stt-transcribe"
             || root.mode === "stt-wave-to-transcribe-morph" || root.mode === "stt-sparkle-morph"
             || root.mode === "key-morph" || root.mode === "ask-morph" || root.mode === "plan-morph"
             || root.mode === "asking" || root.mode === "planning",
-            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "stt-wave-to-transcribe-morph", "stt-sparkle-morph", "key-morph", "ask-morph", "plan-morph", "asking", or "planning"`)
+            `ClaudeSparkle: invalid mode "${root.mode}", expected "working", "working-reverse", "thinking", "starting", "stopping", "stt-morph", "stt-wave", "stt-transcribe", "stt-wave-to-transcribe-morph", "stt-sparkle-morph", "key-morph", "ask-morph", "plan-morph", "asking", or "planning"`)
     }
+
+    // Seed the random loop phase at construction too: a chip born already-busy
+    // (e.g. shell restart mid-task) keeps mode == "working" from the default, so
+    // onModeChanged never fires and _currentFrame would otherwise sit at 0 until
+    // the first reset. Guarded to _desyncMode, so it can't clobber the idle
+    // skipToEnd() path (idle modes aren't working/thinking).
+    Component.onCompleted: if (root.desyncLoop && root._desyncMode) root._currentFrame = root._loopStartFrame
 
     /// Jump directly to the final frame of a one-shot animation (used for initial idle state).
     function skipToEnd() {
@@ -172,9 +207,11 @@ Item {
             }
         }
         // Reset to start position on pause so re-shows begin cleanly. For reverse modes,
-        // "start" is the last frame (they play last→0). Side effect: if agentbar hides
-        // mid-animation (including stt-wave loop or stt-sparkle-morph), it replays from
-        // the beginning on next show.
-        onRunningChanged: if (!running && !root._oneShotComplete) root._currentFrame = root._reverse ? root._frameCount - 1 : 0
+        // "start" is the last frame (they play last→0); for desynced working/thinking
+        // it's this instance's stable random frame (so a shared hide/show — the most
+        // common sync trigger — re-seeds each chip to its OWN phase, not all to 0).
+        // Side effect: if agentbar hides mid-animation (including stt-wave loop or
+        // stt-sparkle-morph), it replays from the beginning on next show.
+        onRunningChanged: if (!running && !root._oneShotComplete) root._currentFrame = root._loopStartFrame
     }
 }

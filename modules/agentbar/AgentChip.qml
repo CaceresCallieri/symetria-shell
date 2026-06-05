@@ -44,6 +44,19 @@ Item {
     // Ask/plan morphs have dedicated icons — suppress the generic key-morph path
     readonly property bool _isSpecialPermission: root.activityTool === "Asking" || root.activityTool === "Planning"
 
+    // Per-turn working-spin variety. Each idle→busy transition re-rolls one of
+    // three looping styles for the steady busy display (forward starburst,
+    // inverted starburst, or the dot→starburst breathe) so several agents busy
+    // at once don't all show the identical animation. Rolled on the isBusy edge
+    // only (see onIsBusyChanged), so it's stable for the whole busy period — no
+    // mid-turn flipping as activityState cycles working/thinking. Initialised at
+    // creation so a chip born already-busy still gets a random style.
+    readonly property var _workingVariantPool: ["working", "working-reverse", "thinking"]
+    property string _workingVariant: root._workingVariantPool[Math.floor(Math.random() * root._workingVariantPool.length)]
+    function _rollWorkingVariant(): void {
+        root._workingVariant = root._workingVariantPool[Math.floor(Math.random() * root._workingVariantPool.length)]
+    }
+
     implicitWidth: sparkle.implicitWidth
     implicitHeight: sparkle.implicitHeight
 
@@ -86,7 +99,9 @@ Item {
         // Busy path
         if (root.activityState === "starting" || root.activityState === "clearing")
             return "starting";
-        return "working";
+        // Steady busy display: the per-turn random variant (forward/reverse spin
+        // or breathe) instead of a fixed "working". Rolled on the idle→busy edge.
+        return root._workingVariant;
     }
 
     readonly property bool isBusy: root.activityState === "working" || root.activityState === "thinking"
@@ -95,6 +110,8 @@ Item {
     onIsBusyChanged: {
         if (root.isBusy) {
             root._isClosing = false
+            // New turn (idle→busy) → re-roll the working-spin style for variety.
+            root._rollWorkingVariant()
         } else if (root.activityState === "needs_permission") {
             // Key-morph only for generic permissions — ask/plan morphs handle
             // their own needs_permission variants via _sparkleMode binding
@@ -188,6 +205,10 @@ Item {
     ClaudeSparkle {
         id: sparkle
         visible: !root._isOpenCode
+        // Stagger the working/thinking loop by a stable per-chip random phase so that
+        // multiple agents busy at once don't spin in visual lockstep (Qt coalesces the
+        // same-interval timers; this desyncs the displayed frame). See ClaudeSparkle.desyncLoop.
+        desyncLoop: true
         // Accent tint — Claude orange (root._accentColor). Fixed brand color, not themed.
         color: root._accentColor
         // 0.6× for STT/key emerge and both clear-blink phases (activityState stays
