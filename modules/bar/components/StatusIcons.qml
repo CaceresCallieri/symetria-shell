@@ -279,13 +279,8 @@ PillContainer {
             sourceComponent: MaterialIcon {
                 animate: true
                 text: {
-                    if (!UPower.displayDevice.isLaptopBattery) {
-                        if (PowerProfiles.profile === PowerProfile.PowerSaver)
-                            return "energy_savings_leaf";
-                        if (PowerProfiles.profile === PowerProfile.Performance)
-                            return "rocket_launch";
-                        return "balance";
-                    }
+                    if (!UPower.displayDevice.isLaptopBattery)
+                        return PowerMode.activeMode.icon;
 
                     const perc = UPower.displayDevice.percentage;
                     const charging = [UPowerDeviceState.Charging, UPowerDeviceState.FullyCharged, UPowerDeviceState.PendingCharge].includes(UPower.displayDevice.state);

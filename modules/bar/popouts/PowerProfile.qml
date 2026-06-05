@@ -9,9 +9,9 @@ import QtQuick.Layouts
 
 // Compact popout for the dedicated power-profile status icon. Just a label
 // showing the current profile name plus the four neumorphic ProfilePill
-// toggles (Silent + the three PPD profiles). Visual language matches the selector inside the Battery popout
-// (intentional — same component, no drift) but trimmed of battery-specific
-// telemetry so the icon's purpose is unambiguous.
+// toggles (Silent + the three PPD profiles). Visual language matches the
+// selector inside the Battery popout (intentional — same component, no drift)
+// but trimmed of battery-specific telemetry so the icon's purpose is unambiguous.
 PillCardSection {
     id: root
 

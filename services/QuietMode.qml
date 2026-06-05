@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Io
-import QtQuick
 
 // Virtual "Silent" power mode.
 //
@@ -24,7 +23,7 @@ Singleton {
 
     // True when the kernel overlay is active. Derived from the state file rather
     // than a local toggle so it stays correct regardless of who flipped it.
-    property bool enabled: false
+    readonly property bool enabled: false
 
     function enable(): void {
         // -n: never prompt for a password. Relies on the NOPASSWD sudoers rule

@@ -4,7 +4,6 @@ pragma ComponentBehavior: Bound
 import qs.services
 import Quickshell
 import Quickshell.Services.UPower
-import QtQuick
 
 // Unified power-mode model — the SINGLE source of truth for the ordered set of
 // selectable power modes. Both the PowerProfile popout's pill row and the bar's
