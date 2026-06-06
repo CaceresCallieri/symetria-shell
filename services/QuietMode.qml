@@ -23,7 +23,15 @@ Singleton {
 
     // True when the kernel overlay is active. Derived from the state file rather
     // than a local toggle so it stays correct regardless of who flipped it.
-    readonly property bool enabled: false
+    //
+    // REGRESSION GUARD — do NOT make this `readonly`. It looks like it should be
+    // (only the FileView below should write it), but `readonly` in QML forbids
+    // ALL imperative assignment, including the `root.enabled = …` in the
+    // FileView's onLoaded/onLoadFailed. Marking it readonly makes those handlers
+    // throw "Cannot assign to read-only property", leaving `enabled` stuck false
+    // forever — the Silent pill never lights up and never toggles. (Found in
+    // review 2026-06-05; reverted because the toggle broke.)
+    property bool enabled: false
 
     function enable(): void {
         // -n: never prompt for a password. Relies on the NOPASSWD sudoers rule
