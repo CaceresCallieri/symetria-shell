@@ -158,7 +158,10 @@ NOTIFICATION_EVENTS = {
     },
     "PermissionRequest": {
         "title_suffix": "Permission Required",
-        "urgency": "critical",
+        # Friendly urgency: kept at "normal" (matching Stop) rather than "critical"
+        # so permission popups don't get the alarming red accent stripe. The agent
+        # is blocked but this is routine, not an emergency.
+        "urgency": "normal",
     },
 }
 
