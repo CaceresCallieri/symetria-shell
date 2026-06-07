@@ -196,6 +196,18 @@ PillCard {
                         fillMode: Image.PreserveAspectCrop
                         cache: false
                         asynchronous: true
+
+                        // Observability: log when the main image fails to
+                        // render. Covers (a) restored notifications whose
+                        // cached PNG was cleaned up, and (b) transient temp
+                        // paths (e.g. Chromium temp files) deleted before
+                        // first paint. Grep `[notif-debug] image-failed`.
+                        onStatusChanged: {
+                            if (status === Image.Error || status === Image.Null) {
+                                console.warn(`[notif-debug] image-failed id=${root.modelData.id} appName='${root.modelData.appName}'`,
+                                    `source='${(source.toString() || "").slice(0, 120)}' status=${status}`);
+                            }
+                        }
                     }
                 }
             }
