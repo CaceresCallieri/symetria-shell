@@ -18,6 +18,11 @@ PillContainer {
     // Popout interface for weather popout
     iconContainer: content
 
+    // Show weather only when enabled AND data is actually available. Truthy check (not
+    // `!== null`) so both `null` (no fetch yet) and `undefined` are treated as "no data" —
+    // otherwise a failed/pending fetch renders a misleading 0° temperature.
+    readonly property bool weatherAvailable: Config.bar.timePill.showWeather && !!Weather.cc
+
     // Hide entirely when no items are visible
     visible: Config.bar.timePill.showClock || Config.bar.timePill.showDate || Config.bar.timePill.showWeather
 
@@ -60,7 +65,7 @@ PillContainer {
         // Weather icon (only show when data available)
         PillContainer.WrappedLoader {
             name: "weather"
-            active: Config.bar.timePill.showWeather && Weather.cc !== null
+            active: root.weatherAvailable
 
             sourceComponent: MaterialIcon {
                 text: Weather.icon
@@ -72,7 +77,7 @@ PillContainer {
         // Temperature (only show when data available)
         PillContainer.WrappedLoader {
             name: "weather"
-            active: Config.bar.timePill.showWeather && Weather.cc !== null
+            active: root.weatherAvailable
 
             sourceComponent: StyledText {
                 text: Weather.temp

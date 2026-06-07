@@ -11,7 +11,10 @@ Singleton {
 
     property string city
     property string loc
-    property var cc
+    // Initialize to null (not the implicit `undefined`) so consumers' `cc !== null`
+    // guards work: `undefined !== null` is true, which would falsely treat "no data yet"
+    // as "data available" and render a bait 0° before any fetch succeeds.
+    property var cc: null
     property list<var> forecast
     property list<var> hourlyForecast
 
