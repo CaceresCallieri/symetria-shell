@@ -413,3 +413,29 @@ With `objectProp`, ScriptModel treats two different object instances sharing the
 **Rule of thumb:** any `Repeater`/delegate model bound to an array that is *rebuilt* (not mutated in place) on updates should use `ScriptModel { values; objectProp }` keyed on a stable id — especially if the delegate animates. Plain-array models are fine only for build-once / rarely-changing lists.
 
 Found in: agent bar — idle Claude chips animated as "thinking" while an OpenCode sibling worked. Fixed by keying `AgentChipGroup`, `ProjectGroup`, and the orphan-agent Repeater (`MergedBarContent`) on `objectProp: "id"`.
+
+## `readonly property` blocks ALL assignment, including same-file handlers
+
+`readonly` in QML does **not** mean "only this component may write it" — it means the property has **exactly one** value source, its initializer binding, and **no imperative assignment is legal from any scope**, including signal handlers *in the same file*. Assigning to it (`root.foo = …`) throws `Cannot assign to read-only property "foo"` at runtime; the write silently no-ops and the property is frozen at its initializer value.
+
+This is a tempting "encapsulation" change to make during review — a singleton property that should only ever be set by one internal `FileView`/`Process`/`Timer` *looks* like it wants to be `readonly`. But if that internal writer assigns imperatively, `readonly` breaks it.
+
+**Symptom seen in `QuietMode.qml`:** `enabled` was changed to `readonly property bool enabled: false`, with a `FileView.onLoaded` handler doing `root.enabled = /^ENABLED=1\b/m.test(text())`. The handler's assignment threw and no-op'd, so `enabled` was pinned to `false` forever — the Silent power-mode pill never lit up and could not be toggled, even though the underlying `sudo quiet-mode on/off` was working fine. The bug is invisible to `qmllint` (it can't resolve Quickshell imports, exits 255 silently) and only surfaces at runtime.
+
+**Why the reasoning behind the change is wrong:** the assumption is "`readonly` forbids *external* writes but allows the declaring component to mutate it internally." QML has no such distinction — there is no `private`/`internal` write scope. `readonly` is absolute.
+
+**The fix depends on how the value is produced:**
+- **Imperatively assigned** (signal handler computes and sets it — e.g. `FileView.onLoaded`): it **must be a plain writable** `property`. Do not mark it `readonly`. Add a comment so a future reviewer doesn't re-apply the "improvement."
+- **Genuinely derived** (a pure expression of other reactive properties): then `readonly property bool enabled: <expr>` is correct *and* you never need to assign it. If you want both encapsulation *and* an imperative internal writer, split them: a writable `property bool _enabled` that the handler sets, plus `readonly property bool enabled: _enabled` as the public, unwritable view.
+
+```qml
+// WRONG — onLoaded assignment throws, enabled stuck at false:
+readonly property bool enabled: false
+FileView { onLoaded: root.enabled = parse(text()) }   // Cannot assign to read-only property
+
+// RIGHT — writable, with a regression guard:
+property bool enabled: false   // NOT readonly: the FileView below assigns to it
+FileView { onLoaded: root.enabled = parse(text()) }
+```
+
+Found in: `services/QuietMode.qml` — a `/seal` code review "hardened" `enabled` to `readonly`, which froze it false and broke the Silent toggle. Reverted to writable with an inline regression-guard comment.
