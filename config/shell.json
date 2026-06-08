@@ -434,7 +434,7 @@
     }
   },
   "services": {
-    "weatherLocation": "",
+    "weatherLocation": "Córdoba",
     "useFahrenheit": false,
     "useTwelveHourClock": false,
     "gpuType": "",
@@ -447,7 +447,8 @@
         "from": "com.github.th_ch.youtube_music",
         "to": "YT Music"
       }
-    ]
+    ],
+    "weatherUseCurrentLocation": false
   },
   "paths": {
     "wallpaperDir": "/home/jc/Pictures/Wallpapers",
