@@ -65,6 +65,7 @@ Deferred Panels loading was **reverted** (over-engineering). Kept changes (4 fil
 - [project_monolithic_architecture.md](project_monolithic_architecture.md) — Shell stays monolithic, satellite branch shelved
 - [project_frozen_dark_theme.md](project_frozen_dark_theme.md) — Scheme system removed, frozen to warm-neutral dark (2026-04-11)
 - [project_cli_consolidation_progress.md](project_cli_consolidation_progress.md) — CLI issues #50-#52 done, #53-#55 open
+- [project_wifi_no_secret_agent.md](project_wifi_no_secret_agent.md) — Wi-Fi connect fails silently w/o NM secret agent; saved-profile null-callback bug + BSSID-pin removed (2026-06-07)
 
 ## References
 - [reference_orchestrator_remote_reload.md](reference_orchestrator_remote_reload.md) — Reload orchestrator in all NeoVim instances via RPC sockets

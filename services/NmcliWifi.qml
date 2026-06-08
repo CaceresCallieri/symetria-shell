@@ -319,8 +319,7 @@ Singleton {
         }
 
         if (password && password.length > 0 && hasBssid) {
-            const bssidUpper = bssid.toUpperCase();
-            createConnectionWithPassword(ssid, bssidUpper, password, callback);
+            createConnectionWithPassword(ssid, password, callback);
             return;
         }
 
@@ -352,9 +351,16 @@ Singleton {
         });
     }
 
-    function createConnectionWithPassword(ssid: string, bssidUpper: string, password: string, callback: var): void {
+    function createConnectionWithPassword(ssid: string, password: string, callback: var): void {
         checkAndDeleteConnection(ssid, () => {
-            const cmd = [NmcliCore.nmcliCommandConnection, "add", NmcliCore.connectionParamType, NmcliCore.deviceTypeWifi, NmcliCore.connectionParamConName, ssid, NmcliCore.connectionParamIfname, "*", NmcliCore.connectionParamSsid, ssid, NmcliCore.connectionParamBssid, bssidUpper, NmcliCore.securityKeyMgmt, NmcliCore.keyMgmtWpaPsk, NmcliCore.securityPsk, password];
+            // NOTE: We intentionally do NOT pin 802-11-wireless.bssid here. Pinning
+            // locks the profile to one AP's MAC, so it silently stops matching when
+            // the router reboots with a new BSSID, on mesh/band-steering networks, or
+            // when revisiting a venue — leaving an unconnectable saved profile. nmtui
+            // and nm-applet create roaming (SSID-only) profiles for the same reason.
+            // The BSSID pin was inherited from the upstream Caelestia config, not a
+            // deliberate Symmetria design choice.
+            const cmd = [NmcliCore.nmcliCommandConnection, "add", NmcliCore.connectionParamType, NmcliCore.deviceTypeWifi, NmcliCore.connectionParamConName, ssid, NmcliCore.connectionParamIfname, "*", NmcliCore.connectionParamSsid, ssid, NmcliCore.securityKeyMgmt, NmcliCore.keyMgmtWpaPsk, NmcliCore.securityPsk, password];
 
             NmcliCore.executeCommand(cmd, result => {
                 if (result.success) {

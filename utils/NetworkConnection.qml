@@ -66,41 +66,48 @@ QtObject {
             return;
         }
 
-        if (network.isSecure) {
-            const hasSavedProfile = NmcliWifi.hasSavedProfile(network.ssid);
-
-            if (hasSavedProfile) {
-                NmcliWifi.connectToNetwork(network.ssid, "", network.bssid, null);
-            } else {
-                // Use password check with callback
-                NmcliWifi.connectToNetworkWithPasswordCheck(
-                    network.ssid,
-                    network.isSecure,
-                    (result) => {
-                        if (result.needsPassword) {
-                            // Clear pending connection if exists
-                            if (NmcliWifi.pendingConnection) {
-                                NmcliWifi.connectionCheckTimer.stop();
-                                NmcliWifi.immediateCheckTimer.stop();
-                                NmcliWifi.immediateCheckTimer.checkCount = 0;
-                                NmcliWifi.pendingConnection = null;
-                            }
-                            
-                            // Handle password dialog - use session if available, otherwise use callback
-                            if (session && session.network) {
-                                session.network.showPasswordDialog = true;
-                                session.network.pendingNetwork = network;
-                            } else if (onPasswordNeeded) {
-                                onPasswordNeeded(network);
-                            }
-                        }
-                    },
-                    network.bssid
-                );
-            }
-        } else {
+        if (!network.isSecure) {
             NmcliWifi.connectToNetwork(network.ssid, "", network.bssid, null);
+            return;
         }
+
+        // Secured network: attempt with the stored secret first (an empty password
+        // reuses any saved profile's PSK), and prompt ONLY if nmcli reports the
+        // secret is missing/rejected. This single path covers three cases: no saved
+        // profile, a saved profile with a good secret (connects silently), and a
+        // saved profile whose secret is stale/wrong (re-prompts).
+        //
+        // REGRESSION GUARD: do NOT reintroduce a `hasSavedProfile()` fast path that
+        // calls connectToNetwork(..., null). Symmetria registers no NetworkManager
+        // secret agent, so when a saved profile's secret is bad, NM fails instantly
+        // with "no-secrets / No agents available". With a null callback that failure
+        // was SILENT — the user clicked Connect and nothing happened, the root cause
+        // of "I can only connect to networks I've connected to before". The callback
+        // below is the only thing that surfaces the password dialog on that failure.
+        NmcliWifi.connectToNetworkWithPasswordCheck(
+            network.ssid,
+            network.isSecure,
+            (result) => {
+                if (result.needsPassword) {
+                    // Clear pending connection if exists
+                    if (NmcliWifi.pendingConnection) {
+                        NmcliWifi.connectionCheckTimer.stop();
+                        NmcliWifi.immediateCheckTimer.stop();
+                        NmcliWifi.immediateCheckTimer.checkCount = 0;
+                        NmcliWifi.pendingConnection = null;
+                    }
+
+                    // Handle password dialog - use session if available, otherwise use callback
+                    if (session && session.network) {
+                        session.network.showPasswordDialog = true;
+                        session.network.pendingNetwork = network;
+                    } else if (onPasswordNeeded) {
+                        onPasswordNeeded(network);
+                    }
+                }
+            },
+            network.bssid
+        );
     }
 
     /**
