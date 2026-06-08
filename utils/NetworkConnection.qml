@@ -37,7 +37,7 @@ QtObject {
      * @param session Optional Session object (for controlcenter - must have network property with showPasswordDialog and pendingNetwork)
      * @param onPasswordNeeded Optional callback function(network) called when password is needed (for bar popouts)
      */
-    function handleConnect(network, session, onPasswordNeeded): void {
+    function handleConnect(network: var, session: var, onPasswordNeeded: var): void {
         if (!network) {
             return;
         }
@@ -61,7 +61,7 @@ QtObject {
      * @param session Optional Session object (for controlcenter - must have network property with showPasswordDialog and pendingNetwork)
      * @param onPasswordNeeded Optional callback function(network) called when password is needed (for bar popouts)
      */
-    function connectToNetwork(network, session, onPasswordNeeded): void {
+    function connectToNetwork(network: var, session: var, onPasswordNeeded: var): void {
         if (!network) {
             return;
         }
@@ -118,7 +118,7 @@ QtObject {
      * @param password The password to use for connection
      * @param onResult Optional callback function(result) called with connection result
      */
-    function connectWithPassword(network, password, onResult): void {
+    function connectWithPassword(network: var, password: string, onResult: var): void {
         if (!network) {
             return;
         }

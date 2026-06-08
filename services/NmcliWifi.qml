@@ -41,7 +41,8 @@ Singleton {
             || error.includes("Secrets were required, but not provided")
             || error.includes("No secrets provided")
             || error.includes("802-11-wireless-security.psk")
-            || error.includes("password for");
+            || error.includes("password for")
+            || error.includes("No agents were available");
         const hasPasswordWord = error.includes("password") && notSuccess;
         const hasSecretsWord = error.includes("Secrets") && notSuccess;
         const has80211Word = error.includes("802.11") && notSuccess;
