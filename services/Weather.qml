@@ -26,6 +26,14 @@ Singleton {
     // so the "not installed" hint doesn't flash before the check completes.
     property bool geoclueAvailable: false
     property bool geoclueChecked: false
+    // Gates the Connections block against JsonAdapter deserialization at startup.
+    // Without this, Config.services property changes during initial JSON load trigger
+    // a second reload() while an in-flight IP request from Component.onCompleted is
+    // still pending — the late IP response can then overwrite the correct location.
+    property bool ready: false
+    // Prevents concurrent ipinfo.io requests when the GPS timeout and sourceError
+    // both fire (geoclue plugin may emit sourceError on forced deactivation).
+    property bool ipFetchInFlight: false
 
     readonly property string icon: cc ? Icons.getWeatherIcon(cc.weatherCode) : "cloud_alert"
     readonly property string description: cc?.weatherDesc ?? qsTr("No weather")
@@ -66,10 +74,14 @@ Singleton {
     // location is configured and when a geoclue GPS fix is unavailable. Cached for
     // 15 min (tracked by `timer`) so repeated reloads don't hammer the endpoint.
     function fetchLocationFromIp(): void {
+        if (root.ipFetchInFlight)
+            return; // deduplicate concurrent calls (GPS timeout + sourceError race)
         if (loc && timer.elapsed() <= 900000)
             return;
 
+        root.ipFetchInFlight = true;
         Requests.get("https://ipinfo.io/json", text => {
+            root.ipFetchInFlight = false;
             const response = JSON.parse(text);
             if (response.loc) {
                 loc = response.loc;
@@ -240,7 +252,10 @@ Singleton {
         return conditions[code] || "Unknown";
     }
 
-    Component.onCompleted: reload()
+    Component.onCompleted: {
+        reload();
+        ready = true; // allow Connections to react to live config changes from here on
+    }
     onLocChanged: fetchWeatherData()
 
     // Refresh weather data hourly; also re-check location in case it has changed
@@ -261,6 +276,8 @@ Singleton {
     // Probe for the geoclue daemon once at startup. The D-Bus system-service file is
     // present iff the `geoclue` package is installed; exit 0 → available.
     Process {
+        id: geoclueProbe
+
         running: true
         command: ["test", "-e", "/usr/share/dbus-1/system-services/org.freedesktop.GeoClue2.service"]
         onExited: (code, status) => {
@@ -320,12 +337,18 @@ Singleton {
         target: Config.services
 
         function onWeatherUseCurrentLocationChanged(): void {
+            if (!root.ready)
+                return;
             root.loc = "";
+            root.city = "";
             root.reload();
         }
 
         function onWeatherLocationChanged(): void {
+            if (!root.ready)
+                return;
             root.loc = "";
+            root.city = "";
             root.reload();
         }
     }

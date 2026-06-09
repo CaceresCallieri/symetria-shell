@@ -120,7 +120,7 @@ Item {
                         wrapMode: Text.WordWrap
                         color: Colours.palette.m3error
                         font.pointSize: Appearance.font.size.small
-                        text: qsTr("geoclue is not installed — GPS is unavailable, using IP location instead. Install it with: sudo pacman -S geoclue")
+                        text: qsTr("geoclue service file not found — GPS may be unavailable, using IP location instead. Install: sudo -A pacman -S geoclue, then ensure 'symmetria' is whitelisted in /etc/geoclue/geoclue.conf")
                     }
 
                     StyledText {
