@@ -15,7 +15,15 @@ WlSessionLockSurface {
 
     readonly property alias unlocking: unlockAnim.running
 
+    // Per-output identity for diagnostics. WlSessionLockSurface is created once
+    // per screen; the surface is torn down and recreated when Hyprland removes/
+    // re-adds outputs across suspend/resume — the prime suspect window.
+    readonly property string screenName: root.screen?.name ?? "unknown"
+
     color: "transparent"
+
+    Component.onCompleted: LockDiagnostics.markSurfaceCreated(root.screenName)
+    Component.onDestruction: LockDiagnostics.markSurfaceDestroyed(root.screenName)
 
     Connections {
         target: root.lock
@@ -165,6 +173,13 @@ WlSessionLockSurface {
         anchors.fill: parent
         captureSource: root.screen
         opacity: 0
+
+        // THE smoking-gun signal. This ScreencopyView is the lock surface's
+        // ONLY opaque content (the surface is transparent). If hasContent never
+        // flips true while locked, the lock is "armed but undrawn" — the exact
+        // crash signature — with qs still alive. Logged for post-mortem and fed
+        // into the heartbeat the external watchdog tails.
+        onHasContentChanged: LockDiagnostics.markScreencopy(root.screenName, hasContent)
 
         layer.enabled: true
         layer.effect: MultiEffect {

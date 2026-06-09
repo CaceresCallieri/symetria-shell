@@ -1,4 +1,5 @@
 import qs.config
+import qs.services
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -24,6 +25,9 @@ Scope {
             return;
 
         if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
+            LockDiagnostics.log("pam_attempt", {
+                method: "password"
+            });
             passwd.start();
         } else if (event.key === Qt.Key_Backspace) {
             if (event.modifiers & Qt.ControlModifier) {
@@ -59,8 +63,13 @@ Scope {
         }
 
         onCompleted: res => {
-            if (res === PamResult.Success)
+            if (res === PamResult.Success) {
+                LockDiagnostics.log("pam_result", {
+                    method: "password",
+                    result: "success"
+                });
                 return root.lock.unlock();
+            }
 
             if (res === PamResult.Error)
                 root.state = "error";
@@ -68,6 +77,11 @@ Scope {
                 root.state = "max";
             else if (res === PamResult.Failed)
                 root.state = "fail";
+
+            LockDiagnostics.log("pam_result", {
+                method: "password",
+                result: root.state
+            });
 
             root.flashMsg();
             stateReset.restart();
@@ -99,8 +113,13 @@ Scope {
             if (!available)
                 return;
 
-            if (res === PamResult.Success)
+            if (res === PamResult.Success) {
+                LockDiagnostics.log("pam_result", {
+                    method: "fingerprint",
+                    result: "success"
+                });
                 return root.lock.unlock();
+            }
 
             if (res === PamResult.Error) {
                 root.fprintState = "error";
