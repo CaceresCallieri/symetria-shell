@@ -359,8 +359,9 @@ class AgentBridge:
 
     def remove_subscriber(self, writer: asyncio.StreamWriter) -> None:
         """Drop a subscriber (idempotent; called from handle_client cleanup)."""
-        if writer in self._subscribers:
-            self._subscribers.discard(writer)
+        was_present = writer in self._subscribers
+        self._subscribers.discard(writer)
+        if was_present:
             log.info("unsubscribe: %d subscriber(s) remain", len(self._subscribers))
 
     def _schedule_emit(self) -> None:
@@ -561,8 +562,8 @@ class AgentBridge:
             # wrongly resolve to, and the environ fallback can't see the
             # IDE's own putenv (post-exec env changes don't reach
             # /proc/pid/environ). Overwrite on every hello, like the socket.
-            declared_host = msg.get("host_window_pid") or 0
-            if declared_host:
+            declared_host = msg.get("host_window_pid")
+            if declared_host and isinstance(declared_host, (int, float)) and declared_host > 0:
                 self._terminal_pids[nvim_pid] = int(declared_host)
             # Resolve terminal PID on first contact (stable for session lifetime)
             elif nvim_pid not in self._terminal_pids:
