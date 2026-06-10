@@ -166,6 +166,13 @@ class AgentBridge:
         # Prevents stdout floods during startup reconnect bursts (30+ events → 2 emissions).
         self._emit_handle: asyncio.TimerHandle | None = None
         self._emit_dirty: bool = False
+        # Socket subscribers (e.g. the Symmetria IDE): StreamWriters registered
+        # via a {"type": "subscribe"} message. Every consolidated snapshot that
+        # goes to stdout is also written to each subscriber as the same JSON
+        # line. Writes are fire-and-forget (no drain) so a slow or dead
+        # subscriber can never stall the shell's stdout emission path —
+        # _emit() runs in sync contexts (call_later callbacks) and cannot await.
+        self._subscribers: set[asyncio.StreamWriter] = set()
 
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
@@ -268,8 +275,8 @@ class AgentBridge:
         if agent_type:
             self._agent_types[f"{nvim_pid}_{buf}"] = agent_type
 
-    def _emit(self) -> None:
-        """Write consolidated state to stdout (consumed by QML SplitParser)."""
+    def _snapshot_line(self) -> str:
+        """Build the consolidated-state JSON line (without writing it anywhere)."""
         agents = []
         projects = set()
 
@@ -313,10 +320,48 @@ class AgentBridge:
             "projects": sorted(projects),
         }
         line = json.dumps(payload)
-        log.debug("_emit: %d agents, %d projects, %d clients — writing %d bytes to stdout",
-                   len(agents), len(projects), len(self._clients), len(line))
+        log.debug("_snapshot: %d agents, %d projects, %d clients, %d subscriber(s) — %d bytes",
+                   len(agents), len(projects), len(self._clients),
+                   len(self._subscribers), len(line))
+        return line
+
+    def _emit(self) -> None:
+        """Write consolidated state to stdout (QML SplitParser) + socket subscribers."""
+        line = self._snapshot_line()
         sys.stdout.write(line + "\n")
         sys.stdout.flush()
+        if self._subscribers:
+            data = (line + "\n").encode()
+            for w in list(self._subscribers):
+                if w.is_closing():
+                    self._subscribers.discard(w)
+                    continue
+                try:
+                    w.write(data)
+                except Exception as e:  # noqa: BLE001 — any write failure means dead peer
+                    log.warning("_emit: dropping dead subscriber (%s)", e)
+                    self._subscribers.discard(w)
+
+    def add_subscriber(self, writer: asyncio.StreamWriter) -> None:
+        """Register a snapshot subscriber and push the current state immediately.
+
+        The initial snapshot goes only to the new writer (not stdout), so a
+        late-joining consumer (the IDE) gets current state without producing
+        a redundant stdout line for the shell.
+        """
+        self._subscribers.add(writer)
+        log.info("subscribe: %d subscriber(s) registered", len(self._subscribers))
+        try:
+            writer.write((self._snapshot_line() + "\n").encode())
+        except Exception as e:  # noqa: BLE001
+            log.warning("add_subscriber: initial snapshot failed (%s)", e)
+            self._subscribers.discard(writer)
+
+    def remove_subscriber(self, writer: asyncio.StreamWriter) -> None:
+        """Drop a subscriber (idempotent; called from handle_client cleanup)."""
+        if writer in self._subscribers:
+            self._subscribers.discard(writer)
+            log.info("unsubscribe: %d subscriber(s) remain", len(self._subscribers))
 
     def _schedule_emit(self) -> None:
         """Coalesced emit: leading edge fires immediately, then 50ms cooldown.
@@ -758,6 +803,7 @@ class AgentBridge:
                 "agent_types": dict(self._agent_types),
                 "subagent_depth": dict(self._subagent_depth),
                 "conn_count": dict(self._conn_count),
+                "subscriber_count": len(self._subscribers),
                 "last_resolicit": {str(k): v for k, v in self._last_resolicit.items()},
             }
             DIAGNOSTIC_DUMP_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -862,6 +908,19 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                 log.warning("CLIENT: bad JSON from pid=%s: %s", nvim_pid, text[:100])
                 continue
 
+            # Subscribe: register this connection for snapshot fan-out and send
+            # the current consolidated state immediately so a late-joining
+            # consumer (the Symmetria IDE) doesn't wait for the next change.
+            # Handled here (not in handle_message) because only handle_client
+            # owns the writer. A subscribe-only connection never sets nvim_pid,
+            # so it takes the ephemeral-conn path below — no _conn_count entry,
+            # no remove_client on disconnect. A publisher connection (hello
+            # first, then subscribe — the IDE's single-connection mode) keeps
+            # its normal client lifecycle; the subscription is orthogonal.
+            if msg.get("type") == "subscribe":
+                bridge.add_subscriber(writer)
+                continue
+
             # Track nvim_pid from first message AND increment the per-pid
             # connection counter. A given physical connection contributes
             # exactly one count regardless of how many messages it sends.
@@ -883,6 +942,7 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
         log.error("CLIENT ERROR: nvim_pid=%s, error=%s", nvim_pid, e)
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
+        bridge.remove_subscriber(writer)  # idempotent — no-op for non-subscribers
         writer.close()
         # Only call remove_client when the LAST connection from this pid
         # closes. The previous behavior (unconditional remove_client on
