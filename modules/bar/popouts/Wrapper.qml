@@ -113,6 +113,11 @@ Item {
                 return;
             }
         }
+        // Cancel the pending update process when Escape is pressed during password entry —
+        // the process is blocked on stdin and must not linger after the popout closes.
+        if (_updatesPasswordActive) {
+            UpdateRunner.cancel();
+        }
         close();
     }
 
@@ -173,7 +178,7 @@ Item {
 
     // Keyboard focus for the updates popout while it shows the sudo password field.
     Binding {
-        when: root.hasCurrent && root.currentName === "updates" && UpdateRunner.phase === "password"
+        when: root._updatesPasswordActive
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"

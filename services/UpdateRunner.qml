@@ -34,6 +34,7 @@ Singleton {
     property int installedCount: 0    // N from pacman's "(N/M)"
     property string currentPackage: ""
     property string errorMessage: ""
+    property bool _cancelling: false
 
     // Curated tail of the live log (last N non-control lines), shown in the popout.
     property string logTail: ""
@@ -78,8 +79,6 @@ Singleton {
         proc.write(password + "\n");
         root.phase = "authenticating";
     }
-
-    property bool _cancelling: false
 
     function cancel(): void {
         if (proc.running) {
@@ -156,15 +155,29 @@ Singleton {
     // to the plain counts view. Errors are left for the user to dismiss explicitly.
     // If the post-run recount (checkupdates) is still in flight, keep holding the
     // done state — reverting early would flash the stale pre-update count.
+    //
+    // Two-timer design avoids mutating `interval` at runtime (which is Qt-internal
+    // behaviour with edge cases on still-armed timers):
+    //   doneRevertTimer  — fires once after 4s; if the recount is still running, starts the poller
+    //   _recountPollTimer — fires every 1s until the recount lands, then acknowledges
     Timer {
         id: doneRevertTimer
         interval: 4000
         onTriggered: {
-            if (Updates.updateInProgress) {
-                interval = 1000; // poll until the recount lands
-                restart();
-            } else {
-                interval = 4000;
+            if (Updates.updateInProgress)
+                _recountPollTimer.start(); // wait for recount before reverting
+            else
+                root.acknowledge();
+        }
+    }
+
+    Timer {
+        id: _recountPollTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (!Updates.updateInProgress) {
+                stop();
                 root.acknowledge();
             }
         }

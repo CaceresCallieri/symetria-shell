@@ -43,8 +43,10 @@ MouseArea {
     onClicked: {
         if (UpdateRunner.running)
             return; // already running — progress is visible in the popout
-        if (UpdateRunner.finished)
-            UpdateRunner.acknowledge(); // clear a prior result, then re-check/start
+        if (UpdateRunner.finished) {
+            UpdateRunner.acknowledge(); // clear a prior result; second click will start a new run
+            return;
+        }
         if (Updates.totalUpdates > 0)
             UpdateRunner.start();
         else

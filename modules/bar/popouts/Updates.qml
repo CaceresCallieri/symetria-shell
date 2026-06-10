@@ -85,11 +85,6 @@ Column {
         contentMargins: Appearance.padding.normal
         visible: root.showProgress
 
-        readonly property bool isError: UpdateRunner.phase === "error"
-        readonly property bool isDone: UpdateRunner.phase === "done"
-        readonly property bool busy: UpdateRunner.running
-        readonly property bool awaitingPassword: UpdateRunner.phase === "password"
-
         readonly property string phaseLabel: {
             switch (UpdateRunner.phase) {
             case "authenticating": return qsTr("Waiting for password…");
@@ -98,6 +93,7 @@ Column {
             case "installing": return qsTr("Installing packages…");
             case "done": return qsTr("Everything is up to date");
             case "error": return qsTr("Update failed");
+            case "password": return ""; // never rendered — password section replaces this row
             default: return qsTr("Preparing…");
             }
         }
@@ -113,7 +109,7 @@ Column {
             Column {
                 width: parent.width
                 spacing: Appearance.spacing.small
-                visible: progressCard.awaitingPassword
+                visible: root.awaitingPassword
 
                 StyledText {
                     text: qsTr("Enter your password")
@@ -131,7 +127,7 @@ Column {
                         // Override PasswordField's roomy 48px default to match the
                         // button height for a compact single-row layout.
                         implicitHeight: updateButton.implicitHeight
-                        isActive: progressCard.awaitingPassword
+                        isActive: root.awaitingPassword
                         onSubmitted: if (password.length > 0) UpdateRunner.submitPassword(password)
                     }
 
@@ -150,7 +146,7 @@ Column {
             Row {
                 width: parent.width
                 spacing: Appearance.spacing.small
-                visible: !progressCard.awaitingPassword
+                visible: !root.awaitingPassword
 
                 Item {
                     anchors.verticalCenter: parent.verticalCenter
@@ -161,16 +157,16 @@ Column {
                         anchors.fill: parent
                         implicitSize: parent.implicitHeight
                         strokeWidth: Appearance.padding.small * 0.5
-                        running: progressCard.busy
-                        visible: progressCard.busy
+                        running: UpdateRunner.running
+                        visible: UpdateRunner.running
                     }
 
                     MaterialIcon {
                         anchors.centerIn: parent
-                        visible: progressCard.isDone || progressCard.isError
-                        text: progressCard.isError ? "error" : "check_circle"
+                        visible: UpdateRunner.phase === "done" || UpdateRunner.phase === "error"
+                        text: UpdateRunner.phase === "error" ? "error" : "check_circle"
                         fill: 1
-                        color: progressCard.isError ? Colours.palette.m3error : Colours.palette.m3primary
+                        color: UpdateRunner.phase === "error" ? Colours.palette.m3error : Colours.palette.m3primary
                     }
                 }
 
@@ -178,7 +174,7 @@ Column {
                     anchors.verticalCenter: parent.verticalCenter
                     text: progressCard.phaseLabel
                     font.weight: 500
-                    color: progressCard.isError ? Colours.palette.m3error : Colours.palette.m3onSurface
+                    color: UpdateRunner.phase === "error" ? Colours.palette.m3error : Colours.palette.m3onSurface
                 }
             }
 
@@ -186,7 +182,7 @@ Column {
             Row {
                 width: parent.width
                 spacing: Appearance.spacing.small
-                visible: !progressCard.isError && !progressCard.isDone && !progressCard.awaitingPassword
+                visible: UpdateRunner.phase !== "error" && UpdateRunner.phase !== "done" && !root.awaitingPassword
 
                 StyledText {
                     id: remainingNumber
@@ -211,7 +207,7 @@ Column {
             // Determinate bar during install.
             Rectangle {
                 width: parent.width
-                visible: UpdateRunner.totalPackages > 0 && !progressCard.isDone && !progressCard.isError
+                visible: UpdateRunner.totalPackages > 0 && UpdateRunner.phase !== "done" && UpdateRunner.phase !== "error"
                 implicitHeight: Appearance.padding.small
                 radius: height / 2
                 color: Colours.palette.m3surfaceContainerHigh
@@ -235,7 +231,7 @@ Column {
             // Current package.
             StyledText {
                 width: parent.width
-                visible: UpdateRunner.currentPackage.length > 0 && !progressCard.isDone
+                visible: UpdateRunner.currentPackage.length > 0 && UpdateRunner.phase !== "done"
                 text: UpdateRunner.currentPackage
                 font.family: Appearance.font.family.mono
                 font.pointSize: Appearance.font.size.small
@@ -246,7 +242,7 @@ Column {
             // Error message.
             StyledText {
                 width: parent.width
-                visible: progressCard.isError
+                visible: UpdateRunner.phase === "error"
                 text: UpdateRunner.errorMessage
                 font.pointSize: Appearance.font.size.small
                 color: Colours.palette.m3error
@@ -254,13 +250,14 @@ Column {
             }
 
             // Live log tail — tall enough to read what's actually happening.
+            // WrapAnywhere + no clip surfaces more content than NoWrap+ElideRight,
+            // which cuts off mid-line and wastes the full log height.
             StyledRect {
                 width: parent.width
-                visible: UpdateRunner.logTail.length > 0 && !progressCard.isDone
+                visible: UpdateRunner.logTail.length > 0 && UpdateRunner.phase !== "done"
                 implicitHeight: Appearance.font.size.small * 26
                 radius: Appearance.rounding.small
                 color: Colours.palette.m3surfaceContainerLow
-                clip: true
 
                 StyledText {
                     anchors.left: parent.left
@@ -272,27 +269,21 @@ Column {
                     font.family: Appearance.font.family.mono
                     font.pointSize: Appearance.font.size.small
                     color: Colours.palette.m3onSurfaceVariant
-                    wrapMode: Text.NoWrap
-                    elide: Text.ElideRight
+                    wrapMode: Text.WrapAnywhere
                 }
             }
 
             // Footer action.
-            Item {
-                width: parent.width
-                implicitHeight: actionButton.implicitHeight
+            RaisedTextButton {
+                id: actionButton
+                anchors.right: parent.right
 
-                RaisedTextButton {
-                    id: actionButton
-                    anchors.right: parent.right
-
-                    text: progressCard.busy ? qsTr("Cancel") : qsTr("Dismiss")
-                    onClicked: {
-                        if (UpdateRunner.running)
-                            UpdateRunner.cancel();
-                        else
-                            UpdateRunner.acknowledge();
-                    }
+                text: UpdateRunner.running ? qsTr("Cancel") : qsTr("Dismiss")
+                onClicked: {
+                    if (UpdateRunner.running)
+                        UpdateRunner.cancel();
+                    else
+                        UpdateRunner.acknowledge();
                 }
             }
         }
