@@ -554,8 +554,18 @@ class AgentBridge:
             self._clients.setdefault(nvim_pid, {})
             # Detect remote clients (PID doesn't exist in local /proc — tunneled via SSH)
             self._ensure_remote_detected(nvim_pid)
+            # An explicitly DECLARED host window PID (Symmetria IDE's bridge
+            # client sends its own pid — the Hyprland window pid) always
+            # beats the inferred /proc walk: an IDE launched from a dev
+            # terminal has a real terminal ancestor that the walk would
+            # wrongly resolve to, and the environ fallback can't see the
+            # IDE's own putenv (post-exec env changes don't reach
+            # /proc/pid/environ). Overwrite on every hello, like the socket.
+            declared_host = msg.get("host_window_pid") or 0
+            if declared_host:
+                self._terminal_pids[nvim_pid] = int(declared_host)
             # Resolve terminal PID on first contact (stable for session lifetime)
-            if nvim_pid not in self._terminal_pids:
+            elif nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
             # Record the real RPC socket (v:servername). Overwrite on every
             # hello — a reconnect after :restart could carry a new path.
