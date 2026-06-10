@@ -112,8 +112,8 @@ Singleton {
 
     on_MicHotChanged: {
         if (_micHot) {
-            if (Config.stt?.ducking?.enabled ?? true)
-                AudioDucking.duck(Config.stt?.ducking?.volume ?? 0.3);
+            if (Config.stt.ducking.enabled)
+                AudioDucking.duck(Config.stt.ducking.volume);
         } else {
             // Unconditional: handles ducking.enabled flipping false mid-duck
             AudioDucking.restore();

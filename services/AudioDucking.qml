@@ -26,7 +26,6 @@ Singleton {
     property bool _ducked: false
     property real _savedVolume: -1 // -1 sentinel: nothing to restore
     property real _appliedVolume: -1 // exact value we set, for manual-change detection
-    readonly property real _epsilon: 0.02
 
     /// Duck the master sink to the ABSOLUTE volume `target` (0..1). If the
     /// current volume is already at or below the target, it is left alone —
@@ -66,7 +65,8 @@ Singleton {
             return;
         }
         // User adjusted volume while ducked — their setting wins.
-        if (Math.abs(Audio.volume - applied) > _epsilon) {
+        const epsilon = 0.02;
+        if (Math.abs(Audio.volume - applied) > epsilon) {
             Logger.log("qml", "stt", "duck restore skipped | volume changed externally (now=" + Audio.volume.toFixed(2) + " expected=" + applied.toFixed(2) + ")");
             return;
         }
