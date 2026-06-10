@@ -216,7 +216,7 @@ class AgentBridge:
         0 when absent, malformed, or pointing at a dead process.
         """
         try:
-            environ = Path(f"/proc/{int(nvim_pid)}/environ").read_bytes()
+            environ = Path(f"/proc/{nvim_pid}/environ").read_bytes()
             for entry in environ.split(b"\0"):
                 if entry.startswith(b"SYMMETRIA_HOST_WINDOW_PID="):
                     host_pid = int(entry.partition(b"=")[2])
@@ -640,6 +640,7 @@ class AgentBridge:
                 self._clear_agent_state(f"{nvim_pid}_{buf}")
             del self._clients[nvim_pid]
             self._terminal_pids.pop(nvim_pid, None)
+            self._nvim_sockets.pop(nvim_pid, None)
             self._remote_clients.discard(nvim_pid)
             # Clear the per-pid connection counter and resolicit throttle so
             # a reconnect from this same pid starts fresh. Without this, a pid
