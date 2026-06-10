@@ -109,6 +109,11 @@ class AgentBridge:
         self._clients: dict[int, dict[int, dict]] = {}
         # {nvim_pid: terminal_pid} — cached terminal PID per Neovim instance
         self._terminal_pids: dict[int, int] = {}
+        # {nvim_pid: socket_path} — actual RPC socket (v:servername) reported
+        # in the hello message. Authoritative over the pid-derived default
+        # ($XDG_RUNTIME_DIR/nvim.<pid>.0), which is wrong for embedding hosts
+        # that pass an explicit --listen path (Symmetria IDE).
+        self._nvim_sockets: dict[int, str] = {}
         # nvim_pids from remote machines (PID doesn't exist in local /proc)
         self._remote_clients: set[int] = set()
         # {agent_id: {"state": str, "tool": str, "ts": float, "in_plan_mode": bool, "event_ts_ns": int}}
@@ -167,8 +172,11 @@ class AgentBridge:
         """Walk /proc upward from nvim_pid to find the terminal emulator PID.
 
         Reads /proc/{pid}/stat for each ancestor: field 2 is the comm name
-        (in parens), field 4 is the parent PID.  Returns 0 if no terminal
-        emulator is found before reaching PID 1.
+        (in parens), field 4 is the parent PID.  If no terminal emulator is
+        found before reaching PID 1 (nvim embedded in a non-terminal host
+        like Symmetria IDE), falls back to the SYMMETRIA_HOST_WINDOW_PID
+        variable the host exports into nvim's environment.  Returns 0 if
+        both strategies fail.
         """
         pid = nvim_pid
         visited: set[int] = set()
@@ -188,7 +196,35 @@ class AgentBridge:
                 pid = int(fields_after[1])  # ppid is the 2nd field after ')'
             except (OSError, ValueError, IndexError):
                 break
+        host_pid = AgentBridge._host_window_pid_from_environ(nvim_pid)
+        if host_pid:
+            log.debug("_resolve_terminal_pid: %d → host window pid %d (environ)", nvim_pid, host_pid)
+            return host_pid
         log.debug("_resolve_terminal_pid: %d → no terminal found", nvim_pid)
+        return 0
+
+    @staticmethod
+    def _host_window_pid_from_environ(nvim_pid: int) -> int:
+        """Read SYMMETRIA_HOST_WINDOW_PID from /proc/{nvim_pid}/environ.
+
+        Embedding hosts that own a real compositor window but aren't terminal
+        emulators (Symmetria IDE's QMLTermWidget panes) export their own PID
+        under this variable before spawning nvim; the child inherits it.  The
+        host PID is what Hyprland associates with the window, so resolving to
+        it makes click-to-focus / workspace mapping / STT targeting work for
+        embedded agents through the existing terminal_pid plumbing.  Returns
+        0 when absent, malformed, or pointing at a dead process.
+        """
+        try:
+            environ = Path(f"/proc/{int(nvim_pid)}/environ").read_bytes()
+            for entry in environ.split(b"\0"):
+                if entry.startswith(b"SYMMETRIA_HOST_WINDOW_PID="):
+                    host_pid = int(entry.partition(b"=")[2])
+                    if host_pid > 0 and Path(f"/proc/{host_pid}").exists():
+                        return host_pid
+                    return 0
+        except (OSError, ValueError):
+            pass
         return 0
 
     @staticmethod
@@ -255,6 +291,9 @@ class AgentBridge:
                     "spawn_type": inst.get("spawn_type", "fresh"),
                     "spawned_at": inst.get("spawned_at", 0),
                     "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
+                    # Real RPC socket from hello (v:servername); "" → consumer
+                    # falls back to the pid-derived default path.
+                    "nvim_socket": self._nvim_sockets.get(nvim_pid, ""),
                     "remote": nvim_pid in self._remote_clients,
                     # Backend identity drives the dashboard accent color. Read
                     # from the sticky _agent_types map (NOT activity) so it
@@ -473,8 +512,13 @@ class AgentBridge:
             # Resolve terminal PID on first contact (stable for session lifetime)
             if nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
-            log.debug("  hello: registered client %s (terminal_pid=%d, remote=%s, total clients: %d)",
-                       nvim_pid, self._terminal_pids.get(nvim_pid, 0),
+            # Record the real RPC socket (v:servername). Overwrite on every
+            # hello — a reconnect after :restart could carry a new path.
+            sock = msg.get("nvim_socket") or ""
+            if sock:
+                self._nvim_sockets[nvim_pid] = sock
+            log.debug("  hello: registered client %s (terminal_pid=%d, socket=%s, remote=%s, total clients: %d)",
+                       nvim_pid, self._terminal_pids.get(nvim_pid, 0), sock,
                        nvim_pid in self._remote_clients, len(self._clients))
             # Don't emit: hello registers the client slot but carries no agent data.
             # The subsequent "sync" message will emit with the full initial state.
@@ -575,6 +619,7 @@ class AgentBridge:
                     self._clear_agent_state(f"{nvim_pid}_{buf}")
                 del self._clients[nvim_pid]
                 self._terminal_pids.pop(nvim_pid, None)
+                self._nvim_sockets.pop(nvim_pid, None)
                 self._remote_clients.discard(nvim_pid)
                 # Clear per-pid counters so a reconnect from this pid starts fresh.
                 self._conn_count.pop(nvim_pid, None)

@@ -372,10 +372,17 @@ Singleton {
         return representativeAgent(matching);
     }
 
-    /// Derive Neovim socket path from agent's nvim_pid.
-    /// Pattern: /run/user/$UID/nvim.<nvim_pid>.0
+    /// Resolve the agent's Neovim RPC socket path.
+    /// Prefers the real socket (v:servername) reported by the orchestrator's
+    /// hello message and forwarded by the bridge — authoritative for
+    /// embedding hosts that pass an explicit --listen path (Symmetria IDE
+    /// uses /tmp/symmetria-nvim-*/nvim.sock, where the pid-derived guess
+    /// below does not exist). Falls back to nvim's default servername
+    /// pattern (/run/user/$UID/nvim.<nvim_pid>.0) for agents registered
+    /// before the bridge forwarded nvim_socket.
     function nvimSocketForAgent(agent: var): string {
         if (!agent || !agent.nvim_pid) return "";
+        if (agent.nvim_socket) return agent.nvim_socket;
         const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000";
         return `${runtimeDir}/nvim.${agent.nvim_pid}.0`;
     }
