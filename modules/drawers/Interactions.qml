@@ -109,7 +109,8 @@ CustomMouseArea {
                 visibilities.utilities = false;
 
             if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
+                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
+                    && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
                 _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -200,7 +201,8 @@ CustomMouseArea {
                 _popoutThrottleTimer.start();
         } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                    && !inTopPanelExpanded(panels.popouts, x, y)
-                   && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
+                   && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
+                   && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();

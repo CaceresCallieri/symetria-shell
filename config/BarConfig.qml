@@ -147,6 +147,13 @@ JsonObject {
         property int networkWidth: 320
         property int weatherWidth: 250
         property int updatesWidth: 200
+        // Much wider while a run is in progress: the progress view shows a phase
+        // line, current package name, and a tall live log that need real estate —
+        // sized so full pacman/makepkg lines are readable without elision.
+        property int updatesProgressWidth: 680
+        // Compact width for the password-entry step: just a label, a short
+        // password field, and the Update button.
+        property int updatesPasswordWidth: 340
         // Wider than updatesWidth: the RAM popout's process list shows
         // long executable names (e.g. claude-code, zen-browser) and a
         // %-column on the right, which together over-elide the name

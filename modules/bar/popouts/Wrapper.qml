@@ -131,14 +131,26 @@ Item {
         && root.currentName === "recording"
         && SttService.vocabHintsVisible
 
+    // The updates popout's sudo password field lives in THIS window too, so it
+    // needs the same grab treatment as the vocab hints input: without the grab
+    // the compositor never routes keys here until the user clicks the field.
+    readonly property bool _updatesPasswordActive: root.hasCurrent
+        && root.currentName === "updates"
+        && UpdateRunner.phase === "password"
+
     HyprlandFocusGrab {
-        active: root.isDetached || root._vocabHintsActive
+        active: root.isDetached || root._vocabHintsActive || root._updatesPasswordActive
         windows: [QsWindow.window]
         onCleared: {
             if (root._vocabHintsActive)
                 // Popout intentionally stays open — only the hints input closes on click-outside.
                 SttService.vocabHintsVisible = false;
-            else
+            else if (root._updatesPasswordActive) {
+                // Click-outside during password entry abandons the pending run —
+                // the process is blocked on stdin and must not linger.
+                UpdateRunner.cancel();
+                root.close();
+            } else
                 root.close();
         }
     }
@@ -153,6 +165,15 @@ Item {
 
     Binding {
         when: root.hasCurrent && root.currentName === "wirelesspassword"
+
+        target: QsWindow.window
+        property: "WlrLayershell.keyboardFocus"
+        value: WlrKeyboardFocus.OnDemand
+    }
+
+    // Keyboard focus for the updates popout while it shows the sudo password field.
+    Binding {
+        when: root.hasCurrent && root.currentName === "updates" && UpdateRunner.phase === "password"
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"
