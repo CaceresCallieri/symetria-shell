@@ -102,6 +102,24 @@ Singleton {
             "-name", "session_*", "-mmin", `+${mins}`, "-delete"]);
     }
 
+    // "Ducked = mic is hot": duck the master sink while audio is actively
+    // being captured. Covers start/resume (→true) and pause/submit/cancel/
+    // restart/crash (→false): stop()/cancel()/restart() null _activeRecording
+    // synchronously; pause and pw-record crash flip the job's state away from
+    // "recording". Lives here, not in SttJob: cancel/restart destroy the job
+    // while its state is still "recording", which would leak a duck.
+    readonly property bool _micHot: _activeRecording !== null && _activeRecording.recording
+
+    on_MicHotChanged: {
+        if (_micHot) {
+            if (Config.stt?.ducking?.enabled ?? true)
+                AudioDucking.duck(Config.stt?.ducking?.volume ?? 0.3);
+        } else {
+            // Unconditional: handles ducking.enabled flipping false mid-duck
+            AudioDucking.restore();
+        }
+    }
+
     // Delivery mode from config: "clipboard" (default), "inject", "submit", or "ask"
     readonly property string _deliveryMode: {
         const mode = Config.stt?.deliveryMode ?? "clipboard";

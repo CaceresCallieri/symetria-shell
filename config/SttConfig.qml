@@ -55,4 +55,14 @@ JsonObject {
         property int retainSuccessHours: 24
         property int maxSuccessEntries: 50
     }
+
+    // Audio ducking: lower the master sink volume while the mic is hot
+    // (recording, not paused) so background audio contaminates the
+    // transcription less. volume is ABSOLUTE: the sink is set to this level
+    // while ducked (0.3 = 30%), unless it was already lower — ducking never
+    // raises the volume.
+    property JsonObject ducking: JsonObject {
+        property bool enabled: true
+        property real volume: 0.3
+    }
 }

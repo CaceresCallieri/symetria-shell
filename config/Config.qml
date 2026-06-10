@@ -494,6 +494,10 @@ Singleton {
                 enabled: stt.cache.enabled,
                 maxEntries: stt.cache.maxEntries,
                 deleteOnSuccess: stt.cache.deleteOnSuccess
+            },
+            ducking: {
+                enabled: stt.ducking.enabled,
+                volume: stt.ducking.volume
             }
         };
     }
