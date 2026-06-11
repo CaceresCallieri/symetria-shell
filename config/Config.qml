@@ -494,7 +494,9 @@ Singleton {
             cache: {
                 enabled: stt.cache.enabled,
                 maxEntries: stt.cache.maxEntries,
-                deleteOnSuccess: stt.cache.deleteOnSuccess
+                deleteOnSuccess: stt.cache.deleteOnSuccess,
+                retainSuccessHours: stt.cache.retainSuccessHours,
+                maxSuccessEntries: stt.cache.maxSuccessEntries
             },
             ducking: {
                 enabled: stt.ducking.enabled,
