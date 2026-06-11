@@ -36,6 +36,13 @@ JsonObject {
         property string format: "wav"
         property int sampleRate: 16000
         property int channels: 1
+
+        // PipeWire node name to record from (pw-record --target). Empty =
+        // system default source. Set to "echo-cancel-source" to capture the
+        // echo-cancelled microphone (requires the libpipewire-module-echo-cancel
+        // drop-in in ~/.config/pipewire/pipewire.conf.d — see docs/module-setup.md).
+        // If the named node does not exist, pw-record fails and recording errors.
+        property string source: ""
     }
 
     property JsonObject cache: JsonObject {

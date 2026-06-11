@@ -141,10 +141,12 @@ try_neovim_inject() {
     return 1
 }
 
-# Check if window class is a terminal emulator
+# Check if window class is a terminal emulator (or an embedding host that
+# exposes nvim over RPC, like symmetria-ide). Must agree with
+# SttJob.qml::_isTerminalClass — see the comment there.
 is_terminal_class() {
     case "$1" in
-        *ghostty*|*warp*|*wezterm*|*alacritty*|*kitty*|*foot*|*konsole*|*xterm*|*urxvt*|*termite*|*sakura*|*tilix*|*terminator*|st-*)
+        *ghostty*|*warp*|*wezterm*|*alacritty*|*kitty*|*foot*|*konsole*|*xterm*|*urxvt*|*termite*|*sakura*|*tilix*|*terminator*|st-*|*symmetria-ide*)
             return 0
             ;;
         *)

@@ -43,6 +43,20 @@ exec-once = wl-paste --type image --watch cliphist store
 
 **API Key:** Set `OPENAI_API_KEY` env var or `stt.apiKey` in `~/.config/symmetria/shell.json`.
 
+**Echo-cancelled capture (optional):** When music plays from the same machine's
+speakers, the mic picks it up and contaminates transcriptions. PipeWire's
+`libpipewire-module-echo-cancel` (WebRTC AEC) can subtract the playback signal:
+create `~/.config/pipewire/pipewire.conf.d/20-echo-cancel.conf` loading the
+module with `monitor.mode = true` (taps the default sink's monitor as the AEC
+reference — no playback rerouting) and a `source.props.node.name` of
+`echo-cancel-source`, then restart PipeWire (`systemctl --user restart pipewire
+pipewire-pulse wireplumber`). Point STT at it with
+`stt.recording.source: "echo-cancel-source"` in shell.json (empty = default
+mic). Measured on this hardware: ~20 dB attenuation, pushing speaker bleed
+below ambient room noise. The drop-in is machine-local (not in the repo);
+if the node is missing, pw-record fails and STT surfaces a recording error —
+clear `stt.recording.source` to fall back to the raw mic.
+
 **Design decisions:** See `docs/stt-design-decisions.md` for critical architectural rationale.
 
 ## Calculator

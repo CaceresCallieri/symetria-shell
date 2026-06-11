@@ -434,7 +434,7 @@
     }
   },
   "services": {
-    "weatherLocation": "Córdoba",
+    "weatherLocation": "C\u00f3rdoba",
     "useFahrenheit": false,
     "useTwelveHourClock": false,
     "gpuType": "",
@@ -483,12 +483,16 @@
     "recording": {
       "format": "wav",
       "sampleRate": 16000,
-      "channels": 1
+      "channels": 1,
+      "source": "echo-cancel-source"
     },
     "cache": {
       "enabled": true,
       "maxEntries": 10,
       "deleteOnSuccess": true
+    },
+    "ducking": {
+      "volume": 0.3
     }
   },
   "keycaster": {

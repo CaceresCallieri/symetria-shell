@@ -437,15 +437,23 @@ QtObject {
         const sampleRate = Config.stt?.recording?.sampleRate ?? 16000;
         const channels = Config.stt?.recording?.channels ?? 1;
 
+        const captureSource = Config.stt?.recording?.source ?? "";
+
         recordProcess.capturedSegmentPath = segmentPath;
-        recordProcess.command = [
+        const args = [
             "pw-record",
             "--format=s16",
             `--rate=${sampleRate}`,
-            `--channels=${channels}`,
-            segmentPath
+            `--channels=${channels}`
         ];
+        if (captureSource !== "")
+            args.push(`--target=${captureSource}`);
+        args.push(segmentPath);
+        recordProcess.command = args;
         recordProcess.running = true;
+        // The level monitor records from the same node so the meter reflects
+        // what the transcriber actually hears (script treats "" as default).
+        levelMonitorProcess.command = [job._levelMonitorScript, captureSource];
         levelMonitorProcess.running = true;
     }
 
@@ -575,7 +583,8 @@ QtObject {
         }
     }
 
-    /// Whether the given window class is a terminal emulator. Mirrors the
+    /// Whether the given window class is a terminal emulator (or an embedding
+    /// host that exposes nvim over RPC, like symmetria-ide). Mirrors the
     /// is_terminal_class function in stt-inject.sh — the script's RPC path
     /// only fires for terminal classes, so the QML pre-check must agree
     /// (otherwise we'd skip wl-copy assuming RPC will fire, but the script
@@ -583,7 +592,7 @@ QtObject {
     function _isTerminalClass(cls: string): bool {
         if (!cls) return false;
         const lc = cls.toLowerCase();
-        return /(?:ghostty|warp|wezterm|alacritty|kitty|foot|konsole|xterm|urxvt|termite|sakura|tilix|terminator|st-)/.test(lc);
+        return /(?:ghostty|warp|wezterm|alacritty|kitty|foot|konsole|xterm|urxvt|termite|sakura|tilix|terminator|st-|symmetria-ide)/.test(lc);
     }
 
     /// Spawn injectProcess with the right args + env. Three call sites converge
@@ -937,9 +946,9 @@ QtObject {
         }
     }
 
-    // Audio level monitor
+    // Audio level monitor. command is assigned in _startRecording() so the
+    // monitor targets the same PipeWire source as the actual capture.
     readonly property Process levelMonitorProcess: Process {
-        command: [job._levelMonitorScript]
         stdout: SplitParser {
             onRead: data => {
                 const level = parseFloat(data.trim());

@@ -87,7 +87,9 @@ The following proper nouns, technical terms, or names may appear. Use these exac
 fi
 
 CURL_ERR=$(mktemp)
-HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
+# -sS (not bare -s): silent progress bar but keep error messages on stderr,
+# otherwise $CURL_ERR stays empty and failures log as "curl-failed | unknown".
+HTTP_CODE=$(curl -sS -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
     --max-time 110 \
     -X POST "https://api.openai.com/v1/audio/transcriptions" \

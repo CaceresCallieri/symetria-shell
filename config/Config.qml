@@ -488,7 +488,8 @@ Singleton {
             recording: {
                 format: stt.recording.format,
                 sampleRate: stt.recording.sampleRate,
-                channels: stt.recording.channels
+                channels: stt.recording.channels,
+                source: stt.recording.source
             },
             cache: {
                 enabled: stt.cache.enabled,
