@@ -25,6 +25,8 @@ done
 #   STT_EXPECTED_TEXT:    The text that should be in the clipboard (for verification)
 #   STT_NVIM_SOCKET:     Pre-determined Neovim socket (PID-scoped + focus-verified)
 #   STT_NVIM_ACTIVE_BUF: Buffer number captured at stop-time for target_buf parameter
+#   STT_BRIDGE_PID:      Publisher pid for bridge-mediated injection (IDE agent panes)
+#   STT_BRIDGE_BUF:      Agent slot for bridge-mediated injection (captured at stop-time)
 #
 # Always exits 0 — injection failure is non-fatal (clipboard still has text).
 
@@ -185,6 +187,8 @@ request = {
     "submit": os.environ["STT_BRIDGE_SUBMIT"] == "true",
 }
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+# MUST exceed the bridge's INJECT_TIMEOUT_SECONDS (3s) so its structured
+# timeout reply wins over this socket timeout's bare exception.
 sock.settimeout(5.0)
 try:
     sock.connect(os.environ["STT_BRIDGE_SOCK"])
@@ -216,7 +220,7 @@ PYEOF
     fi
 
     echo "[STT:INJ-BRIDGE] bridge inject succeeded | response=$result" >&2
-    if echo "$result" | grep -q '"submitted": *true'; then
+    if echo "$result" | grep -Eq '"submitted"[[:space:]]*:[[:space:]]*true'; then
         RPC_SUBMITTED="true"
     else
         RPC_SUBMITTED="false"

@@ -439,6 +439,12 @@ class AgentBridge:
         if not request_id:
             fail("missing-request-id")
             return
+        if request_id in self._pending_injects:
+            # A silent overwrite would orphan the first requester (it
+            # would never receive its result). request_ids are client
+            # UUIDs, so a collision means a buggy/duplicated client.
+            fail("duplicate-request-id")
+            return
         publisher = self._publisher_writers.get(target)
         if publisher is None or publisher.is_closing():
             log.info("inject: no publisher for pid=%s (request %s)", target, request_id)
@@ -460,7 +466,12 @@ class AgentBridge:
                  bool(msg.get("submit")))
 
     def handle_inject_result(self, msg: dict) -> None:
-        """Relay a publisher's inject_result back to the waiting requester."""
+        """Relay a publisher's inject_result back to the waiting requester.
+
+        The message is relayed VERBATIM — the shape documented in
+        handle_inject is the expected contract, not an enforced one, so
+        requesters must tolerate extra or missing fields.
+        """
         request_id = str(msg.get("request_id") or "")
         requester = self._pending_injects.pop(request_id, None)
         if requester is None:
@@ -469,6 +480,18 @@ class AgentBridge:
         self._write_line(requester, msg)
         log.info("inject: result for %s relayed (ok=%s, submitted=%s)",
                  request_id, msg.get("ok"), msg.get("submitted"))
+
+    def drop_pending_injects_for(self, writer: asyncio.StreamWriter) -> None:
+        """Forget in-flight injects whose requester connection just closed.
+
+        Without this sweep a disconnected requester's writer lingers in
+        _pending_injects until the timeout fires (bounded 3s soft leak);
+        with it, the publisher's late result is simply dropped.
+        """
+        stale = [rid for rid, w in self._pending_injects.items() if w is writer]
+        for rid in stale:
+            self._pending_injects.pop(rid, None)
+            log.debug("inject: requester for %s disconnected — dropping", rid)
 
     def _expire_inject(self, request_id: str) -> None:
         """Timeout guard: answer the requester if the publisher never did."""
@@ -1090,6 +1113,7 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
         bridge.remove_subscriber(writer)  # idempotent — no-op for non-subscribers
+        bridge.drop_pending_injects_for(writer)  # idempotent — no-op for non-requesters
         if nvim_pid is not None:
             bridge.unregister_publisher_writer(nvim_pid, writer)  # guarded — no-op if superseded
         writer.close()

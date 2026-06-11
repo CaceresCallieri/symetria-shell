@@ -588,10 +588,14 @@ QtObject {
         _clipboardModeOnly = false;
 
         // Direct delivery (skip wl-copy): a real nvim RPC socket OR a
-        // bridge-injectable IDE agent. Both write straight into the
-        // target's input without touching the clipboard.
+        // bridge-injectable IDE agent WITH a resolved publisher pid. Both
+        // write straight into the target's input without touching the
+        // clipboard. The pid guard matters: inject_via === "bridge" with
+        // an unresolved pid would skip wl-copy AND fail the bridge path,
+        // losing the text with no clipboard fallback.
         const rpcEligible = _targetWindowAddress !== ""
-            && (_targetNvimSocket !== "" || _targetInjectVia === "bridge")
+            && (_targetNvimSocket !== ""
+                || (_targetInjectVia === "bridge" && _targetBridgePid > 0))
             && _isTerminalClass(_targetWindowClass);
 
         if (rpcEligible) {
