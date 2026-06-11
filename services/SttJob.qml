@@ -131,6 +131,14 @@ QtObject {
     // Target Neovim socket (resolved from AgentService at start-time)
     property string _targetNvimSocket: ""
     property int _targetNvimActiveBuf: -1
+    // Bridge-mediated injection target (Symmetria IDE terminal-agent
+    // panes). When the resolved agent declares inject_via === "bridge",
+    // delivery routes through agent-bridge.py's inject verb instead of
+    // nvim RPC — those agents are claude TUIs in IDE-owned panes with no
+    // nvim socket (the pid-derived socket guess pointed at a Python
+    // process and made every IDE-targeted RPC delivery bail, 2026-06-11).
+    property string _targetInjectVia: ""
+    property int _targetBridgePid: -1
 
     // Pending action for recordProcess.onExited callback
     property string _pendingRecordAction: ""
@@ -353,15 +361,27 @@ QtObject {
     function _resolveAgentTarget(): void {
         _targetNvimSocket = "";
         _targetNvimActiveBuf = -1;
+        _targetInjectVia = "";
+        _targetBridgePid = -1;
 
         if (!AgentService.bridgeRunning) return;
 
         const agent = AgentService.activeAgentForTerminal(_targetWindowPid);
         if (!agent) return;
 
-        _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
+        _targetInjectVia = agent.inject_via ?? "";
+        if (_targetInjectVia === "bridge") {
+            // IDE pane agent: no nvim socket exists — do NOT call
+            // nvimSocketForAgent (its pid-derived fallback would fabricate
+            // a path to a non-nvim process). The bridge pid addresses the
+            // publisher for the inject verb instead.
+            _targetBridgePid = agent.nvim_pid ?? -1;
+        } else {
+            _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
+        }
         _targetNvimActiveBuf = agent.buf ?? -1;
-        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket);
+        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket
+                   + " injectVia=" + _targetInjectVia + " bridgePid=" + _targetBridgePid);
 
         const effectiveMode = SttService._deliveryMode === "ask" ? _activeDeliveryChoice : SttService._deliveryMode;
         if (effectiveMode !== "clipboard") {
@@ -567,8 +587,11 @@ QtObject {
 
         _clipboardModeOnly = false;
 
+        // Direct delivery (skip wl-copy): a real nvim RPC socket OR a
+        // bridge-injectable IDE agent. Both write straight into the
+        // target's input without touching the clipboard.
         const rpcEligible = _targetWindowAddress !== ""
-            && _targetNvimSocket !== ""
+            && (_targetNvimSocket !== "" || _targetInjectVia === "bridge")
             && _isTerminalClass(_targetWindowClass);
 
         if (rpcEligible) {
@@ -637,19 +660,23 @@ QtObject {
         const cmd = [_injectScript, _targetWindowAddress, _targetWindowClass];
         if (effectiveMode === "submit") cmd.push("submit");
         Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly + " forceSendshortcut=" + forceSendshortcut);
-        // Effective socket: blanked when forcing sendshortcut so the script
-        // can't accidentally take the RPC path even if _targetNvimSocket was
-        // resolved earlier.
+        // Effective socket/bridge-pid: blanked when forcing sendshortcut so
+        // the script can't accidentally take a direct-injection path even
+        // if a target was resolved earlier.
         const effectiveSocket = forceSendshortcut ? "" : _targetNvimSocket;
+        const effectiveBridgePid = (forceSendshortcut || _targetInjectVia !== "bridge")
+            ? -1 : _targetBridgePid;
         // Prepend voice tag for agent-backed terminals (e.g. Claude Code)
         // so the LLM knows the input is voice-transcribed. Suppressed when
         // we're forcing sendshortcut (clipboard mode = no agent awareness).
-        const voicePrefix = (Config.stt?.voiceTag && effectiveSocket !== "")
+        const voicePrefix = (Config.stt?.voiceTag && (effectiveSocket !== "" || effectiveBridgePid > 0))
             ? Config.stt?.voiceTag : "";
         injectProcess.environment = ({
             STT_EXPECTED_TEXT: voicePrefix + _transcribedText,
             STT_NVIM_SOCKET: effectiveSocket,
             STT_NVIM_ACTIVE_BUF: forceSendshortcut ? "-1" : _targetNvimActiveBuf.toString(),
+            STT_BRIDGE_PID: effectiveBridgePid > 0 ? effectiveBridgePid.toString() : "",
+            STT_BRIDGE_BUF: effectiveBridgePid > 0 ? _targetNvimActiveBuf.toString() : "",
             STT_RPC_ONLY: rpcOnly ? "1" : ""
         });
         injectProcess.command = cmd;
@@ -1164,7 +1191,7 @@ QtObject {
                             "",
                             Toast.Warning
                         );
-                    } else if (result.path === "rpc" && !result.submitted) {
+                    } else if ((result.path === "rpc" || result.path === "bridge") && !result.submitted) {
                         const userRequestedSubmit = SttService._deliveryMode === "submit" ||
                             (SttService._deliveryMode === "ask" && job._activeDeliveryChoice === "submit");
                         if (userRequestedSubmit) {

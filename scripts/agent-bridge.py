@@ -173,6 +173,17 @@ class AgentBridge:
         # subscriber can never stall the shell's stdout emission path —
         # _emit() runs in sync contexts (call_later callbacks) and cannot await.
         self._subscribers: set[asyncio.StreamWriter] = set()
+        # Publisher writers, keyed by nvim_pid. Lets the bridge route an
+        # "inject" command BACK to the publisher that owns the target agent
+        # (the Symmetria IDE's bridge client handles it by writing the text
+        # into the focused claude pane's pty). The latest hello wins —
+        # during the brief two-connection reconnect overlap (see
+        # _conn_count) the newest connection is the live one.
+        self._publisher_writers: dict[int, asyncio.StreamWriter] = {}
+        # In-flight inject requests: request_id -> requester StreamWriter.
+        # Entries expire via call_later so a publisher that never answers
+        # can't leak writers or hang the requester past its own timeout.
+        self._pending_injects: dict[str, asyncio.StreamWriter] = {}
 
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
@@ -310,6 +321,11 @@ class AgentBridge:
                     "activity_state": activity.get("state", ""),
                     "activity_tool": activity.get("tool", ""),
                     "in_plan_mode": activity.get("in_plan_mode", False),
+                    # Delivery capability declared by the publisher.
+                    # "bridge" → text injection routes through the bridge's
+                    # inject verb (Symmetria IDE terminal-agent panes, which
+                    # have no nvim socket). "" → nvim RPC / legacy behavior.
+                    "inject_via": inst.get("inject_via", ""),
                 })
 
         # Sort: by project, then by spawn time within project
@@ -363,6 +379,107 @@ class AgentBridge:
         self._subscribers.discard(writer)
         if was_present:
             log.info("unsubscribe: %d subscriber(s) remain", len(self._subscribers))
+
+    # ------------------------------------------------------------------
+    # Inject routing (STT voice → agent pane, bridge-mediated)
+    # ------------------------------------------------------------------
+
+    # How long the bridge waits for the publisher's inject_result before
+    # answering the requester with a timeout failure. Slightly above the
+    # IDE's worst case (bracketed-paste write + 150ms submit delay) and
+    # below stt-inject.sh's own 5s client timeout, so the requester always
+    # gets a structured answer instead of a dead socket.
+    INJECT_TIMEOUT_SECONDS = 3.0
+
+    @staticmethod
+    def _write_line(writer: asyncio.StreamWriter, payload: dict) -> None:
+        """Fire-and-forget one JSON line (same no-drain policy as _emit)."""
+        if writer.is_closing():
+            return
+        try:
+            writer.write((json.dumps(payload) + "\n").encode())
+        except Exception as e:  # noqa: BLE001 — any write failure means dead peer
+            log.warning("_write_line: dropping dead peer (%s)", e)
+
+    def register_publisher_writer(self, nvim_pid: int, writer: asyncio.StreamWriter) -> None:
+        """Record the connection that can receive commands for this pid."""
+        self._publisher_writers[nvim_pid] = writer
+
+    def unregister_publisher_writer(self, nvim_pid: int, writer: asyncio.StreamWriter) -> None:
+        """Drop the writer mapping iff it still points at this connection.
+
+        Guarded so the stale half of a reconnect overlap closing late
+        cannot unregister the NEW connection's writer.
+        """
+        if self._publisher_writers.get(nvim_pid) is writer:
+            self._publisher_writers.pop(nvim_pid, None)
+
+    def handle_inject(self, msg: dict, requester: asyncio.StreamWriter) -> None:
+        """Route an inject request to the publisher owning the target agent.
+
+        Request:  {"type": "inject", "request_id": str,
+                   "target_nvim_pid": int, "buf": int, "text": str,
+                   "submit": bool}
+        Response (relayed back to the requester):
+                  {"type": "inject_result", "request_id": str, "ok": bool,
+                   "submitted": bool, "error": str}
+        """
+        request_id = str(msg.get("request_id") or "")
+        try:
+            target = int(msg.get("target_nvim_pid") or 0)
+        except (TypeError, ValueError):
+            target = 0
+
+        def fail(error: str) -> None:
+            self._write_line(requester, {
+                "type": "inject_result", "request_id": request_id,
+                "ok": False, "submitted": False, "error": error,
+            })
+
+        if not request_id:
+            fail("missing-request-id")
+            return
+        publisher = self._publisher_writers.get(target)
+        if publisher is None or publisher.is_closing():
+            log.info("inject: no publisher for pid=%s (request %s)", target, request_id)
+            fail("no-publisher")
+            return
+        self._pending_injects[request_id] = requester
+        asyncio.get_running_loop().call_later(
+            self.INJECT_TIMEOUT_SECONDS, self._expire_inject, request_id
+        )
+        self._write_line(publisher, {
+            "type": "inject",
+            "request_id": request_id,
+            "buf": msg.get("buf", -1),
+            "text": msg.get("text", ""),
+            "submit": bool(msg.get("submit")),
+        })
+        log.info("inject: routed request %s to pid=%s (buf=%s, %d chars, submit=%s)",
+                 request_id, target, msg.get("buf"), len(msg.get("text", "")),
+                 bool(msg.get("submit")))
+
+    def handle_inject_result(self, msg: dict) -> None:
+        """Relay a publisher's inject_result back to the waiting requester."""
+        request_id = str(msg.get("request_id") or "")
+        requester = self._pending_injects.pop(request_id, None)
+        if requester is None:
+            log.debug("inject_result: no pending requester for %s (timed out?)", request_id)
+            return
+        self._write_line(requester, msg)
+        log.info("inject: result for %s relayed (ok=%s, submitted=%s)",
+                 request_id, msg.get("ok"), msg.get("submitted"))
+
+    def _expire_inject(self, request_id: str) -> None:
+        """Timeout guard: answer the requester if the publisher never did."""
+        requester = self._pending_injects.pop(request_id, None)
+        if requester is None:
+            return
+        log.warning("inject: request %s timed out waiting for publisher", request_id)
+        self._write_line(requester, {
+            "type": "inject_result", "request_id": request_id,
+            "ok": False, "submitted": False, "error": "timeout",
+        })
 
     def _schedule_emit(self) -> None:
         """Coalesced emit: leading edge fires immediately, then 50ms cooldown.
@@ -932,6 +1049,19 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                 bridge.add_subscriber(writer)
                 continue
 
+            # Inject request/response routing. Handled here (like subscribe)
+            # because only handle_client owns the writers: the request needs
+            # this connection's writer recorded as the reply target, and the
+            # result arrives on the publisher's connection. An inject-only
+            # requester (stt-inject.sh) carries no nvim_pid, so it stays an
+            # ephemeral connection — no client registration, no remove_client.
+            if msg.get("type") == "inject":
+                bridge.handle_inject(msg, writer)
+                continue
+            if msg.get("type") == "inject_result":
+                bridge.handle_inject_result(msg)
+                continue
+
             # Track nvim_pid from first message AND increment the per-pid
             # connection counter. A given physical connection contributes
             # exactly one count regardless of how many messages it sends.
@@ -945,6 +1075,12 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                 else:
                     log.info("CLIENT identified: nvim_pid=None (ephemeral hook conn)")
 
+            # Route commands back to this publisher (inject). Registered on
+            # every hello so the newest connection wins during the brief
+            # two-connection reconnect overlap.
+            if msg.get("type") == "hello" and nvim_pid is not None:
+                bridge.register_publisher_writer(nvim_pid, writer)
+
             bridge.handle_message(msg)
         log.info("CLIENT EOF: nvim_pid=%s (reader exhausted)", nvim_pid)
     except asyncio.CancelledError:
@@ -954,6 +1090,8 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
         bridge.remove_subscriber(writer)  # idempotent — no-op for non-subscribers
+        if nvim_pid is not None:
+            bridge.unregister_publisher_writer(nvim_pid, writer)  # guarded — no-op if superseded
         writer.close()
         # Only call remove_client when the LAST connection from this pid
         # closes. The previous behavior (unconditional remove_client on

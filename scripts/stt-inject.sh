@@ -34,6 +34,12 @@ SUBMIT="${3:-}"
 EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
+# Bridge-mediated injection target (Symmetria IDE terminal-agent panes):
+# the publisher pid + slot to address via agent-bridge.py's inject verb.
+# Mutually exclusive with NVIM_SOCKET by construction (SttJob resolves one
+# or the other from the agent's inject_via capability).
+BRIDGE_PID="${STT_BRIDGE_PID:-}"
+BRIDGE_BUF="${STT_BRIDGE_BUF:--1}"
 DOWNGRADED=""
 # Must be literal "true" or "false" — embedded as JSON boolean by emit_result()
 RPC_SUBMITTED="false"
@@ -141,6 +147,83 @@ try_neovim_inject() {
     return 1
 }
 
+# ── Bridge-mediated injection (Symmetria IDE agent panes) ────────────────────
+# Routes the text through agent-bridge.py's inject verb: the bridge forwards
+# it to the IDE's publisher connection, the IDE writes it into the target
+# claude pane's pty (bracketed paste + Enter), and the inject_result comes
+# back over this same ephemeral connection. Sets RPC_SUBMITTED from the
+# result so emit_result reports submit confirmation like the nvim path.
+try_bridge_inject() {
+    local submit_bool
+    case "$SUBMIT" in
+        submit) submit_bool="true" ;;
+        *)      submit_bool="false" ;;
+    esac
+
+    if [ -z "$BRIDGE_PID" ]; then
+        echo "[STT:INJ-BRIDGE] no bridge target pid — skipping bridge inject" >&2
+        return 1
+    fi
+
+    local sock="${SYMMETRIA_AGENT_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/symmetria-agents.sock}"
+    if [ ! -S "$sock" ]; then
+        echo "[STT:INJ-BRIDGE] bridge socket missing: $sock" >&2
+        return 1
+    fi
+
+    stt_log "inject" "bridge-attempt | pid=$BRIDGE_PID buf=$BRIDGE_BUF"
+    local result
+    if ! result=$(STT_BRIDGE_SOCK="$sock" STT_BRIDGE_SUBMIT="$submit_bool" python3 - <<'PYEOF'
+import json, os, socket, sys, uuid
+
+request = {
+    "type": "inject",
+    "request_id": str(uuid.uuid4()),
+    "target_nvim_pid": int(os.environ["STT_BRIDGE_PID"]),
+    "buf": int(os.environ.get("STT_BRIDGE_BUF") or -1),
+    "text": os.environ.get("STT_EXPECTED_TEXT", ""),
+    "submit": os.environ["STT_BRIDGE_SUBMIT"] == "true",
+}
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.settimeout(5.0)
+try:
+    sock.connect(os.environ["STT_BRIDGE_SOCK"])
+    sock.sendall((json.dumps(request) + "\n").encode())
+    buf = b""
+    while b"\n" not in buf:
+        chunk = sock.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    line = buf.split(b"\n", 1)[0].decode("utf-8", "replace")
+    response = json.loads(line)
+    print(json.dumps(response))
+    ok = (
+        response.get("type") == "inject_result"
+        and response.get("request_id") == request["request_id"]
+        and response.get("ok") is True
+    )
+    sys.exit(0 if ok else 1)
+except Exception as exc:  # noqa: BLE001 — any failure means no delivery
+    print(json.dumps({"ok": False, "error": str(exc)}))
+    sys.exit(1)
+finally:
+    sock.close()
+PYEOF
+    ); then
+        echo "[STT:INJ-BRIDGE] bridge inject failed | response=$result" >&2
+        return 1
+    fi
+
+    echo "[STT:INJ-BRIDGE] bridge inject succeeded | response=$result" >&2
+    if echo "$result" | grep -q '"submitted": *true'; then
+        RPC_SUBMITTED="true"
+    else
+        RPC_SUBMITTED="false"
+    fi
+    return 0
+}
+
 # Check if window class is a terminal emulator (or an embedding host that
 # exposes nvim over RPC, like symmetria-ide). Must agree with
 # SttJob.qml::_isTerminalClass — see the comment there.
@@ -215,6 +298,20 @@ if [ -n "${STT_RPC_ONLY:-}" ]; then
         exit 0
     fi
 
+    # Bridge-injectable target (IDE agent pane) — bridge verb, no nvim.
+    if [ -n "$BRIDGE_PID" ]; then
+        if try_bridge_inject; then
+            stt_log "inject" "bridge-success"
+            emit_result "bridge" "true"
+            exit 0
+        fi
+        stt_log "inject" "bridge-failed | rpc-only=bail"
+        echo "[STT:INJ-RPCONLY] bridge inject failed and STT_RPC_ONLY set — no fallback" >&2
+        notify_failure "STT Inject Failed" "Voice → agent pane (bridge) failed. Use Alt+V to paste from Transcriptions."
+        emit_result "bridge" "false"
+        exit 0
+    fi
+
     stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
     if try_neovim_inject; then
         stt_log "inject" "rpc-success"
@@ -234,16 +331,28 @@ fi
 # via Neovim's RPC socket. Only attempted for terminal emulator windows.
 
 if is_terminal_class "$CLASS_LOWER" && [ -n "$EXPECTED_TEXT" ]; then
-    stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
-    echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2
-    if try_neovim_inject; then
-        stt_log "inject" "rpc-success"
-        echo "[STT:INJ-NVIM] Neovim injection succeeded — skipping sendshortcut" >&2
-        emit_result "rpc" "true"
-        exit 0
+    if [ -n "$BRIDGE_PID" ]; then
+        echo "[STT:INJ-BRIDGE] bridge target detected — attempting bridge injection" >&2
+        if try_bridge_inject; then
+            stt_log "inject" "bridge-success"
+            echo "[STT:INJ-BRIDGE] bridge injection succeeded — skipping sendshortcut" >&2
+            emit_result "bridge" "true"
+            exit 0
+        fi
+        stt_log "inject" "bridge-failed | fallback=sendshortcut"
+        echo "[STT:INJ-BRIDGE] bridge injection failed — falling back to sendshortcut paste" >&2
+    else
+        stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
+        echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2
+        if try_neovim_inject; then
+            stt_log "inject" "rpc-success"
+            echo "[STT:INJ-NVIM] Neovim injection succeeded — skipping sendshortcut" >&2
+            emit_result "rpc" "true"
+            exit 0
+        fi
+        stt_log "inject" "rpc-failed | fallback=sendshortcut"
+        echo "[STT:INJ-NVIM] Neovim injection failed — falling back to sendshortcut paste" >&2
     fi
-    stt_log "inject" "rpc-failed | fallback=sendshortcut"
-    echo "[STT:INJ-NVIM] Neovim injection failed — falling back to sendshortcut paste" >&2
 fi
 
 # ── Downgrade submit on sendshortcut path ────────────────────────────────────
