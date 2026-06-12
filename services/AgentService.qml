@@ -282,12 +282,37 @@ Singleton {
     function setSttTarget(terminalPid: int, bufId: int): void {
         _sttTargetTerminalPid = terminalPid;
         _sttTargetBufId = bufId;
+        _pushSttState();
     }
 
     /// Clear the STT target highlight. Called by SttService on cancel/idle.
     function clearSttTarget(): void {
         _sttTargetTerminalPid = -1;
         _sttTargetBufId = -1;
+        _pushSttState();
+    }
+
+    /// Mirror the STT target into the bridge hub (stdin pipe) so non-shell
+    /// snapshot consumers — the Symmetria IDE's AgentTopBar — can render the
+    /// same recording/transcribing soundwave this dashboard computes locally
+    /// via isAgentSttTarget(). The shell owns bridgeProcess, so its stdin is
+    /// a zero-reconnect control channel; if the hub is down the write is a
+    /// silent no-op and the next setSttTarget after restart resyncs.
+    function _pushSttState(): void {
+        if (!bridgeProcess.running) return;
+        bridgeProcess.write(JSON.stringify({
+            type: "stt_state",
+            terminal_pid: _sttTargetTerminalPid,
+            buf: _sttTargetBufId,
+            transcribing: sttIsTranscribing
+        }) + "\n");
+    }
+
+    // The recording→transcribing flip happens without a setSttTarget call
+    // (sttIsTranscribing derives from SttService.job.state), so push it
+    // explicitly — the IDE swaps center-pulse → traveling wave on it.
+    onSttIsTranscribingChanged: {
+        if (_sttTargetTerminalPid > 0) _pushSttState();
     }
 
     /// Check if a single agent matches the current STT injection target.
@@ -570,6 +595,10 @@ Singleton {
     // Bridge process — long-running, writes JSON lines to stdout
     Process {
         id: bridgeProcess
+
+        // stdin carries shell→hub control lines (stt_state pushes via
+        // _pushSttState). Without this flag, Process.write() is a no-op.
+        stdinEnabled: true
 
         stdout: SplitParser {
             onRead: data => {

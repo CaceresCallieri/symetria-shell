@@ -184,6 +184,43 @@ class AgentBridge:
         # Entries expire via call_later so a publisher that never answers
         # can't leak writers or hang the requester past its own timeout.
         self._pending_injects: dict[str, asyncio.StreamWriter] = {}
+        # STT target state pushed by the shell over our stdin (AgentService
+        # writes JSON lines into this process's stdin pipe — the shell is our
+        # parent, so no socket round-trip is needed). None = no dictation in
+        # flight. Carried verbatim in every snapshot as the top-level "stt"
+        # field so non-shell consumers (the Symmetria IDE's AgentTopBar) can
+        # render the same recording/transcribing soundwave the shell
+        # dashboard computes locally via AgentService.isAgentSttTarget().
+        # Shape: {"terminal_pid": int, "buf": int, "transcribing": bool}.
+        self._stt_state: dict | None = None
+
+    def set_stt_state(self, msg: dict) -> None:
+        """Store the shell-reported STT target and rebroadcast if it changed.
+
+        A terminal_pid <= 0 (or unparsable) clears the state — the shell
+        sends that on clearSttTarget (dictation finished/cancelled).
+        """
+        try:
+            terminal_pid = int(msg.get("terminal_pid", -1))
+        except (TypeError, ValueError):
+            terminal_pid = -1
+        if terminal_pid <= 0:
+            new_state = None
+        else:
+            try:
+                buf = int(msg.get("buf", -1))
+            except (TypeError, ValueError):
+                buf = -1
+            new_state = {
+                "terminal_pid": terminal_pid,
+                "buf": buf,
+                "transcribing": bool(msg.get("transcribing", False)),
+            }
+        if new_state == self._stt_state:
+            return
+        self._stt_state = new_state
+        log.debug("stt_state: %s", new_state)
+        self._schedule_emit()
 
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
@@ -334,6 +371,9 @@ class AgentBridge:
         payload = {
             "agents": agents,
             "projects": sorted(projects),
+            # Shell-reported STT target (see set_stt_state). null when no
+            # dictation is in flight. Consumers match on terminal_pid + buf.
+            "stt": self._stt_state,
         }
         line = json.dumps(payload)
         log.debug("_snapshot: %d agents, %d projects, %d clients, %d subscriber(s) — %d bytes",
@@ -1260,6 +1300,43 @@ async def main():
 
     # Actively solicit running Neovim instances to reconnect
     asyncio.create_task(solicit_neovim_instances())
+
+    # Parent-control channel: the shell (AgentService) owns this process and
+    # writes JSON lines into our stdin (Quickshell Process.write). Currently
+    # carries only stt_state pushes. Kept separate from the Unix socket on
+    # purpose — stdin is parent-only, needs no reconnect handling (a hub
+    # restart gets a fresh pipe), and can never be spoofed by another local
+    # process the way an unauthenticated socket message could.
+    async def stdin_reader():
+        loop = asyncio.get_running_loop()
+        reader = asyncio.StreamReader()
+        try:
+            await loop.connect_read_pipe(
+                lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
+            )
+        except (OSError, ValueError) as exc:
+            # No usable stdin (e.g. launched detached for debugging) —
+            # STT state just won't flow; everything else works.
+            log.warning("stdin_reader: stdin unavailable (%s)", exc)
+            return
+        while True:
+            line = await reader.readline()
+            if not line:  # EOF — parent closed the pipe
+                log.info("stdin_reader: EOF, stopping")
+                return
+            text = line.decode("utf-8", errors="replace").strip()
+            if not text:
+                continue
+            try:
+                msg = json.loads(text)
+            except json.JSONDecodeError:
+                log.warning("stdin_reader: malformed line: %s", text[:200])
+                continue
+            if msg.get("type") == "stt_state":
+                bridge.set_stt_state(msg)
+            else:
+                log.warning("stdin_reader: unknown type %r", msg.get("type"))
+    asyncio.create_task(stdin_reader())
 
     # Periodic staleness reaper — clears orphaned activity entries (no live
     # orchestrator connection). Registered agents are never reaped by timeout.
