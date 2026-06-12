@@ -670,11 +670,6 @@ class AgentBridge:
             # (depth++) and SubagentStop with depth > 0 (depth--) fall through
             # here to apply the normal state update in _activities.
             if state in ("offline", "idle"):
-                # Parent Stop also clears any outstanding subagent counter — a
-                # SubagentStop arriving after this point is by definition
-                # orphan (the recap pattern). Without this clear, a Task
-                # subagent that legitimately ran during the parent turn
-                # would consume a counter slot meant for a future turn.
                 self._pop_activity(agent_id)
             else:
                 self._activities[agent_id] = {
@@ -1002,7 +997,10 @@ class AgentBridge:
         candidates: dict[str, str] = {}
         for aid, act in self._activities.items():
             # OpenCode agents are invisible to the claude CLI. Untyped ("")
-            # entries default to Claude in the dashboard, so include them.
+            # entries default to Claude in the dashboard, so include them —
+            # safe because only the Claude hook populates session_id, so an
+            # untyped entry passing the sid filter below is necessarily a
+            # Claude reporter.
             if self._agent_types.get(aid, "") not in ("", "claude"):
                 continue
             sid = act.get("session_id", "")
@@ -1018,22 +1016,20 @@ class AgentBridge:
         if not candidates:
             return
 
+        # Throttle is start-to-start by intent (stamped before the spawn):
+        # the reaper awaits this call so there is no re-entry to guard
+        # against, and a slow CLI run simply eats into the next interval.
         self._last_claude_reconcile = now
+        proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 "claude", "agents", "--json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            try:
-                out, _ = await asyncio.wait_for(
-                    proc.communicate(), timeout=CLAUDE_CLI_TIMEOUT_SECONDS
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
-                log.warning("reconcile | claude agents --json timed out after %ds",
-                            CLAUDE_CLI_TIMEOUT_SECONDS)
-                return
+            out, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=CLAUDE_CLI_TIMEOUT_SECONDS
+            )
             sessions = json.loads(out.decode("utf-8", errors="replace") or "[]")
         except FileNotFoundError:
             if not self._claude_cli_warned:
@@ -1041,9 +1037,24 @@ class AgentBridge:
                 log.warning("reconcile | claude CLI not found on PATH — "
                             "cancellation reconciliation disabled")
             return
+        except asyncio.TimeoutError:
+            log.warning("reconcile | claude agents --json timed out after %ds",
+                        CLAUDE_CLI_TIMEOUT_SECONDS)
+            return
         except (json.JSONDecodeError, OSError) as exc:
             log.warning("reconcile | claude agents --json failed: %s", exc)
             return
+        finally:
+            # Reap the child on every abnormal exit (timeout, shutdown
+            # cancellation mid-communicate): kill() without wait() leaks a
+            # zombie, and a CancelledError would orphan the CLI process.
+            # Matches the kill()+wait() pattern in solicit_neovim_instance.
+            if proc is not None and proc.returncode is None:
+                proc.kill()
+                try:
+                    await proc.wait()
+                except Exception:  # noqa: BLE001 — reaping is best-effort
+                    pass
 
         status_by_session = {
             s.get("sessionId", ""): s.get("status", "")
@@ -1137,6 +1148,12 @@ class AgentBridge:
 
     def _pop_activity(self, aid: str) -> None:
         """Transition an agent to idle: drop its activity entry + per-turn state.
+
+        Also clears the subagent depth counter: once a turn ends, any
+        SubagentStop arriving later is by definition orphan (the recap
+        pattern). Without this clear, a Task subagent that legitimately ran
+        during the finished turn would consume a counter slot meant for a
+        future turn.
 
         Unlike _clear_agent_state this keeps identity (_agent_types) and the
         history ring buffer — the agent still exists, it's just no longer busy.
