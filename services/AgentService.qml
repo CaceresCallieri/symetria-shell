@@ -297,7 +297,8 @@ Singleton {
     /// same recording/transcribing soundwave this dashboard computes locally
     /// via isAgentSttTarget(). The shell owns bridgeProcess, so its stdin is
     /// a zero-reconnect control channel; if the hub is down the write is a
-    /// silent no-op and the next setSttTarget after restart resyncs.
+    /// silent no-op and bridgeProcess.onRunningChanged re-pushes any live
+    /// target once the hub is back.
     function _pushSttState(): void {
         if (!bridgeProcess.running) return;
         bridgeProcess.write(JSON.stringify({
@@ -599,6 +600,15 @@ Singleton {
         // stdin carries shell→hub control lines (stt_state pushes via
         // _pushSttState). Without this flag, Process.write() is a no-op.
         stdinEnabled: true
+
+        // Resync an in-flight STT target after a hub restart: targets are
+        // short-lived (set at recording start, cleared at end), so without
+        // this re-push a hub that restarts mid-dictation would never learn
+        // the live target and the IDE's soundwave would stay dark.
+        onRunningChanged: {
+            if (running && root._sttTargetTerminalPid > 0)
+                root._pushSttState();
+        }
 
         stdout: SplitParser {
             onRead: data => {

@@ -94,6 +94,14 @@ log = _Log()
 class AgentBridge:
     """Aggregates agent state from all connected orchestrator instances."""
 
+    @staticmethod
+    def _coerce_int(value, default: int = -1) -> int:
+        """int() with a default for None/garbage — wire fields arrive untyped."""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     # Terminal emulator process names to match when walking /proc upward.
     TERMINAL_NAMES = frozenset({
         "ghostty", "kitty", "alacritty", "foot", "wezterm-gui",
@@ -192,25 +200,19 @@ class AgentBridge:
         # render the same recording/transcribing soundwave the shell
         # dashboard computes locally via AgentService.isAgentSttTarget().
         # Shape: {"terminal_pid": int, "buf": int, "transcribing": bool}.
-        self._stt_state: dict | None = None
+        self._stt_state: dict[str, object] | None = None
 
-    def set_stt_state(self, msg: dict) -> None:
+    def set_stt_state(self, msg: dict[str, object]) -> None:
         """Store the shell-reported STT target and rebroadcast if it changed.
 
         A terminal_pid <= 0 (or unparsable) clears the state — the shell
         sends that on clearSttTarget (dictation finished/cancelled).
         """
-        try:
-            terminal_pid = int(msg.get("terminal_pid", -1))
-        except (TypeError, ValueError):
-            terminal_pid = -1
+        terminal_pid = self._coerce_int(msg.get("terminal_pid"))
         if terminal_pid <= 0:
             new_state = None
         else:
-            try:
-                buf = int(msg.get("buf", -1))
-            except (TypeError, ValueError):
-                buf = -1
+            buf = self._coerce_int(msg.get("buf"))
             new_state = {
                 "terminal_pid": terminal_pid,
                 "buf": buf,
@@ -372,7 +374,11 @@ class AgentBridge:
             "agents": agents,
             "projects": sorted(projects),
             # Shell-reported STT target (see set_stt_state). null when no
-            # dictation is in flight. Consumers match on terminal_pid + buf.
+            # dictation is in flight. Consumers match on terminal_pid + buf;
+            # buf == -1 is the "representative agent" sentinel (match the
+            # ACTIVE agent for that terminal_pid), mirroring the shell's
+            # AgentService.isAgentSttTarget bufId === -1 branch — consumers
+            # must replicate that semantics, not require an exact buf.
             "stt": self._stt_state,
         }
         line = json.dumps(payload)
@@ -465,10 +471,7 @@ class AgentBridge:
                    "submitted": bool, "error": str}
         """
         request_id = str(msg.get("request_id") or "")
-        try:
-            target = int(msg.get("target_nvim_pid") or 0)
-        except (TypeError, ValueError):
-            target = 0
+        target = self._coerce_int(msg.get("target_nvim_pid"), default=0)
 
         def fail(error: str) -> None:
             self._write_line(requester, {
@@ -1319,6 +1322,9 @@ async def main():
             # STT state just won't flow; everything else works.
             log.warning("stdin_reader: stdin unavailable (%s)", exc)
             return
+        # readline() is unbounded by construction; acceptable because stdin
+        # is wired exclusively to our parent (the shell), a trusted writer
+        # of short JSON lines — no untrusted process can reach this pipe.
         while True:
             line = await reader.readline()
             if not line:  # EOF — parent closed the pipe
