@@ -40,6 +40,22 @@ ACTIVITY_STALENESS_TIMEOUT = 15
 # the orchestrator's quiet_bufs liveness path.
 STUCK_WORKING_WARN_SECONDS = 120
 
+# Claude CLI reconciliation. Claude Code fires NO hook when the user cancels
+# a turn (Esc) — the Stop hook is documented as "does not run if the stoppage
+# occurred due to a user interrupt" — so a canceled agent stays busy forever
+# from the hooks' point of view. `claude agents --json` (CLI v2.1.145+) is
+# the ground truth: it enumerates local sessions with per-session status
+# (busy/idle/...). When a local Claude agent has reported a busy state with
+# no hook traffic for RECONCILE_AFTER seconds, we poll the CLI and force-
+# clear any agent whose session it explicitly reports as idle.
+# See .claude/memory/project_claude_cancel_detection.md for the research.
+CLAUDE_RECONCILE_AFTER_SECONDS = 15
+# Floor between CLI invocations — the CLI is a Node process (~0.5-1s spawn);
+# never run it more often than this even while agents look stuck.
+CLAUDE_RECONCILE_MIN_INTERVAL = 10
+# Hard cap on one CLI invocation before we kill it and retry next cycle.
+CLAUDE_CLI_TIMEOUT_SECONDS = 10
+
 # How many activity transitions to retain per agent for postmortem dumps.
 # 20 is enough to cover the trailing PreToolUse → PostToolUse → Stop dance
 # of a typical Claude Code turn, plus several preceding tool calls.
@@ -145,6 +161,11 @@ class AgentBridge:
         # Per-agent set of warning flags we've already emitted (prevents spam).
         # Currently used for the stuck-working watchdog.
         self._warned_stuck: set[str] = set()
+        # Monotonic timestamp of the last `claude agents --json` invocation
+        # (reconciliation throttle) and a latch so a missing/broken CLI is
+        # logged once instead of every 5s reaper tick.
+        self._last_claude_reconcile: float = 0.0
+        self._claude_cli_warned: bool = False
         # Per-parent-agent SubagentStart/Stop pairing counter. Increments on
         # SubagentStart, decrements on SubagentStop. Cleared on parent Stop.
         # An unpaired SubagentStop (count == 0) is the signature of Claude
@@ -595,6 +616,9 @@ class AgentBridge:
                 self._agent_types[agent_id] = agent_type
             hook_event = msg.get("hook_event", "")
             event_ts_ns = int(msg.get("event_ts_ns", 0) or 0)
+            # Claude Code session UUID (absent for OpenCode reporters) — join
+            # key for the `claude agents --json` reconciliation poll.
+            session_id = msg.get("session_id", "")
 
             prev_entry = self._activities.get(agent_id)
             prev_state = prev_entry.get("state", "") if prev_entry else ""
@@ -646,14 +670,12 @@ class AgentBridge:
             # (depth++) and SubagentStop with depth > 0 (depth--) fall through
             # here to apply the normal state update in _activities.
             if state in ("offline", "idle"):
-                self._activities.pop(agent_id, None)
-                self._warned_stuck.discard(agent_id)
-                # Parent Stop clears any outstanding subagent counter — a
+                # Parent Stop also clears any outstanding subagent counter — a
                 # SubagentStop arriving after this point is by definition
                 # orphan (the recap pattern). Without this clear, a Task
                 # subagent that legitimately ran during the parent turn
                 # would consume a counter slot meant for a future turn.
-                self._subagent_depth.pop(agent_id, None)
+                self._pop_activity(agent_id)
             else:
                 self._activities[agent_id] = {
                     "state": state,
@@ -664,6 +686,7 @@ class AgentBridge:
                     # is always current — no accumulation needed.
                     "in_plan_mode": plan,
                     "hook_event": hook_event,
+                    "session_id": session_id,
                 }
                 # Any genuine new state clears the prior stuck warning so the
                 # watchdog can re-warn next time it gets stuck.
@@ -960,6 +983,86 @@ class AgentBridge:
                 aid, int(stuck_for), tail_str or "(no history)",
             )
 
+    async def reconcile_claude_sessions(self) -> None:
+        """Force-clear busy Claude agents whose session the claude CLI reports idle.
+
+        This is the cancellation catch-all: a user Esc fires no hook (see the
+        CLAUDE_RECONCILE_* constants), so without this poll a canceled agent
+        stays busy until the next UserPromptSubmit. Deliberately conservative:
+        an agent is cleared ONLY when `claude agents --json` enumerates its
+        session AND explicitly reports status "idle". A session missing from
+        the CLI output, or one with no status field, is left untouched —
+        process death is the orphan reaper's / liveness path's job.
+        """
+        now = time.monotonic()
+        if now - self._last_claude_reconcile < CLAUDE_RECONCILE_MIN_INTERVAL:
+            return
+
+        # Candidates: local Claude agents busy with no hook traffic for a while.
+        candidates: dict[str, str] = {}
+        for aid, act in self._activities.items():
+            # OpenCode agents are invisible to the claude CLI. Untyped ("")
+            # entries default to Claude in the dashboard, so include them.
+            if self._agent_types.get(aid, "") not in ("", "claude"):
+                continue
+            sid = act.get("session_id", "")
+            if not sid:
+                continue
+            if now - act.get("ts", now) < CLAUDE_RECONCILE_AFTER_SECONDS:
+                continue
+            # Remote (SSH-tunneled) sessions don't appear in the local CLI.
+            nvim_pid_str, _, _ = aid.partition("_")
+            if nvim_pid_str.isdigit() and int(nvim_pid_str) in self._remote_clients:
+                continue
+            candidates[aid] = sid
+        if not candidates:
+            return
+
+        self._last_claude_reconcile = now
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "claude", "agents", "--json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                out, _ = await asyncio.wait_for(
+                    proc.communicate(), timeout=CLAUDE_CLI_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                proc.kill()
+                log.warning("reconcile | claude agents --json timed out after %ds",
+                            CLAUDE_CLI_TIMEOUT_SECONDS)
+                return
+            sessions = json.loads(out.decode("utf-8", errors="replace") or "[]")
+        except FileNotFoundError:
+            if not self._claude_cli_warned:
+                self._claude_cli_warned = True
+                log.warning("reconcile | claude CLI not found on PATH — "
+                            "cancellation reconciliation disabled")
+            return
+        except (json.JSONDecodeError, OSError) as exc:
+            log.warning("reconcile | claude agents --json failed: %s", exc)
+            return
+
+        status_by_session = {
+            s.get("sessionId", ""): s.get("status", "")
+            for s in sessions if isinstance(s, dict)
+        }
+        changed = False
+        for aid, sid in candidates.items():
+            status = status_by_session.get(sid)
+            if status != "idle":
+                continue
+            stale_state = self._activities.get(aid, {}).get("state", "?")
+            log.info("RECONCILE | %s session=%s CLI reports idle — clearing stuck '%s' "
+                     "(cancellation fired no hook)", aid, sid[:8], stale_state)
+            self._append_to_history(aid, "(cli-reconcile)", "idle", "", 0, False)
+            self._pop_activity(aid)
+            changed = True
+        if changed:
+            self._schedule_emit()
+
     def write_diagnostic_dump(self) -> None:
         """Serialize full bridge state to DIAGNOSTIC_DUMP_PATH for postmortem.
 
@@ -1031,6 +1134,18 @@ class AgentBridge:
             "tool": tool,
             "ooo": ooo,
         })
+
+    def _pop_activity(self, aid: str) -> None:
+        """Transition an agent to idle: drop its activity entry + per-turn state.
+
+        Unlike _clear_agent_state this keeps identity (_agent_types) and the
+        history ring buffer — the agent still exists, it's just no longer busy.
+        Shared by the hook-driven idle/offline path and the CLI reconciler so
+        the two can never drift.
+        """
+        self._activities.pop(aid, None)
+        self._warned_stuck.discard(aid)
+        self._subagent_depth.pop(aid, None)
 
     def _clear_agent_state(self, aid: str) -> None:
         """Remove all per-agent state for a given agent_id.
@@ -1346,13 +1461,15 @@ async def main():
 
     # Periodic staleness reaper — clears orphaned activity entries (no live
     # orchestrator connection). Registered agents are never reaped by timeout.
-    # Also runs the stuck-working watchdog (purely observational logging).
+    # Also runs the stuck-working watchdog (purely observational logging) and
+    # the claude-CLI reconciler (the cancellation catch-all — self-throttled).
     async def activity_reaper():
         while True:
             await asyncio.sleep(5)  # Check every 5 seconds
             try:
                 bridge.reap_stale_activities()
                 bridge.check_stuck_working()
+                await bridge.reconcile_claude_sessions()
             except Exception as exc:  # noqa: BLE001
                 log.error("activity_reaper: unexpected error: %s", exc)
     asyncio.create_task(activity_reaper())
@@ -1383,12 +1500,18 @@ async def shutdown(server):
 
     log.info("SHUTDOWN: closing server...")
     server.close()
-    await server.wait_closed()
+    # Cancel tasks BEFORE wait_closed(): since Python 3.13, wait_closed()
+    # also waits for all in-flight client handler coroutines — and orchestrator
+    # connections are long-lived, so awaiting it first deadlocks the shutdown
+    # (observed 2026-06-11: bridge stuck half-shut down, server closed but
+    # still serving existing clients). Cancelling handle_client tasks first
+    # closes those connections, letting wait_closed() return promptly.
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     log.info("SHUTDOWN: cancelling %d tasks", len(tasks))
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
+    await server.wait_closed()
     log.info("SHUTDOWN: all tasks finished")
 
 

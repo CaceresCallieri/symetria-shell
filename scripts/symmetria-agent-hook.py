@@ -111,6 +111,8 @@ EVENT_STATE_MAP = {
     "PostCompact": "thinking",  # 2026+: emitted after compaction completes
     # Observer-only events (no state change but explicitly mapped to silence
     # "unmapped event" warnings — they carry no actionable lifecycle info)
+    # EXCEPTION: Notification wired with the idle_prompt matcher + argv marker
+    # is promoted to "idle" in main() (cancellation fallback — see below).
     "Notification": "",
     "TaskCreated": "",
     "TaskCompleted": "",
@@ -231,6 +233,29 @@ def main():
     if hook_name == "SessionStart" and event.get("source", "") == "clear":
         state = "clearing"
 
+    # Cancellation detection. Claude Code fires NO hook at the moment of a
+    # user interrupt (Esc) — the Stop hook is documented as "does not run if
+    # the stoppage occurred due to a user interrupt". Two partial signals
+    # exist; both are mapped to idle here (the bridge's claude-CLI
+    # reconciliation poll is the catch-all for the remaining gap):
+    #
+    # 1. Notification(idle_prompt) — "Claude is done and waiting for your
+    #    next prompt". Wired in settings.json with matcher "idle_prompt" and
+    #    an explicit argv marker so we never have to guess at undocumented
+    #    payload fields. Fires after an idle threshold (~60s), so it's a
+    #    delayed clear, not an instant one.
+    if hook_name == "Notification" and "idle-notification" in sys.argv[1:]:
+        state = "idle"
+
+    # 2. PostToolUseFailure with is_interrupt — an Esc that lands mid-tool-call
+    #    reportedly surfaces here. The field is NOT in the official docs (as of
+    #    2026-06-11), so this is defensive: absent field → unchanged behavior
+    #    ("thinking"), and we log loudly when it IS seen so we learn whether
+    #    the signal is real. See memory/project_claude_cancel_detection.md.
+    if hook_name == "PostToolUseFailure" and event.get("is_interrupt") is True:
+        _hook_log(f"interrupt | agent={agent_id} PostToolUseFailure carried is_interrupt=true — mapping to idle")
+        state = "idle"
+
     # Observer-only events have an explicit empty-string mapping — log them
     # at debug-info level (so we know they fired) but don't emit an activity
     # message to the bridge.
@@ -276,6 +301,10 @@ def main():
         "in_plan_mode": plan_mode,
         "hook_event": hook_name,  # passthrough — bridge logs it for diff context
         "event_ts_ns": event_ts_ns,
+        # Claude Code session UUID (present in every hook payload). The bridge
+        # joins this against `claude agents --json` sessionId to reconcile
+        # stuck-busy agents whose cancellation fired no hook.
+        "session_id": event.get("session_id", ""),
     })
     notif = _build_notification(hook_name, event, agent_id)
 

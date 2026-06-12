@@ -104,6 +104,18 @@ The history tail in the warning is the smoking gun for diagnosing the cause — 
 
 The warning is purely observational. The orchestrator's `quiet_bufs` liveness path (terminal silent for 60s) is the actual recovery mechanism; this watchdog just tells us when recovery should have happened but didn't.
 
+### Claude CLI reconciliation (cancellation catch-all, added 2026-06-11)
+
+Claude Code fires **no hook at all when the user cancels a turn with Esc** — the Stop hook is officially documented as "does not run if the stoppage occurred due to a user interrupt" (feature requests anthropics/claude-code#9516 / #45289 remain open). A canceled agent therefore stays `working`/`thinking` forever from the hooks' point of view. Research notes: `.claude/memory/project_claude_cancel_detection.md`.
+
+The bridge closes this gap by polling ground truth. Every reaper tick (5s), `reconcile_claude_sessions()` looks for local Claude agents that have been in a busy state with no hook traffic for ≥ `CLAUDE_RECONCILE_AFTER_SECONDS` (15s). If any exist (and the CLI hasn't been invoked within `CLAUDE_RECONCILE_MIN_INTERVAL`), it runs `claude agents --json` (CLI v2.1.145+) and joins on the `session_id` the hook script now passes through in every activity message. An agent is force-cleared to idle **only** when the CLI explicitly reports its session as `status: "idle"` — missing sessions and absent status fields are left alone (process death belongs to the orphan reaper / liveness paths). Cleared agents get a `(cli-reconcile)` entry in their history ring and a `RECONCILE |` log line.
+
+Excluded from reconciliation: OpenCode agents (invisible to the claude CLI; their `session.idle` plugin event already handles cancel correctly) and remote SSH-tunneled agents (not in the local CLI output — these still rely on the timeout/liveness fallbacks).
+
+Two faster, partial signals are also wired in the hook layer:
+- `Notification` with the `idle_prompt` matcher (settings.json passes an `idle-notification` argv marker) → `idle`. Fires after Claude's idle threshold (~60s), so it's a delayed clear.
+- `PostToolUseFailure` with `is_interrupt: true` → `idle`. The field is undocumented (unverified as of 2026-06-11); the hook logs `interrupt |` whenever it is actually observed so we can confirm the signal empirically.
+
 ### SIGUSR1 diagnostic dump
 
 ```bash
@@ -163,12 +175,12 @@ Logs a structured `report-stuck` and `report-stuck-snap` line — useful as a "u
 [py:bridge] STUCK WORKING | X in 'working' for 137s
 ```
 
-Cause: Claude Code emitted `Stop` but the hook script never ran. Possible reasons:
+Cause: no `Stop` ever reached the bridge. The **most common reason is user cancellation** — Claude Code deliberately fires no hook on Esc (see "Claude CLI reconciliation" above, which now recovers this case within ~15–25s). Rarer reasons:
 - `SYMMETRIA_AGENT_ID` was unset at Stop time (orchestrator unset it during teardown).
 - Claude Code crashed before firing Stop.
 - The hook process was killed before reaching `sock.sendall`.
 
-Fix direction: orchestrator should keep `SYMMETRIA_AGENT_ID` set through Stop, and the hook should perhaps retry once on socket error.
+If this pattern appears WITHOUT a subsequent `RECONCILE |` line clearing it, the reconciler itself failed — check for `reconcile |` warnings (CLI missing, timeout, parse failure) in the bridge log.
 
 ### Pattern 0 — Recap subagent (FIXED 2026-04-25)
 
