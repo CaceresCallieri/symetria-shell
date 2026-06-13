@@ -95,7 +95,6 @@ JsonObject {
             { name: ".hyprdots", icon: "mat:tune" },
             { name: "kosmos", icon: "mat:rocket_launch" },
             { name: "magistralia", icon: "mat:school" },
-            { name: "corpy", icon: "mat:code" },
             { name: "nvim", icon: "mat:edit" }
         ]
     }
