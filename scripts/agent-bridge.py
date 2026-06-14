@@ -67,9 +67,16 @@ CLAUDE_CLI_TIMEOUT_SECONDS = 10
 # triggers that never trust the clear push: (a) the target agent entering
 # "working" — the dictation is delivered the moment it starts processing;
 # (b) the target agent being reaped; (c) this absolute backstop for the
-# abandoned-recording case (cancel + lost clear + agent never works). Generous
-# so a long single dictation is never cut short — during transcribing the
-# shell re-pushes and refreshes the stamp, so only a truly idle latch ages out.
+# abandoned-recording case (cancel + lost clear + agent never works). The
+# window runs from the last _stt_state CHANGE: the recording→transcribing flip
+# re-pushes once and refreshes the stamp, but steady transcribing does NOT (the
+# shell pushes only on set/clear/the single flip). 300s is generous — a normal
+# dictation clears via (a)/(b) far sooner, and transcription is a fast API call,
+# so a target unchanged for 300s is almost certainly stale. Do NOT gate this
+# backstop on `transcribing`: a target stuck at transcribing=true whose agent
+# never works (e.g. delivery failed) would then latch forever — the very bug
+# this guards against. A rare >300s single recording may briefly drop the
+# indicator until the transcribing flip re-pushes; that is the accepted tradeoff.
 STT_STALENESS_TIMEOUT = 300
 
 # How many activity transitions to retain per agent for postmortem dumps.
@@ -272,10 +279,13 @@ class AgentBridge:
 
         The target is keyed by (terminal_pid, buf); an agent_id is
         "{nvim_pid}_{buf}" whose terminal_pid is _terminal_pids[nvim_pid]. A
-        target buf of -1 is the "representative agent" sentinel (any agent on
-        the target terminal matches), mirroring AgentService.isAgentSttTarget.
+        target buf of -1 is the "representative agent" sentinel: this matches
+        ANY agent on the target terminal — deliberately broader than
+        AgentService.isAgentSttTarget (which matches only the *active* agent),
+        because over-eager clearing is harmless for a self-heal while a missed
+        clear is the latch bug this exists to fix.
         """
-        if not self._stt_state:
+        if self._stt_state is None:
             return False
         nvim_pid_str, _, buf_str = agent_id.partition("_")
         try:
@@ -770,6 +780,9 @@ class AgentBridge:
             # fixes the IDE chip falling back to STT instead of showing "working"
             # — the IDE's only STT source is this broadcast (the shell agentbar
             # reads local AgentService state, which is why it was never affected).
+            # Re-evaluated on every "working" event (not just transitions), which
+            # is intentionally cheap: both helpers short-circuit once _stt_state
+            # is None, so post-clear events are a single dict identity check.
             if state == "working" and self._stt_target_is(agent_id):
                 self._clear_stt_state("target agent working")
             self._schedule_emit()
