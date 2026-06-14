@@ -56,6 +56,22 @@ CLAUDE_RECONCILE_MIN_INTERVAL = 10
 # Hard cap on one CLI invocation before we kill it and retry next cycle.
 CLAUDE_CLI_TIMEOUT_SECONDS = 10
 
+# STT target staleness backstop. The shell pushes the dictation target on
+# recording start and is meant to push a clear (terminal_pid <= 0) when it
+# finishes — but that clear push can be lost (a hub restart racing the clear,
+# a gated _clearSttTargetIfOwned skip on the shell side), latching a stale
+# "recording" broadcast forever. Unlike the shell's own agentbar (which reads
+# its LOCAL AgentService state), the Symmetria IDE's ONLY STT source is this
+# hub's broadcast, so a latch freezes the IDE chip's soundwave indefinitely.
+# _stt_state therefore self-heals the same way activity does, via three
+# triggers that never trust the clear push: (a) the target agent entering
+# "working" — the dictation is delivered the moment it starts processing;
+# (b) the target agent being reaped; (c) this absolute backstop for the
+# abandoned-recording case (cancel + lost clear + agent never works). Generous
+# so a long single dictation is never cut short — during transcribing the
+# shell re-pushes and refreshes the stamp, so only a truly idle latch ages out.
+STT_STALENESS_TIMEOUT = 300
+
 # How many activity transitions to retain per agent for postmortem dumps.
 # 20 is enough to cover the trailing PreToolUse → PostToolUse → Stop dance
 # of a typical Claude Code turn, plus several preceding tool calls.
@@ -222,6 +238,11 @@ class AgentBridge:
         # dashboard computes locally via AgentService.isAgentSttTarget().
         # Shape: {"terminal_pid": int, "buf": int, "transcribing": bool}.
         self._stt_state: dict[str, object] | None = None
+        # Monotonic stamp of the last _stt_state CHANGE — drives the staleness
+        # backstop (STT_STALENESS_TIMEOUT). An identical re-push does not
+        # refresh it (set_stt_state early-returns), so it reflects the last
+        # real transition, not keepalive traffic.
+        self._stt_state_ts: float = 0.0
 
     def set_stt_state(self, msg: dict[str, object]) -> None:
         """Store the shell-reported STT target and rebroadcast if it changed.
@@ -242,8 +263,51 @@ class AgentBridge:
         if new_state == self._stt_state:
             return
         self._stt_state = new_state
+        self._stt_state_ts = time.monotonic()
         log.debug("stt_state: %s", new_state)
         self._schedule_emit()
+
+    def _stt_target_is(self, agent_id: str) -> bool:
+        """True if agent_id is the agent the current STT target points at.
+
+        The target is keyed by (terminal_pid, buf); an agent_id is
+        "{nvim_pid}_{buf}" whose terminal_pid is _terminal_pids[nvim_pid]. A
+        target buf of -1 is the "representative agent" sentinel (any agent on
+        the target terminal matches), mirroring AgentService.isAgentSttTarget.
+        """
+        if not self._stt_state:
+            return False
+        nvim_pid_str, _, buf_str = agent_id.partition("_")
+        try:
+            nvim_pid = int(nvim_pid_str)
+            buf = int(buf_str)
+        except ValueError:
+            return False
+        if self._terminal_pids.get(nvim_pid, 0) != self._stt_state.get("terminal_pid"):
+            return False
+        target_buf = self._stt_state.get("buf", -1)
+        return target_buf == -1 or target_buf == buf
+
+    def _clear_stt_state(self, reason: str) -> None:
+        """Self-heal the STT broadcast without a shell clear push (see
+        STT_STALENESS_TIMEOUT). No-op when nothing is latched, so callers can
+        fire it unconditionally."""
+        if self._stt_state is None:
+            return
+        log.info("stt_state self-heal (%s): clearing %s", reason, self._stt_state)
+        self._stt_state = None
+        self._stt_state_ts = 0.0
+        self._schedule_emit()
+
+    def reap_stale_stt(self) -> None:
+        """Backstop self-heal (c): drop an STT target that has outlived any
+        plausible dictation. Catches the abandoned-recording case — user
+        cancels, the shell's clear push is lost, and the agent never starts
+        working (so the activity-driven heal never fires)."""
+        if self._stt_state is None:
+            return
+        if time.monotonic() - self._stt_state_ts > STT_STALENESS_TIMEOUT:
+            self._clear_stt_state("staleness timeout")
 
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
@@ -697,6 +761,17 @@ class AgentBridge:
             if prev_state != state:
                 log.info("activity | %s %s→%s event=%s tool=%s plan=%s",
                          agent_id, prev_state or "-", state, hook_event or "?", tool, plan)
+            # STT self-heal (a): once the target agent is actually WORKING, the
+            # dictation that targeted it has been delivered and acted on, so
+            # drop any STT broadcast the shell's clear push failed to clear.
+            # Gated on "working" specifically (not needs_permission/idle): during
+            # a recording in flight the agent sits idle/waiting, so a broader
+            # gate would erase the soundwave mid-recording. This is the heal that
+            # fixes the IDE chip falling back to STT instead of showing "working"
+            # — the IDE's only STT source is this broadcast (the shell agentbar
+            # reads local AgentService state, which is why it was never affected).
+            if state == "working" and self._stt_target_is(agent_id):
+                self._clear_stt_state("target agent working")
             self._schedule_emit()
             return
 
@@ -1171,6 +1246,12 @@ class AgentBridge:
         to ensure all four per-agent dicts stay consistent. Centralises the
         teardown so new dicts only need to be added here.
         """
+        # STT self-heal (b): if this agent was the dictation target, drop the
+        # stale STT broadcast — the target no longer exists. Checked before the
+        # pops below since _stt_target_is reads _terminal_pids (not touched here)
+        # and the agent_id, not the dicts being cleared.
+        if self._stt_target_is(aid):
+            self._clear_stt_state("target agent reaped")
         self._activities.pop(aid, None)
         self._agent_types.pop(aid, None)
         self._activity_history.pop(aid, None)
@@ -1485,6 +1566,7 @@ async def main():
             await asyncio.sleep(5)  # Check every 5 seconds
             try:
                 bridge.reap_stale_activities()
+                bridge.reap_stale_stt()
                 bridge.check_stuck_working()
                 await bridge.reconcile_claude_sessions()
             except Exception as exc:  # noqa: BLE001
