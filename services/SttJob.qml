@@ -46,6 +46,10 @@ QtObject {
     /// Transcribed text result
     readonly property string transcribedText: _transcribedText
 
+    /// Live partial transcript during streaming-mode recording. Preview only —
+    /// the delivered text still comes from the batch transcribe path.
+    readonly property string partialTranscript: _partialTranscript
+
     /// The user's runtime delivery choice for this job
     readonly property string activeDeliveryChoice: _activeDeliveryChoice
 
@@ -81,6 +85,7 @@ QtObject {
     readonly property string _levelMonitorScript: Qt.resolvedUrl("../scripts/stt-level-monitor.sh").toString().replace(/^file:\/\//, "")
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace(/^file:\/\//, "")
     readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace(/^file:\/\//, "")
+    readonly property string _streamScript: Qt.resolvedUrl("../scripts/stt-stream.py").toString().replace(/^file:\/\//, "")
 
     // API key: config value takes priority, then environment variable
     readonly property string _resolvedApiKey: {
@@ -98,6 +103,7 @@ QtObject {
     property string _state: "idle"
     property real _audioLevel: 0.0
     property string _transcribedText: ""
+    property string _partialTranscript: ""
 
     // Error detail properties
     property string _errorDetail: ""
@@ -212,6 +218,7 @@ QtObject {
         _pendingRecordAction = "submit";
         levelMonitorProcess.running = false;
         recordProcess.running = false;
+        streamProcess.running = false; // preview only; batch path delivers
     }
 
     /// Pause if recording.
@@ -220,6 +227,7 @@ QtObject {
         _pendingRecordAction = "pause";
         levelMonitorProcess.running = false;
         recordProcess.running = false;
+        streamProcess.running = false;
     }
 
     /// Resume from pause.
@@ -264,6 +272,7 @@ QtObject {
 
         if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
+        if (streamProcess.running) streamProcess.signal(9);
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
 
@@ -475,6 +484,24 @@ QtObject {
         // what the transcriber actually hears (script treats "" as default).
         levelMonitorProcess.command = [job._levelMonitorScript, captureSource];
         levelMonitorProcess.running = true;
+
+        // Streaming preview: a third reader on the same PipeWire node feeds the
+        // streaming helper. PipeWire multiplexes the source, so this coexists
+        // with the record-to-file and level-monitor readers. mode defaults to
+        // "batch", so this stays dormant unless streaming is opted into.
+        if (Config.stt?.mode === "streaming") {
+            job._partialTranscript = "";
+            const backend = Config.stt?.streaming?.backend ?? "local";
+            const partialInterval = Config.stt?.streaming?.partialInterval ?? 1.5;
+            const targetArg = captureSource !== "" ? ` --target=${captureSource}` : "";
+            const rec = `pw-record --format=s16 --rate=${sampleRate} --channels=${channels}${targetArg} -`;
+            // NOTE: the "local" backend needs the faster-whisper venv python +
+            // LD_LIBRARY_PATH (wired in a later increment). "mock" runs on the
+            // system python3 and is the path to validate this plumbing.
+            const help = `python3 '${job._streamScript}' --backend ${backend} --sample-rate ${sampleRate} --partial-interval ${partialInterval}`;
+            streamProcess.command = ["sh", "-c", `${rec} | ${help}`];
+            streamProcess.running = true;
+        }
     }
 
     /// Proceed to transcription after recording is complete.
@@ -825,6 +852,7 @@ QtObject {
         if (sessionId !== "") _cleanupTempFiles();
         if (recordProcess.running) recordProcess.signal(9);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
+        if (streamProcess.running) streamProcess.signal(9);
         if (transcribeProcess.running) transcribeProcess.signal(9);
         if (concatProcess.running) concatProcess.signal(9);
         if (clipboardProcess.running) clipboardProcess.running = false;
@@ -985,6 +1013,33 @@ QtObject {
                 const level = parseFloat(data.trim());
                 if (!isNaN(level) && isFinite(level))
                     job._audioLevel = Math.min(1.0, Math.max(0.0, level));
+            }
+        }
+    }
+
+    // Streaming preview (Config.stt.mode === "streaming"): a second pw-record
+    // feeds scripts/stt-stream.py, whose JSON-lines partials drive
+    // partialTranscript for the live overlay. Command is assigned in
+    // _startRecording(). ADDITIVE — this does NOT replace the batch
+    // transcribe/deliver path; the delivered text still comes from
+    // transcribeProcess (gpt-4o). The stream's own "final" is intentionally
+    // ignored here (delivery stays batch); wiring stream-final delivery is a
+    // later, opt-in increment.
+    readonly property Process streamProcess: Process {
+        stdout: SplitParser {
+            onRead: data => {
+                const line = data.trim();
+                if (line === "") return;
+                let ev;
+                try {
+                    ev = JSON.parse(line);
+                } catch (e) {
+                    return; // ignore non-JSON noise
+                }
+                if (ev.type === "partial")
+                    job._partialTranscript = ev.text ?? "";
+                else if (ev.type === "error")
+                    console.warn("[STT:stream] backend error:", ev.detail);
             }
         }
     }

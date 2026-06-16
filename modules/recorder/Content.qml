@@ -45,6 +45,9 @@ Item {
     readonly property real audioLevel: job?.audioLevel ?? 0
     readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
 
+    // Live partial transcript (STT streaming mode). "" for non-STT jobs.
+    readonly property string partialTranscript: mode === "stt" ? (job?.partialTranscript ?? "") : ""
+
     // ── STT-specific property aliases ──────────────────────────────
 
     readonly property bool serviceIsAskMode: mode === "stt" && SttService.isAskMode
@@ -284,6 +287,26 @@ Item {
                         id: vocabBadge
                         Layout.alignment: Qt.AlignTop
                     }
+                }
+            }
+
+            // ── Streaming live partial preview (STT streaming mode) ───
+            // Shows what the streaming backend is hearing in real time so the
+            // user can re-dictate mishearings on the fly. Preview only — the
+            // delivered text still comes from the batch path. Drawer only for
+            // now; the bar embed's compact width needs a separate treatment.
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.mode === "stt" && root.partialTranscript !== ""
+                    && (root.displayState === "recording" || root.displayState === "processing")
+
+                StyledText {
+                    width: 320
+                    text: root.partialTranscript
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Appearance.font.size.small
+                    color: Colours.palette.m3onSurfaceVariant
                 }
             }
 
