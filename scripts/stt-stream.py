@@ -32,9 +32,11 @@ table below is where they plug in.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import signal
+import subprocess
 import sys
 
 # 16-bit mono PCM: 2 bytes per sample. One "tick" read from stdin is sized so
@@ -78,6 +80,31 @@ def _emit_error_safe(detail: str) -> None:
         emit({"type": "error", "detail": detail})
     except BrokenPipeError:
         _silence_broken_stdout()
+
+
+def _spawn_capture(source: str, sample_rate: int, channels: int) -> subprocess.Popen:
+    """Spawn pw-record as a child reading the mic, returning the Popen.
+
+    The helper owning pw-record (rather than a `sh -c "pw-record | helper"`
+    pipeline) means a single process for QML to manage: signalling the helper
+    cleans up capture too, with no orphaned grandchildren. PR_SET_PDEATHSIG
+    makes pw-record receive SIGTERM if THIS helper dies for ANY reason
+    (including an uncatchable SIGKILL), so it can never be left holding the
+    PipeWire source.
+    """
+    args = ["pw-record", "--format=s16", f"--rate={sample_rate}", f"--channels={channels}"]
+    if source:
+        args.append(f"--target={source}")
+    args.append("-")
+
+    def _set_pdeathsig() -> None:
+        try:
+            # PR_SET_PDEATHSIG = 1
+            ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, signal.SIGTERM)
+        except Exception:
+            pass
+
+    return subprocess.Popen(args, stdout=subprocess.PIPE, preexec_fn=_set_pdeathsig)
 
 
 def pcm_bytes_to_float32(pcm: bytes):
@@ -227,6 +254,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--lang", default=None, help="language hint, e.g. es")
     parser.add_argument(
+        "--capture",
+        action="store_true",
+        help="spawn pw-record internally instead of reading PCM from stdin",
+    )
+    parser.add_argument("--source", default="", help="PipeWire source node (with --capture)")
+    parser.add_argument(
+        "--channels", type=_positive_int, default=1, help="capture channels (with --capture)"
+    )
+    parser.add_argument(
         "--sample-rate",
         dest="sample_rate",
         type=_positive_int,
@@ -266,11 +302,17 @@ def run(args: argparse.Namespace) -> int:
     bytes_since_partial = 0
     last_partial = None
 
-    stdin = sys.stdin.buffer
+    # Audio source: either pw-record we own (--capture) or PCM piped to stdin.
+    capture_proc = (
+        _spawn_capture(args.source, args.sample_rate, args.channels)
+        if args.capture
+        else None
+    )
+    stream = capture_proc.stdout if capture_proc is not None else sys.stdin.buffer
     try:
         while True:
-            chunk = stdin.read(tick_bytes)
-            if not chunk:  # EOF: pw-record closed -> stop() finalizes the take.
+            chunk = stream.read(tick_bytes)
+            if not chunk:  # EOF: source closed -> stop() finalizes the take.
                 break
             backend.feed(chunk)
             bytes_since_partial += len(chunk)
@@ -292,6 +334,17 @@ def run(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001 - any failure becomes an error event
         _emit_error_safe(str(exc))
         return 1
+    finally:
+        # PR_SET_PDEATHSIG already covers a hard kill; this is the graceful path.
+        if capture_proc is not None:
+            try:
+                capture_proc.terminate()
+                capture_proc.wait(timeout=1)
+            except Exception:
+                try:
+                    capture_proc.kill()
+                except Exception:
+                    pass
     return 0
 
 

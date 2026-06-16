@@ -268,6 +268,7 @@ QtObject {
     /// back through null in the new restart flow.
     function cancelForRestart(): void {
         _pendingRecordAction = "cancel";
+        _partialTranscript = "";
         _stopAllTimers();
 
         if (recordProcess.running) recordProcess.signal(9);
@@ -489,17 +490,28 @@ QtObject {
         // streaming helper. PipeWire multiplexes the source, so this coexists
         // with the record-to-file and level-monitor readers. mode defaults to
         // "batch", so this stays dormant unless streaming is opted into.
-        if (Config.stt?.mode === "streaming") {
+        // Spawn the helper directly (argv, no shell) with --capture so it owns
+        // its own pw-record child: killing streamProcess tears down capture
+        // cleanly (no orphaned pipeline grandchildren), and Config values are
+        // passed as argv with no shell-injection surface. showPartials gates the
+        // whole thing — off means no spawn, partialTranscript stays "" and the
+        // overlay self-hides.
+        if (Config.stt?.mode === "streaming" && (Config.stt?.streaming?.showPartials ?? true)) {
             job._partialTranscript = "";
             const backend = Config.stt?.streaming?.backend ?? "local";
             const partialInterval = Config.stt?.streaming?.partialInterval ?? 1.5;
-            const targetArg = captureSource !== "" ? ` --target=${captureSource}` : "";
-            const rec = `pw-record --format=s16 --rate=${sampleRate} --channels=${channels}${targetArg} -`;
             // NOTE: the "local" backend needs the faster-whisper venv python +
-            // LD_LIBRARY_PATH (wired in a later increment). "mock" runs on the
-            // system python3 and is the path to validate this plumbing.
-            const help = `python3 '${job._streamScript}' --backend ${backend} --sample-rate ${sampleRate} --partial-interval ${partialInterval}`;
-            streamProcess.command = ["sh", "-c", `${rec} | ${help}`];
+            // LD_LIBRARY_PATH and is NOT functional until that increment. Today,
+            // set streaming.backend="mock" to validate this plumbing on system
+            // python3.
+            streamProcess.command = [
+                "python3", job._streamScript,
+                "--capture", "--source", captureSource,
+                "--backend", backend,
+                "--sample-rate", String(sampleRate),
+                "--channels", String(channels),
+                "--partial-interval", String(partialInterval)
+            ];
             streamProcess.running = true;
         }
     }
@@ -1037,7 +1049,7 @@ QtObject {
                     return; // ignore non-JSON noise
                 }
                 if (ev.type === "partial")
-                    job._partialTranscript = ev.text ?? "";
+                    job._partialTranscript = String(ev.text ?? "");
                 else if (ev.type === "error")
                     console.warn("[STT:stream] backend error:", ev.detail);
             }
