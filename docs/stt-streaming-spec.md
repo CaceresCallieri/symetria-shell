@@ -167,6 +167,8 @@ CUDNN_DIR=$(dirname "$(find ~/.local/share/symmetria/stt-venv -name 'libcudnn.so
 
 Measured: `small` transcribed 38 s of Spanish in ~4.9 s wall (model cached, 6 buffer re-transcribes) — faster than real-time. `small` mangles technical Spanish vocab; `large-v3` is the Fase 1 quality model.
 
+**Language / Spanglish (verified 2026-06-16).** The user code-switches (Spanish with embedded English terms). MUST use **auto-detect** (`language=None`) — never pin `es`, which forces Spanish interpretation and mangles English words. Verified on real history audio vs the gpt-4o baseline: `large-v3` auto got WhatsApp / Instagram / streamlined / "working tree" / "history tab" correct while detecting `es`. Two gaps vs gpt-4o-transcribe: (1) weaker punctuation/capitalization (a Whisper trait — `condition_on_previous_text=True` on the *final* pass helps; the Fase 3 hybrid's gpt-4o final eliminates it); (2) rare compound tech terms can mangle ("chatbot core" → "chat.cor"), mitigable via vocabulary-hint priming or a cleanup pass. The helper already defaults to auto and exposes `--lang` as an optional manual override — keep that contract.
+
 **Local engine choice:**
 
 | Approach | Pros | Cons | Use |
