@@ -18,6 +18,13 @@ JsonObject {
     property string longAudioModel: "whisper-1"
     property int longAudioThresholdSec: 420
 
+    // Transcription mode. "batch" is the current file-then-curl pipeline (best
+    // for long-form dictation). "streaming" shows partial transcripts live
+    // while recording via the scripts/stt-stream.py helper. The two coexist;
+    // see docs/stt-streaming-spec.md. Default "batch" preserves current
+    // behaviour until streaming is opted into.
+    property string mode: "batch"
+
     property int autoHideDelay: 1500
     property int processingTimeout: 120000
     // Valid values: "clipboard" | "inject" | "submit" | "ask"
@@ -43,6 +50,41 @@ JsonObject {
         // drop-in in ~/.config/pipewire/pipewire.conf.d — see docs/module-setup.md).
         // If the named node does not exist, pw-record fails and recording errors.
         property string source: ""
+    }
+
+    // Streaming mode (mode === "streaming"). Backends are interchangeable
+    // behind the scripts/stt-stream.py helper (PCM stdin -> JSON-lines stdout);
+    // QML consumes partials the same way it consumes the waveform level. NOTE:
+    // streaming.backend is distinct from the top-level `backend` above, which
+    // selects the BATCH provider. See docs/stt-streaming-spec.md.
+    property JsonObject streaming: JsonObject {
+        // "local" | "openai" | "deepgram" | "google"
+        property string backend: "local"
+        // Render the live partial transcript in the recorder overlay.
+        property bool showPartials: true
+        // Seconds of new audio between partial emissions (helper
+        // --partial-interval). Lower = snappier but more engine work.
+        property real partialInterval: 1.5
+
+        property JsonObject local: JsonObject {
+            // "faster-whisper" (PCM-stdin, VAD, Whisper-grade) | "whisper.cpp"
+            property string engine: "faster-whisper"
+            property string model: "large-v3"
+            property string device: "cuda" // "cuda" | "cpu" (cpu = zero VRAM)
+
+            // float16 is REQUIRED on RTX 50-series (Blackwell, sm_120):
+            // CTranslate2 int8 crashes there (cuBLAS NOT_SUPPORTED). Needs
+            // CTranslate2 >=4.5.0 / CUDA 12.8. See docs/stt-streaming-spec.md.
+            property string computeType: "float16"
+
+            // Manual on/off for the local engine. ON = model resident (instant
+            // dictation, ~3 GB VRAM, keeps the laptop dGPU awake -> battery
+            // cost); OFF = engine down (dGPU sleeps), dictation cold-starts or
+            // routes to a cloud backend. A deliberate toggle, NOT an idle
+            // timeout (an idle timeout that only unloads weights leaves the
+            // CUDA context alive, so the dGPU never sleeps). Flippable via IPC.
+            property bool resident: false
+        }
     }
 
     property JsonObject cache: JsonObject {
