@@ -33,9 +33,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import sys
-import time
 
 # 16-bit mono PCM: 2 bytes per sample. One "tick" read from stdin is sized so
 # QML sees events at a steady cadence, mirroring the 100ms level-monitor chunk.
@@ -53,11 +53,44 @@ def emit(event: dict) -> None:
     sys.stdout.flush()
 
 
+def _silence_broken_stdout() -> None:
+    """Point fd 1 at /dev/null after a broken pipe.
+
+    Python flushes sys.stdout's buffer again at interpreter shutdown; if the
+    pipe is already broken that flush re-raises and prints a stray "Exception
+    ignored ... BrokenPipeError" to stderr. Redirecting the fd makes the
+    shutdown flush go nowhere, silently.
+    """
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+    except OSError:
+        pass
+
+
+def _emit_error_safe(detail: str) -> None:
+    """Emit an error event, swallowing a dead-pipe failure during reporting.
+
+    If the QML parent has already gone away the pipe is broken, so writing the
+    error would itself raise BrokenPipeError; there is no one left to read it.
+    """
+    try:
+        emit({"type": "error", "detail": detail})
+    except BrokenPipeError:
+        _silence_broken_stdout()
+
+
 def pcm_bytes_to_float32(pcm: bytes):
-    """Convert s16le PCM bytes to a normalized float32 numpy array in [-1, 1]."""
+    """Convert s16le PCM bytes to a normalized float32 numpy array in [-1, 1].
+
+    A pipe read can split a 2-byte sample, leaving the accumulated buffer an
+    odd length; np.frombuffer raises on that, so trim the trailing byte (it
+    rejoins its pair once the next read arrives).
+    """
     import numpy as np
 
-    return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+    usable = len(pcm) - (len(pcm) % BYTES_PER_SAMPLE)
+    return np.frombuffer(pcm[:usable], dtype=np.int16).astype(np.float32) / 32768.0
 
 
 class MockBackend:
@@ -172,6 +205,13 @@ def build_backend(args: argparse.Namespace):
     )
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -187,7 +227,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--lang", default=None, help="language hint, e.g. es")
     parser.add_argument(
-        "--sample-rate", dest="sample_rate", type=int, default=16000, help="PCM rate"
+        "--sample-rate",
+        dest="sample_rate",
+        type=_positive_int,
+        default=16000,
+        help="PCM rate (positive int)",
     )
     parser.add_argument(
         "--partial-interval",
@@ -200,19 +244,27 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def run(args: argparse.Namespace) -> int:
-    # SIGTERM/SIGINT (how SttJob cancels) should unwind cleanly via the read
-    # loop, not dump a traceback. Raising KeyboardInterrupt lets the finally
-    # block decide whether a final transcript is still warranted.
+    # QML tears the helper down with SIGTERM (its Process kills the child on
+    # cancel). Translate that into KeyboardInterrupt so a cancel landing
+    # anywhere -- read loop OR final flush -- unwinds to the single handler
+    # below that discards the take without emitting a final. A normal stop()
+    # instead closes stdin (EOF), which falls through to the final emission.
+    # SIGINT keeps its default (also KeyboardInterrupt), so Ctrl+C during
+    # manual testing cancels cleanly too.
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
 
     backend = build_backend(args)
     emit({"type": "ready"})
 
     tick_bytes = max(1, int(args.sample_rate * TICK_SECONDS) * BYTES_PER_SAMPLE)
-    interval_bytes = int(args.sample_rate * args.partial_interval) * BYTES_PER_SAMPLE
+    # Never let the partial cadence outrun one tick: a non-positive
+    # --partial-interval would otherwise re-transcribe the whole buffer every
+    # 100ms and flood the engine.
+    interval_bytes = max(
+        tick_bytes, int(args.sample_rate * args.partial_interval) * BYTES_PER_SAMPLE
+    )
     bytes_since_partial = 0
     last_partial = None
-    cancelled = False
 
     stdin = sys.stdin.buffer
     try:
@@ -228,32 +280,39 @@ def run(args: argparse.Namespace) -> int:
                 if text and text != last_partial:
                     last_partial = text
                     emit({"type": "partial", "text": text})
-    except KeyboardInterrupt:
-        cancelled = True
-    except Exception as exc:  # noqa: BLE001 - any failure becomes an error event
-        emit({"type": "error", "detail": str(exc)})
-        return 1
-
-    if cancelled:
-        # Cancellation discards the take; SttJob.cancel() owns cleanup.
-        return 0
-
-    try:
         emit({"type": "final", "text": backend.final()})
-    except Exception as exc:  # noqa: BLE001
-        emit({"type": "error", "detail": str(exc)})
+    except KeyboardInterrupt:
+        # Cancellation (SIGTERM/SIGINT) discards the take; emit nothing.
+        return 0
+    except BrokenPipeError:
+        # The QML parent went away; its pipe is gone, so there is nothing left
+        # to report and flushing again would only re-raise.
+        _silence_broken_stdout()
+        return 0
+    except Exception as exc:  # noqa: BLE001 - any failure becomes an error event
+        _emit_error_safe(str(exc))
         return 1
     return 0
 
 
 def main() -> int:
+    # Force UTF-8 on the output streams regardless of the spawn locale: the
+    # wire protocol carries Spanish text (qué, andás) via ensure_ascii=False,
+    # and QML may launch us without a UTF-8 locale, which would otherwise raise
+    # UnicodeEncodeError on the first accented partial.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     args = parse_args(sys.argv[1:])
     try:
         return run(args)
-    except RuntimeError as exc:
-        # Setup-time failures (bad backend, missing engine) are reported as a
-        # structured error so QML can surface a hint instead of a silent exit.
-        emit({"type": "error", "detail": str(exc)})
+    except Exception as exc:  # noqa: BLE001 - any setup failure -> structured error
+        # Setup-time failures (bad backend, missing engine, CUDA/CTranslate2
+        # init on the Blackwell path) are reported as a structured error so QML
+        # surfaces a hint instead of a bare traceback. Engine init runs before
+        # run()'s own try, so non-RuntimeError exception types must be caught
+        # here too.
+        _emit_error_safe(str(exc))
         return 1
 
 
