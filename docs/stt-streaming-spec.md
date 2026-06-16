@@ -147,7 +147,25 @@ Hardware: **NVIDIA RTX 5070 Laptop, 8 GB VRAM, CUDA** (Blackwell, sm_120) + Ryze
 
 **Quality:** Whisper `large-v3` is Whisper-grade Spanish (same model as OpenAI's, reimplemented faster). Local quality is NOT the weak point; latency/partial smoothness is the thing to tune.
 
-**Blackwell constraint (critical):** RTX 50-series (sm_120) has a known CTranslate2 incompatibility — **INT8 crashes** (`cuBLAS NOT_SUPPORTED`). Use **`float16`** (~3 GB VRAM for large-v3, fits 8 GB). Requires **CTranslate2 ≥ 4.5.0, CUDA 12.8, PyTorch 2.7+** (WhisperX PR #1182, Oct 2025, confirmed sm_120 working). This is a setup gate, not a viability blocker.
+**Blackwell constraint (critical):** RTX 50-series (sm_120) has a known CTranslate2 incompatibility — **INT8 crashes** (`cuBLAS NOT_SUPPORTED`). Use **`float16`** (~3 GB VRAM for large-v3, fits 8 GB). faster-whisper does NOT need PyTorch (it runs on CTranslate2), so the WhisperX/torch CUDA matrix does not apply — only CTranslate2 + the CUDA runtime libs matter.
+
+**Verified setup (2026-06-16) — confirmed working on the RTX 5070.** float16 loads and transcribes on this Blackwell GPU; no int8 crash. The recipe:
+
+```sh
+# isolated venv (Arch python is PEP 668 externally-managed; no system pip)
+python3 -m venv ~/.local/share/symmetria/stt-venv
+~/.local/share/symmetria/stt-venv/bin/pip install faster-whisper        # pulls ctranslate2 4.8.0 (cp314 wheel, sm_120-capable)
+~/.local/share/symmetria/stt-venv/bin/pip install nvidia-cublas-cu12 nvidia-cudnn-cu12   # 12.9 / 9.23 — NOT bundled by the ctranslate2 wheel
+```
+
+**Launch gate:** the ctranslate2 wheel does not bundle cuBLAS/cuDNN, so the helper must be spawned with `LD_LIBRARY_PATH` pointing at the pip-installed nvidia lib dirs. `LD_LIBRARY_PATH` is read by the dynamic linker at exec — it CANNOT be set reliably from inside the already-started Python process (glibc caches it). So the QML `Process` command must be `env LD_LIBRARY_PATH=<cublas_dir>:<cudnn_dir> <venv>/bin/python stt-stream.py ...`. Compute the dirs from the namespace packages' `__path__` (their `__file__` is `None`):
+
+```sh
+CUBLAS_DIR=$(dirname "$(find ~/.local/share/symmetria/stt-venv -name 'libcublas.so.12' | head -1)")
+CUDNN_DIR=$(dirname "$(find ~/.local/share/symmetria/stt-venv -name 'libcudnn.so*' | head -1)")
+```
+
+Measured: `small` transcribed 38 s of Spanish in ~4.9 s wall (model cached, 6 buffer re-transcribes) — faster than real-time. `small` mangles technical Spanish vocab; `large-v3` is the Fase 1 quality model.
 
 **Local engine choice:**
 
@@ -228,7 +246,7 @@ What is explicitly **unchanged**: target capture/locking, delivery modes (clipbo
 
 ## 9. Open questions / risks
 
-- **Blackwell setup (Fase 1):** verify CTranslate2 ≥4.5.0 / CUDA 12.8 / float16 actually loads on this RTX 5070 before committing to faster-whisper; whisper.cpp (CUDA/Vulkan) is the more tolerant fallback.
+- **Blackwell setup (RESOLVED 2026-06-16):** float16 + ctranslate2 4.8.0 confirmed loading and transcribing on this RTX 5070 — see the verified recipe in §4. The remaining gate is purely the `LD_LIBRARY_PATH` launch wiring (the helper's QML `Process` command must inject the nvidia lib dirs). whisper.cpp (CUDA/Vulkan) stays as a fallback only if a future ctranslate2 regresses sm_120 support.
 - **Partial UX:** interim text flickers/revises. Need a display treatment (e.g. dim the unstable tail) so the live preview is readable, not jittery.
 - **Audio fan-out mechanism:** `tee` vs multiple PipeWire readers vs a named pipe — pick the one that doesn't drop samples under load.
 - **Final-vs-partial reconciliation:** the streamed `final` may differ from the last `partial`; the delivered text must be the `final` (or, in Fase 3, the batch result).
