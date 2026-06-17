@@ -62,7 +62,7 @@ Item {
         && partialTranscript !== ""
         && isRecordingPhase
     // Max pill text width before older words scroll off the left (ElideLeft).
-    readonly property real partialMaxWidth: 360
+    readonly property real partialMaxWidth: 414
 
     // Padding around the visible child, sized so the PillCard frame has
     // breathing room above/below the timer + waveform without making the
