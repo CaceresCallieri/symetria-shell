@@ -156,6 +156,13 @@ Scope {
         function pasteTranscription(): void {
             TranscriptionStore.paste("");
         }
+
+        // Toggle streaming dictation mode (Super+Alt+D). Switches subsequent
+        // recordings between streaming (live partials) and batch, and drives
+        // the bar's dictation-status icon while active.
+        function streamingToggle(): void {
+            SttService.toggleStreaming();
+        }
     }
 
     // ── IPC: "recorder" target (shared actions) ───────────────────

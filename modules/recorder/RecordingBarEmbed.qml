@@ -58,7 +58,7 @@ Item {
     // inside the pill, no waveform) vs the drawer (wrapped text block).
     readonly property string partialTranscript: mode === "stt" ? (job?.partialTranscript ?? "") : ""
     readonly property bool showStreamingText: mode === "stt"
-        && Config.stt?.mode === "streaming"
+        && SttService.streamingActive
         && partialTranscript !== ""
         && isRecordingPhase
     // Max pill text width before older words scroll off the left (ElideLeft).

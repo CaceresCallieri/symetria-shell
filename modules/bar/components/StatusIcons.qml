@@ -296,6 +296,19 @@ PillContainer {
             }
         }
 
+        // Dictation streaming active indicator — appears while STT streaming
+        // mode is toggled on (Super+Alt+D → SttService.streamingActive).
+        PillContainer.WrappedLoader {
+            name: "dictation"
+            active: Config.bar.status.showDictationStatus && SttService.streamingActive
+
+            sourceComponent: MaterialIcon {
+                animate: true
+                text: "graphic_eq"
+                color: root.colour
+            }
+        }
+
         // Right padding spacer
         Item {
             implicitWidth: root.pillPadding

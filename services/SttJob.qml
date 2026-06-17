@@ -497,7 +497,7 @@ QtObject {
         // passed as argv with no shell-injection surface. showPartials gates the
         // whole thing — off means no spawn, partialTranscript stays "" and the
         // overlay self-hides.
-        if (Config.stt?.mode === "streaming" && (Config.stt?.streaming?.showPartials ?? true)) {
+        if (SttService.streamingActive && (Config.stt?.streaming?.showPartials ?? true)) {
             job._partialTranscript = "";
             const sb = Config.stt?.streaming?.backend ?? "local";
             const partialInterval = Config.stt?.streaming?.partialInterval ?? 1.5;

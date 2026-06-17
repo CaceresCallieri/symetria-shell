@@ -114,6 +114,10 @@ JsonObject {
         property bool showBattery: true
         property bool showPowerProfile: true
         property bool showLockStatus: true
+        // Show a "dictation active" icon while STT streaming mode is toggled on
+        // (SttService.streamingActive). The icon only appears when streaming is
+        // active; this flag lets it be disabled entirely.
+        property bool showDictationStatus: true
     }
 
     component Clock: JsonObject {

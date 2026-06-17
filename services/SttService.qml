@@ -39,6 +39,14 @@ Singleton {
     /// Whether the delivery mode radio toggle should be shown (from config)
     readonly property bool isAskMode: _deliveryMode === "ask"
 
+    /// Streaming dictation toggle (runtime). Initialized from Config.stt.mode,
+    /// flipped by toggleStreaming() (Super+Alt+D). When true, recordings use the
+    /// streaming helper for live partials; when false, batch. Read by SttJob and
+    /// the bar's dictation-status icon. NOT readonly — toggleStreaming() writes
+    /// it imperatively (a readonly binding would block the write; see
+    /// docs/qml-pitfalls.md "readonly blocks ALL assignment").
+    property bool streamingActive: Config.stt?.mode === "streaming"
+
 
     /// Emitted when an action is successfully dispatched.
     /// Used by Content.qml to animate the corresponding control button.
@@ -160,6 +168,15 @@ Singleton {
                 );
             }
         }
+    }
+
+    /// Toggle streaming dictation mode (Super+Alt+D). Flips streamingActive,
+    /// which switches subsequent recordings between streaming (live partials)
+    /// and batch, and drives the bar's dictation-status icon. Combined toggle
+    /// for now — later this may split into "mode" vs "warm the model" controls.
+    function toggleStreaming(): void {
+        streamingActive = !streamingActive;
+        Logger.log("qml", "stt", "toggleStreaming → " + (streamingActive ? "streaming" : "batch"));
     }
 
     /// Start a new recording job. Blocked if a job already exists.
