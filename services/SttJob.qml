@@ -86,6 +86,7 @@ QtObject {
     readonly property string _transcribeScript: Qt.resolvedUrl("../scripts/stt-transcribe.sh").toString().replace(/^file:\/\//, "")
     readonly property string _injectScript: Qt.resolvedUrl("../scripts/stt-inject.sh").toString().replace(/^file:\/\//, "")
     readonly property string _streamScript: Qt.resolvedUrl("../scripts/stt-stream.py").toString().replace(/^file:\/\//, "")
+    readonly property string _streamLocalScript: Qt.resolvedUrl("../scripts/stt-stream-local.sh").toString().replace(/^file:\/\//, "")
 
     // API key: config value takes priority, then environment variable
     readonly property string _resolvedApiKey: {
@@ -498,20 +499,30 @@ QtObject {
         // overlay self-hides.
         if (Config.stt?.mode === "streaming" && (Config.stt?.streaming?.showPartials ?? true)) {
             job._partialTranscript = "";
-            const backend = Config.stt?.streaming?.backend ?? "local";
+            const sb = Config.stt?.streaming?.backend ?? "local";
             const partialInterval = Config.stt?.streaming?.partialInterval ?? 1.5;
-            // NOTE: the "local" backend needs the faster-whisper venv python +
-            // LD_LIBRARY_PATH and is NOT functional until that increment. Today,
-            // set streaming.backend="mock" to validate this plumbing on system
-            // python3.
-            streamProcess.command = [
-                "python3", job._streamScript,
+            const common = [
                 "--capture", "--source", captureSource,
-                "--backend", backend,
                 "--sample-rate", String(sampleRate),
                 "--channels", String(channels),
                 "--partial-interval", String(partialInterval)
             ];
+            if (sb === "local") {
+                // Local faster-whisper via the venv wrapper, which sets
+                // LD_LIBRARY_PATH (cuBLAS/cuDNN) before exec. Language is left
+                // to auto-detect (best for Spanglish — see stt-streaming-spec).
+                const lc = Config.stt?.streaming?.local;
+                streamProcess.command = [
+                    job._streamLocalScript,
+                    "--backend", lc?.engine ?? "faster-whisper",
+                    "--model", lc?.model ?? "large-v3",
+                    "--device", lc?.device ?? "cuda",
+                    "--compute-type", lc?.computeType ?? "float16"
+                ].concat(common);
+            } else {
+                // mock (and future cloud backends) need no venv.
+                streamProcess.command = ["python3", job._streamScript, "--backend", sb].concat(common);
+            }
             streamProcess.running = true;
         }
     }
