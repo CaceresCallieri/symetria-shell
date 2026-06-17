@@ -293,8 +293,14 @@ Item {
             // ── Streaming live partial preview (STT streaming mode) ───
             // Shows what the streaming backend is hearing in real time so the
             // user can re-dictate mishearings on the fly. Preview only — the
-            // delivered text still comes from the batch path. Drawer only for
-            // now; the bar embed's compact width needs a separate treatment.
+            // delivered text still comes from the batch path.
+            //
+            // CONTRACT — this is ONE of TWO partial-preview surfaces; the other
+            // is the bar embed (RecordingBarEmbed.qml), which is the primary one
+            // in daily use (merge mode). Keep both in sync: a streaming-partial
+            // change here must be mirrored there, or the preview disappears for
+            // whichever surface the user is in. The treatments differ on purpose
+            // (wrapped block here; grow-with-cap + ElideLeft pill there).
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 show: root.mode === "stt" && root.partialTranscript !== ""

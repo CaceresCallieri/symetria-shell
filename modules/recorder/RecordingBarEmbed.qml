@@ -47,6 +47,23 @@ Item {
     // STT delivery mode
     readonly property bool isAskMode: mode === "stt" && SttService.isAskMode
 
+    // Live streaming partial transcript (STT streaming mode). "" otherwise.
+    //
+    // CONTRACT — the streaming partial preview has TWO surfaces: this bar embed
+    // (merge mode, the primary one in daily use) and the drawer
+    // (modules/recorder/Content.qml). If you add or change streaming-partial
+    // behaviour on one surface, mirror it on the other — otherwise the preview
+    // silently vanishes for whichever surface the user is actually in. The
+    // bar-embed treatment is intentionally different (grow-with-cap + ElideLeft
+    // inside the pill, no waveform) vs the drawer (wrapped text block).
+    readonly property string partialTranscript: mode === "stt" ? (job?.partialTranscript ?? "") : ""
+    readonly property bool showStreamingText: mode === "stt"
+        && Config.stt?.mode === "streaming"
+        && partialTranscript !== ""
+        && isRecordingPhase
+    // Max pill text width before older words scroll off the left (ElideLeft).
+    readonly property real partialMaxWidth: 360
+
     // Padding around the visible child, sized so the PillCard frame has
     // breathing room above/below the timer + waveform without making the
     // bar embed feel chunky. Asymmetric (more horizontal than vertical)
@@ -120,15 +137,30 @@ Item {
             color: Colours.palette.m3outlineVariant
         }
 
-        // Audio level bars
+        // Audio level bars. Hidden in streaming mode — the live text replaces
+        // the waveform inside the pill (per the embed treatment).
         AudioWaveform {
-            Layout.preferredWidth: implicitWidth
+            visible: !root.showStreamingText
+            Layout.preferredWidth: visible ? implicitWidth : 0
             Layout.preferredHeight: 24
 
             audioLevel: root.job?.audioLevel ?? 0
             displayState: root.displayState
             containerHeight: 24
             active: root.isRecordingPhase
+        }
+
+        // STT streaming: live partial transcript inside the pill. The pill
+        // grows with the text up to partialMaxWidth; past that, ElideLeft keeps
+        // the NEWEST words visible while older ones scroll off the left.
+        StyledText {
+            visible: root.showStreamingText
+            Layout.maximumWidth: root.partialMaxWidth
+            text: root.partialTranscript
+            elide: Text.ElideLeft
+            maximumLineCount: 1
+            font.pointSize: Appearance.font.size.small
+            color: Colours.palette.m3onSurface
         }
 
         // Separator before trailing icon (visible when icon is visible)
