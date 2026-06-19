@@ -251,6 +251,8 @@ Singleton {
         const workspaces = parsed && Array.isArray(parsed._workspaces) ? parsed._workspaces : null;
         if (!workspaces)
             return parsed;
+        if (workspaces.length === 0)
+            console.warn("[KeyChords] _workspaces is empty — expand menus will be dropped");
 
         const out = {};
         for (const [name, group] of Object.entries(parsed)) {
@@ -264,15 +266,19 @@ Singleton {
             const specialTpl = group.expand.specialCommand;
             const chords = [];
             for (const ws of workspaces) {
-                if (!ws || typeof ws.key !== "string" || typeof ws.label !== "string" || typeof ws.ws !== "string")
+                if (!ws || typeof ws.key !== "string" || typeof ws.label !== "string" || typeof ws.ws !== "string") {
+                    console.warn("[KeyChords] Skipping malformed _workspaces entry:", JSON.stringify(ws));
                     continue;
+                }
                 const isSpecial = typeof ws.special === "string";
                 const template = (isSpecial && typeof specialTpl === "string") ? specialTpl : normalTpl;
                 if (typeof template !== "string")
                     continue;
+                // Function replacers avoid String.replace's $-pattern interpretation
+                // ($&, $1, $$, etc.) should a ws/special value ever contain "$".
                 const command = template
-                    .replace(/\{ws\}/g, ws.ws)
-                    .replace(/\{special\}/g, ws.special ?? "");
+                    .replace(/\{ws\}/g, () => ws.ws)
+                    .replace(/\{special\}/g, () => ws.special ?? "");
                 chords.push({ key: ws.key, label: ws.label, command });
             }
             out[name] = { title: group.title, chords };
