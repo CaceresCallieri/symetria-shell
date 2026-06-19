@@ -1145,11 +1145,29 @@ QtObject {
                 job.readyForDelivery();
             } else {
                 Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail + " raw=" + job._errorRaw);
-                if (job._errorDetail === "") {
-                    job._errorDetail = "Transcription failed";
-                    job._errorHint = "Check logs for details";
+                if (code === 0 && job._transcribedText === "") {
+                    // HTTP 200 but an empty transcript means the recording held no
+                    // discernible speech — a silent / near-silent capture (wrong
+                    // default mic, a muted input, or the user too far from it). The
+                    // API succeeded, so there's no stderr for _categorizeApiError to
+                    // classify; without this branch the generic "Transcription
+                    // failed" + source "api" path treats it as a transient API
+                    // error and auto-retries. Re-sending the SAME audio can only
+                    // reproduce the empty result, so this is a PERMANENT,
+                    // non-retryable error: source "silence" is not transient, so
+                    // _tryAutoRetry below skips straight to the toast + recovery-save
+                    // path instead of burning retries on dead audio. (See
+                    // debug.log 2026-06-19 18:36 — one silent take was auto- and
+                    // manually retried 9× to no avail.)
+                    job._setErrorState("silence", "No speech detected",
+                        "Mic captured silence — check your input device", true);
+                } else {
+                    if (job._errorDetail === "") {
+                        job._errorDetail = "Transcription failed";
+                        job._errorHint = "Check logs for details";
+                    }
+                    job._setErrorState("api", job._errorDetail, job._errorHint, true);
                 }
-                job._setErrorState("api", job._errorDetail, job._errorHint, true);
                 job._tryAutoRetry();
             }
         }

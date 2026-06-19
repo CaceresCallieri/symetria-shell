@@ -244,17 +244,22 @@ Item {
         }
     }
 
-    // ── Compact error indicator ─────────────────────────────
-    MaterialIcon {
+    // ── Compact error indicator: [⚠] · [reason] ─────────────
+    // Unlike success (a self-dismissing tick), the error state persists until
+    // the user retries/cancels (no auto-hide timer fires for "error" — see
+    // SttJob successTimer), so the reason label has time to be read. The label
+    // binds the job's classified errorDetail ("No speech detected", "Server
+    // error", …); errorDetail is always populated by _setErrorState, so the
+    // qsTr fallback only guards the brief null-job window. Capped + ElideRight
+    // so a long reason can't blow the pill out across the neighbouring bar pills.
+    RowLayout {
         id: errorIcon
 
         readonly property bool _show: root.displayState === "error"
 
         anchors.centerIn: parent
+        spacing: Appearance.spacing.small
         visible: _show || scale > 0.001
-        text: "error"
-        color: Colours.palette.m3error
-        font.pointSize: Appearance.font.size.large
         transformOrigin: Item.Center
         scale: _show ? 1.0 : 0.0
 
@@ -264,6 +269,21 @@ Item {
                 easing.type: Easing.BezierSpline
                 easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
             }
+        }
+
+        MaterialIcon {
+            text: "error"
+            color: Colours.palette.m3error
+            font.pointSize: Appearance.font.size.large
+        }
+
+        StyledText {
+            Layout.maximumWidth: 320
+            text: root.job?.errorDetail ?? qsTr("Transcription failed")
+            elide: Text.ElideRight
+            maximumLineCount: 1
+            font.pointSize: Appearance.font.size.small
+            color: Colours.palette.m3error
         }
     }
 }

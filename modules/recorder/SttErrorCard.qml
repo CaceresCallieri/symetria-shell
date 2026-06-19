@@ -22,25 +22,41 @@ ColumnLayout {
 
     spacing: Appearance.spacing.small
 
-    MaterialIcon {
+    // Error glyph with the reason beside it: [⚠] [detail / hint]. The detail
+    // binds the job's classified errorDetail ("No speech detected", "Server
+    // error", …) — always populated by _setErrorState, so the qsTr fallbacks
+    // only guard the brief null-job window. Reason text is width-capped + wraps
+    // so a long message stays inside the card instead of stretching it.
+    RowLayout {
         Layout.alignment: Qt.AlignHCenter
-        text: root.stateIcon
-        color: root.stateIconColor
-        font.pointSize: Appearance.font.size.extraLarge
-    }
+        spacing: Appearance.spacing.normal
 
-    StyledText {
-        Layout.alignment: Qt.AlignHCenter
-        text: root.job?.errorDetail ?? qsTr("Transcription failed")
-        font.pointSize: Appearance.font.size.normal
-        color: Colours.palette.m3error
-    }
+        MaterialIcon {
+            Layout.alignment: Qt.AlignVCenter
+            text: root.stateIcon
+            color: root.stateIconColor
+            font.pointSize: Appearance.font.size.extraLarge
+        }
 
-    StyledText {
-        Layout.alignment: Qt.AlignHCenter
-        text: root.job?.errorHint ?? qsTr("Check STT configuration")
-        font.pointSize: Appearance.font.size.small
-        color: Colours.palette.m3outline
+        ColumnLayout {
+            spacing: Appearance.spacing.smaller
+
+            StyledText {
+                Layout.maximumWidth: 340
+                text: root.job?.errorDetail ?? qsTr("Transcription failed")
+                wrapMode: Text.WordWrap
+                font.pointSize: Appearance.font.size.normal
+                color: Colours.palette.m3error
+            }
+
+            StyledText {
+                Layout.maximumWidth: 340
+                text: root.job?.errorHint ?? qsTr("Check STT configuration")
+                wrapMode: Text.WordWrap
+                font.pointSize: Appearance.font.size.small
+                color: Colours.palette.m3outline
+            }
+        }
     }
 
     RowLayout {
