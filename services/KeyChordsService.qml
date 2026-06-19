@@ -15,6 +15,10 @@ import QtQuick
 /// Use `command` for shell execution or `group` to navigate to a sub-group.
 /// If both are present, `group` takes precedence.
 /// Commands are executed via "sh -c" for shell expansion ($HOME, pipes, etc.).
+///
+/// A group may instead declare an `expand` object to be generated from the
+/// shared top-level `_workspaces` list (defined ONCE, reused by every menu) —
+/// see expandWorkspaceGroups() for the template contract.
 Singleton {
     id: root
 
@@ -170,7 +174,7 @@ Singleton {
         onLoaded: {
             try {
                 const parsed = JSON.parse(text());
-                root.chordGroups = validateGroups(parsed);
+                root.chordGroups = validateGroups(expandWorkspaceGroups(parsed));
             } catch (e) {
                 console.error("[KeyChords] Failed to parse chords.json:", e.message);
             }
@@ -224,5 +228,55 @@ Singleton {
         }
 
         return result;
+    }
+
+    /// Expand "workspace list" groups into concrete chords from a single shared
+    /// source, so the workspace set is defined ONCE instead of copy-pasted into
+    /// every menu (switch / send / move). A group opts in by declaring an
+    /// `expand` object instead of an inline `chords` array; it is generated from
+    /// the top-level `_workspaces` array. Groups without `expand` pass through
+    /// untouched (and `_workspaces` itself is dropped later by validateGroups,
+    /// since it has no `chords`).
+    ///
+    /// Each `_workspaces` entry is {key, label, ws}, plus an optional `special`
+    /// string (the bare special-workspace name; "" for the default special) that
+    /// marks the entry as a special workspace. Each `expand` supplies a `command`
+    /// template and, optionally, a `specialCommand` used for special entries; in
+    /// both, `{ws}` and `{special}` are substituted. Example:
+    ///   "_workspaces": [ { "key": "S", "label": "symmetria", "ws": "name:symmetria" } ],
+    ///   "workspace": { "title": "Switch", "expand": {
+    ///       "command": "switch_workspace.sh {ws}",
+    ///       "specialCommand": "hyprctl dispatch togglespecialworkspace {special}" } }
+    function expandWorkspaceGroups(parsed: var): var {
+        const workspaces = parsed && Array.isArray(parsed._workspaces) ? parsed._workspaces : null;
+        if (!workspaces)
+            return parsed;
+
+        const out = {};
+        for (const [name, group] of Object.entries(parsed)) {
+            // Pass through anything that isn't an expand group (incl. _workspaces itself).
+            if (!group || typeof group !== "object" || Array.isArray(group) || !group.expand || typeof group.expand !== "object") {
+                out[name] = group;
+                continue;
+            }
+
+            const normalTpl = group.expand.command;
+            const specialTpl = group.expand.specialCommand;
+            const chords = [];
+            for (const ws of workspaces) {
+                if (!ws || typeof ws.key !== "string" || typeof ws.label !== "string" || typeof ws.ws !== "string")
+                    continue;
+                const isSpecial = typeof ws.special === "string";
+                const template = (isSpecial && typeof specialTpl === "string") ? specialTpl : normalTpl;
+                if (typeof template !== "string")
+                    continue;
+                const command = template
+                    .replace(/\{ws\}/g, ws.ws)
+                    .replace(/\{special\}/g, ws.special ?? "");
+                chords.push({ key: ws.key, label: ws.label, command });
+            }
+            out[name] = { title: group.title, chords };
+        }
+        return out;
     }
 }

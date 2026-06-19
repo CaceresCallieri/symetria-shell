@@ -94,7 +94,6 @@ JsonObject {
             { name: ".dotfiles", icon: "mat:settings" },
             { name: ".hyprdots", icon: "mat:tune" },
             { name: "kosmos", icon: "mat:rocket_launch" },
-            { name: "magistralia", icon: "mat:school" },
             { name: "nvim", icon: "mat:edit" }
         ]
     }

@@ -42,5 +42,26 @@
             { "key": "1", "label": "Workspace 1", "command": "hyprctl dispatch movetoworkspacesilent 1" },
             { "key": "2", "label": "Workspace 2", "command": "hyprctl dispatch movetoworkspacesilent 2" }
         ]
+    },
+
+    "_comment_expand": "DRY: define a workspace set ONCE in the top-level '_workspaces' array, then let any number of menus generate their chords from it instead of repeating the list. A menu opts in with an 'expand' object (in place of 'chords'). For each '_workspaces' entry, a chord is built from the menu's 'command' template with '{ws}' replaced by the entry's 'ws' and '{special}' by its 'special'. Entries that carry a 'special' field are special workspaces; if the menu defines 'specialCommand', that template is used for them instead (e.g. a switch menu toggles them rather than dispatching 'workspace'). '_workspaces' is consumed by the expander and never shown as its own menu.",
+    "_workspaces": [
+        { "key": "1", "label": "Workspace 1", "ws": "1" },
+        { "key": "S", "label": "symmetria", "ws": "name:symmetria" },
+        { "key": "C", "label": "communications", "ws": "special:communications", "special": "communications" },
+        { "key": "Q", "label": "special", "ws": "special", "special": "" }
+    ],
+    "switch-all-workspaces": {
+        "title": "Switch Workspace",
+        "expand": {
+            "command": "hyprctl dispatch workspace {ws}",
+            "specialCommand": "hyprctl dispatch togglespecialworkspace {special}"
+        }
+    },
+    "move-to-all-workspaces": {
+        "title": "Send Window →",
+        "expand": {
+            "command": "hyprctl dispatch movetoworkspacesilent {ws}"
+        }
     }
 }
