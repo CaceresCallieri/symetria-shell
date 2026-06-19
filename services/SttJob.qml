@@ -290,6 +290,17 @@ QtObject {
         if (_state !== "error") return;
         Logger.log("qml", "stt", "job.retry | id=" + sessionId);
 
+        // A silent capture is not retryable — re-transcribing the SAME audio can
+        // only reproduce the empty result. The card's retry button is already
+        // hidden for source "silence", but the toggle keybind and IPC retry()
+        // call _job.retry() DIRECTLY (gated only on source != "config" in
+        // SttService), so without this chokepoint guard those paths would restart
+        // the futile loop. The recovery path for silence is to record again.
+        if (_errorSource === "silence") {
+            Logger.log("qml", "stt", "retry-skipped | id=" + sessionId + " source=silence");
+            return;
+        }
+
         if (_currentAudioFile === "") {
             _setErrorState("internal", "No audio file to retry", "Start a new recording", false);
             return;
@@ -1144,7 +1155,6 @@ QtObject {
                 job._cleanupRecovery();
                 job.readyForDelivery();
             } else {
-                Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail + " raw=" + job._errorRaw);
                 if (code === 0 && job._transcribedText === "") {
                     // HTTP 200 but an empty transcript means the recording held no
                     // discernible speech — a silent / near-silent capture (wrong
@@ -1158,10 +1168,18 @@ QtObject {
                     // _tryAutoRetry below skips straight to the toast + recovery-save
                     // path instead of burning retries on dead audio. (See
                     // debug.log 2026-06-19 18:36 — one silent take was auto- and
-                    // manually retried 9× to no avail.)
+                    // manually retried 9× to no avail.) retry() guards source
+                    // "silence" too, so the toggle/IPC paths can't restart it either.
+                    Logger.log("qml", "stt", "silence | id=" + job.sessionId + " — empty transcript, not retrying");
                     job._setErrorState("silence", "No speech detected",
                         "Mic captured silence — check your input device", true);
                 } else {
+                    // Real failure path: code != 0 (stderr already classified by
+                    // _categorizeApiError) or an unexpected empty-on-error. Log here
+                    // — NOT before the silence branch — so the error line carries a
+                    // meaningful detail/raw instead of the blank fields a silent
+                    // success would show.
+                    Logger.log("qml", "stt", "transcribe-error | id=" + job.sessionId + " code=" + code + " detail=" + job._errorDetail + " raw=" + job._errorRaw);
                     if (job._errorDetail === "") {
                         job._errorDetail = "Transcription failed";
                         job._errorHint = "Check logs for details";

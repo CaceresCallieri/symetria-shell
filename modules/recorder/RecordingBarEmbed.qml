@@ -259,6 +259,9 @@ Item {
 
         anchors.centerIn: parent
         spacing: Appearance.spacing.small
+        // Keep painted while scale shrinks back to 0 so the exit animation has
+        // something to render (same scale-out pattern as successIcon above); the
+        // whole row — glyph + reason — scales as one unit.
         visible: _show || scale > 0.001
         transformOrigin: Item.Center
         scale: _show ? 1.0 : 0.0
