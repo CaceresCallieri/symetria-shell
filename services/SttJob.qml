@@ -241,9 +241,16 @@ QtObject {
         _state = "recording";
     }
 
-    /// Cancel: kill processes, discard audio, trigger removal.
+    /// Cancel: kill processes, trigger removal.
+    ///
+    /// Recovery audio: when cancelling a FAILED job (error state) the on-disk
+    /// recovery copy is KEPT, so the transcription can still be retried later —
+    /// that copy is the entire point of the failed-state safety net, and
+    /// dismissing the card (✗ button / Alt+X) shouldn't throw the audio away.
+    /// Cancelling in any other state (a live recording) discards everything;
+    /// no recovery copy exists yet anyway (it's only written on a final error).
     function cancel(): void {
-        cancelForRestart();
+        cancelForRestart(_state !== "error");
 
         // Clear activeRecording if this job is the active one.
         // NOTE: When called via SttService.cancel(), _activeRecording has
@@ -267,7 +274,11 @@ QtObject {
     /// without a subsequent re-raise because the binding only re-evaluates
     /// when _job or its closing flag changes — and _job never transitions
     /// back through null in the new restart flow.
-    function cancelForRestart(): void {
+    /// @param dropRecovery  When true, also delete the on-disk recovery copy —
+    ///   a hard discard, used by a live-recording cancel and by restart(). When
+    ///   false, the recovery copy is left in place so a failed transcription
+    ///   stays retryable after the card is dismissed (see cancel()).
+    function cancelForRestart(dropRecovery: bool): void {
         _pendingRecordAction = "cancel";
         _partialTranscript = "";
         _stopAllTimers();
@@ -279,9 +290,8 @@ QtObject {
         if (concatProcess.running) concatProcess.signal(9);
 
         _cleanupTempFiles();
-        // Cancel is a deliberate "throw this away" action — also drop any
-        // persistent recovery copy, since the user explicitly discarded it.
-        _cleanupRecovery();
+        if (dropRecovery)
+            _cleanupRecovery();
         _clearSttTargetIfOwned();
     }
 

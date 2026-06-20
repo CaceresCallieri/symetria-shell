@@ -290,15 +290,23 @@ Singleton {
             return;
         }
 
-        const sid = _activeRecording?.sessionId ?? "";
-        actionTriggered(sid, "cancel");
+        // Cancel the live recording if one exists; otherwise tear down whatever
+        // job is present (error / processing / transcribed). The fallback to
+        // _job is what lets a keybind/IPC dismiss the failed-state card: once a
+        // job errors, _activeRecording is already null (cleared at stop()), so
+        // without it cancel() would silently no-op and the user stays stuck on
+        // the error card. The card's triggerPress() only animates the ✗ button
+        // (visual feedback) and never invokes cancel() itself, so the teardown
+        // must happen here — mirroring how retry() calls _job.retry() directly.
+        const target = _activeRecording ?? _job;
+        if (!target) return;
+        actionTriggered(target.sessionId, "cancel");
         if (_activeRecording) {
-            const job = _activeRecording;
             _activeRecording = null;
             _sessionVocabHints = [];
             vocabHintsVisible = false;
-            job.cancel();
         }
+        target.cancel();
     }
 
     /// Restart: cancel active recording + start a new one.
@@ -325,7 +333,7 @@ Singleton {
         _activeRecording = null;
         _sessionVocabHints = [];
         vocabHintsVisible = false;
-        job.cancelForRestart();
+        job.cancelForRestart(true);
         // Trigger the bar embed's close animation. job.closing=true causes the
         // declarative _showEmbed binding in Bar.qml to evaluate false, which
         // animates implicitWidth to 0 (shrink). _job is NOT cleared here —
