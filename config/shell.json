@@ -478,9 +478,6 @@
     "backend": "openai",
     "model": "gpt-4o-transcribe",
     "mode": "batch",
-    "streaming": {
-      "backend": "local"
-    },
     "autoHideDelay": 1500,
     "processingTimeout": 120000,
     "deliveryMode": "ask",

@@ -264,16 +264,20 @@ QtObject {
         SttService._removeJob(job);
     }
 
-    /// Tear down processes and resources WITHOUT triggering the close
-    /// animation or scheduling removal. Used by SttService.restart(), which
-    /// wants a seamless atomic swap: _job is kept alive (and closing stays
-    /// false) until the new job is ready, at which point _startInternal
-    /// reassigns _job and destroys this old job directly. Setting
-    /// closing=true here would prematurely trigger Bar.qml's declarative
-    /// _showEmbed binding (which is true when !closing), collapsing the embed
-    /// without a subsequent re-raise because the binding only re-evaluates
-    /// when _job or its closing flag changes — and _job never transitions
-    /// back through null in the new restart flow.
+    /// Shared teardown core for both cancel() and restart(): kill the pipeline
+    /// processes and free resources WITHOUT triggering the close animation or
+    /// scheduling removal — each caller decides what happens next (cancel() adds
+    /// _removeJob() to play the close animation; restart() keeps _job alive for
+    /// the atomic swap).
+    ///
+    /// restart() relies on the no-animation behaviour: it wants a seamless
+    /// atomic swap, so _job is kept alive (and closing stays false) until the
+    /// new job is ready, at which point _startInternal reassigns _job and
+    /// destroys this old job directly. Setting closing=true here would
+    /// prematurely trigger Bar.qml's declarative _showEmbed binding (which is
+    /// true when !closing), collapsing the embed without a subsequent re-raise
+    /// because the binding only re-evaluates when _job or its closing flag
+    /// changes — and _job never transitions back through null in the restart flow.
     /// @param dropRecovery  When true, also delete the on-disk recovery copy —
     ///   a hard discard, used by a live-recording cancel and by restart(). When
     ///   false, the recovery copy is left in place so a failed transcription

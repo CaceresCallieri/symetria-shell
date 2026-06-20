@@ -290,17 +290,28 @@ Singleton {
             return;
         }
 
-        // Cancel the live recording if one exists; otherwise tear down whatever
-        // job is present (error / processing / transcribed). The fallback to
-        // _job is what lets a keybind/IPC dismiss the failed-state card: once a
-        // job errors, _activeRecording is already null (cleared at stop()), so
-        // without it cancel() would silently no-op and the user stays stuck on
-        // the error card. The card's triggerPress() only animates the ✗ button
-        // (visual feedback) and never invokes cancel() itself, so the teardown
-        // must happen here — mirroring how retry() calls _job.retry() directly.
-        const target = _activeRecording ?? _job;
+        // Cancel the live recording if one exists; otherwise dismiss a FAILED
+        // job. The fallback to _job is gated to the error state on purpose:
+        //   - It lets a keybind/IPC tear down the failed-state card. Once a job
+        //     errors, _activeRecording is already null (cleared at stop()), so
+        //     without this cancel() would silently no-op and the user stays
+        //     stuck — the error card's triggerPress() only animates the ✗ button
+        //     (visual feedback) and never invokes cancel() itself, so the
+        //     teardown must happen here, mirroring how retry() calls
+        //     _job.retry() directly.
+        //   - It deliberately does NOT cover processing/delivering/transcribed.
+        //     In those states a transcribe/clipboard/inject Process is still
+        //     running, and the delivery handlers (clipboardProcess/injectProcess
+        //     onExited) aren't guarded against a mid-flight teardown — they'd
+        //     flip the job to "success" after it was removed. The error state is
+        //     quiescent (every Process has already exited), so tearing down
+        //     there is race-free. Stuck processing is handled by
+        //     processingTimeoutTimer → error instead.
+        const target = _activeRecording ?? (_job?.state === "error" ? _job : null);
         if (!target) return;
         actionTriggered(target.sessionId, "cancel");
+        // target === _activeRecording only when a live recording exists; on the
+        // error-dismissal path target is _job and _activeRecording is already null.
         if (_activeRecording) {
             _activeRecording = null;
             _sessionVocabHints = [];
