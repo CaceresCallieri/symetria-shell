@@ -33,6 +33,17 @@ StyledRect {
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
 
+    // When true (merged agent bar), the mask wraps onto multiple rows and the indicator must
+    // track the active slot's row vertically. Default false → single-row consumers (top bar,
+    // special workspaces, calendar) are byte-for-byte unaffected (rowYOffset stays 0 and the
+    // colouriser keeps its original implicit sizing).
+    property bool multiRow: false
+
+    // Horizontal shift applied to the active row so the indicator tracks a centred (partial)
+    // wrapped row's slots. Supplied by the merged-bar consumer to match the per-item Translate
+    // that centres wrapped rows; 0 (and thus inert) for single-row consumers.
+    property real rowXOffset: 0
+
     // --- Repeater mode: find active workspace index ---
     readonly property int currentWsIdx: {
         if (useListView)
@@ -70,16 +81,31 @@ StyledRect {
     property real trailing: (currentWs?.x ?? 0) - contentOffset
     property real currentSize: itemSize
     property real indicatorOffset: itemOffset
-    property real offset: Math.min(leading, trailing) - indicatorOffset
+    property real offset: Math.min(leading, trailing) - indicatorOffset + rowXOffset
     property real size: {
         const s = Math.abs(leading - trailing) + currentSize;
         // Handle activeTrail animation: extend indicator to cover previous workspace
         // (only applicable in Repeater mode - ListView mode doesn't support trail)
         if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
             const prevWs = workspaces?.itemAt(previousWsIdx);
-            return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
+            // In the merged multi-row bar, only trail across same-row neighbours — a cross-row
+            // trail would compute a bogus horizontal span (item x is relative to its own row).
+            // The !multiRow short-circuit keeps single-row consumers' behaviour byte-identical.
+            if (prevWs && (!multiRow || prevWs.y === currentWs?.y))
+                return Math.min(prevWs.x + prevWs.indicatorSize - offset, s);
+            return s;
         }
         return s;
+    }
+
+    // Vertical offset of the active slot's row centre from the mask's overall centre. Drives
+    // both the indicator box (via the consumer's Loader anchors.verticalCenterOffset, which reads
+    // this back) and the colouriser's compensating shift. Zero on a single row, so it only does
+    // anything once multiRow content has actually wrapped.
+    property real rowYOffset: {
+        if (!multiRow || useListView || !currentWs || !mask)
+            return 0;
+        return (currentWs.y + currentWs.height / 2) - (mask.height / 2);
     }
 
     // Track workspace index changes for trail animation
@@ -143,11 +169,15 @@ StyledRect {
         colorizationColor: root.textColor
 
         x: -root.offset
-        y: 0
-        implicitWidth: root.mask.implicitWidth
-        implicitHeight: root.mask.implicitHeight
+        // Multi-row (merged bar): size to the mask's ACTUAL extent so the rendered texture maps
+        // 1:1 (MultiEffect renders the source at its real size, not implicitWidth) and includes
+        // every row; verticalCenterOffset then shifts the active row's band into the one-row-tall
+        // indicator. Single-row consumers keep the original implicit sizing and a zero offset.
+        implicitWidth: root.multiRow ? root.mask.width : root.mask.implicitWidth
+        implicitHeight: root.multiRow ? root.mask.height : root.mask.implicitHeight
 
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: -root.rowYOffset
     }
 
     Behavior on leading {
@@ -181,6 +211,11 @@ StyledRect {
         // ListView mode always uses standard animation (no trail support)
         enabled: useListView || !Config.bar.workspaces.activeTrail
 
+        EAnim {}
+    }
+
+    // Vertical glide when the active slot switches rows (merged multi-row bar only).
+    Behavior on rowYOffset {
         EAnim {}
     }
 

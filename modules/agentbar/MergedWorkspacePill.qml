@@ -33,7 +33,11 @@ Item {
     readonly property int ws: wsId
     readonly property bool isActive: visualActiveWsId === ws
     readonly property int activePadding: Appearance.padding.large
-    readonly property int indicatorOffset: isActive ? activePadding : 0
+    // In the merged Flow the active slot's breathing room is baked into the item's WIDTH (content
+    // stays centred via anchors.centerIn), replacing the RowLayout left/right margins that Flow
+    // cannot express. So x is the box's left edge and the box itself already spans the full
+    // highlight extent — the indicator needs no extra horizontal offset.
+    readonly property int indicatorOffset: 0
     readonly property int indicatorSize: implicitWidth + (isActive ? activePadding * 2 : 0)
 
     // Workspace state

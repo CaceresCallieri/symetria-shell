@@ -22,10 +22,13 @@ Item {
     required property ShellScreen screen
 
     readonly property int padding: Math.max(Appearance.padding.small, Config.border.thickness)
-    // Merged mode uses the bar's taller innerWidth since it displays workspace content;
-    // separate mode uses the agentbar's compact innerHeight.
+    // Merged mode displays workspace content and may WRAP onto multiple rows, so its height is
+    // driven by the loaded content's own implicitHeight (the wrapping Flow's childrenRect),
+    // floored at one row's innerWidth for the brief window before the content reports its size.
+    // Separate mode uses the agentbar's compact innerHeight. This height flows into exclusiveZone,
+    // the mask Region, Border, Backgrounds and Panels — so wrapped rows reserve real screen space.
     readonly property int innerHeight: AgentService.mergeActive
-        ? Config.bar.sizes.innerWidth
+        ? Math.max(Config.bar.sizes.innerWidth, content.item?.implicitHeight ?? 0)
         : Config.agentbar.sizes.innerHeight
     readonly property int contentHeight: innerHeight + padding * 2
     // Snaps immediately so application windows shift before the visual animation completes
