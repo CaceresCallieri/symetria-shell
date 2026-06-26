@@ -21,6 +21,8 @@ Item {
     readonly property HyprlandMonitor monitor: Hypr.monitorFor(screen)
 
     implicitHeight: pill.implicitHeight
+    // Vestigial: the actual width comes from the Wrapper Loader's left+right anchors (full screen
+    // width), so this implicitWidth is never consulted for sizing. Kept only for convention.
     implicitWidth: pill.implicitWidth
 
     // Layout metrics for the wrapping content row.
@@ -29,13 +31,27 @@ Item {
     // the pill's own horizontal padding plus an edge margin so the capsule never touches the
     // screen edge. root.width is the full screen width (the Loader in Wrapper anchors left+right).
     readonly property int _edgeMargin: Appearance.padding.large
-    readonly property int _maxContentWidth: Math.max(1, root.width - _edgeMargin * 2 - Appearance.padding.large * 2)
+    // When width isn't laid out yet (anchors resolve a frame after creation, so root.width is
+    // briefly 0) fall back to a huge budget so everything stays on one row — a 1px budget would
+    // otherwise force every item onto its own row, ballooning childrenRect.height and the exclusive
+    // zone and shoving application windows for a frame. Recomputes to the real budget once width
+    // arrives.
+    readonly property int _maxContentWidth: root.width > 0
+        ? Math.max(1, root.width - _edgeMargin * 2 - Appearance.padding.large * 2)
+        : 100000
     // True once content occupies more than one row. This is the hinge for the whole stability
     // strategy: a single row can never re-wrap (so it animates freely and the pill hugs it),
     // whereas a wrapped layout must snap and use a fixed width (so a workspace switch can't make
     // Flow oscillate or the pill overflow the screen). 1.5× guards against float jitter at the
     // exact one-row height.
     readonly property bool _wrapped: layout.childrenRect.height > _rowHeight * 1.5
+    // Count of Flow children — changes whenever a slot is added/removed. _rowCenterOffset reads it
+    // as a reactivity anchor: QML doesn't reliably re-fire a binding on `layout.children` list
+    // mutation, and a slot appended to a partial last row moves no existing sibling, so without
+    // this the existing slots would keep a stale centre offset until the next unrelated relayout.
+    readonly property int _layoutChildCount: root.filteredWorkspaces.length
+        + (root.hasRemote ? 1 : 0)
+        + root.orphanAgents.length
 
     /// Horizontal shift that centres the wrapped row containing itemY WITHIN THE FIXED CONTENT
     /// WIDTH (the Flow's budget). Because the wrapped pill is locked to that budget, centring each
@@ -47,6 +63,9 @@ Item {
     function _rowCenterOffset(itemY: real): real {
         if (!_wrapped)
             return 0;
+        // Reactivity anchor (see _layoutChildCount): reading it makes this binding depend on slot
+        // add/remove, which otherwise moves no existing sibling and so wouldn't re-fire the binding.
+        void root._layoutChildCount;
         let rowRight = 0;
         const kids = layout.children;
         for (let i = 0; i < kids.length; i++) {
@@ -55,10 +74,15 @@ Item {
             if (!c || !c.visible || c.width <= 0)
                 continue;
             const right = c.x + c.width;
-            if (c.y === itemY && right > rowRight)
+            // Same-row test by y. Every Flow child is forced to height: _rowHeight, so Flow assigns
+            // identical row y values; the <1px tolerance defends that invariant against a future
+            // child of a different height.
+            if (Math.abs(c.y - itemY) < 1 && right > rowRight)
                 rowRight = right;
         }
-        return (layout.width - rowRight) / 2;
+        // Clamp at 0: a lone slot wider than the budget (Flow can't break a single item) would make
+        // rowRight > layout.width and push the row off the left edge — left-align it instead.
+        return Math.max(0, (layout.width - rowRight) / 2);
     }
 
     // Per-monitor or global active workspace ID (same logic as Workspaces.qml)
