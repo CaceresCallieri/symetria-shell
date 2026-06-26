@@ -742,7 +742,7 @@ QtObject {
         const cmd = [_injectScript, _targetWindowAddress, _targetWindowClass];
         if (effectiveMode === "submit") cmd.push("submit");
         Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly + " forceSendshortcut=" + forceSendshortcut);
-        // Effective socket/bridge-pid: blanked when forcing sendshortcut so
+        // Effective socket/IDE-pid: blanked when forcing sendshortcut so
         // the script can't accidentally take a direct-injection path even
         // if a target was resolved earlier.
         const effectiveSocket = forceSendshortcut ? "" : _targetNvimSocket;

@@ -114,14 +114,6 @@ log = _Log()
 class AgentBridge:
     """Aggregates agent state from all connected orchestrator instances."""
 
-    @staticmethod
-    def _coerce_int(value, default: int = -1) -> int:
-        """int() with a default for None/garbage — wire fields arrive untyped."""
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
     # Terminal emulator process names to match when walking /proc upward.
     TERMINAL_NAMES = frozenset({
         "ghostty", "kitty", "alacritty", "foot", "wezterm-gui",
@@ -457,7 +449,7 @@ class AgentBridge:
             log.info("unsubscribe: %d subscriber(s) remain", len(self._subscribers))
 
     # ------------------------------------------------------------------
-    # Inject routing (STT voice → agent pane, bridge-mediated)
+    # Inject routing — REMOVED (agent-ownership inversion, Phase 4)
     # ------------------------------------------------------------------
 
     # (agent-ownership inversion, Phase 4) The bridge-routed STT inject path —
