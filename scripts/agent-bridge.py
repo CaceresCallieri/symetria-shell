@@ -486,6 +486,11 @@ class AgentBridge:
                     # don't (opencode).
                     # Prefer the IDE-published id (non-empty), else the bridge's
                     # sticky map. Both empty until first report / for opencode.
+                    # Uses `or` — NOT the present-key check the activity_* fields
+                    # use — deliberately: a published "" session_id means "not
+                    # known yet" and must fall through, whereas a published
+                    # activity_state "" is a meaningful "idle". Do NOT normalize
+                    # the two patterns.
                     "session_id": (
                         inst.get("session_id") or self._session_ids.get(agent_id, "")
                     ),
