@@ -25,8 +25,8 @@ done
 #   STT_EXPECTED_TEXT:    The text that should be in the clipboard (for verification)
 #   STT_NVIM_SOCKET:     Pre-determined Neovim socket (PID-scoped + focus-verified)
 #   STT_NVIM_ACTIVE_BUF: Buffer number captured at stop-time for target_buf parameter
-#   STT_BRIDGE_PID:      Publisher pid for bridge-mediated injection (IDE agent panes)
-#   STT_BRIDGE_BUF:      Agent slot for bridge-mediated injection (captured at stop-time)
+#   STT_IDE_PID:         Symmetria IDE pid for DIRECT injection into its agent panes
+#   STT_IDE_BUF:         Agent slot for direct injection (captured at stop-time)
 #
 # Always exits 0 — injection failure is non-fatal (clipboard still has text).
 
@@ -36,12 +36,13 @@ SUBMIT="${3:-}"
 EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
-# Bridge-mediated injection target (Symmetria IDE terminal-agent panes):
-# the publisher pid + slot to address via agent-bridge.py's inject verb.
+# Direct-injection target (Symmetria IDE terminal-agent panes): the IDE pid +
+# agent slot to address via the IDE's own agent socket (agent-ownership
+# inversion, Phase 4 — replaces the old bridge `inject` verb round-trip).
 # Mutually exclusive with NVIM_SOCKET by construction (SttJob resolves one
 # or the other from the agent's inject_via capability).
-BRIDGE_PID="${STT_BRIDGE_PID:-}"
-BRIDGE_BUF="${STT_BRIDGE_BUF:--1}"
+IDE_PID="${STT_IDE_PID:-}"
+IDE_BUF="${STT_IDE_BUF:--1}"
 DOWNGRADED=""
 # Must be literal "true" or "false" — embedded as JSON boolean by emit_result()
 RPC_SUBMITTED="false"
@@ -149,49 +150,52 @@ try_neovim_inject() {
     return 1
 }
 
-# ── Bridge-mediated injection (Symmetria IDE agent panes) ────────────────────
-# Routes the text through agent-bridge.py's inject verb: the bridge forwards
-# it to the IDE's publisher connection, the IDE writes it into the target
-# claude pane's pty (bracketed paste + Enter), and the inject_result comes
-# back over this same ephemeral connection. Sets RPC_SUBMITTED from the
-# result so emit_result reports submit confirmation like the nvim path.
-try_bridge_inject() {
+# ── Direct injection (Symmetria IDE agent panes) ─────────────────────────────
+# Connects straight to the owning IDE's agent socket
+# ($XDG_RUNTIME_DIR/symmetria-ide-agents-<ide_pid>.sock) and sends an
+# stt_inject request: the IDE writes the text into the target claude pane's
+# pty (bracketed paste + Enter) and replies an stt_inject_result on the same
+# connection. Sets RPC_SUBMITTED from the result so emit_result reports submit
+# confirmation like the nvim path. Replaces the old bridge `inject` round-trip
+# (agent-ownership inversion, Phase 4) — one socket, one timeout.
+try_direct_inject() {
     local submit_bool
     case "$SUBMIT" in
         submit) submit_bool="true" ;;
         *)      submit_bool="false" ;;
     esac
 
-    if [ -z "$BRIDGE_PID" ]; then
-        echo "[STT:INJ-BRIDGE] no bridge target pid — skipping bridge inject" >&2
+    if [ -z "$IDE_PID" ]; then
+        echo "[STT:INJ-DIRECT] no IDE target pid — skipping direct inject" >&2
         return 1
     fi
 
-    local sock="${SYMMETRIA_AGENT_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/symmetria-agents.sock}"
+    local runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    local sock="${runtime}/symmetria-ide-agents-${IDE_PID}.sock"
     if [ ! -S "$sock" ]; then
-        echo "[STT:INJ-BRIDGE] bridge socket missing: $sock" >&2
+        echo "[STT:INJ-DIRECT] IDE socket missing: $sock" >&2
         return 1
     fi
 
-    stt_log "inject" "bridge-attempt | pid=$BRIDGE_PID buf=$BRIDGE_BUF"
+    stt_log "inject" "direct-attempt | idePid=$IDE_PID buf=$IDE_BUF"
     local result
-    if ! result=$(STT_BRIDGE_SOCK="$sock" STT_BRIDGE_SUBMIT="$submit_bool" python3 - <<'PYEOF'
-import json, os, socket, sys, uuid
+    if ! result=$(STT_IDE_SOCK="$sock" STT_INJECT_SUBMIT="$submit_bool" python3 - <<'PYEOF'
+import json, os, socket, sys
 
 request = {
-    "type": "inject",
-    "request_id": str(uuid.uuid4()),
-    "target_nvim_pid": int(os.environ["STT_BRIDGE_PID"]),
-    "buf": int(os.environ.get("STT_BRIDGE_BUF") or -1),
+    "type": "stt_inject",
+    "buf": int(os.environ.get("STT_IDE_BUF") or -1),
     "text": os.environ.get("STT_EXPECTED_TEXT", ""),
-    "submit": os.environ["STT_BRIDGE_SUBMIT"] == "true",
+    "submit": os.environ["STT_INJECT_SUBMIT"] == "true",
 }
+# The IDE stamps its own request_id internally — the direct client needn't send
+# one (unlike the bridge path, which correlated replies by request_id).
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-# MUST exceed the bridge's INJECT_TIMEOUT_SECONDS (3s) so its structured
-# timeout reply wins over this socket timeout's bare exception.
-sock.settimeout(5.0)
+# MUST exceed the IDE's _INJECT_TIMEOUT_SECONDS (5s) so its structured timeout
+# reply wins over this socket timeout's bare exception.
+sock.settimeout(6.0)
 try:
-    sock.connect(os.environ["STT_BRIDGE_SOCK"])
+    sock.connect(os.environ["STT_IDE_SOCK"])
     sock.sendall((json.dumps(request) + "\n").encode())
     buf = b""
     while b"\n" not in buf:
@@ -203,8 +207,7 @@ try:
     response = json.loads(line)
     print(json.dumps(response))
     ok = (
-        response.get("type") == "inject_result"
-        and response.get("request_id") == request["request_id"]
+        response.get("type") == "stt_inject_result"
         and response.get("ok") is True
     )
     sys.exit(0 if ok else 1)
@@ -215,11 +218,11 @@ finally:
     sock.close()
 PYEOF
     ); then
-        echo "[STT:INJ-BRIDGE] bridge inject failed | response=$result" >&2
+        echo "[STT:INJ-DIRECT] direct inject failed | response=$result" >&2
         return 1
     fi
 
-    echo "[STT:INJ-BRIDGE] bridge inject succeeded | response=$result" >&2
+    echo "[STT:INJ-DIRECT] direct inject succeeded | response=$result" >&2
     if echo "$result" | grep -Eq '"submitted"[[:space:]]*:[[:space:]]*true'; then
         RPC_SUBMITTED="true"
     else
@@ -302,17 +305,17 @@ if [ -n "${STT_RPC_ONLY:-}" ]; then
         exit 0
     fi
 
-    # Bridge-injectable target (IDE agent pane) — bridge verb, no nvim.
-    if [ -n "$BRIDGE_PID" ]; then
-        if try_bridge_inject; then
-            stt_log "inject" "bridge-success"
-            emit_result "bridge" "true"
+    # Direct-injectable target (IDE agent pane) — IDE socket, no nvim.
+    if [ -n "$IDE_PID" ]; then
+        if try_direct_inject; then
+            stt_log "inject" "direct-success"
+            emit_result "direct" "true"
             exit 0
         fi
-        stt_log "inject" "bridge-failed | rpc-only=bail"
-        echo "[STT:INJ-RPCONLY] bridge inject failed and STT_RPC_ONLY set — no fallback" >&2
-        notify_failure "STT Inject Failed" "Voice → agent pane (bridge) failed. Use Alt+V to paste from Transcriptions."
-        emit_result "bridge" "false"
+        stt_log "inject" "direct-failed | rpc-only=bail"
+        echo "[STT:INJ-RPCONLY] direct inject failed and STT_RPC_ONLY set — no fallback" >&2
+        notify_failure "STT Inject Failed" "Voice → agent pane (direct) failed. Use Alt+V to paste from Transcriptions."
+        emit_result "direct" "false"
         exit 0
     fi
 
@@ -335,16 +338,16 @@ fi
 # via Neovim's RPC socket. Only attempted for terminal emulator windows.
 
 if is_terminal_class "$CLASS_LOWER" && [ -n "$EXPECTED_TEXT" ]; then
-    if [ -n "$BRIDGE_PID" ]; then
-        echo "[STT:INJ-BRIDGE] bridge target detected — attempting bridge injection" >&2
-        if try_bridge_inject; then
-            stt_log "inject" "bridge-success"
-            echo "[STT:INJ-BRIDGE] bridge injection succeeded — skipping sendshortcut" >&2
-            emit_result "bridge" "true"
+    if [ -n "$IDE_PID" ]; then
+        echo "[STT:INJ-DIRECT] IDE target detected — attempting direct injection" >&2
+        if try_direct_inject; then
+            stt_log "inject" "direct-success"
+            echo "[STT:INJ-DIRECT] direct injection succeeded — skipping sendshortcut" >&2
+            emit_result "direct" "true"
             exit 0
         fi
-        stt_log "inject" "bridge-failed | fallback=sendshortcut"
-        echo "[STT:INJ-BRIDGE] bridge injection failed — falling back to sendshortcut paste" >&2
+        stt_log "inject" "direct-failed | fallback=sendshortcut"
+        echo "[STT:INJ-DIRECT] direct injection failed — falling back to sendshortcut paste" >&2
     else
         stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
         echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2

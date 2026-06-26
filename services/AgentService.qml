@@ -98,6 +98,11 @@ Singleton {
     // Qt.resolvedUrl returns "file:///abs/path" on Linux; strip "file://" to get "/abs/path"
     readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace(/^file:\/\//, "")
 
+    // Fire-and-forget helper that pushes STT recording state straight to the
+    // owning IDE's agent socket (agent-ownership inversion, Phase 4 — replaces
+    // the bridge-snapshot `stt` field). See _pushSttRecording.
+    readonly property string _sttRecordingScript: Qt.resolvedUrl("../scripts/stt-recording.py").toString().replace(/^file:\/\//, "")
+
     // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
     readonly property list<color> palette: [
         Colours.palette.m3primary,
@@ -120,6 +125,10 @@ Singleton {
 
     property int _sttTargetTerminalPid: -1
     property int _sttTargetBufId: -1
+    // IDE pid (= agent.nvim_pid) that owns the current STT target, so the
+    // recording dot can be pushed and later cleared on that IDE's socket
+    // directly. -1 = no target, or a non-IDE (plain nvim / remote) target.
+    property int _sttTargetIdePid: -1
 
     /// terminal_pid → {id: int, name: string}
     // intentional var: JS object used as hash map (pid → workspace info)
@@ -282,38 +291,56 @@ Singleton {
     function setSttTarget(terminalPid: int, bufId: int): void {
         _sttTargetTerminalPid = terminalPid;
         _sttTargetBufId = bufId;
-        _pushSttState();
+        // Remember which IDE owns this target so the recording dot can be
+        // pushed now and cleared later, on that IDE's socket directly.
+        _sttTargetIdePid = _resolveSttIdePid(terminalPid);
+        _pushSttRecording(_sttTargetIdePid, bufId, sttIsTranscribing);
     }
 
     /// Clear the STT target highlight. Called by SttService on cancel/idle.
     function clearSttTarget(): void {
+        // Tell the owning IDE to clear its chip dot (buf 0) BEFORE forgetting
+        // which IDE it was — the direct channel has no implicit "no target"
+        // (the old bridge path inferred a clear from terminal_pid <= 0).
+        _pushSttRecording(_sttTargetIdePid, 0, false);
         _sttTargetTerminalPid = -1;
         _sttTargetBufId = -1;
-        _pushSttState();
+        _sttTargetIdePid = -1;
     }
 
-    /// Mirror the STT target into the bridge hub (stdin pipe) so non-shell
-    /// snapshot consumers — the Symmetria IDE's AgentTopBar — can render the
-    /// same recording/transcribing soundwave this dashboard computes locally
-    /// via isAgentSttTarget(). The shell owns bridgeProcess, so its stdin is
-    /// a zero-reconnect control channel; if the hub is down the write is a
-    /// silent no-op and bridgeProcess.onRunningChanged re-pushes any live
-    /// target once the hub is back.
-    function _pushSttState(): void {
-        if (!bridgeProcess.running) return;
-        bridgeProcess.write(JSON.stringify({
-            type: "stt_state",
-            terminal_pid: _sttTargetTerminalPid,
-            buf: _sttTargetBufId,
-            transcribing: sttIsTranscribing
-        }) + "\n");
+    /// Resolve the Symmetria IDE pid owning the agent on `terminalPid`, or -1
+    /// for a non-IDE (plain nvim / remote) target. IDE-pane agents declare
+    /// inject_via === "bridge" and carry the IDE pid as nvim_pid.
+    function _resolveSttIdePid(terminalPid: int): int {
+        const agent = activeAgentForTerminal(terminalPid);
+        if (agent && (agent.inject_via ?? "") === "bridge")
+            return agent.nvim_pid ?? -1;
+        return -1;
+    }
+
+    /// Light (or clear) the recording soundwave on a specific IDE's agent chip
+    /// by writing straight to the IDE's own agent socket (agent-ownership
+    /// inversion, Phase 4 — replaces the bridge-snapshot `stt` field). The IDE
+    /// reads {buf, transcribing}: buf = agent slot, -1 = focused agent, 0 (or
+    /// any unknown slot) = clear (AppController._on_stt_recording). Best-effort
+    /// fire-and-forget — a missing/dead IDE socket is a silent no-op (matching
+    /// the old "write to a dead hub is a no-op" semantics). The shell's OWN
+    /// agentbar dot reads local _sttTarget* state (isAgentSttTarget) and is
+    /// unaffected by this push; only the cross-process IDE mirror moves here.
+    function _pushSttRecording(idePid: int, buf: int, transcribing: bool): void {
+        if (idePid <= 0) return;  // non-IDE / remote agent — no direct socket
+        Quickshell.execDetached([
+            "python3", _sttRecordingScript,
+            idePid.toString(), buf.toString(), transcribing ? "1" : "0"
+        ]);
     }
 
     // The recording→transcribing flip happens without a setSttTarget call
     // (sttIsTranscribing derives from SttService.job.state), so push it
     // explicitly — the IDE swaps center-pulse → traveling wave on it.
     onSttIsTranscribingChanged: {
-        if (_sttTargetTerminalPid > 0) _pushSttState();
+        if (_sttTargetIdePid > 0)
+            _pushSttRecording(_sttTargetIdePid, _sttTargetBufId, sttIsTranscribing);
     }
 
     /// Check if a single agent matches the current STT injection target.
@@ -593,22 +620,12 @@ Singleton {
         bridgeProcess.running = true;
     }
 
-    // Bridge process — long-running, writes JSON lines to stdout
+    // Bridge process — long-running, writes JSON lines to stdout. As of the
+    // agent-ownership inversion (Phase 4) the shell no longer pushes anything
+    // INTO the bridge over stdin — STT recording state now goes straight to the
+    // owning IDE's socket (see _pushSttRecording), so this is stdout-only.
     Process {
         id: bridgeProcess
-
-        // stdin carries shell→hub control lines (stt_state pushes via
-        // _pushSttState). Without this flag, Process.write() is a no-op.
-        stdinEnabled: true
-
-        // Resync an in-flight STT target after a hub restart: targets are
-        // short-lived (set at recording start, cleared at end), so without
-        // this re-push a hub that restarts mid-dictation would never learn
-        // the live target and the IDE's soundwave would stay dark.
-        onRunningChanged: {
-            if (running && root._sttTargetTerminalPid > 0)
-                root._pushSttState();
-        }
 
         stdout: SplitParser {
             onRead: data => {

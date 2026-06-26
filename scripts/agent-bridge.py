@@ -56,28 +56,9 @@ CLAUDE_RECONCILE_MIN_INTERVAL = 10
 # Hard cap on one CLI invocation before we kill it and retry next cycle.
 CLAUDE_CLI_TIMEOUT_SECONDS = 10
 
-# STT target staleness backstop. The shell pushes the dictation target on
-# recording start and is meant to push a clear (terminal_pid <= 0) when it
-# finishes — but that clear push can be lost (a hub restart racing the clear,
-# a gated _clearSttTargetIfOwned skip on the shell side), latching a stale
-# "recording" broadcast forever. Unlike the shell's own agentbar (which reads
-# its LOCAL AgentService state), the Symmetria IDE's ONLY STT source is this
-# hub's broadcast, so a latch freezes the IDE chip's soundwave indefinitely.
-# _stt_state therefore self-heals the same way activity does, via three
-# triggers that never trust the clear push: (a) the target agent entering
-# "working" — the dictation is delivered the moment it starts processing;
-# (b) the target agent being reaped; (c) this absolute backstop for the
-# abandoned-recording case (cancel + lost clear + agent never works). The
-# window runs from the last _stt_state CHANGE: the recording→transcribing flip
-# re-pushes once and refreshes the stamp, but steady transcribing does NOT (the
-# shell pushes only on set/clear/the single flip). 300s is generous — a normal
-# dictation clears via (a)/(b) far sooner, and transcription is a fast API call,
-# so a target unchanged for 300s is almost certainly stale. Do NOT gate this
-# backstop on `transcribing`: a target stuck at transcribing=true whose agent
-# never works (e.g. delivery failed) would then latch forever — the very bug
-# this guards against. A rare >300s single recording may briefly drop the
-# indicator until the transcribing flip re-pushes; that is the accepted tradeoff.
-STT_STALENESS_TIMEOUT = 300
+# (agent-ownership inversion, Phase 4) The former STT staleness backstop
+# (STT_STALENESS_TIMEOUT) lived here; STT no longer flows through the bridge, so
+# there is no STT state to self-heal. See the NOTE in AgentBridge.__init__.
 
 # How many activity transitions to retain per agent for postmortem dumps.
 # 20 is enough to cover the trailing PreToolUse → PostToolUse → Stop dance
@@ -233,99 +214,13 @@ class AgentBridge:
         # subscriber can never stall the shell's stdout emission path —
         # _emit() runs in sync contexts (call_later callbacks) and cannot await.
         self._subscribers: set[asyncio.StreamWriter] = set()
-        # Publisher writers, keyed by nvim_pid. Lets the bridge route an
-        # "inject" command BACK to the publisher that owns the target agent
-        # (the Symmetria IDE's bridge client handles it by writing the text
-        # into the focused claude pane's pty). The latest hello wins —
-        # during the brief two-connection reconnect overlap (see
-        # _conn_count) the newest connection is the live one.
-        self._publisher_writers: dict[int, asyncio.StreamWriter] = {}
-        # In-flight inject requests: request_id -> requester StreamWriter.
-        # Entries expire via call_later so a publisher that never answers
-        # can't leak writers or hang the requester past its own timeout.
-        self._pending_injects: dict[str, asyncio.StreamWriter] = {}
-        # STT target state pushed by the shell over our stdin (AgentService
-        # writes JSON lines into this process's stdin pipe — the shell is our
-        # parent, so no socket round-trip is needed). None = no dictation in
-        # flight. Carried verbatim in every snapshot as the top-level "stt"
-        # field so non-shell consumers (the Symmetria IDE's AgentTopBar) can
-        # render the same recording/transcribing soundwave the shell
-        # dashboard computes locally via AgentService.isAgentSttTarget().
-        # Shape: {"terminal_pid": int, "buf": int, "transcribing": bool}.
-        self._stt_state: dict[str, object] | None = None
-        # Monotonic stamp of the last _stt_state CHANGE — drives the staleness
-        # backstop (STT_STALENESS_TIMEOUT). An identical re-push does not
-        # refresh it (set_stt_state early-returns), so it reflects the last
-        # real transition, not keepalive traffic.
-        self._stt_state_ts: float = 0.0
-
-    def set_stt_state(self, msg: dict[str, object]) -> None:
-        """Store the shell-reported STT target and rebroadcast if it changed.
-
-        A terminal_pid <= 0 (or unparsable) clears the state — the shell
-        sends that on clearSttTarget (dictation finished/cancelled).
-        """
-        terminal_pid = self._coerce_int(msg.get("terminal_pid"))
-        if terminal_pid <= 0:
-            new_state = None
-        else:
-            buf = self._coerce_int(msg.get("buf"))
-            new_state = {
-                "terminal_pid": terminal_pid,
-                "buf": buf,
-                "transcribing": bool(msg.get("transcribing", False)),
-            }
-        if new_state == self._stt_state:
-            return
-        self._stt_state = new_state
-        self._stt_state_ts = time.monotonic()
-        log.debug("stt_state: %s", new_state)
-        self._schedule_emit()
-
-    def _stt_target_is(self, agent_id: str) -> bool:
-        """True if agent_id is the agent the current STT target points at.
-
-        The target is keyed by (terminal_pid, buf); an agent_id is
-        "{nvim_pid}_{buf}" whose terminal_pid is _terminal_pids[nvim_pid]. A
-        target buf of -1 is the "representative agent" sentinel: this matches
-        ANY agent on the target terminal — deliberately broader than
-        AgentService.isAgentSttTarget (which matches only the *active* agent),
-        because over-eager clearing is harmless for a self-heal while a missed
-        clear is the latch bug this exists to fix.
-        """
-        if self._stt_state is None:
-            return False
-        nvim_pid_str, _, buf_str = agent_id.partition("_")
-        try:
-            nvim_pid = int(nvim_pid_str)
-            buf = int(buf_str)
-        except ValueError:
-            return False
-        if self._terminal_pids.get(nvim_pid, 0) != self._stt_state.get("terminal_pid"):
-            return False
-        target_buf = self._stt_state.get("buf", -1)
-        return target_buf == -1 or target_buf == buf
-
-    def _clear_stt_state(self, reason: str) -> None:
-        """Self-heal the STT broadcast without a shell clear push (see
-        STT_STALENESS_TIMEOUT). No-op when nothing is latched, so callers can
-        fire it unconditionally."""
-        if self._stt_state is None:
-            return
-        log.info("stt_state self-heal (%s): clearing %s", reason, self._stt_state)
-        self._stt_state = None
-        self._stt_state_ts = 0.0
-        self._schedule_emit()
-
-    def reap_stale_stt(self) -> None:
-        """Backstop self-heal (c): drop an STT target that has outlived any
-        plausible dictation. Catches the abandoned-recording case — user
-        cancels, the shell's clear push is lost, and the agent never starts
-        working (so the activity-driven heal never fires)."""
-        if self._stt_state is None:
-            return
-        if time.monotonic() - self._stt_state_ts > STT_STALENESS_TIMEOUT:
-            self._clear_stt_state("staleness timeout")
+        # NOTE (agent-ownership inversion, Phase 4): the bridge no longer routes
+        # STT inject requests or carries the shell's STT recording state. Both
+        # moved to a DIRECT shell→IDE channel (the IDE's own agent socket): see
+        # the IDE's agent_events.py + scripts/stt-inject.sh / stt-recording.py.
+        # The former _publisher_writers / _pending_injects / _stt_state fields
+        # and their handlers were removed with that cutover. The bridge is now a
+        # pure IDE→dashboard relay for activity/session_id; STT never touches it.
 
     @staticmethod
     def _resolve_terminal_pid(nvim_pid: int) -> int:
@@ -512,13 +407,9 @@ class AgentBridge:
         payload = {
             "agents": agents,
             "projects": sorted(projects),
-            # Shell-reported STT target (see set_stt_state). null when no
-            # dictation is in flight. Consumers match on terminal_pid + buf;
-            # buf == -1 is the "representative agent" sentinel (match the
-            # ACTIVE agent for that terminal_pid), mirroring the shell's
-            # AgentService.isAgentSttTarget bufId === -1 branch — consumers
-            # must replicate that semantics, not require an exact buf.
-            "stt": self._stt_state,
+            # (agent-ownership inversion, Phase 4) The snapshot no longer carries
+            # an "stt" field — STT recording state goes DIRECT shell→IDE now, not
+            # via this relay.
         }
         line = json.dumps(payload)
         log.debug("_snapshot: %d agents, %d projects, %d clients, %d subscriber(s) — %d bytes",
@@ -569,122 +460,13 @@ class AgentBridge:
     # Inject routing (STT voice → agent pane, bridge-mediated)
     # ------------------------------------------------------------------
 
-    # How long the bridge waits for the publisher's inject_result before
-    # answering the requester with a timeout failure. Slightly above the
-    # IDE's worst case (bracketed-paste write + 150ms submit delay) and
-    # below stt-inject.sh's own 5s client timeout, so the requester always
-    # gets a structured answer instead of a dead socket.
-    INJECT_TIMEOUT_SECONDS = 3.0
-
-    @staticmethod
-    def _write_line(writer: asyncio.StreamWriter, payload: dict) -> None:
-        """Fire-and-forget one JSON line (same no-drain policy as _emit)."""
-        if writer.is_closing():
-            return
-        try:
-            writer.write((json.dumps(payload) + "\n").encode())
-        except Exception as e:  # noqa: BLE001 — any write failure means dead peer
-            log.warning("_write_line: dropping dead peer (%s)", e)
-
-    def register_publisher_writer(self, nvim_pid: int, writer: asyncio.StreamWriter) -> None:
-        """Record the connection that can receive commands for this pid."""
-        self._publisher_writers[nvim_pid] = writer
-
-    def unregister_publisher_writer(self, nvim_pid: int, writer: asyncio.StreamWriter) -> None:
-        """Drop the writer mapping iff it still points at this connection.
-
-        Guarded so the stale half of a reconnect overlap closing late
-        cannot unregister the NEW connection's writer.
-        """
-        if self._publisher_writers.get(nvim_pid) is writer:
-            self._publisher_writers.pop(nvim_pid, None)
-
-    def handle_inject(self, msg: dict, requester: asyncio.StreamWriter) -> None:
-        """Route an inject request to the publisher owning the target agent.
-
-        Request:  {"type": "inject", "request_id": str,
-                   "target_nvim_pid": int, "buf": int, "text": str,
-                   "submit": bool}
-        Response (relayed back to the requester):
-                  {"type": "inject_result", "request_id": str, "ok": bool,
-                   "submitted": bool, "error": str}
-        """
-        request_id = str(msg.get("request_id") or "")
-        target = self._coerce_int(msg.get("target_nvim_pid"), default=0)
-
-        def fail(error: str) -> None:
-            self._write_line(requester, {
-                "type": "inject_result", "request_id": request_id,
-                "ok": False, "submitted": False, "error": error,
-            })
-
-        if not request_id:
-            fail("missing-request-id")
-            return
-        if request_id in self._pending_injects:
-            # A silent overwrite would orphan the first requester (it
-            # would never receive its result). request_ids are client
-            # UUIDs, so a collision means a buggy/duplicated client.
-            fail("duplicate-request-id")
-            return
-        publisher = self._publisher_writers.get(target)
-        if publisher is None or publisher.is_closing():
-            log.info("inject: no publisher for pid=%s (request %s)", target, request_id)
-            fail("no-publisher")
-            return
-        self._pending_injects[request_id] = requester
-        asyncio.get_running_loop().call_later(
-            self.INJECT_TIMEOUT_SECONDS, self._expire_inject, request_id
-        )
-        self._write_line(publisher, {
-            "type": "inject",
-            "request_id": request_id,
-            "buf": msg.get("buf", -1),
-            "text": msg.get("text", ""),
-            "submit": bool(msg.get("submit")),
-        })
-        log.info("inject: routed request %s to pid=%s (buf=%s, %d chars, submit=%s)",
-                 request_id, target, msg.get("buf"), len(msg.get("text", "")),
-                 bool(msg.get("submit")))
-
-    def handle_inject_result(self, msg: dict) -> None:
-        """Relay a publisher's inject_result back to the waiting requester.
-
-        The message is relayed VERBATIM — the shape documented in
-        handle_inject is the expected contract, not an enforced one, so
-        requesters must tolerate extra or missing fields.
-        """
-        request_id = str(msg.get("request_id") or "")
-        requester = self._pending_injects.pop(request_id, None)
-        if requester is None:
-            log.debug("inject_result: no pending requester for %s (timed out?)", request_id)
-            return
-        self._write_line(requester, msg)
-        log.info("inject: result for %s relayed (ok=%s, submitted=%s)",
-                 request_id, msg.get("ok"), msg.get("submitted"))
-
-    def drop_pending_injects_for(self, writer: asyncio.StreamWriter) -> None:
-        """Forget in-flight injects whose requester connection just closed.
-
-        Without this sweep a disconnected requester's writer lingers in
-        _pending_injects until the timeout fires (bounded 3s soft leak);
-        with it, the publisher's late result is simply dropped.
-        """
-        stale = [rid for rid, w in self._pending_injects.items() if w is writer]
-        for rid in stale:
-            self._pending_injects.pop(rid, None)
-            log.debug("inject: requester for %s disconnected — dropping", rid)
-
-    def _expire_inject(self, request_id: str) -> None:
-        """Timeout guard: answer the requester if the publisher never did."""
-        requester = self._pending_injects.pop(request_id, None)
-        if requester is None:
-            return
-        log.warning("inject: request %s timed out waiting for publisher", request_id)
-        self._write_line(requester, {
-            "type": "inject_result", "request_id": request_id,
-            "ok": False, "submitted": False, "error": "timeout",
-        })
+    # (agent-ownership inversion, Phase 4) The bridge-routed STT inject path —
+    # register_publisher_writer / handle_inject / handle_inject_result /
+    # drop_pending_injects_for / _expire_inject and the _write_line helper they
+    # shared — was removed here. Injection is now a DIRECT shell→IDE round-trip
+    # on the IDE's own agent socket (scripts/stt-inject.sh → the IDE's
+    # agent_events.py), so the bridge no longer forwards inject commands to
+    # publishers or relays their results.
 
     def _schedule_emit(self) -> None:
         """Coalesced emit: leading edge fires immediately, then 50ms cooldown.
@@ -820,20 +602,10 @@ class AgentBridge:
             if prev_state != state:
                 log.info("activity | %s %s→%s event=%s tool=%s plan=%s",
                          agent_id, prev_state or "-", state, hook_event or "?", tool, plan)
-            # STT self-heal (a): once the target agent is actually WORKING, the
-            # dictation that targeted it has been delivered and acted on, so
-            # drop any STT broadcast the shell's clear push failed to clear.
-            # Gated on "working" specifically (not needs_permission/idle): during
-            # a recording in flight the agent sits idle/waiting, so a broader
-            # gate would erase the soundwave mid-recording. This is the heal that
-            # fixes the IDE chip falling back to STT instead of showing "working"
-            # — the IDE's only STT source is this broadcast (the shell agentbar
-            # reads local AgentService state, which is why it was never affected).
-            # Re-evaluated on every "working" event (not just transitions), which
-            # is intentionally cheap: both helpers short-circuit once _stt_state
-            # is None, so post-clear events are a single dict identity check.
-            if state == "working" and self._stt_target_is(agent_id):
-                self._clear_stt_state("target agent working")
+            # (agent-ownership inversion, Phase 4) The STT self-heal that
+            # cleared a stale recording broadcast when the target agent started
+            # WORKING lived here; the bridge no longer carries STT state, so the
+            # IDE clears its own chip dot from the direct channel instead.
             self._schedule_emit()
             return
 
@@ -1320,12 +1092,9 @@ class AgentBridge:
         to ensure all four per-agent dicts stay consistent. Centralises the
         teardown so new dicts only need to be added here.
         """
-        # STT self-heal (b): if this agent was the dictation target, drop the
-        # stale STT broadcast — the target no longer exists. Checked before the
-        # pops below since _stt_target_is reads _terminal_pids (not touched here)
-        # and the agent_id, not the dicts being cleared.
-        if self._stt_target_is(aid):
-            self._clear_stt_state("target agent reaped")
+        # (agent-ownership inversion, Phase 4) The STT self-heal that dropped a
+        # stale recording broadcast when the dictation target was reaped lived
+        # here; STT no longer flows through the bridge.
         self._activities.pop(aid, None)
         self._agent_types.pop(aid, None)
         self._session_ids.pop(aid, None)
@@ -1403,18 +1172,9 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                 bridge.add_subscriber(writer)
                 continue
 
-            # Inject request/response routing. Handled here (like subscribe)
-            # because only handle_client owns the writers: the request needs
-            # this connection's writer recorded as the reply target, and the
-            # result arrives on the publisher's connection. An inject-only
-            # requester (stt-inject.sh) carries no nvim_pid, so it stays an
-            # ephemeral connection — no client registration, no remove_client.
-            if msg.get("type") == "inject":
-                bridge.handle_inject(msg, writer)
-                continue
-            if msg.get("type") == "inject_result":
-                bridge.handle_inject_result(msg)
-                continue
+            # (agent-ownership inversion, Phase 4) The inject request/response
+            # routing handled here was removed — STT injection is now a direct
+            # shell→IDE round-trip, never relayed through the bridge.
 
             # Track nvim_pid from first message AND increment the per-pid
             # connection counter. A given physical connection contributes
@@ -1429,12 +1189,6 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
                 else:
                     log.info("CLIENT identified: nvim_pid=None (ephemeral hook conn)")
 
-            # Route commands back to this publisher (inject). Registered on
-            # every hello so the newest connection wins during the brief
-            # two-connection reconnect overlap.
-            if msg.get("type") == "hello" and nvim_pid is not None:
-                bridge.register_publisher_writer(nvim_pid, writer)
-
             bridge.handle_message(msg)
         log.info("CLIENT EOF: nvim_pid=%s (reader exhausted)", nvim_pid)
     except asyncio.CancelledError:
@@ -1444,9 +1198,6 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     finally:
         log.info("CLIENT CLEANUP: nvim_pid=%s, closing writer", nvim_pid)
         bridge.remove_subscriber(writer)  # idempotent — no-op for non-subscribers
-        bridge.drop_pending_injects_for(writer)  # idempotent — no-op for non-requesters
-        if nvim_pid is not None:
-            bridge.unregister_publisher_writer(nvim_pid, writer)  # guarded — no-op if superseded
         writer.close()
         # Only call remove_client when the LAST connection from this pid
         # closes. The previous behavior (unconditional remove_client on
@@ -1592,45 +1343,10 @@ async def main():
     # Actively solicit running Neovim instances to reconnect
     asyncio.create_task(solicit_neovim_instances())
 
-    # Parent-control channel: the shell (AgentService) owns this process and
-    # writes JSON lines into our stdin (Quickshell Process.write). Currently
-    # carries only stt_state pushes. Kept separate from the Unix socket on
-    # purpose — stdin is parent-only, needs no reconnect handling (a hub
-    # restart gets a fresh pipe), and can never be spoofed by another local
-    # process the way an unauthenticated socket message could.
-    async def stdin_reader():
-        loop = asyncio.get_running_loop()
-        reader = asyncio.StreamReader()
-        try:
-            await loop.connect_read_pipe(
-                lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
-            )
-        except (OSError, ValueError) as exc:
-            # No usable stdin (e.g. launched detached for debugging) —
-            # STT state just won't flow; everything else works.
-            log.warning("stdin_reader: stdin unavailable (%s)", exc)
-            return
-        # readline() is unbounded by construction; acceptable because stdin
-        # is wired exclusively to our parent (the shell), a trusted writer
-        # of short JSON lines — no untrusted process can reach this pipe.
-        while True:
-            line = await reader.readline()
-            if not line:  # EOF — parent closed the pipe
-                log.info("stdin_reader: EOF, stopping")
-                return
-            text = line.decode("utf-8", errors="replace").strip()
-            if not text:
-                continue
-            try:
-                msg = json.loads(text)
-            except json.JSONDecodeError:
-                log.warning("stdin_reader: malformed line: %s", text[:200])
-                continue
-            if msg.get("type") == "stt_state":
-                bridge.set_stt_state(msg)
-            else:
-                log.warning("stdin_reader: unknown type %r", msg.get("type"))
-    asyncio.create_task(stdin_reader())
+    # (agent-ownership inversion, Phase 4) The parent-control stdin channel was
+    # removed — it carried ONLY the shell's stt_state pushes, and STT recording
+    # state now goes DIRECT shell→IDE (the shell no longer writes to this
+    # process's stdin). The Unix socket remains the sole inbound channel.
 
     # Periodic staleness reaper — clears orphaned activity entries (no live
     # orchestrator connection). Registered agents are never reaped by timeout.
@@ -1641,7 +1357,6 @@ async def main():
             await asyncio.sleep(5)  # Check every 5 seconds
             try:
                 bridge.reap_stale_activities()
-                bridge.reap_stale_stt()
                 bridge.check_stuck_working()
                 await bridge.reconcile_claude_sessions()
             except Exception as exc:  # noqa: BLE001
