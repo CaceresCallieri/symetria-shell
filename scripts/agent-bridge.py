@@ -439,6 +439,14 @@ class AgentBridge:
                 projects.add(project)
                 agent_id = f"{nvim_pid}_{buf}"
                 activity = self._activities.get(agent_id, {})
+                # Agent-ownership inversion (Phase 2): an IDE that captures its
+                # own agents publishes activity directly onto the instance record
+                # (via notify_activity → the "updated" verb). PREFER those
+                # published fields when present, falling back to the bridge's own
+                # computed activity for publishers that don't (and for the
+                # transitional period before the global hook is removed). The
+                # check is `"<key>" in inst`, NOT truthiness, so a published idle
+                # ("") still wins over a stale computed value.
                 agents.append({
                     "id": agent_id,
                     "nvim_pid": nvim_pid,
@@ -460,16 +468,32 @@ class AgentBridge:
                     # survives idle, when the activity entry is gone. "" →
                     # treated as Claude downstream (backward-compatible).
                     "agent_type": self._agent_types.get(agent_id, ""),
-                    "activity_state": activity.get("state", ""),
-                    "activity_tool": activity.get("tool", ""),
+                    "activity_state": (
+                        inst["activity_state"]
+                        if "activity_state" in inst
+                        else activity.get("state", "")
+                    ),
+                    "activity_tool": (
+                        inst["activity_tool"]
+                        if "activity_tool" in inst
+                        else activity.get("tool", "")
+                    ),
                     # Resumable harness session id, from the STICKY _session_ids
                     # map (NOT activity, which is popped on idle) so it survives
                     # an idle agent — the IDE reads this to power `claude -r <id>`
                     # session restore and typically saves while agents are idle.
                     # "" until the hook first reports it / for harnesses that
                     # don't (opencode).
-                    "session_id": self._session_ids.get(agent_id, ""),
-                    "in_plan_mode": activity.get("in_plan_mode", False),
+                    # Prefer the IDE-published id (non-empty), else the bridge's
+                    # sticky map. Both empty until first report / for opencode.
+                    "session_id": (
+                        inst.get("session_id") or self._session_ids.get(agent_id, "")
+                    ),
+                    "in_plan_mode": (
+                        inst["in_plan_mode"]
+                        if "in_plan_mode" in inst
+                        else activity.get("in_plan_mode", False)
+                    ),
                     # Delivery capability declared by the publisher.
                     # "bridge" → text injection routes through the bridge's
                     # inject verb (Symmetria IDE terminal-agent panes, which
@@ -931,8 +955,20 @@ class AgentBridge:
         elif msg_type == "updated":
             buf = msg.get("buf")
             if nvim_pid in self._clients and buf in self._clients[nvim_pid]:
-                # Merge updated fields
-                for key in ("title", "color_idx", "dangerous", "spawn_type"):
+                # Merge updated fields. The activity_* / in_plan_mode / session_id
+                # keys carry an IDE's locally-captured activity (inversion P2 —
+                # notify_activity); merging them onto the instance lets
+                # _snapshot_line prefer them over the bridge's own computed values.
+                for key in (
+                    "title",
+                    "color_idx",
+                    "dangerous",
+                    "spawn_type",
+                    "activity_state",
+                    "activity_tool",
+                    "in_plan_mode",
+                    "session_id",
+                ):
                     if key in msg:
                         self._clients[nvim_pid][buf][key] = msg[key]
                 log.debug("  updated: buf=%s from pid %s", buf, nvim_pid)
