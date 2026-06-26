@@ -177,6 +177,14 @@ class AgentBridge:
         # must persist so the dashboard keeps the right accent color. Cleared
         # only when the instance is fully torn down (_clear_agent_state).
         self._agent_types: dict[str, str] = {}
+        # Sticky resumable harness session id — SAME lifecycle rationale as
+        # _agent_types: an agent's _activities entry is popped when it goes
+        # idle, so a session id read from there vanishes the moment the agent
+        # stops. The Symmetria IDE reads this from the snapshot to power
+        # `claude -r <id>` session restore, and it reloads BETWEEN tasks (agents
+        # idle), so the id must survive idle. Kept here, cleared only on full
+        # teardown (_clear_agent_state).
+        self._session_ids: dict[str, str] = {}
         # Per-agent ring buffer of recent state transitions for postmortem
         # diagnostics. Each entry: {ts, event_ts_ns, hook_event, state, tool,
         # ooo} where ooo is True if this update arrived out-of-order.
@@ -454,6 +462,13 @@ class AgentBridge:
                     "agent_type": self._agent_types.get(agent_id, ""),
                     "activity_state": activity.get("state", ""),
                     "activity_tool": activity.get("tool", ""),
+                    # Resumable harness session id, from the STICKY _session_ids
+                    # map (NOT activity, which is popped on idle) so it survives
+                    # an idle agent — the IDE reads this to power `claude -r <id>`
+                    # session restore and typically saves while agents are idle.
+                    # "" until the hook first reports it / for harnesses that
+                    # don't (opencode).
+                    "session_id": self._session_ids.get(agent_id, ""),
                     "in_plan_mode": activity.get("in_plan_mode", False),
                     # Delivery capability declared by the publisher.
                     # "bridge" → text injection routes through the bridge's
@@ -693,6 +708,11 @@ class AgentBridge:
             # Claude Code session UUID (absent for OpenCode reporters) — join
             # key for the `claude agents --json` reconciliation poll.
             session_id = msg.get("session_id", "")
+            # Sticky session id (same pattern as agent_type above): keep it
+            # across idle so the IDE can capture it for session restore even
+            # from an idle snapshot. Only overwrite when actually supplied.
+            if session_id:
+                self._session_ids[agent_id] = session_id
 
             prev_entry = self._activities.get(agent_id)
             prev_state = prev_entry.get("state", "") if prev_entry else ""
@@ -1267,6 +1287,7 @@ class AgentBridge:
             self._clear_stt_state("target agent reaped")
         self._activities.pop(aid, None)
         self._agent_types.pop(aid, None)
+        self._session_ids.pop(aid, None)
         self._activity_history.pop(aid, None)
         self._subagent_depth.pop(aid, None)
         self._warned_stuck.discard(aid)
