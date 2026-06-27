@@ -125,12 +125,30 @@ Singleton {
     }
 
     /// Handle a key press. Returns true if matched (command executed or group navigated).
+    ///
+    /// Matching is two-pass. Pass 1 is case-SENSITIVE so a single group can bind a
+    /// letter and its Shifted form to different actions (e.g. the "recording" group:
+    /// f/r record without audio, F/R with audio). The overlay feeds us `event.text`,
+    /// which already carries Shift state ("f" vs "F"). Pass 2 is a case-INSENSITIVE
+    /// fallback so every existing single-case chord keeps firing regardless of
+    /// Shift/Caps (e.g. "M" still matches "m").
+    ///
+    /// Do NOT collapse these into one toUpperCase() compare: that would make f/F
+    /// indistinguishable and silently break the recording menu's audio variants.
     function handleKey(key: string): bool {
         if (!active || !_activeChords || _activeChords.length === 0)
             return false;
 
-        const normalized = key.toUpperCase();
+        // Pass 1: exact (case-sensitive) match.
+        for (const chord of _activeChords) {
+            if (chord.key === key) {
+                dispatchChord(chord);
+                return true;
+            }
+        }
 
+        // Pass 2: case-insensitive fallback.
+        const normalized = key.toUpperCase();
         for (const chord of _activeChords) {
             if (chord.key.toUpperCase() === normalized) {
                 dispatchChord(chord);

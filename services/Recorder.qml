@@ -250,4 +250,42 @@ Singleton {
             props.elapsed++;
         }
     }
+
+    // IPC control surface for keychords (and any external caller). Routing through
+    // this service's start()/stop() — rather than invoking `symmetria record`
+    // directly — is what keeps Recorder.running in sync: state is only updated by
+    // start()/stop()'s verify polling and the startup pidof check, so a direct CLI
+    // recording would run but never appear as "recording" in the bar/utility
+    // dashboard (nor be stoppable there). The utility dashboard's Record card uses
+    // the same start([...]) variants.
+    //
+    // Target is "screenRecorder", NOT "recorder" — "recorder" is already owned by
+    // the audio/STT recorder (modules/recorder/RecorderRoot.qml).
+    IpcHandler {
+        target: "screenRecorder"
+
+        function fullscreen(): void {
+            root.start([]);
+        }
+
+        function region(): void {
+            root.start(["-r"]);
+        }
+
+        function fullscreenAudio(): void {
+            root.start(["-s"]);
+        }
+
+        function regionAudio(): void {
+            root.start(["-sr"]);
+        }
+
+        function stop(): void {
+            root.stop();
+        }
+
+        function togglePause(): void {
+            root.togglePause();
+        }
+    }
 }
