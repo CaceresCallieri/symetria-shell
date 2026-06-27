@@ -45,8 +45,13 @@ If missing, Symmetria will fail to load components that browse the filesystem. S
 - Entry point: `/usr/bin/symmetria` (Python 3.14 shim)
 - After editing CLI source, re-deploy:
 ```bash
-sudo cp -r ~/.config/quickshell/symmetria-cli/src/symmetria /usr/lib/python3.14/site-packages/symmetria
+sudo cp -rT ~/.config/quickshell/symmetria-cli/src/symmetria /usr/lib/python3.14/site-packages/symmetria
 ```
+  The `-T` is required, NOT optional: the destination `symmetria/` already
+  exists, so plain `cp -r src dest` copies *into* it (creating a nested, dead
+  `symmetria/symmetria/`) and silently leaves the real top-level package — the
+  one Python imports — untouched. `-T` treats the destination as the target so
+  the package contents are overwritten in place.
 
 ## Pre-commit Hooks
 
