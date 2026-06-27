@@ -133,6 +133,10 @@ Singleton {
     /// fallback so every existing single-case chord keeps firing regardless of
     /// Shift/Caps (e.g. "M" still matches "m").
     ///
+    /// Caveat: because Pass 1 keys off `event.text`, case-sensitive bindings are
+    /// inverted by Caps Lock — with Caps Lock on, bare "f" arrives as "F" and so
+    /// fires the Shifted action. Single-case (Pass 2) chords are unaffected.
+    ///
     /// Do NOT collapse these into one toUpperCase() compare: that would make f/F
     /// indistinguishable and silently break the recording menu's audio variants.
     function handleKey(key: string): bool {

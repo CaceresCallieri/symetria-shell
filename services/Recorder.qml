@@ -32,6 +32,10 @@ Singleton {
         // Only start if not already running
         if (props.running) {
             console.log("[Recorder] start IGNORED — already recording");
+            // Surface feedback for entry points without a disabled state (e.g. the
+            // keychords recording menu). The dashboard Record card disables its
+            // button while running, so it never reaches this branch.
+            Toaster.toast(qsTr("Already recording"), qsTr("Stop the current recording from the dashboard first"), "screen_record", Toast.Info);
             return;
         }
         if (startPending) {
@@ -251,13 +255,18 @@ Singleton {
         }
     }
 
-    // IPC control surface for keychords (and any external caller). Routing through
-    // this service's start()/stop() — rather than invoking `symmetria record`
-    // directly — is what keeps Recorder.running in sync: state is only updated by
+    // IPC start surface for the keychords recording menu. Routing through this
+    // service's start() — rather than invoking `symmetria record` directly — is
+    // what keeps Recorder.running in sync: running-state is only updated by
     // start()/stop()'s verify polling and the startup pidof check, so a direct CLI
     // recording would run but never appear as "recording" in the bar/utility
-    // dashboard (nor be stoppable there). The utility dashboard's Record card uses
-    // the same start([...]) variants.
+    // dashboard. The Record card uses these same start([...]) variants.
+    //
+    // Stopping/pausing is intentionally NOT exposed here: the utility dashboard's
+    // Record card is the recording center and owns those controls. Do not add a
+    // stop()/togglePause() IPC without also giving togglePause() an in-progress
+    // guard — it flips props.paused optimistically and would desync under rapid
+    // external invocation.
     //
     // Target is "screenRecorder", NOT "recorder" — "recorder" is already owned by
     // the audio/STT recorder (modules/recorder/RecorderRoot.qml).
@@ -278,14 +287,6 @@ Singleton {
 
         function regionAudio(): void {
             root.start(["-sr"]);
-        }
-
-        function stop(): void {
-            root.stop();
-        }
-
-        function togglePause(): void {
-            root.togglePause();
         }
     }
 }
