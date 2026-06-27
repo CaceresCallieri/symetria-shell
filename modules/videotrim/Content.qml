@@ -42,6 +42,10 @@ Item {
     // muted until primed so the priming play() makes no sound.
     property bool primed: false
 
+    // Source whose selection + filmstrip have already been initialised, so a
+    // duration re-emit doesn't wipe the user's handle drags or re-extract.
+    property string preparedSource: ""
+
     function fmt(sec: real): string {
         if (!isFinite(sec) || sec < 0)
             sec = 0;
@@ -72,7 +76,12 @@ Item {
         // extraction whenever a new source's duration resolves.
         onDurationChanged: {
             const d = player.duration;
-            if (d > 0) {
+            // Initialise selection + filmstrip once per source. Guarding on the
+            // source identity prevents a duration re-emit (metadata refresh, or
+            // a 0→N→0→N sequence) from discarding the user's handle drags and
+            // needlessly re-running extraction.
+            if (d > 0 && VideoTrimService.source !== root.preparedSource) {
+                root.preparedSource = VideoTrimService.source;
                 root.inPoint = 0;
                 root.outPoint = d / 1000;
                 player.position = 0;
@@ -91,23 +100,41 @@ Item {
             }
         }
 
-        // Preview-within-selection: stop at the out-point so play() auditions
-        // only the kept region rather than running to the end of the source.
         onPositionChanged: {
+            // Event-driven prime completion: the first painted frame advances
+            // position past 0, which signals a frame has decoded onto the
+            // VideoOutput — more reliable than the fixed primeTimer fallback.
+            if (!root.primed && playbackState === MediaPlayer.PlayingState && player.position > 0) {
+                root.finishPriming();
+                return;
+            }
+            // Preview-within-selection: stop at the out-point so play() auditions
+            // only the kept region rather than running to the end of the source.
             if (root.primed && playbackState === MediaPlayer.PlayingState && player.position >= root.outPoint * 1000)
                 pause();
         }
     }
 
-    // Fires shortly after the priming play() so a frame has rendered; then we
-    // pause, return to the start, and unmute for real playback.
+    // Fallback prime completion. HACK: 120 ms is empirical — Qt Multimedia has
+    // no "first frame painted" signal, so if position never ticks during the
+    // brief priming play() (some backends), this timer forces completion so the
+    // pane never stays black. Remove the timer if such a signal becomes
+    // available; the onPositionChanged path above is the primary mechanism.
     Timer {
         id: primeTimer
         interval: 120
-        onTriggered: {
-            player.pause();
-            player.position = Math.round(root.inPoint * 1000);
-            root.primed = true;
+        onTriggered: root.finishPriming()
+    }
+
+    // When the service swaps to a different clip while this Content instance
+    // stays alive (panel already open on this monitor), re-arm priming and the
+    // per-source init so the new clip shows its poster frame and re-derives its
+    // selection rather than inheriting the previous clip's primed state.
+    Connections {
+        target: VideoTrimService
+        function onSourceChanged(): void {
+            root.primed = false;
+            root.preparedSource = "";
         }
     }
 
@@ -404,6 +431,17 @@ Item {
                 }
             }
         }
+    }
+
+    // Complete priming: pause the muted prime playback, park the head at the
+    // start, and unmute. Invoked by whichever fires first — the first painted
+    // frame (onPositionChanged) or the primeTimer fallback.
+    function finishPriming(): void {
+        if (root.primed)
+            return;
+        player.pause();
+        player.position = Math.round(root.inPoint * 1000);
+        root.primed = true;
     }
 
     // Toggle playback, snapping the playhead back into the kept region first so

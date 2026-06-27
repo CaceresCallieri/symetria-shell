@@ -56,9 +56,11 @@ Singleton {
     /// cleared and regenerated on each generateThumbnails() call.
     readonly property string thumbnailDir: `${Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"}/symmetria-videotrim`
 
-    /// Bumped each time a thumbnail batch finishes, so the Content's
-    /// FolderListModel can force a re-read (it does not auto-detect files
-    /// written by an external process — same constraint as RecordingList).
+    /// Bumped each time a thumbnail batch finishes. The Content addresses frames
+    /// by deterministic path carrying a `?v=thumbnailVersion` query, so changing
+    /// this value busts Qt's image cache and forces the (externally written)
+    /// frames to reload — chosen over FolderListModel, which does not reliably
+    /// surface externally-written, mid-session-regenerated files.
     property int thumbnailVersion: 0
 
     /// Extract `count` evenly-spaced filmstrip thumbnails from `source` into
@@ -68,12 +70,15 @@ Singleton {
         if (source.length === 0 || durationSec <= 0 || count <= 0)
             return;
         const rate = count / durationSec;
-        // Controlled inputs (our own recordings dir, no quotes/spaces in names)
-        // so single-quote wrapping in sh -c is safe here.
+        // Single-quote for the shell, escaping any embedded quote (' -> '\'') so
+        // a path arriving via the public open() IPC can't break out of quoting.
+        const shq = s => "'" + s.replace(/'/g, "'\\''") + "'";
+        const dir = shq(thumbnailDir);
+        const src = shq(source);
         thumbProc.command = ["sh", "-c",
-            `rm -rf '${thumbnailDir}' && mkdir -p '${thumbnailDir}' && ` +
-            `ffmpeg -y -i '${source}' -vf "fps=${rate},scale=-1:96" ` +
-            `-frames:v ${count} '${thumbnailDir}/thumb_%03d.jpg' >/dev/null 2>&1`];
+            `rm -rf ${dir} && mkdir -p ${dir} && ` +
+            `ffmpeg -y -i ${src} -vf "fps=${rate},scale=-1:96" ` +
+            `-frames:v ${count} ${dir}/thumb_%03d.jpg >/dev/null 2>&1`];
         thumbProc.running = true;
     }
 
@@ -97,6 +102,7 @@ Singleton {
     function close(): void {
         visible = false;
         source = "";
+        targetScreen = "";
     }
 
     // Resolve the newest ORIGINAL recording for editLast — excludes
@@ -121,6 +127,9 @@ Singleton {
         // -avoid_negative_ts make_zero: rebase timestamps so the copied stream
         // starts cleanly at 0 instead of carrying the source's keyframe offset.
         trimProc.outPath = out;
+        // Snapshot the source so the (async) exit handler only dismisses the
+        // panel if the user hasn't opened a different clip in the meantime.
+        trimProc.trimmedSource = source;
         trimProc.command = [
             "ffmpeg", "-y",
             "-ss", inSec.toFixed(3),
@@ -151,13 +160,17 @@ Singleton {
         }
     }
 
-    // Filmstrip extractor. Bumps thumbnailVersion on completion so the view
-    // re-reads thumbnailDir (FolderListModel won't auto-detect the new files).
+    // Filmstrip extractor. On success bumps thumbnailVersion, whose value the
+    // Content's frame URLs carry as a ?v= cache-bust so the new (externally
+    // written) frames reload. See the thumbnailVersion property.
     Process {
         id: thumbProc
 
         onExited: (code, status) => {
-            root.thumbnailVersion++;
+            // Only signal a fresh batch on success — a failed ffmpeg leaves no
+            // new frames, so bumping would force reloads against missing files.
+            if (code === 0)
+                root.thumbnailVersion++;
         }
     }
 
@@ -165,13 +178,18 @@ Singleton {
         id: trimProc
 
         property string outPath: ""
+        // Source captured at trim start; see trim() and the close guard below.
+        property string trimmedSource: ""
 
         onExited: (code, status) => {
             root.trimming = false;
             if (code === 0) {
                 Quickshell.execDetached(["wl-copy", outPath]);
                 Toaster.toast(qsTr("Recording trimmed"), qsTr("Saved and path copied to clipboard"), "content_cut", Toast.Success);
-                root.close();
+                // Don't dismiss a session the user has since re-pointed at a
+                // different clip while this trim was running.
+                if (root.source === trimProc.trimmedSource)
+                    root.close();
             } else {
                 Toaster.toast(qsTr("Trim failed"), qsTr("ffmpeg exited with code %1").arg(code), "error", Toast.Error);
             }
