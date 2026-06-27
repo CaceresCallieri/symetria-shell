@@ -21,6 +21,8 @@ cmake --build build && sudo cmake --install build && sudo chown -R $USER:$USER ~
 rm -rf ~/.cache/quickshell/qmlcache
 ```
 
+**CLI (`symmetria-cli`) redeploy:** [cli-redeploy-cp-rT-gotcha.md](cli-redeploy-cp-rt-gotcha.md) — must use `cp -rT`; plain `cp -r` fails silently (nests, leaves package stale)
+
 ## Claude.ai Sparkle Sprites
 Two hand-drawn SVG sprite sheets extracted from claude.ai for the agentbar:
 - **Working** (8 frames, `0 0 100 800`): starburst rotation during streaming
