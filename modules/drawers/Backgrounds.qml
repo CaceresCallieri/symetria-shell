@@ -9,6 +9,7 @@ import qs.modules.askpass as Askpass
 import qs.modules.recorder as RecorderModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
+import qs.modules.videotrim as VideoTrimModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -87,6 +88,13 @@ Item {
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0  // Start at top-left (clockwise path like bar popouts)
+        }
+
+        VideoTrimModule.VideoTrimBackground {
+            wrapper: root.panels.videoTrim
+
+            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
+            startY: 0  // Top-hanging, like recorder/packages
         }
 
         BarPopouts.Background {

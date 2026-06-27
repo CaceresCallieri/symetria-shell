@@ -10,6 +10,7 @@ import qs.modules.askpass as Askpass
 import qs.modules.recorder as RecorderModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
+import qs.modules.videotrim as VideoTrimModule
 import Quickshell
 import QtQuick
 
@@ -31,6 +32,7 @@ Item {
     readonly property alias recorder: recorder
     readonly property alias calculator: calculator
     readonly property alias packages: packages
+    readonly property alias videoTrim: videoTrim
 
     anchors.fill: parent
     anchors.leftMargin: Config.border.sideThickness
@@ -149,6 +151,15 @@ Item {
         screen: root.screen
         visibilities: root.visibilities
         panels: root
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+    }
+
+    VideoTrimModule.Wrapper {
+        id: videoTrim
+
+        screen: root.screen
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
