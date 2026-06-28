@@ -18,6 +18,7 @@ import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
 import "modules/killconfirm" as KillConfirmModule
 import "modules/windowoverview" as WindowOverviewModule
+import "modules/agentoverview" as AgentOverviewModule
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -59,6 +60,8 @@ ShellRoot {
     }
     WindowOverviewModule.Wrapper {}
     WindowOverviewModule.OverviewSurface {}
+    AgentOverviewModule.Wrapper {}
+    AgentOverviewModule.OverviewSurface {}
     Lock {
         id: lock
     }
