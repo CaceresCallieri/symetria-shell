@@ -38,18 +38,22 @@ Singleton {
     // Active  = busy: thinking / working / needs_permission / starting / clearing.
     // Dormant = idle but ALIVE: "" or "idle" (offline agents are excluded entirely).
 
+    function _stateOf(agent: var): string {
+        return agent?.activity_state ?? "";
+    }
+
     function isAgentActive(agent: var): bool {
-        const s = agent?.activity_state ?? "";
+        const s = root._stateOf(agent);
         return s !== "" && s !== "idle" && s !== "offline";
     }
 
     function isAgentDormant(agent: var): bool {
-        const s = agent?.activity_state ?? "";
+        const s = root._stateOf(agent);
         return s !== "offline" && !root.isAgentActive(agent);
     }
 
     function _agentAlive(agent: var): bool {
-        return (agent?.activity_state ?? "") !== "offline";
+        return root._stateOf(agent) !== "offline";
     }
 
     function _matchesFilter(agent: var): bool {
@@ -66,7 +70,17 @@ Singleton {
     // the underlying data. Pass AgentService.agents + _workspaceMap + filterMode
     // as arguments purely to trip the binding when any of them change; the
     // compute fn then re-derives and filters the grouping.
-    readonly property var filteredGrouping: root._computeFilteredGrouping(AgentService.agents, AgentService._workspaceMap, root.filterMode)
+    // Gated on `active` so nothing recomputes while the overlay is closed. The
+    // surface additionally gates its card model on per-monitor `shouldShow`, so
+    // only the focused screen instantiates cards (and their live sparkles).
+    readonly property var filteredGrouping: root.active ? root._computeFilteredGrouping(AgentService.agents, AgentService.workspaceMap, root.filterMode) : root._emptyGrouping
+
+    // Stable empty grouping returned while the overlay is closed.
+    readonly property var _emptyGrouping: ({
+            byWorkspace: ({}),
+            orphans: [],
+            remote: []
+        })
 
     function _computeFilteredGrouping(_agentsDep: var, _wsDep: var, _modeDep: string): var {
         const g = AgentService.agentsByWorkspace();
@@ -87,8 +101,10 @@ Singleton {
 
     // ── Counts for the filter control (over ALL alive agents) ────────
 
-    readonly property int activeCount: root._countWhere(AgentService.agents, a => root.isAgentActive(a))
-    readonly property int dormantCount: root._countWhere(AgentService.agents, a => root.isAgentDormant(a))
+    // Gated on `active` (same reason as filteredGrouping) — the filter buttons
+    // that read these counts only exist while the overlay is open.
+    readonly property int activeCount: root.active ? root._countWhere(AgentService.agents, a => root.isAgentActive(a)) : 0
+    readonly property int dormantCount: root.active ? root._countWhere(AgentService.agents, a => root.isAgentDormant(a)) : 0
     readonly property int aliveCount: root.activeCount + root.dormantCount
 
     function _countWhere(agents: var, pred: var): int {
@@ -143,6 +159,12 @@ Singleton {
     function cycleFilter(): void {
         const i = root._filterOrder.indexOf(filterMode);
         filterMode = root._filterOrder[(i + 1) % root._filterOrder.length];
+    }
+
+    function cycleFilterReverse(): void {
+        const n = root._filterOrder.length;
+        const i = root._filterOrder.indexOf(filterMode);
+        filterMode = root._filterOrder[(i - 1 + n) % n];
     }
 
     // ── Click-to-focus ───────────────────────────────────────────────

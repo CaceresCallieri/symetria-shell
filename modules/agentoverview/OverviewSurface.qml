@@ -168,7 +168,9 @@ Scope {
             /// Ordered group descriptors for the grid: numbered workspaces first
             /// (ascending), then Remote, then orphans. Keyed by a stable `key` so
             /// the outer Repeater's ScriptModel updates groups in place.
-            readonly property var groups: win._buildGroups(AgentOverviewService.filteredGrouping)
+            // Only the visible surface builds cards — keeps a multi-monitor setup
+            // from instantiating N copies of the grid (and N sets of live sparkles).
+            readonly property var groups: win.shouldShow ? win._buildGroups(AgentOverviewService.filteredGrouping) : []
 
             function _buildGroups(g: var): var {
                 const out = [];
@@ -226,6 +228,9 @@ Scope {
                     if (event.key === Qt.Key_Tab) {
                         event.accepted = true;
                         AgentOverviewService.cycleFilter();
+                    } else if (event.key === Qt.Key_Backtab) {
+                        event.accepted = true;
+                        AgentOverviewService.cycleFilterReverse();
                     } else if (event.key === Qt.Key_1) {
                         event.accepted = true;
                         AgentOverviewService.setFilter("all");
@@ -294,6 +299,9 @@ Scope {
                         visible: win.groups.length === 0
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
+                        // Invariant: with filterMode "all" and an empty grid, aliveCount
+                        // is necessarily 0 → the first arm wins, so the dynamic
+                        // "No <mode> agents" message only ever reads active/dormant.
                         text: AgentOverviewService.aliveCount === 0 ? "No agents running" : ("No " + AgentOverviewService.filterMode + " agents")
                         color: Colours.palette.m3onSurfaceVariant
                         font.pointSize: Appearance.font.size.large

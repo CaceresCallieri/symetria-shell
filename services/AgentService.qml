@@ -28,6 +28,9 @@ Singleton {
     // intentional var: JS array — used with .filter()/.sort()/.find() in _sortProjectsByWorkspace
     readonly property var projects: _projects
     readonly property int agentCount: _agents.length
+    // intentional var: terminal_pid → {id, name} map; public mirror of
+    // _workspaceMap for cross-module reactive consumers (AgentOverviewService)
+    readonly property var workspaceMap: _workspaceMap
 
     // Private mutable backing for userHidden
     property bool _userHidden: false
