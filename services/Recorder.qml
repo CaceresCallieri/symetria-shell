@@ -288,5 +288,12 @@ Singleton {
         function regionAudio(): void {
             root.start(["-sr"]);
         }
+
+        // Meeting mode: fullscreen + system audio + microphone merged into one
+        // track (CLI: `record -s -m`). Captures BOTH sides of a video call — the
+        // remote voice via default_output and the local voice via default_input.
+        function meeting(): void {
+            root.start(["-s", "-m"]);
+        }
     }
 }
