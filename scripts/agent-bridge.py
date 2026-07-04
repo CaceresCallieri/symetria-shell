@@ -391,6 +391,13 @@ class AgentBridge:
                     # inject verb (Symmetria IDE terminal-agent panes, which
                     # have no nvim socket). "" → nvim RPC / legacy behavior.
                     "inject_via": inst.get("inject_via", ""),
+                    # Addressable tmux session name (<slug>-<hash>-<slot>),
+                    # published by IDEs running the tmux substrate so external
+                    # control planes (vigiliad → the phone) can attach ttyd and
+                    # route send-keys to this exact agent. "" for agents with no
+                    # standalone tmux session (flag off, or publishers that don't
+                    # host their agents in tmux).
+                    "tmux_session": inst.get("tmux_session", ""),
                 })
 
         # Sort: by project, then by spawn time within project
