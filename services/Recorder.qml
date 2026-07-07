@@ -281,12 +281,23 @@ Singleton {
             root.start(["-r"]);
         }
 
+        // Active window: records the window's current screen region (resolved by
+        // the CLI via `hyprctl activewindow`). Instant like fullscreen — no slurp —
+        // so start()'s single-check verify path applies, not region polling.
+        function window(): void {
+            root.start(["-w"]);
+        }
+
         function fullscreenAudio(): void {
             root.start(["-s"]);
         }
 
         function regionAudio(): void {
             root.start(["-sr"]);
+        }
+
+        function windowAudio(): void {
+            root.start(["-w", "-s"]);
         }
 
         // Meeting mode: fullscreen + system audio + microphone merged into one
