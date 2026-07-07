@@ -103,7 +103,7 @@ PillCard {
                         icon: "volume_up"
                         text: qsTr("Record region with sound")
                         activeText: qsTr("Region")
-                        onClicked: Recorder.start(["-sr"])
+                        onClicked: Recorder.start(["-r", "-s"])
                     }
                 ]
             }

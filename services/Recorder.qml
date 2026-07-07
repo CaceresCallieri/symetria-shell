@@ -50,7 +50,11 @@ Singleton {
         const args = Array.from(extraArgs).filter(s => s.length > 0);
         const cmd = baseCmd.concat(args);
 
-        // Detect region mode: only "-r" and "-sr" are region flags
+        // Detect region mode: only "-r" and combined "-sr" are region flags (all
+        // in-shell callers pass separate flags now, but external `symmetria shell`
+        // invocations may still combine them). -w (active window) is intentionally
+        // NOT region mode: the CLI resolves the geometry itself without slurp, so
+        // the instant fullscreen-style verify applies, not region polling.
         const isRegion = args.some(a => a === "-r" || a === "-sr");
 
         console.log("[Recorder] start —", isRegion ? "REGION" : "FULLSCREEN", "— execDetached:", JSON.stringify(cmd));
@@ -181,9 +185,12 @@ Singleton {
                     slurpCheckProc.running = true;
                 }
             } else {
-                // Fullscreen mode: single check failed
+                // Fullscreen/window mode: single check failed. Window mode has a
+                // realistic failure cause (no active window to resolve), so surface
+                // it — the region paths already toast on their failure branches.
                 root.startPending = false;
                 console.log("[Recorder] VERIFY FAILED — gpu-screen-recorder not running");
+                Toaster.toast(qsTr("Recording failed"), qsTr("Recorder did not start"), "error", Toast.Error);
                 props.running = false;
             }
         }
@@ -293,7 +300,7 @@ Singleton {
         }
 
         function regionAudio(): void {
-            root.start(["-sr"]);
+            root.start(["-r", "-s"]);
         }
 
         function windowAudio(): void {
