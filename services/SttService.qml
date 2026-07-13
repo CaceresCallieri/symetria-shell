@@ -535,13 +535,22 @@ Singleton {
         command: ["sh", "-c",
             'mkdir -p "$RECOVERY_DIR"\n' +
             'count=0\n' +
-            'for f in "$TEMP_DIR"/session_*.wav; do\n' +
-            '    [ -e "$f" ] || continue\n' +
+            // -mmin +1 age gate: a LIVE capture's WAV has an ever-fresh mtime
+            // (pw-record flushes continuously), so a recording started inside
+            // the startup window can never be swept out from under pw-record.
+            // A crashed file's mtime froze at death and qualifies within a
+            // minute. Filenames contain no whitespace (session_<digits>_...),
+            // so the word-split loop over find output is safe.
+            'for f in $(find "$TEMP_DIR" -maxdepth 1 -name "session_*.wav" -mmin +1 2>/dev/null); do\n' +
             '    base=$(basename "$f")\n' +
             // session id = digits between "session_" and the first "_" or "."
-            // (segment files are named session_<id>_seg<N>.wav)
+            // (working files: session_<id>_segment_<N>.wav and, when segments
+            // were concatenated, session_<id>_combined.wav — all adopted)
             '    sid=${base#session_}; sid=${sid%%[_.]*}\n' +
             '    mv -n "$f" "$RECOVERY_DIR/$base"\n' +
+            // mv -n exits 0 even when it skips a name collision; only count
+            // and sidecar-annotate files that actually left the temp dir.
+            '    [ -e "$f" ] && continue\n' +
             '    sidecar="$RECOVERY_DIR/session_${sid}.json"\n' +
             '    if [ ! -e "$sidecar" ]; then\n' +
             '        printf \'{\\n  "sessionId": "%s",\\n  "recoveredAt": "%s",\\n  "reason": "orphaned recording adopted at shell startup",\\n  "audioFile": "%s"\\n}\\n\' "$sid" "$(date -Is)" "$base" > "$sidecar"\n' +
@@ -550,6 +559,10 @@ Singleton {
             'done\n' +
             'echo "$count"\n'
         ]
+        onExited: (code, status) => {
+            if (code !== 0)
+                Logger.log("qml", "stt", "orphan-sweep-failed | code=" + code);
+        }
         environment: ({
             TEMP_DIR: root._tempDir,
             RECOVERY_DIR: root._recoveryDir
@@ -560,8 +573,8 @@ Singleton {
                 if (count === 0) return;
                 Logger.log("qml", "stt", "orphan-sweep | adopted=" + count);
                 Toaster.toast(
-                    qsTr("STT: Recovered interrupted recording"),
-                    qsTr("%1 audio file(s) from a previous session moved to %2").arg(count).arg(root._recoveryDir),
+                    qsTr("STT: Recovered interrupted audio"),
+                    qsTr("%1 file(s) from a previous session moved to %2").arg(count).arg(root._recoveryDir),
                     "",
                     Toast.Warning
                 );
