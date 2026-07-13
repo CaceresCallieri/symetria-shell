@@ -427,7 +427,7 @@ Singleton {
     // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
     readonly property var _sessionBinds: [
         ["R", "restart"],
-        ["S", "mode clipboard"],
+        ["S", "mode clipboard"],   // S = Save to clipboard (not submit — that's Return)
         ["I", "mode inject"],
         ["Return", "mode submit"],
         ["W", "hints"]
@@ -435,18 +435,21 @@ Singleton {
 
     onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
 
+    function _unbindCmd(bind: var): string {
+        return `keyword unbind ALT,${bind[0]}`;
+    }
+
     function _registerSessionBinds(): void {
         // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
         // binds on the same combo (which would double-fire the IPC command),
         // so a leftover bind from a crashed shell must be cleared first.
         const cmds = _sessionBinds.map(b =>
-            `keyword unbind ALT,${b[0]} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
+            `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
         Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
     }
 
     function _unregisterSessionBinds(): void {
-        const cmds = _sessionBinds.map(b => `keyword unbind ALT,${b[0]}`);
-        Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
+        Quickshell.execDetached(["hyprctl", "--batch", _sessionBinds.map(_unbindCmd).join(" ; ")]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

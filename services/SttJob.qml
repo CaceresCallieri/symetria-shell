@@ -783,8 +783,7 @@ QtObject {
             createdAt: new Date().toISOString(),
             audioFile: `session_${sessionId}.wav`,
             vocabHints: _snapshotVocabHints.slice(),
-            deliveryMode: SttService._deliveryMode,
-            activeDeliveryChoice: _activeDeliveryChoice,
+            deliveryMode: _activeDeliveryChoice,
             errorSource: _errorSource,
             errorDetail: _errorDetail,
             errorHint: _errorHint,
@@ -827,7 +826,7 @@ QtObject {
             model: _lastModelUsed || (Config.stt?.model ?? "gpt-4o-transcribe"),
             durationSec: Math.round(elapsedSeconds),
             charCount: _transcribedText.length,
-            deliveryMode: SttService._deliveryMode,
+            deliveryMode: _activeDeliveryChoice,
             targetWindowClass: _targetWindowClass,
             transcript: _transcribedText
         };
