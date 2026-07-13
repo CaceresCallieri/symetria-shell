@@ -3,8 +3,8 @@ import qs.config
 import QtQuick
 
 /// Pop-in success indicator for completed STT transcriptions.
-/// Shows delivery-method icon (clipboard/inject/submit) with animated
-/// pop from modeBtn position (ask mode) or center (fixed mode).
+/// Shows delivery-method icon (clipboard/inject/submit) with an animated
+/// pop originating from the delivery-mode button's position.
 /// Loaded by Content.qml's terminal-state Loader via sourceComponent wrapper.
 Item {
     id: root
@@ -15,7 +15,6 @@ Item {
     required property bool injectionDowngraded
     required property string injectionPath
     required property bool injectionSubmitted
-    required property bool isAskMode
     required property real modeBtnX
     required property real modeBtnWidth
 
@@ -63,13 +62,8 @@ Item {
         }
 
         Component.onCompleted: {
-            if (root.isAskMode) {
-                x = root.modeBtnX + root.modeBtnWidth / 2 - width / 2;
-                scale = root.modeBtnWidth / width;
-            } else {
-                x = (parent.width - width) / 2;
-                scale = 0.4;
-            }
+            x = root.modeBtnX + root.modeBtnWidth / 2 - width / 2;
+            scale = root.modeBtnWidth / width;
             popAnim.start();
         }
 

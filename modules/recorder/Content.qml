@@ -50,7 +50,6 @@ Item {
 
     // ── STT-specific property aliases ──────────────────────────────
 
-    readonly property bool serviceIsAskMode: mode === "stt" && SttService.isAskMode
     readonly property string serviceDeliveryChoice: job?.activeDeliveryChoice ?? "clipboard"
     readonly property string serviceInjectionPath: job?.injectionPath ?? ""
     readonly property bool serviceInjectionDowngraded: job?.injectionDowngraded ?? false
@@ -129,7 +128,6 @@ Item {
             injectionDowngraded: root.serviceInjectionDowngraded
             injectionPath: root.serviceInjectionPath
             injectionSubmitted: root.serviceInjectionSubmitted
-            isAskMode: root.serviceIsAskMode
             modeBtnX: modeBtn.x
             modeBtnWidth: modeBtn.width
         }
@@ -266,7 +264,7 @@ Item {
                     IconButton {
                         id: modeBtn
 
-                        visible: root.mode === "stt" && root.serviceIsAskMode
+                        visible: root.mode === "stt"
                         icon: RecordingSessionManager.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
                         type: IconButton.Tonal
                         toggle: false

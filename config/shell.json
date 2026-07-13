@@ -480,7 +480,7 @@
     "mode": "batch",
     "autoHideDelay": 1500,
     "processingTimeout": 120000,
-    "deliveryMode": "ask",
+    "deliveryMode": "submit",
     "recording": {
       "format": "wav",
       "sampleRate": 16000,

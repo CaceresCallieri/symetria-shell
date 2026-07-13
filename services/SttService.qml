@@ -36,9 +36,6 @@ Singleton {
     /// The currently recording job (at most one), or null
     readonly property SttJob activeRecording: _activeRecording
 
-    /// Whether the delivery mode radio toggle should be shown (from config)
-    readonly property bool isAskMode: _deliveryMode === "ask"
-
     /// Streaming dictation toggle (runtime). Initialized from Config.stt.mode,
     /// flipped by toggleStreaming() (Super+Alt+D). When true, recordings use the
     /// streaming helper for live partials; when false, batch. Read by SttJob and
@@ -68,10 +65,6 @@ Singleton {
     // Toggle debouncing
     property real _lastToggleTime: 0
     readonly property int _toggleDebounceMs: 200
-
-    // Runtime delivery choice for "ask" mode.
-    // Persists across recordings within the same shell session.
-    property string _lastDeliveryChoice: "submit"
 
     // Temp directory readiness
     property bool _tempDirReady: false
@@ -128,10 +121,12 @@ Singleton {
         }
     }
 
-    // Delivery mode from config: "clipboard" (default), "inject", "submit", or "ask"
+    // Default delivery mode from config: "clipboard" (default), "inject", or
+    // "submit". Seeds each new job's _activeDeliveryChoice; mode keys override
+    // per-job only (one-shot).
     readonly property string _deliveryMode: {
         const mode = Config.stt?.deliveryMode ?? "clipboard";
-        if (mode === "inject" || mode === "submit" || mode === "ask") return mode;
+        if (mode === "inject" || mode === "submit") return mode;
         return "clipboard";
     }
 
@@ -373,21 +368,25 @@ Singleton {
         _job.retry();
     }
 
-    /// Switch the runtime delivery choice (only effective in "ask" mode).
+    /// Switch the current job's delivery choice (one-shot — the next job
+    /// re-seeds from Config.stt.deliveryMode). Targets _job rather than
+    /// _activeRecording so mode keys keep working during processing/
+    /// delivering/error: the choice is read at delivery time.
     /// This is the IPC entry point — emits actionTriggered for UI feedback.
     /// For direct UI interaction, use SttJob.setDeliveryChoice (no signal).
     function setDeliveryChoice(mode: string): void {
-        if (_deliveryMode !== "ask") {
-            console.debug("[STT] setDeliveryChoice() ignored: deliveryMode is", _deliveryMode, "(not ask)");
+        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
+        // No-job guard: the session-scoped Hyprland binds could be stale
+        // after a shell crash (cleared on next startup), so ignore quietly.
+        // Also ignore the parked closing job during the restart window —
+        // it is about to be destroyed and the new job re-seeds from config.
+        if (!_job || _job.closing) {
+            console.debug("[STT] setDeliveryChoice() ignored: no active job");
             return;
         }
-        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
-        if (_lastDeliveryChoice === mode) return;
-        _lastDeliveryChoice = mode;
-        if (_activeRecording) {
-            _activeRecording._activeDeliveryChoice = mode;
-            actionTriggered(_activeRecording.sessionId, "mode-" + mode);
-        }
+        if (_job._activeDeliveryChoice === mode) return;
+        _job._activeDeliveryChoice = mode;
+        actionTriggered(_job.sessionId, "mode-" + mode);
     }
 
     /// Add a per-session vocabulary hint (shown as chip in the widget).
@@ -410,6 +409,47 @@ Singleton {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Session-scoped Hyprland keybinds
+    // ─────────────────────────────────────────────────────────────────────────
+    // These Alt combos only make sense while an STT session exists, so they
+    // are registered dynamically (hyprctl keyword bind) when a job appears
+    // and removed when it goes away — outside a session the keys pass through
+    // to applications. Alt+V (pasteTranscription) stays a static global bind
+    // in the Hyprland config because it is useful when idle.
+    //
+    // The bind window is `active` (job exists), not just recording: the
+    // delivery choice is read at delivery time, so mode keys must work during
+    // processing, and restart/hints no-op harmlessly via their own guards.
+    // restart() never flips `active` false (_pendingOldJob keeps _job alive),
+    // so there is no unbind/rebind churn across the restart animation.
+
+    // [key, stt IPC function] pairs. Kept in sync with the comment block in
+    // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
+    readonly property var _sessionBinds: [
+        ["R", "restart"],
+        ["S", "mode clipboard"],
+        ["I", "mode inject"],
+        ["Return", "mode submit"],
+        ["W", "hints"]
+    ]
+
+    onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
+
+    function _registerSessionBinds(): void {
+        // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
+        // binds on the same combo (which would double-fire the IPC command),
+        // so a leftover bind from a crashed shell must be cleared first.
+        const cmds = _sessionBinds.map(b =>
+            `keyword unbind ALT,${b[0]} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
+        Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
+    }
+
+    function _unregisterSessionBinds(): void {
+        const cmds = _sessionBinds.map(b => `keyword unbind ALT,${b[0]}`);
+        Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Job lifecycle
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -418,7 +458,7 @@ Singleton {
     function _createJob(): SttJob {
         const job = jobComponent.createObject(root, {
             sessionId: Date.now().toString(),
-            _activeDeliveryChoice: _lastDeliveryChoice
+            _activeDeliveryChoice: _deliveryMode
         });
 
         job.finished.connect(() => _onJobFinished(job));
@@ -482,6 +522,9 @@ Singleton {
     // jobs only attempt to write into it after a final error, and those writes
     // also `mkdir -p` defensively, so a transient failure here is non-fatal.
     Component.onCompleted: {
+        // Clear session keybinds left registered by a crashed shell — no job
+        // exists at startup, so none of them should be bound.
+        root._unregisterSessionBinds();
         Quickshell.execDetached(["mkdir", "-p", root._recoveryDir]);
         Quickshell.execDetached(["mkdir", "-p", root._historyDir]);
         // Sweep retained successful recordings that have aged out since last run.
@@ -493,6 +536,7 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     Component.onDestruction: {
+        _unregisterSessionBinds();
         restartDelayTimer.stop();
         if (_pendingOldJob)
             _pendingOldJob._destroyCleanup();

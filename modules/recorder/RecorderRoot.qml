@@ -131,6 +131,11 @@ Scope {
         }
 
         function restart(): void {
+            // Guard before acquire: with no active session (e.g. a stale
+            // session-scoped Alt+R bind after a crash), acquire() would take
+            // the "stt" lock and nothing would ever release it — release only
+            // fires on SttService.active true→false.
+            if (!SttService.active) return;
             if (!RecordingSessionManager.acquire("stt")) return;
             SttService.restart();
         }

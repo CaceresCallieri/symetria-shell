@@ -161,7 +161,9 @@ QtObject {
     // path still has access to the hints at transcription time.
     property list<string> _snapshotVocabHints: []
 
-    // Runtime delivery choice for "ask" mode (inherited from service, locked on submit)
+    // Runtime per-session delivery choice, seeded from the config default
+    // (Config.stt.deliveryMode) at job creation. One-shot: mode keys override
+    // only this job; the next job re-seeds from config.
     property string _activeDeliveryChoice: "clipboard"
 
     // Injection result feedback
@@ -331,15 +333,13 @@ QtObject {
         _startTranscription(_currentAudioFile);
     }
 
-    /// Switch the delivery choice (only meaningful in "ask" mode during recording).
-    /// Direct-UI entry point — no actionTriggered signal emitted.
+    /// Switch this job's delivery choice (one-shot — does not persist to the
+    /// next job). Direct-UI entry point — no actionTriggered signal emitted.
     /// For IPC with UI feedback, use SttService.setDeliveryChoice instead.
     function setDeliveryChoice(mode: string): void {
-        if (SttService._deliveryMode !== "ask") return;
         if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
         if (_activeDeliveryChoice === mode) return;
         _activeDeliveryChoice = mode;
-        SttService._lastDeliveryChoice = mode;
     }
 
     // ── Internal methods ───────────────────────────────────────────────
@@ -422,8 +422,7 @@ QtObject {
         Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket
                    + " injectVia=" + _targetInjectVia + " idePid=" + _targetIdePid);
 
-        const effectiveMode = SttService._deliveryMode === "ask" ? _activeDeliveryChoice : SttService._deliveryMode;
-        if (effectiveMode !== "clipboard") {
+        if (_activeDeliveryChoice !== "clipboard") {
             AgentService.setSttTarget(_targetWindowPid, agent.buf ?? -1);
         }
     }
@@ -649,9 +648,7 @@ QtObject {
     function _startDeliveryChain(): void {
         _state = "delivering";
 
-        const effectiveMode = SttService._deliveryMode === "ask"
-            ? _activeDeliveryChoice
-            : SttService._deliveryMode;
+        const effectiveMode = _activeDeliveryChoice;
         Logger.log("qml", "stt", "delivery-start | id=" + sessionId + " mode=" + effectiveMode + " textLen=" + _transcribedText.length);
 
         if (effectiveMode === "clipboard") {
@@ -736,11 +733,8 @@ QtObject {
         }
         if (_targetWindowClass === "")
             console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
-        const effectiveMode = SttService._deliveryMode === "ask"
-            ? _activeDeliveryChoice
-            : SttService._deliveryMode;
         const cmd = [_injectScript, _targetWindowAddress, _targetWindowClass];
-        if (effectiveMode === "submit") cmd.push("submit");
+        if (_activeDeliveryChoice === "submit") cmd.push("submit");
         Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly + " forceSendshortcut=" + forceSendshortcut);
         // Effective socket/IDE-pid: blanked when forcing sendshortcut so
         // the script can't accidentally take a direct-injection path even
@@ -941,9 +935,11 @@ QtObject {
             _audioLevel = 0.0;
     }
 
-    // Toggle red border when user switches delivery choice in "ask" mode
+    // Toggle red border when the user switches the delivery choice mid-session.
+    // Does not fire at job creation: createObject initial-property values are
+    // set during construction without emitting change signals.
     on_ActiveDeliveryChoiceChanged: {
-        if (SttService._deliveryMode !== "ask" || _state === "idle") return;
+        if (_state === "idle") return;
         if (_activeDeliveryChoice === "clipboard") {
             AgentService.clearSttTarget();
         } else if (_targetWindowPid > 0 && _targetNvimActiveBuf >= 0) {
@@ -1327,8 +1323,7 @@ QtObject {
                             Toast.Warning
                         );
                     } else if ((result.path === "rpc" || result.path === "direct") && !result.submitted) {
-                        const userRequestedSubmit = SttService._deliveryMode === "submit" ||
-                            (SttService._deliveryMode === "ask" && job._activeDeliveryChoice === "submit");
+                        const userRequestedSubmit = job._activeDeliveryChoice === "submit";
                         if (userRequestedSubmit) {
                             Toaster.toast(
                                 qsTr("STT: Submit unconfirmed"),

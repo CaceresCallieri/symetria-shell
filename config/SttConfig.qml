@@ -27,7 +27,9 @@ JsonObject {
 
     property int autoHideDelay: 1500
     property int processingTimeout: 120000
-    // Valid values: "clipboard" | "inject" | "submit" | "ask"
+    // Default delivery mode, seeding each new recording. Mode keys during a
+    // session override it for that recording only (one-shot).
+    // Valid values: "clipboard" | "inject" | "submit"
     property string deliveryMode: "clipboard"
 
     // Prefix prepended to transcribed text when injecting into agent-backed

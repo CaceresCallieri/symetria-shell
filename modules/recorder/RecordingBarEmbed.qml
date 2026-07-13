@@ -44,9 +44,6 @@ Item {
         || displayState === "paused"
         || displayState === "processing"
 
-    // STT delivery mode
-    readonly property bool isAskMode: mode === "stt" && SttService.isAskMode
-
     // Live streaming partial transcript (STT streaming mode). "" otherwise.
     //
     // CONTRACT — the streaming partial preview has TWO surfaces: this bar embed
@@ -181,7 +178,8 @@ Item {
             font.pointSize: Appearance.font.size.small
         }
 
-        // STT mode: delivery mode icon (ask mode only). Raised Tonal
+        // STT mode: delivery mode icon, shown for every STT session (the
+        // choice is a one-shot override of the config default). Raised Tonal
         // IconButton matches the drawer's modeBtn so the same control reads
         // identically regardless of merge-mode surface.
         //
@@ -193,7 +191,7 @@ Item {
         IconButton {
             id: deliveryModeBtn
 
-            visible: root.isAskMode
+            visible: root.mode === "stt"
             icon: RecordingSessionManager.deliveryModeIcons[root.job?.activeDeliveryChoice ?? "clipboard"] ?? "content_copy"
             type: IconButton.Tonal
             toggle: false
