@@ -521,6 +521,54 @@ Singleton {
         }
     }
 
+    // Adopt recordings orphaned in the tmpfs working dir by a previous shell
+    // that died mid-session (crash, or SIGTERM during dictation).
+    // SttJob._destroyCleanup deliberately preserves the working WAV for
+    // non-terminal jobs; this sweep moves those files into the persistent
+    // recovery dir — before a reboot can discard the tmpfs copy — writes a
+    // minimal sidecar per session, and toasts so the user knows the audio
+    // is recoverable. Runs once at startup, before any new job can write
+    // into the temp dir.
+    Process {
+        id: orphanSweepProcess
+
+        command: ["sh", "-c",
+            'mkdir -p "$RECOVERY_DIR"\n' +
+            'count=0\n' +
+            'for f in "$TEMP_DIR"/session_*.wav; do\n' +
+            '    [ -e "$f" ] || continue\n' +
+            '    base=$(basename "$f")\n' +
+            // session id = digits between "session_" and the first "_" or "."
+            // (segment files are named session_<id>_seg<N>.wav)
+            '    sid=${base#session_}; sid=${sid%%[_.]*}\n' +
+            '    mv -n "$f" "$RECOVERY_DIR/$base"\n' +
+            '    sidecar="$RECOVERY_DIR/session_${sid}.json"\n' +
+            '    if [ ! -e "$sidecar" ]; then\n' +
+            '        printf \'{\\n  "sessionId": "%s",\\n  "recoveredAt": "%s",\\n  "reason": "orphaned recording adopted at shell startup",\\n  "audioFile": "%s"\\n}\\n\' "$sid" "$(date -Is)" "$base" > "$sidecar"\n' +
+            '    fi\n' +
+            '    count=$((count+1))\n' +
+            'done\n' +
+            'echo "$count"\n'
+        ]
+        environment: ({
+            TEMP_DIR: root._tempDir,
+            RECOVERY_DIR: root._recoveryDir
+        })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const count = parseInt(text.trim(), 10) || 0;
+                if (count === 0) return;
+                Logger.log("qml", "stt", "orphan-sweep | adopted=" + count);
+                Toaster.toast(
+                    qsTr("STT: Recovered interrupted recording"),
+                    qsTr("%1 audio file(s) from a previous session moved to %2").arg(count).arg(root._recoveryDir),
+                    "",
+                    Toast.Warning
+                );
+            }
+        }
+    }
+
     // Create the persistent recovery directory once at startup. Fire-and-forget:
     // jobs only attempt to write into it after a final error, and those writes
     // also `mkdir -p` defensively, so a transient failure here is non-fatal.
@@ -532,6 +580,8 @@ Singleton {
         Quickshell.execDetached(["mkdir", "-p", root._historyDir]);
         // Sweep retained successful recordings that have aged out since last run.
         root._pruneHistory();
+        // Rescue any recording the previous shell instance left behind.
+        orphanSweepProcess.running = true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

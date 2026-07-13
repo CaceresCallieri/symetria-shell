@@ -893,8 +893,18 @@ QtObject {
     /// Cleanup for Component.onDestruction (called by service shutdown)
     function _destroyCleanup(): void {
         _stopAllTimers();
-        if (sessionId !== "") _cleanupTempFiles();
-        if (recordProcess.running) recordProcess.signal(9);
+        // Shutdown teardown must PRESERVE the working audio for mid-session
+        // jobs: the tmpfs WAV is the only copy — the recovery net fires only
+        // on final transcription error and history only on success, so
+        // deleting here (as the cancel path rightly does) destroys the
+        // recording when the shell is SIGTERM'd mid-dictation. SttService's
+        // startup orphan sweep adopts preserved files into the recovery dir.
+        const terminalState = _state === "success" || _state === "error" || _state === "idle";
+        if (sessionId !== "" && terminalState) _cleanupTempFiles();
+        // SIGTERM (not SIGKILL) so pw-record finalizes the WAV header before
+        // exiting — matches the normal stop path; a SIGKILLed capture leaves
+        // the RIFF sizes unset and some decoders reject the file.
+        if (recordProcess.running) recordProcess.signal(15);
         if (levelMonitorProcess.running) levelMonitorProcess.running = false;
         if (streamProcess.running) streamProcess.signal(9);
         if (transcribeProcess.running) transcribeProcess.signal(9);
