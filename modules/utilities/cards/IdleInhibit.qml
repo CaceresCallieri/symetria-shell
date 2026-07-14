@@ -1,5 +1,4 @@
 import qs.components
-import qs.components.controls
 import qs.services
 import qs.config
 import QtQuick
@@ -18,58 +17,19 @@ PillCard {
     // when Keep Awake is toggled off, and we want that overflow hidden.
     clipContent: true
 
-    RowLayout {
+    UtilityCardHeader {
         id: layout
 
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.margins: Appearance.padding.large
-        spacing: Appearance.spacing.normal
 
-        PillSurface {
-            implicitWidth: implicitHeight
-            implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
-
-            // Brighten the body when Keep Awake is on, but keep the raised
-            // claymorphism depth in both states so the icon circle reads as
-            // part of the same pill family as the Quick Toggles below.
-            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, IdleInhibitor.enabled ? Colours.glass.veryStrong : Colours.glass.subtle).background
-
-            MaterialIcon {
-                id: icon
-
-                anchors.centerIn: parent
-                text: "coffee"
-                color: Colours.palette.m3onSurface
-                font.pointSize: Appearance.font.size.large
-            }
-        }
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 0
-
-            StyledText {
-                Layout.fillWidth: true
-                text: qsTr("Keep Awake")
-                font.pointSize: Appearance.font.size.normal
-                elide: Text.ElideRight
-            }
-
-            StyledText {
-                Layout.fillWidth: true
-                text: IdleInhibitor.enabled ? qsTr("Preventing sleep mode") : qsTr("Normal power management")
-                color: Colours.palette.m3onSurfaceVariant
-                font.pointSize: Appearance.font.size.small
-                elide: Text.ElideRight
-            }
-        }
-
-        StyledSwitch {
-            checked: IdleInhibitor.enabled
-            onToggled: IdleInhibitor.enabled = checked
-        }
+        icon: "coffee"
+        title: qsTr("Keep Awake")
+        subtitle: IdleInhibitor.enabled ? qsTr("Preventing sleep mode") : qsTr("Normal power management")
+        active: IdleInhibitor.enabled
+        onToggled: checked => IdleInhibitor.enabled = checked
     }
 
     Loader {

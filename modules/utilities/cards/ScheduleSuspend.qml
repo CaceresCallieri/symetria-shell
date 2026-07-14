@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import qs.components
-import qs.components.controls
 import qs.services
 import qs.config
 import QtQuick
@@ -22,52 +21,12 @@ PillCard {
         anchors.margins: Appearance.padding.large
         spacing: Appearance.spacing.normal
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Appearance.spacing.normal
-
-            PillSurface {
-                implicitWidth: implicitHeight
-                implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
-
-                // Same state-brightening recipe as the Keep Awake card so the
-                // two utility cards read as siblings.
-                color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, SuspendTimer.running ? Colours.glass.veryStrong : Colours.glass.subtle).background
-
-                MaterialIcon {
-                    id: icon
-
-                    anchors.centerIn: parent
-                    text: "bedtime"
-                    color: Colours.palette.m3onSurface
-                    font.pointSize: Appearance.font.size.large
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 0
-
-                StyledText {
-                    Layout.fillWidth: true
-                    text: qsTr("Schedule Suspend")
-                    font.pointSize: Appearance.font.size.normal
-                    elide: Text.ElideRight
-                }
-
-                StyledText {
-                    Layout.fillWidth: true
-                    text: SuspendTimer.running ? qsTr("Suspending at %1").arg(Qt.formatTime(SuspendTimer.deadline, Config.services.useTwelveHourClock ? "hh:mm a" : "hh:mm")) : qsTr("No suspend scheduled")
-                    color: Colours.palette.m3onSurfaceVariant
-                    font.pointSize: Appearance.font.size.small
-                    elide: Text.ElideRight
-                }
-            }
-
-            StyledSwitch {
-                checked: SuspendTimer.running
-                onToggled: checked ? SuspendTimer.start(0) : SuspendTimer.cancel()
-            }
+        UtilityCardHeader {
+            icon: "bedtime"
+            title: qsTr("Schedule Suspend")
+            subtitle: SuspendTimer.running ? qsTr("Suspending at %1").arg(Qt.formatTime(SuspendTimer.deadline, Config.services.useTwelveHourClock ? "hh:mm a" : "hh:mm")) : qsTr("No suspend scheduled")
+            active: SuspendTimer.running
+            onToggled: checked => checked ? SuspendTimer.start(0) : SuspendTimer.cancel()
         }
 
         // Swap area: duration presets when idle, live countdown when armed.
