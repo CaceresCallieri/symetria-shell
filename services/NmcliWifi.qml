@@ -353,7 +353,11 @@ Singleton {
         deleteProfilesForSsid(ssid, () => {
             const cmd = [NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid, NmcliCore.connectionParamPassword, password];
             NmcliCore.executeCommand(cmd, result => {
-                loadSavedConnections(() => {});
+                // Refresh the saved-profile cache only when a profile was actually
+                // created/activated; on failure nothing changed (and the dialog's
+                // forgetNetwork already refreshes the cache on its own).
+                if (result.success)
+                    loadSavedConnections(() => {});
                 handleConnectResult(ssid, password, bssid, callback, retries, result);
             });
         });
@@ -368,12 +372,23 @@ Singleton {
         const maxRetries = 2;
 
         if (result.needsPassword && callback) {
+            // NOTE: on a rejected/missing secret this may run after
+            // handlePasswordRequired already delivered the same needsPassword result
+            // to the dialog callback, so the callback can fire twice. Both firings
+            // are synchronous and the dialog handler is idempotent (its only side
+            // effect, forgetNetwork, no-ops on the second call), so this is left as a
+            // benign redundancy — deduping it reliably is not possible here because
+            // both the duplicate and the sole legitimate path present with
+            // pendingConnection already nulled.
             callback(result);
             return;
         }
 
         if (!result.success && root.pendingConnection && retries < maxRetries) {
             console.warn("[NMCLI] Connection failed, retrying... (attempt " + (retries + 1) + "/" + maxRetries + ")");
+            // Retry on the next event-loop tick. There is no back-off: Qt.callLater
+            // cannot delay — a second argument is passed to the callback, NOT treated
+            // as a timeout — so do not add `, 1000` expecting a delay. Bounded by maxRetries.
             Qt.callLater(() => {
                 connectWireless(ssid, password, bssid, callback, retries + 1);
             });
@@ -422,7 +437,9 @@ Singleton {
                 callback();
             return;
         }
-        NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "delete", "uuid", uuids[index]], () => {
+        NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "delete", "uuid", uuids[index]], result => {
+            if (!result.success)
+                console.warn("[NMCLI] Failed to delete profile uuid " + uuids[index] + ": " + (result.error || ""));
             deleteUuidsSequentially(uuids, index + 1, callback);
         });
     }
