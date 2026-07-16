@@ -303,14 +303,13 @@ Singleton {
     }
 
     function connectWireless(ssid: string, password: string, bssid: string, callback: var, retryCount: int): void {
-        const hasBssid = bssid !== undefined && bssid !== null && bssid.length > 0;
         const retries = retryCount !== undefined ? retryCount : 0;
-        const maxRetries = 2;
 
         if (callback) {
+            // bssid is intentionally NOT stored/pinned — profiles roam by SSID.
             root.pendingConnection = {
                 ssid: ssid,
-                bssid: hasBssid ? bssid : "",
+                bssid: "",
                 callback: callback,
                 retryCount: retries
             };
@@ -319,93 +318,112 @@ Singleton {
             immediateCheckTimer.start();
         }
 
-        if (password && password.length > 0 && hasBssid) {
-            createConnectionWithPassword(ssid, password, callback);
+        if (password && password.length > 0) {
+            // Secured network: route through the robust secret-injection path so the
+            // typed password is guaranteed to reach NetworkManager. BSSID and
+            // non-BSSID networks now share one atomic path — the old BSSID special
+            // case (delete + `connection add` + `connection up`) silently dropped the
+            // password and has been removed. See connectWithSecret.
+            connectWithSecret(ssid, password, bssid, callback, retries);
             return;
         }
 
-        let cmd = [NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid];
-        if (password && password.length > 0) {
-            cmd.push(NmcliCore.connectionParamPassword, password);
-        }
-        NmcliCore.executeCommand(cmd, result => {
-            if (result.needsPassword && callback) {
-                callback(result);
-                return;
-            }
-
-            if (!result.success && root.pendingConnection && retries < maxRetries) {
-                console.warn("[NMCLI] Connection failed, retrying... (attempt " + (retries + 1) + "/" + maxRetries + ")");
-                Qt.callLater(() => {
-                    connectWireless(ssid, password, bssid, callback, retries + 1);
-                }, 1000);
-            } else if (!result.success && root.pendingConnection) {
-                // Pending connection timers (connectionCheckTimer/immediateCheckTimer) handle
-                // the failure — no explicit callback here, they will call it on timeout.
-            } else if (result.success && callback) {
-                // Success is also handled by the pending connection timers which detect
-                // the active network change and call the callback with success: true.
-            } else if (!result.success && !root.pendingConnection) {
-                if (callback)
-                    callback(result);
-            }
+        // Open network, or the empty-password probe that tries an existing stored
+        // secret (and surfaces needsPassword when none exists / it is rejected).
+        NmcliCore.executeCommand([NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid], result => {
+            handleConnectResult(ssid, password, bssid, callback, retries, result);
         });
     }
 
-    function createConnectionWithPassword(ssid: string, password: string, callback: var): void {
-        checkAndDeleteConnection(ssid, () => {
-            // NOTE: We intentionally do NOT pin 802-11-wireless.bssid here. Pinning
-            // locks the profile to one AP's MAC, so it silently stops matching when
-            // the router reboots with a new BSSID, on mesh/band-steering networks, or
-            // when revisiting a venue — leaving an unconnectable saved profile. nmtui
-            // and nm-applet create roaming (SSID-only) profiles for the same reason.
-            // The BSSID pin was inherited from the upstream Caelestia config, not a
-            // deliberate Symmetria design choice.
-            const cmd = [NmcliCore.nmcliCommandConnection, "add", NmcliCore.connectionParamType, NmcliCore.deviceTypeWifi, NmcliCore.connectionParamConName, ssid, NmcliCore.connectionParamIfname, "*", NmcliCore.connectionParamSsid, ssid, NmcliCore.securityKeyMgmt, NmcliCore.keyMgmtWpaPsk, NmcliCore.securityPsk, password];
-
+    // Robustly (re)connect to a secured SSID. Deletes every stale profile that
+    // shares the SSID's name — addressed by UUID so duplicate same-named profiles
+    // are removed deterministically — then runs the atomic
+    // `nmcli device wifi connect <ssid> password <pw>`, which creates one clean
+    // profile carrying the psk and activates it in a single operation.
+    //
+    // REGRESSION GUARD: do NOT reintroduce a delete-then-`connection add`-then-
+    // `connection up` sequence. That path (removed 2026-07-15) raced NM's
+    // auto-activation and, on a duplicate-name warning, fell back to
+    // `connection up <name>`, which brought up the OLD psk-less profile. NM then
+    // failed instantly with `no-secrets` ("No agents were available") — Symmetria
+    // registers no NM secret agent — so the typed password never reached NM and the
+    // dialog hung on "Connecting…". Keep the psk in the SAME command that activates
+    // the connection. See docs / project_wifi_no_secret_agent memory.
+    function connectWithSecret(ssid: string, password: string, bssid: string, callback: var, retries: int): void {
+        deleteProfilesForSsid(ssid, () => {
+            const cmd = [NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid, NmcliCore.connectionParamPassword, password];
             NmcliCore.executeCommand(cmd, result => {
-                if (result.success) {
-                    loadSavedConnections(() => {});
-                    activateConnection(ssid, callback);
-                } else {
-                    const hasDuplicateWarning = result.error && (result.error.includes("another connection with the name") || result.error.includes("Reference the connection by its uuid"));
-
-                    if (hasDuplicateWarning || (result.exitCode > 0 && result.exitCode < 10)) {
-                        loadSavedConnections(() => {});
-                        activateConnection(ssid, callback);
-                    } else {
-                        console.warn("[NMCLI] Connection profile creation failed, trying fallback...");
-                        let fallbackCmd = [NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid, NmcliCore.connectionParamPassword, password];
-                        NmcliCore.executeCommand(fallbackCmd, fallbackResult => {
-                            if (callback)
-                                callback(fallbackResult);
-                        });
-                    }
-                }
+                loadSavedConnections(() => {});
+                handleConnectResult(ssid, password, bssid, callback, retries, result);
             });
         });
     }
 
-    function checkAndDeleteConnection(ssid: string, callback: var): void {
-        NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "show", ssid], result => {
-            if (result.success) {
-                NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "delete", ssid], deleteResult => {
-                    Qt.callLater(() => {
-                        if (callback)
-                            callback();
-                    }, 300);
-                });
-            } else {
-                if (callback)
-                    callback();
+    // Shared result handling for both the open/probe and secured connect paths.
+    // Success and slow-association outcomes are driven by the pendingConnection
+    // timers (they watch active.ssid); this only forwards an immediate
+    // needs-password result and the no-pending-connection failure case, plus
+    // schedules bounded retries.
+    function handleConnectResult(ssid: string, password: string, bssid: string, callback: var, retries: int, result: var): void {
+        const maxRetries = 2;
+
+        if (result.needsPassword && callback) {
+            callback(result);
+            return;
+        }
+
+        if (!result.success && root.pendingConnection && retries < maxRetries) {
+            console.warn("[NMCLI] Connection failed, retrying... (attempt " + (retries + 1) + "/" + maxRetries + ")");
+            Qt.callLater(() => {
+                connectWireless(ssid, password, bssid, callback, retries + 1);
+            });
+        } else if (!result.success && root.pendingConnection) {
+            // Pending connection timers (connectionCheckTimer/immediateCheckTimer) handle
+            // the failure — no explicit callback here, they will call it on timeout.
+        } else if (result.success && callback) {
+            // Success is also handled by the pending connection timers which detect
+            // the active network change and call the callback with success: true.
+        } else if (!result.success && !root.pendingConnection) {
+            if (callback)
+                callback(result);
+        }
+    }
+
+    // Delete every saved profile whose NAME equals the SSID, addressed by UUID so
+    // duplicate same-named profiles (a legacy of the old racy connect path) are
+    // removed deterministically — deleting by name is ambiguous once duplicates
+    // exist. Chains on real delete completion rather than a fixed delay, then
+    // invokes callback once all matching profiles are gone.
+    function deleteProfilesForSsid(ssid: string, callback: var): void {
+        NmcliCore.executeCommand(["-t", "-f", "UUID,NAME", NmcliCore.nmcliCommandConnection, "show"], result => {
+            const uuids = [];
+            if (result.success && result.output) {
+                const target = ssid.trim().toLowerCase();
+                const lines = result.output.trim().split("\n");
+                for (const line of lines) {
+                    // -t terse output escapes ':' inside values as '\:'. The UUID field
+                    // never contains ':', so the first unescaped ':' splits UUID | NAME.
+                    const idx = line.indexOf(":");
+                    if (idx < 0)
+                        continue;
+                    const uuid = line.substring(0, idx);
+                    const name = line.substring(idx + 1).replace(/\\:/g, ":");
+                    if (name.trim().toLowerCase() === target)
+                        uuids.push(uuid);
+                }
             }
+            deleteUuidsSequentially(uuids, 0, callback);
         });
     }
 
-    function activateConnection(connectionName: string, callback: var): void {
-        NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "up", connectionName], result => {
+    function deleteUuidsSequentially(uuids: var, index: int, callback: var): void {
+        if (index >= uuids.length) {
             if (callback)
-                callback(result);
+                callback();
+            return;
+        }
+        NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "delete", "uuid", uuids[index]], () => {
+            deleteUuidsSequentially(uuids, index + 1, callback);
         });
     }
 
