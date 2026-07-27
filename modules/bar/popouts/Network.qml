@@ -133,7 +133,11 @@ PillCardSection {
                                         root.passwordNetwork = network;
                                         root.showPasswordDialog = true;
                                         root.wrapper.currentName = "wirelesspassword";
-                                    }
+                                    },
+                                    // Clears the row spinner on EVERY terminal outcome.
+                                    // This is the only thing that clears it — see the
+                                    // regression guard on the Connections block below.
+                                    () => root.connectingToSsid = ""
                                 );
                             }
                         }
@@ -331,24 +335,16 @@ PillCardSection {
     Connections {
         target: NmcliWifi
 
-        function onActiveChanged(): void {
-            if (NmcliWifi.active && root.connectingToSsid === NmcliWifi.active.ssid) {
-                root.connectingToSsid = "";
-                // Close password dialog if we successfully connected
-                if (root.showPasswordDialog && root.passwordNetwork && NmcliWifi.active.ssid === root.passwordNetwork.ssid) {
-                    root.showPasswordDialog = false;
-                    root.passwordNetwork = null;
-                    if (root.wrapper.currentName === "wirelesspassword") {
-                        root.wrapper.currentName = "network";
-                    }
-                }
-            }
-        }
+        // REGRESSION GUARD: do NOT add an onActiveChanged handler that clears the
+        // spinner or closes the password dialog by comparing NmcliWifi.active.ssid
+        // against the target. `active` is the first active AP across ALL wireless
+        // devices, so it can match an unrelated radio's network, and it raced the
+        // callback-driven close in WirelessPassword.closeDialog(). The connect
+        // result callback passed to handleConnect above is the authoritative
+        // signal. See docs/wifi-connect-flow.md.
 
-        // Clear the row-level spinner when the in-flight connection fails (wrong
-        // password, timeout, etc.). Without this the row stays "loading" and
-        // unclickable forever — the only previous clear path was a successful
-        // active-network match.
+        // Belt-and-braces clear for connections started somewhere other than this
+        // popout's own click handler (which clears via its onResult callback).
         function onConnectionFailed(ssid: string): void {
             if (root.connectingToSsid === ssid) {
                 root.connectingToSsid = "";

@@ -88,6 +88,7 @@ Singleton {
             } else if (result && result.needsPassword) {
                 // Password needed - callback will handle showing dialog
                 if (callback) callback(result);
+                root.pendingConnection = null;
             } else {
                 // Connection failed
                 if (result && result.error) {
@@ -112,6 +113,7 @@ Singleton {
             } else if (result && result.needsPassword) {
                 // Password needed - callback will handle showing dialog
                 if (callback) callback(result);
+                root.pendingConnection = null;
             } else {
                 // Connection failed
                 if (result && result.error) {

@@ -29,16 +29,22 @@ QtObject {
     id: root
 
     /**
-     * Handle network connection with automatic disconnection if needed.
-     * If there's an active network different from the target, disconnects first,
-     * then connects to the target network.
-     * 
+     * Connect to a network. Does NOT disconnect the active connection first —
+     * see the regression guard below.
+     *
      * @param network The network object to connect to (must have ssid property)
      * @param session Optional Session object (for controlcenter - must have network property with showPasswordDialog and pendingNetwork)
      * @param onPasswordNeeded Optional callback function(network) called when password is needed (for bar popouts)
+     * @param onResult Optional callback function(result) invoked on every terminal
+     *        outcome — success, failure, or needsPassword. Callers that show a
+     *        pending state (row spinners, buttons) MUST pass this; it is the only
+     *        signal that the attempt finished.
      */
-    function handleConnect(network: var, session: var, onPasswordNeeded: var): void {
+    function handleConnect(network: var, session: var, onPasswordNeeded: var, onResult: var): void {
         if (!network) {
+            console.warn("[NetworkConnection] handleConnect called with no network");
+            if (onResult)
+                onResult(root.noNetworkResult());
             return;
         }
 
@@ -52,7 +58,22 @@ QtObject {
         // 2026-07-27: tapping one network dropped the live connection and sent NM
         // chasing a completely different SSID. It was also sequenced with
         // Qt.callLater, which does not wait for the disconnect to finish.
-        root.connectToNetwork(network, session, onPasswordNeeded);
+        root.connectToNetwork(network, session, onPasswordNeeded, onResult);
+    }
+
+    // Shared terminal result for the "caller gave us nothing to connect to"
+    // guards. Every early return MUST deliver one of these: a guard that returns
+    // silently leaves the caller's pending UI (button disabled, row spinning)
+    // with nothing that can ever clear it — the exact permanent-"Connecting…"
+    // failure this whole flow was rewritten to eliminate.
+    function noNetworkResult(): var {
+        return {
+            success: false,
+            needsPassword: false,
+            output: "",
+            error: "No network specified",
+            exitCode: -1
+        };
     }
 
     /**
@@ -63,22 +84,25 @@ QtObject {
      * @param network The network object to connect to (must have ssid, isSecure, bssid properties)
      * @param session Optional Session object (for controlcenter - must have network property with showPasswordDialog and pendingNetwork)
      * @param onPasswordNeeded Optional callback function(network) called when password is needed (for bar popouts)
+     * @param onResult Optional callback function(result) invoked on every terminal outcome
      */
-    function connectToNetwork(network: var, session: var, onPasswordNeeded: var): void {
+    function connectToNetwork(network: var, session: var, onPasswordNeeded: var, onResult: var): void {
         if (!network) {
+            console.warn("[NetworkConnection] connectToNetwork called with no network");
+            if (onResult)
+                onResult(root.noNetworkResult());
             return;
         }
 
         if (!network.isSecure) {
-            NmcliWifi.connectToNetwork(network.ssid, "", network.bssid, null);
+            NmcliWifi.connectToNetwork(network.ssid, "", network.bssid, onResult || null);
             return;
         }
 
-        // Secured network: attempt with the stored secret first (an empty password
-        // reuses any saved profile's PSK), and prompt ONLY if nmcli reports the
-        // secret is missing/rejected. This single path covers three cases: no saved
-        // profile, a saved profile with a good secret (connects silently), and a
-        // saved profile whose secret is stale/wrong (re-prompts).
+        // Secured network: connectToNetworkWithPasswordCheck activates the saved
+        // profile when one exists, and returns needsPassword immediately when none
+        // does — it does NOT probe with an empty password first. See
+        // docs/wifi-connect-flow.md ("No empty-password probe").
         //
         // REGRESSION GUARD: do NOT reintroduce a `hasSavedProfile()` fast path that
         // calls connectToNetwork(..., null). Symmetria registers no NetworkManager
@@ -92,15 +116,10 @@ QtObject {
             network.isSecure,
             (result) => {
                 if (result.needsPassword) {
-                    // Nothing to tear down here: NmcliWifi settles its own in-flight
-                    // state before invoking this callback.
-                    //
-                    // REGRESSION GUARD: this block used to poke
-                    // NmcliWifi.connectionCheckTimer / .immediateCheckTimer. Those
-                    // were `Timer { id: ... }` declarations INSIDE the singleton,
-                    // not exposed properties — QML ids are file-scoped, so from
-                    // here they were `undefined` and the calls would have thrown.
-                    // Reach into another component only through declared properties.
+                    // REGRESSION GUARD: reach into another component only through
+                    // declared properties. The removed code called Timer ids inside
+                    // the NmcliWifi singleton; QML ids are file-scoped, so they were
+                    // always undefined here.
 
                     // Handle password dialog - use session if available, otherwise use callback
                     if (session && session.network) {
@@ -110,6 +129,8 @@ QtObject {
                         onPasswordNeeded(network);
                     }
                 }
+                if (onResult)
+                    onResult(result);
             },
             network.bssid
         );
@@ -125,6 +146,9 @@ QtObject {
      */
     function connectWithPassword(network: var, password: string, onResult: var): void {
         if (!network) {
+            console.warn("[NetworkConnection] connectWithPassword called with no network");
+            if (onResult)
+                onResult(root.noNetworkResult());
             return;
         }
 

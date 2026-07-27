@@ -16,18 +16,15 @@ ColumnLayout {
     property var network: null
     property bool isClosing: false
 
-    readonly property bool shouldBeVisible: root.wrapper.currentName === "wirelesspassword"
+    // Fences stale connect callbacks. An attempt can outlive the dialog state it
+    // was started from: cancel mid-connect, reopen for another network, and the
+    // first attempt's callback still arrives. Without this it would wipe the newly
+    // typed password, show an error for the wrong SSID, or close a dialog the user
+    // just reopened. Bumped on every close and every reopen; a callback whose
+    // captured token no longer matches is discarded.
+    property int attemptToken: 0
 
-    Connections {
-        target: root.wrapper
-        function onCurrentNameChanged(): void {
-            if (root.wrapper.currentName === "wirelesspassword") {
-                // Force focus to password container when popout becomes active.
-                // Network is set by Content.qml's reactive binding.
-                focusTimer.start();
-            }
-        }
-    }
+    readonly property bool shouldBeVisible: root.wrapper.currentName === "wirelesspassword"
 
     Timer {
         id: focusTimer
@@ -60,13 +57,9 @@ ColumnLayout {
             // without going through closeDialog (e.g. popout navigated away
             // externally while connecting). Without this the next open can
             // appear stuck in "Connecting…" with a disabled Connect button.
+            root.attemptToken++;
             connectButton.hasError = false;
             connectButton.connecting = false;
-            // Restore the declarative binding severed by the imperative `enabled = false`
-            // at connection start. Without this, the Connect button stays permanently
-            // disabled even after `connecting` is reset above.
-            connectButton.enabled = Qt.binding(() => passwordField.password.length > 0 && !connectButton.connecting);
-            connectButton.text = qsTr("Connect");
             focusTimer.start();
         }
     }
@@ -138,7 +131,6 @@ ColumnLayout {
             }
 
             StyledText {
-                id: networkNameText
                 Layout.alignment: Qt.AlignHCenter
                 text: {
                     if (root.network) {
@@ -154,8 +146,6 @@ ColumnLayout {
             }
 
             StyledText {
-                id: statusText
-
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Appearance.spacing.small
                 visible: connectButton.connecting || connectButton.hasError
@@ -192,8 +182,6 @@ ColumnLayout {
                 spacing: Appearance.spacing.normal
 
                 TextButton {
-                    id: cancelButton
-
                     Layout.fillWidth: true
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
                     inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
@@ -213,7 +201,12 @@ ColumnLayout {
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
                     inactiveColour: Colours.palette.m3primary
                     inactiveOnColour: Colours.palette.m3onPrimary
-                    text: qsTr("Connect")
+                    // Both stay declarative. REGRESSION GUARD: do NOT assign
+                    // `enabled` or `text` imperatively — an imperative write severs
+                    // the binding permanently, which is what previously left Connect
+                    // clickable with an empty password after a failed attempt.
+                    // `connecting` alone drives both.
+                    text: connecting ? qsTr("Connecting...") : qsTr("Connect")
                     enabled: passwordField.password.length > 0 && !connecting
 
                     onClicked: {
@@ -228,13 +221,15 @@ ColumnLayout {
 
                         hasError = false;
                         connecting = true;
-                        enabled = false;
-                        text = qsTr("Connecting...");
+                        const token = root.attemptToken;
 
                         // The callback is authoritative and always fires exactly
                         // once — NmcliWifi derives it from nmcli's exit code, not
                         // from polling. Every terminal state is handled right here.
                         NetworkConnection.connectWithPassword(root.network, password, result => {
+                            if (token !== root.attemptToken)
+                                return;
+
                             if (result && result.success) {
                                 root.closeDialog();
                                 return;
@@ -242,8 +237,6 @@ ColumnLayout {
 
                             connecting = false;
                             hasError = true;
-                            enabled = true;
-                            text = qsTr("Connect");
                             passwordField.password = "";
 
                             // REGRESSION GUARD: do NOT call forgetNetwork() here.
@@ -275,10 +268,10 @@ ColumnLayout {
         }
 
         isClosing = true;
+        root.attemptToken++;
         passwordField.password = "";
         connectButton.connecting = false;
         connectButton.hasError = false;
-        connectButton.text = qsTr("Connect");
 
         // Return to network popout
         if (root.wrapper.currentName === "wirelesspassword") {

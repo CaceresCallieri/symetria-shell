@@ -27,11 +27,6 @@ Singleton {
     property var wifiConnectionQueue: []
     property int currentSsidQueryIndex: 0
 
-    /// SSID of the connect attempt currently in flight, or "" when idle. This is
-    /// a UI hint only — never a success/failure signal. The authoritative outcome
-    /// is the callback handed to connectToNetwork/connectToNetworkWithPasswordCheck.
-    property string connectingSsid: ""
-
     signal connectionFailed(string ssid)
 
     /// How long to let NetworkManager work before nmcli gives up. Association +
@@ -304,7 +299,14 @@ Singleton {
                 return;
             }
 
-            root.connectingSsid = ssid;
+            if (uuids.length > 1) {
+                // Duplicate same-named profiles are a known legacy artefact. We
+                // activate the first, which may be the stale one — surface it so a
+                // "wrong password" report on a network with a good saved profile is
+                // diagnosable rather than mysterious.
+                console.warn("[NMCLI] " + uuids.length + " saved profiles named '" + ssid + "'; activating " + uuids[0]);
+            }
+
             NmcliCore.executeCommand(["--wait", String(root.connectTimeoutSeconds), NmcliCore.nmcliCommandConnection, "up", "uuid", uuids[0]], result => {
                 deliverConnectResult(ssid, callback, result);
             });
@@ -324,7 +326,6 @@ Singleton {
             return;
         }
 
-        root.connectingSsid = ssid;
         NmcliCore.executeCommand(["--wait", String(root.connectTimeoutSeconds), NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid], result => {
             deliverConnectResult(ssid, callback, result);
         });
@@ -340,38 +341,33 @@ Singleton {
     // profile on a duplicate-name warning, and NetworkManager failed instantly
     // with no-secrets because Symmetria registers no NM secret agent.
     function connectWithSecret(ssid: string, password: string, callback: var): void {
-        root.connectingSsid = ssid;
-        findProfileUuidsForSsid(ssid, uuids => {
-            deleteUuidsSequentially(uuids, 0, () => {
-                const cmd = [
-                    "--wait", String(root.connectTimeoutSeconds),
-                    NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid,
-                    NmcliCore.connectionParamPassword, password
-                ];
-                NmcliCore.executeCommand(cmd, result => {
-                    if (!result.success && result.needsPassword) {
-                        // The password was rejected, so the profile this very
-                        // command just created carries a known-bad psk AND
-                        // autoconnect=yes — NetworkManager would keep retrying it
-                        // on its own. Remove it before reporting the failure.
-                        //
-                        // This is NOT the indiscriminate forgetNetwork-on-failure
-                        // that used to destroy working connections. The difference
-                        // is what authorises the delete: that code deleted on a
-                        // timeout it INFERRED by polling, and was wrong whenever
-                        // the connection had actually succeeded. This deletes only
-                        // when nmcli itself returned non-zero with a secrets error,
-                        // which means NetworkManager definitively did not connect.
-                        // Keep that distinction if you ever revisit this.
-                        findProfileUuidsForSsid(ssid, uuids => {
-                            deleteUuidsSequentially(uuids, 0, () => {
-                                deliverConnectResult(ssid, callback, result);
-                            });
-                        });
-                        return;
-                    }
-                    deliverConnectResult(ssid, callback, result);
-                });
+        deleteProfilesForSsid(ssid, () => {
+            const cmd = [
+                "--wait", String(root.connectTimeoutSeconds),
+                NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid,
+                NmcliCore.connectionParamPassword, password
+            ];
+            NmcliCore.executeCommand(cmd, result => {
+                if (!result.success && result.needsPassword) {
+                    // The password was rejected, so the profile this very command
+                    // just created carries a known-bad psk AND autoconnect=yes —
+                    // NetworkManager would keep retrying it on its own. Remove it
+                    // before reporting the failure.
+                    //
+                    // This is NOT the indiscriminate forgetNetwork-on-failure that
+                    // used to destroy working connections. The difference is what
+                    // authorises the delete: that code deleted on a timeout it
+                    // INFERRED by polling, and was wrong whenever the connection had
+                    // actually succeeded. This deletes only when nmcli itself
+                    // returned non-zero with a secrets error, which means
+                    // NetworkManager definitively did not connect. Keep that
+                    // distinction if you ever revisit this.
+                    deleteProfilesForSsid(ssid, () => {
+                        deliverConnectResult(ssid, callback, result);
+                    });
+                    return;
+                }
+                deliverConnectResult(ssid, callback, result);
             });
         });
     }
@@ -385,15 +381,16 @@ Singleton {
     // start of the NEXT attempt (connectWithSecret), where doing so is safe
     // because nothing is in flight.
     function deliverConnectResult(ssid: string, callback: var, result: var): void {
-        root.connectingSsid = "";
-
         if (result.success) {
             // Refresh the network list and saved-profile cache so the UI reflects
             // the new active network. `nmcli monitor` also triggers this, but not
             // deterministically enough for a callback consumer to rely on.
             getNetworks(() => {});
             loadSavedConnections(() => {});
-        } else {
+        } else if (!result.needsPassword) {
+            // Only a genuine failure. "No stored secret, ask the user" is a normal
+            // step of a first-time connect, not something consumers should surface
+            // as an error.
             root.connectionFailed(ssid);
         }
 
@@ -434,6 +431,14 @@ Singleton {
         });
     }
 
+    // Remove every saved profile named after this SSID, then continue. Pairs the
+    // live UUID lookup with the sequential delete — the two are never useful apart.
+    function deleteProfilesForSsid(ssid: string, callback: var): void {
+        findProfileUuidsForSsid(ssid, uuids => {
+            deleteUuidsSequentially(uuids, 0, callback);
+        });
+    }
+
     function deleteUuidsSequentially(uuids: var, index: int, callback: var): void {
         if (index >= uuids.length) {
             if (callback)
@@ -470,21 +475,19 @@ Singleton {
     /// across ALL wireless devices. On 2026-07-27, with two radios connected,
     /// asking to disconnect one network took down the OTHER one.
     function disconnectFromNetwork(ssid: string): void {
-        const target = (ssid && ssid.length > 0) ? ssid : (active && active.ssid ? active.ssid : "");
-
-        if (target.length > 0) {
-            NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "down", target], result => {
-                if (result.success) {
-                    getNetworks(() => {});
-                }
-            });
-        } else {
-            NmcliCore.executeCommand([NmcliCore.nmcliCommandDevice, "disconnect", NmcliCore.deviceTypeWifi], result => {
-                if (result.success) {
-                    getNetworks(() => {});
-                }
-            });
+        if (!ssid || ssid.length === 0) {
+            // Refuse rather than guess. Falling back to `active` here is exactly the
+            // hazard the guard above describes, and every caller already knows which
+            // network the user acted on.
+            console.warn("[NMCLI] disconnectFromNetwork called with no SSID — ignoring");
+            return;
         }
+
+        NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "down", ssid], result => {
+            if (result.success) {
+                getNetworks(() => {});
+            }
+        });
     }
 
     // --- Saved connections ---
@@ -613,9 +616,11 @@ Singleton {
 
         NmcliCore.executeCommand([NmcliCore.nmcliCommandConnection, "delete", connectionName], result => {
             if (result.success) {
-                Qt.callLater(() => {
-                    loadSavedConnections(() => {});
-                }, 500);
+                // No delay needed — `connection delete` has already returned, so
+                // the profile is gone by the time we re-read the list. (This used
+                // to read `Qt.callLater(fn, 500)`, which does NOT delay: trailing
+                // arguments are passed TO fn. The intended wait never happened.)
+                loadSavedConnections(() => {});
             }
             if (callback)
                 callback(result);
@@ -688,15 +693,25 @@ Singleton {
         getNetworks(() => {});
         loadSavedConnections(() => {});
 
-        Qt.callLater(() => {
-            if (root.wirelessInterfaces.length > 0) {
-                const activeWireless = root.wirelessInterfaces.find(iface => {
-                    return NmcliCore.isConnectedState(iface.state);
-                });
-                if (activeWireless && activeWireless.device) {
-                    getWirelessDeviceDetails(activeWireless.device, () => {});
-                }
-            }
-        }, 2000);
+        // A real Timer, because the wait is real intent: the interface list is
+        // populated asynchronously above and device details are useless before it
+        // lands. REGRESSION GUARD: do NOT collapse this back to
+        // `Qt.callLater(fn, 2000)` — Qt.callLater cannot delay; its trailing
+        // arguments are passed TO fn, so that form ran immediately against an
+        // empty wirelessInterfaces list and silently fetched nothing.
+        deviceDetailsBootstrapTimer.start();
+    }
+
+    Timer {
+        id: deviceDetailsBootstrapTimer
+
+        interval: 2000
+        onTriggered: {
+            if (root.wirelessInterfaces.length === 0)
+                return;
+            const activeWireless = root.wirelessInterfaces.find(iface => NmcliCore.isConnectedState(iface.state));
+            if (activeWireless && activeWireless.device)
+                root.getWirelessDeviceDetails(activeWireless.device, () => {});
+        }
     }
 }

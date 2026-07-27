@@ -30,6 +30,14 @@ Item {
     }
 
     property bool isClosing: false
+
+    // Fences stale connect callbacks. An attempt can outlive the dialog state it
+    // was started from: cancel mid-connect, reopen for another network, and the
+    // first attempt's callback still arrives. Without this it would wipe the newly
+    // typed password, show an error for the wrong SSID, or close a dialog the user
+    // just reopened. Bumped on every close and every reopen; a callback whose
+    // captured token no longer matches is discarded.
+    property int attemptToken: 0
     visible: session.network.showPasswordDialog || isClosing
     enabled: session.network.showPasswordDialog && !isClosing
     focus: enabled
@@ -189,6 +197,13 @@ Item {
                     target: root.session.network
                     function onShowPasswordDialogChanged(): void {
                         if (root.session.network.showPasswordDialog) {
+                            // Cancel any close animation still in flight. Without
+                            // this, reopening while isClosing is true lets the
+                            // running ParallelAnimation's onFinished set
+                            // showPasswordDialog = false, slamming shut the dialog
+                            // the user just reopened.
+                            root.isClosing = false;
+                            root.attemptToken++;
                             Qt.callLater(() => {
                                 passwordContainer.forceActiveFocus();
                                 passwordContainer.passwordBuffer = "";
@@ -197,11 +212,6 @@ Item {
                                 // didn't go through closeDialog (e.g. dismissed
                                 // externally while connecting).
                                 connectButton.connecting = false;
-                                // Restore the declarative binding severed by the imperative
-                                // `enabled = false` at connection start. Without this the
-                                // Connect button stays permanently disabled on reopen.
-                                connectButton.enabled = Qt.binding(() => passwordContainer.passwordBuffer.length > 0 && !connectButton.connecting);
-                                connectButton.text = qsTr("Connect");
                             });
                         }
                     }
@@ -377,7 +387,12 @@ Item {
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
                     inactiveColour: Colours.palette.m3primary
                     inactiveOnColour: Colours.palette.m3onPrimary
-                    text: qsTr("Connect")
+                    // Both stay declarative. REGRESSION GUARD: do NOT assign
+                    // `enabled` or `text` imperatively — an imperative write severs
+                    // the binding permanently, which is what previously left Connect
+                    // clickable with an empty password after a failed attempt.
+                    // `connecting` alone drives both.
+                    text: connecting ? qsTr("Connecting...") : qsTr("Connect")
                     enabled: passwordContainer.passwordBuffer.length > 0 && !connecting
 
                     onClicked: {
@@ -392,13 +407,15 @@ Item {
 
                         hasError = false;
                         connecting = true;
-                        enabled = false;
-                        text = qsTr("Connecting...");
+                        const token = root.attemptToken;
 
                         // The callback is authoritative and always fires exactly
                         // once — NmcliWifi derives it from nmcli's exit code, not
                         // from polling. Every terminal state is handled right here.
                         NetworkConnection.connectWithPassword(root.network, password, result => {
+                            if (token !== root.attemptToken)
+                                return;
+
                             if (result && result.success) {
                                 root.closeDialog();
                                 return;
@@ -406,8 +423,6 @@ Item {
 
                             connecting = false;
                             hasError = true;
-                            enabled = true;
-                            text = qsTr("Connect");
                             passwordContainer.passwordBuffer = "";
 
                             // REGRESSION GUARD: do NOT call forgetNetwork() here.
@@ -439,9 +454,9 @@ Item {
         }
 
         isClosing = true;
+        root.attemptToken++;
         passwordContainer.passwordBuffer = "";
         connectButton.connecting = false;
         connectButton.hasError = false;
-        connectButton.text = qsTr("Connect");
     }
 }

@@ -439,3 +439,20 @@ FileView { onLoaded: root.enabled = parse(text()) }
 ```
 
 Found in: `services/QuietMode.qml` — a `/seal` code review "hardened" `enabled` to `readonly`, which froze it false and broke the Silent toggle. Reverted to writable with an inline regression-guard comment.
+
+### Counter-example: `readonly property list<T>` DOES accept reassignment
+
+The rule above holds for value-typed properties (`bool`, `int`, `string`, object references). It does **not** hold for `list<T>`:
+
+```qml
+// This works — the assignment is NOT a no-op:
+readonly property list<AccessPoint> networks: []
+...
+root.networks = updated;   // succeeds, bindings fire
+```
+
+`services/NmcliWifi.qml` has done exactly this since the initial import, and the network list demonstrably updates. Qt evidently treats a `readonly` list property's declared value as the initial contents rather than as a frozen binding.
+
+Why this matters: someone applying the `QuietMode` lesson mechanically will read `root.networks = updated` as a latent frozen-value bug and "fix" the `readonly` away — a pointless diff — or, worse, will assume the reverse and mark some *other* imperatively-written property `readonly` because "this one works." Neither inference is safe. **Check the property's type before reasoning about `readonly`:** the freeze applies to value types; lists are the documented exception.
+
+This was surfaced during the 2026-07-27 wifi review, where it was flagged as suspicious-but-working rather than as a defect.

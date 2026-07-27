@@ -18,6 +18,24 @@ moment it becomes known.
 Nothing else is a success or failure signal. In particular `NmcliWifi.active` is
 **not** one — see below.
 
+This contract holds at the `NmcliWifi` layer, and the wrappers in
+`utils/NetworkConnection.qml` must preserve it: every early-return guard has to
+invoke `onResult` before returning. A guard that returns silently leaves the
+caller's pending UI — a disabled button, a spinning row — with nothing that can
+ever clear it, which is the permanent-"Connecting…" failure in a new disguise.
+
+## Signals
+
+`NmcliWifi.connectionFailed(ssid)` is emitted from `deliverConnectResult` on a
+**genuine** failure only. It is deliberately NOT emitted when the result is
+`needsPassword`: "this network has no stored secret, ask the user" is a normal
+step of a first-time connect, not an error, and consumers that surface errors to
+the user would misfire on every first connection.
+
+Consumers should prefer the connect callback over this signal. It exists for
+components that did not start the attempt themselves — e.g. the bar popout clears
+a row spinner with it when the connection was initiated elsewhere.
+
 ## Symmetria registers no NetworkManager secret agent
 
 `nmtui` and `nm-applet` register a D-Bus secret agent, which is how they can

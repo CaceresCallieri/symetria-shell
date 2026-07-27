@@ -14,7 +14,7 @@
 #   ./wifi-testbed.sh status  # show current state
 #   ./wifi-testbed.sh down    # tear everything down, unload the module
 #
-# Requires: hostapd, dnsmasq, iw, and the mac80211_hwsim kernel module.
+# Requires: hostapd, dnsmasq, and the mac80211_hwsim kernel module.
 
 set -euo pipefail
 
@@ -26,7 +26,6 @@ TESTBED_RUNTIME_DIR="/run/symmetria-wifi-testbed"
 HOSTAPD_CONFIG_PATH="$TESTBED_RUNTIME_DIR/hostapd.conf"
 HOSTAPD_PID_PATH="$TESTBED_RUNTIME_DIR/hostapd.pid"
 DNSMASQ_PID_PATH="$TESTBED_RUNTIME_DIR/dnsmasq.pid"
-INTERFACE_RECORD_PATH="$TESTBED_RUNTIME_DIR/interfaces"
 
 log() { printf '  %s\n' "$*"; }
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -40,6 +39,10 @@ list_simulated_interfaces() {
         driver_path="$(readlink -f "$interface_path/phy80211/device/driver" 2>/dev/null || true)"
         [[ "$driver_path" == *mac80211_hwsim* ]] && echo "$interface_name"
     done
+    # Explicit success: without this the function inherits the exit status of the
+    # final [[ ]] test, so it returns non-zero whenever the last interface on the
+    # system is not a simulated one — fragile under `set -e`.
+    return 0
 }
 
 require_root() {
@@ -49,12 +52,26 @@ require_root() {
 testbed_up() {
     require_root
 
+    local required_binary
+    for required_binary in hostapd dnsmasq nmcli; do
+        command -v "$required_binary" >/dev/null \
+            || fail "missing required command: $required_binary (paru -S hostapd dnsmasq networkmanager)"
+    done
+
     if lsmod | grep -q '^mac80211_hwsim'; then
         log "mac80211_hwsim already loaded — tearing down first for a clean slate"
         testbed_down_quiet
     fi
 
+    # From here on the script mutates system state (kernel module, NM device
+    # management, daemons). Any failure must undo all of it — otherwise an abort
+    # silently leaves the machine with a loaded module, a running hostapd and an
+    # unmanaged wireless device, with nothing telling the user to run `down`.
+    trap 'testbed_down_quiet' ERR
+
     mkdir -p "$TESTBED_RUNTIME_DIR"
+    # The hostapd config below holds the passphrase in cleartext.
+    chmod 700 "$TESTBED_RUNTIME_DIR"
 
     log "loading mac80211_hwsim with 2 simulated radios"
     modprobe mac80211_hwsim radios=2
@@ -69,8 +86,6 @@ testbed_up() {
     mapfile -t simulated_interfaces < <(list_simulated_interfaces)
     local access_point_interface="${simulated_interfaces[0]}"
     local client_interface="${simulated_interfaces[1]}"
-    printf 'access_point_interface=%s\nclient_interface=%s\n' \
-        "$access_point_interface" "$client_interface" >"$INTERFACE_RECORD_PATH"
     log "AP side: $access_point_interface   client side: $client_interface"
 
     # NetworkManager must not touch the AP radio (it would fight hostapd), but
@@ -78,6 +93,7 @@ testbed_up() {
     nmcli device set "$access_point_interface" managed no
     nmcli device set "$client_interface" managed yes
 
+    (umask 077; : >"$HOSTAPD_CONFIG_PATH")
     cat >"$HOSTAPD_CONFIG_PATH" <<EOF
 interface=$access_point_interface
 driver=nl80211
@@ -99,7 +115,7 @@ EOF
 
     # --dhcp-option=3 (no router) and =6 (no DNS) are what keep the real
     # internet path intact: the client gets an address but never a default
-    # route, so wlan0 remains the only way out.
+    # route, so the machine's real wireless card remains the only way out.
     log "starting dnsmasq (DHCP only, no gateway, no DNS)"
     dnsmasq \
         --interface="$access_point_interface" \
@@ -120,10 +136,19 @@ EOF
         [[ $scan_attempt -lt 15 ]] || fail "client radio never saw '$TESTBED_SSID'"
     done
 
+    # Success: stop unwinding on later errors (the caller may legitimately fail).
+    trap - ERR
+
+    local real_wifi
+    real_wifi="$(nmcli -t -f DEVICE,TYPE,STATE device \
+        | awk -F: -v ap="$access_point_interface" -v cl="$client_interface" \
+              '$2=="wifi" && $1!=ap && $1!=cl && $1 !~ /^p2p-/ {print $1": "$3}' \
+        | paste -sd', ')"
+
     log ""
     log "Test bed ready. '$TESTBED_SSID' is visible to NetworkManager on $client_interface."
     log "Correct password: $TESTBED_PASSWORD"
-    log "Real Wi-Fi ($(nmcli -t -f DEVICE,STATE device | grep '^wlan0' || echo 'wlan0:?')) is untouched."
+    log "Real Wi-Fi (${real_wifi:-none detected}) is untouched."
 }
 
 testbed_down_quiet() {
