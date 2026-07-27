@@ -53,9 +53,53 @@ Singleton {
         });
 
         Qt.callLater(() => {
-            proc.startWatchdog();
+            proc.startedAt = Date.now();
             proc.exec(proc.command);
         });
+        watchdogSweeper.start();
+    }
+
+    /// Ceiling on how long a single nmcli invocation may go without reporting.
+    /// Sits above NmcliWifi.connectTimeoutSeconds (45s) so nmcli's own --wait
+    /// reports the real outcome first in every normal case; this only catches a
+    /// process that failed to spawn or genuinely wedged.
+    readonly property int commandTimeoutMs: 60000
+
+    // Enforces the callback contract for processes that never exit.
+    //
+    // REGRESSION GUARD: this was originally written as a Timer declared INSIDE
+    // the CommandProcess component. That does not load — Process has no default
+    // property, so a child object is "Cannot assign to non-existent default
+    // property" and the whole shell fails to start. qmllint does not catch it
+    // (it cannot resolve Quickshell imports). One sweeper over activeProcesses is
+    // also cheaper than one Timer per invocation.
+    Timer {
+        id: watchdogSweeper
+
+        interval: 5000
+        repeat: true
+
+        onTriggered: {
+            if (root.activeProcesses.length === 0) {
+                stop();
+                return;
+            }
+
+            const now = Date.now();
+            // Iterate over a copy: deliver() runs caller callbacks that can spawn
+            // or retire processes, mutating activeProcesses mid-loop.
+            for (const proc of root.activeProcesses.slice()) {
+                if (!proc || proc.callbackCalled || proc.startedAt === 0)
+                    continue;
+                if (now - proc.startedAt < root.commandTimeoutMs)
+                    continue;
+
+                console.warn("[NMCLI] no response after " + Math.round(root.commandTimeoutMs / 1000) + "s, abandoning: " + proc.command.join(" "));
+                proc.deliver(false, "", "nmcli did not respond", -1);
+                proc.running = false;
+                proc.processFinished();
+            }
+        }
     }
 
     function isConnectionCommand(command: list<string>): bool {
@@ -250,17 +294,18 @@ Singleton {
 
         signal processFinished
 
+        /// Wall-clock ms when exec() was issued; 0 until then. Read by the
+        /// watchdog sweeper to find processes that never reported back.
+        property double startedAt: 0
+
         // Guarantees the callback contract even when the process never exits.
         // Everything upstream assumes "the callback always fires exactly once";
-        // without this, a nmcli that fails to spawn or wedges reproduces the exact
+        // without this, an nmcli that fails to spawn or wedges reproduces the exact
         // permanent-"Connecting…" hang this whole flow was rewritten to eliminate.
-        // The ceiling sits above NmcliWifi.connectTimeoutSeconds (45s) so nmcli's
-        // own --wait reports the real outcome first in every normal case.
         function deliver(success: bool, output: string, error: string, code: int): void {
             if (callbackCalled)
                 return;
             callbackCalled = true;
-            watchdog.stop();
             if (proc.callback) {
                 proc.callback({
                     success: success,
@@ -269,22 +314,6 @@ Singleton {
                     exitCode: code,
                     needsPassword: root.isConnectionCommand(proc.command) && root.detectPasswordRequired(error)
                 });
-            }
-        }
-
-        function startWatchdog(): void {
-            watchdog.start();
-        }
-
-        Timer {
-            id: watchdog
-
-            interval: 60000
-            onTriggered: {
-                console.warn("[NMCLI] no response after 60s, abandoning: " + proc.command.join(" "));
-                proc.deliver(false, "", "nmcli did not respond", -1);
-                proc.running = false;
-                proc.processFinished();
             }
         }
 
