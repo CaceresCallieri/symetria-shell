@@ -214,13 +214,31 @@ Singleton {
         });
     }
 
+    // --- Password detection ---
+    // A pure predicate over nmcli's stderr. It lives here, in the nmcli layer,
+    // because it describes nmcli's own output vocabulary — no wifi-domain state
+    // is involved. (It previously lived in NmcliWifi, which forced CommandProcess
+    // into a documented layer inversion; that inversion is gone.)
+
+    function detectPasswordRequired(error: string): bool {
+        if (!error || error.length === 0) {
+            return false;
+        }
+
+        const notSuccess = !error.includes("Connection activated") && !error.includes("successfully");
+        const hasSecretKeyword = error.includes("Secrets were required")
+            || error.includes("No secrets provided")
+            || error.includes("802-11-wireless-security.psk")
+            || error.includes("password for")
+            || error.includes("No agents were available");
+        const hasPasswordWord = error.includes("password") && notSuccess;
+        const hasSecretsWord = error.includes("Secrets") && notSuccess;
+        const has80211Word = error.includes("802.11") && notSuccess;
+
+        return notSuccess && (hasSecretKeyword || hasPasswordWord || hasSecretsWord || has80211Word);
+    }
+
     // --- CommandProcess component ---
-    // NOTE: Intentional layer inversion — CommandProcess references NmcliWifi
-    // for password detection (handlePasswordRequired, detectPasswordRequired,
-    // pendingConnection, connectionFailed). This coupling exists because password
-    // errors arrive via stderr on ANY nmcli process, and the detection must happen
-    // at the process level before the generic callback fires. Refactoring to a
-    // signal-based approach risks breaking the delicate password detection flow.
 
     component CommandProcess: Process {
         id: proc
@@ -244,55 +262,29 @@ Singleton {
 
         stderr: StdioCollector {
             id: stderrCollector
-
-            onStreamFinished: {
-                const error = text.trim();
-                if (error && error.length > 0) {
-                    const output = (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "";
-                    NmcliWifi.handlePasswordRequired(proc, error, output, -1);
-                }
-            }
         }
 
+        // The process exit IS the result. nmcli blocks until NetworkManager has
+        // settled the operation, so there is nothing left to infer afterwards:
+        // exit code 0 means it worked, and stderr says why when it did not.
         onExited: code => {
             exitCode = code;
 
             Qt.callLater(() => {
-                if (callbackCalled) {
-                    processFinished();
-                    return;
-                }
-
-                if (proc.callback) {
+                if (proc.callback && !callbackCalled) {
                     const output = (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "";
                     const error = (stderrCollector && stderrCollector.text) ? stderrCollector.text : "";
-                    const success = exitCode === 0;
-                    const cmdIsConnection = root.isConnectionCommand(proc.command);
-
-                    if (NmcliWifi.handlePasswordRequired(proc, error, output, exitCode)) {
-                        processFinished();
-                        return;
-                    }
-
-                    const needsPassword = cmdIsConnection && NmcliWifi.detectPasswordRequired(error);
-
-                    if (!success && cmdIsConnection && NmcliWifi.pendingConnection) {
-                        const failedSsid = NmcliWifi.pendingConnection.ssid;
-                        NmcliWifi.connectionFailed(failedSsid);
-                    }
 
                     callbackCalled = true;
                     callback({
-                        success: success,
+                        success: exitCode === 0,
                         output: output,
                         error: error,
                         exitCode: proc.exitCode,
-                        needsPassword: needsPassword || false
+                        needsPassword: root.isConnectionCommand(proc.command) && root.detectPasswordRequired(error)
                     });
-                    processFinished();
-                } else {
-                    processFinished();
                 }
+                processFinished();
             });
         }
     }

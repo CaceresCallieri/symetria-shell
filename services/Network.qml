@@ -123,9 +123,9 @@ Singleton {
         }, bssid);
     }
 
-    function disconnectFromNetwork(): void {
+    function disconnectFromNetwork(ssid: string): void {
         // Try to disconnect - use connection name if available, otherwise use device
-        NmcliWifi.disconnectFromNetwork();
+        NmcliWifi.disconnectFromNetwork(ssid);
         // Refresh network list after disconnection
         Qt.callLater(() => {
             NmcliWifi.getNetworks(() => {

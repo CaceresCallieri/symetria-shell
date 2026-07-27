@@ -42,14 +42,17 @@ QtObject {
             return;
         }
 
-        if (NmcliWifi.active && NmcliWifi.active.ssid !== network.ssid) {
-            NmcliWifi.disconnectFromNetwork();
-            Qt.callLater(() => {
-                root.connectToNetwork(network, session, onPasswordNeeded);
-            });
-        } else {
-            root.connectToNetwork(network, session, onPasswordNeeded);
-        }
+        // REGRESSION GUARD: do NOT disconnect the currently active network first.
+        // NetworkManager already deactivates the old connection as part of
+        // activating the new one on the same device, so the explicit teardown
+        // bought nothing and cost plenty: it left the machine with no network at
+        // all if the new connection then failed, and — because every saved
+        // profile has autoconnect=yes — NetworkManager immediately raced to
+        // auto-activate some unrelated saved network in the gap. Observed
+        // 2026-07-27: tapping one network dropped the live connection and sent NM
+        // chasing a completely different SSID. It was also sequenced with
+        // Qt.callLater, which does not wait for the disconnect to finish.
+        root.connectToNetwork(network, session, onPasswordNeeded);
     }
 
     /**
@@ -89,13 +92,15 @@ QtObject {
             network.isSecure,
             (result) => {
                 if (result.needsPassword) {
-                    // Clear pending connection if exists
-                    if (NmcliWifi.pendingConnection) {
-                        NmcliWifi.connectionCheckTimer.stop();
-                        NmcliWifi.immediateCheckTimer.stop();
-                        NmcliWifi.immediateCheckTimer.checkCount = 0;
-                        NmcliWifi.pendingConnection = null;
-                    }
+                    // Nothing to tear down here: NmcliWifi settles its own in-flight
+                    // state before invoking this callback.
+                    //
+                    // REGRESSION GUARD: this block used to poke
+                    // NmcliWifi.connectionCheckTimer / .immediateCheckTimer. Those
+                    // were `Timer { id: ... }` declarations INSIDE the singleton,
+                    // not exposed properties — QML ids are file-scoped, so from
+                    // here they were `undefined` and the calls would have thrown.
+                    // Reach into another component only through declared properties.
 
                     // Handle password dialog - use session if available, otherwise use callback
                     if (session && session.network) {

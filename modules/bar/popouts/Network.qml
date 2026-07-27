@@ -123,7 +123,7 @@ PillCardSection {
 
                         function onClicked(): void {
                             if (networkItem.modelData.active) {
-                                NmcliWifi.disconnectFromNetwork();
+                                NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
                             } else {
                                 root.connectingToSsid = networkItem.modelData.ssid;
                                 NetworkConnection.handleConnect(

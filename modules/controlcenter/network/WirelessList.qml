@@ -194,7 +194,7 @@ DeviceList {
                     StateLayer {
                         function onClicked(): void {
                             if (modelData.active) {
-                                NmcliWifi.disconnectFromNetwork();
+                                NmcliWifi.disconnectFromNetwork(modelData.ssid);
                             } else {
                                 NetworkConnection.handleConnect(modelData, root.session, null);
                             }
