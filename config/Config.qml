@@ -141,8 +141,7 @@ Singleton {
                 enabled: appearance.transparency.enabled,
                 base: appearance.transparency.base,
                 layers: appearance.transparency.layers
-            },
-            pillStyle: appearance.pillStyle
+            }
         };
     }
 

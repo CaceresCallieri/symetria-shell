@@ -95,7 +95,13 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **Module entry points** — Each major module exposes `Wrapper.qml` as its entry point, imported via qualified alias: `import "modules/x" as XModule` → `XModule.Wrapper {}`. This avoids the last-import-wins collision pitfall. Modules without collision risk (e.g., `Stt`, `Keycaster`) keep their own name.
 - **Drawer system** — `modules/drawers/` manages slide-out panels with unified visibility and gestures
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
-- **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar)
+- **Theme** — `services/Theme.qml` selects the surface design language along TWO orthogonal axes:
+  `material` (clay | metal — how one surface looks, consumed by the surface primitives) and
+  `form` (islands | panel — how surfaces are arranged, consumed by the bar geometry). Recipes are
+  plain data tables, so a new material is a data block rather than a parallel implementation of
+  every primitive. Switching is live (`symmetria shell surface material|form <name>`), but is
+  **runtime-only — not persisted**; the shipped default lives in the property initialisers.
+- **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar, surface)
 
 
 ## Remote Agents (SSH Tunnel)
@@ -122,7 +128,15 @@ Symmetria can display agents from remote machines that tunnel their orchestrator
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | QML defaults | `config/*.qml` | Structure, schemas, defaults (version-controlled) |
-| JSON overrides | `~/.config/symmetria/shell.json` | User preferences (NOT version-controlled) |
+| JSON overrides | `~/.config/symmetria/shell.json` | User preferences — **symlinked to the tracked `config/shell.json`** |
+
+**The override file IS version-controlled.** `~/.config/symmetria/shell.json` is a
+symlink to `config/shell.json` in this repo, so every settings change made in the
+UI — and every live edit for debugging — dirties the working tree. Two consequences:
+edits you make to "just the user config" WILL show up in `git status`, and
+`config/shell.json` diffs routinely contain unrelated serializer churn (the shell's
+JSON writer re-encodes unicode escapes on save). Review that file selectively before
+staging rather than assuming its whole diff belongs to your change.
 
 **JSON overrides always win.** If you edit a QML default but the value exists in shell.json, your change won't take effect. Check shell.json first when debugging config issues.
 

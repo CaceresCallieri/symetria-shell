@@ -246,6 +246,7 @@ Scope {
     //   symmetria shell surface toggleMaterial
     //   symmetria shell surface toggleForm
     //   symmetria shell surface get
+    //   symmetria shell surface list
     //
     // Target is "surface", NOT "theme": services/Colours.qml already registers a
     // "theme" handler (the palette dump). Quickshell silently drops the SECOND

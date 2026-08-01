@@ -41,7 +41,13 @@ Item {
     readonly property int dotSize: 4
     readonly property int dotSpacing: Appearance.spacing.normal
 
-    implicitHeight: Config.bar.sizes.innerWidth
+    // FORM axis: this is the third bar-plate producer. It sizes and offsets
+    // through the shared Theme contract so the panel form's off-screen bleed
+    // reaches it too — see the CONTRACT note on barPlateHeight in
+    // services/Theme.qml.
+    readonly property int contentOffset: Theme.barPlateContentOffset
+
+    implicitHeight: Theme.barPlateHeight
     implicitWidth: multiMonitor ? leftDot.width + dotSpacing + pill.implicitWidth + dotSpacing + rightDot.width : pill.implicitWidth
 
     // Focus indicator dot - left side
@@ -50,6 +56,7 @@ Item {
         anchors.right: pill.left
         anchors.rightMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.contentOffset
         visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize
@@ -73,7 +80,7 @@ Item {
 
         anchors.centerIn: parent
 
-        implicitHeight: Config.bar.sizes.innerWidth
+        implicitHeight: Theme.barPlateHeight
         implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
 
         Item {
@@ -107,6 +114,9 @@ Item {
                 id: layout
 
                 anchors.centerIn: parent
+                // Centred on the VISIBLE band: the plate's top `barTopBleed` px
+                // are off-screen under the panel form.
+                anchors.verticalCenterOffset: root.contentOffset
                 spacing: Math.floor(Appearance.spacing.small / 2)
 
                 Repeater {
@@ -180,6 +190,7 @@ Item {
         anchors.left: pill.right
         anchors.leftMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.contentOffset
         visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize

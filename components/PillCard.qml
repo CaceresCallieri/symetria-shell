@@ -68,7 +68,7 @@ Item {
     // softer, more diffuse shadows that wrap the element in ambient depth.
     // Tuned to land between "too glowy" (the original 18 blur was a halo
     // against busy wallpaper) and "too austere" (10 blur stripped the warmth).
-    // Metal replaces this with a single tight, dark shadow.
+    // Metal drops both shadows entirely — a flat plate casts no convex halo.
     property real darkShadowOffsetX: Theme.card.darkShadowOffsetX
     property real darkShadowOffsetY: Theme.card.darkShadowOffsetY
     property real darkShadowBlur: Theme.card.darkShadowBlur
@@ -84,8 +84,8 @@ Item {
     // inner-shadow that grounds the card as "embedded into the panel." These
     // overlays are what differentiate the warm claymorphic card from the cool
     // neumorphic pills inside it; without them the card collapses into another
-    // flat surface and loses its role as the visual frame. Metal moves the top
-    // rim into SurfaceFinish (hard specular line) and deepens the bottom shadow.
+    // flat surface and loses its role as the visual frame. Metal zeroes both:
+    // the lighting moves entirely into SurfaceFinish's sweep and rim.
     property real highlightAlpha: Theme.card.highlightAlpha
     property real innerShadowAlpha: Theme.card.innerShadowAlpha
 

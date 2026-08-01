@@ -325,7 +325,12 @@ Item {
         readonly property bool _shouldBeActive: root.centerEntry?.enabled !== false && !AgentService.mergeActive
 
         anchors.horizontalCenter: parent.horizontalCenter
+        // The centre entry draws its own plate, so under the panel form it is
+        // taller than the bar. Centring would split the excess evenly and push
+        // half of it BELOW the bar; shifting up by half the bleed sends all of
+        // it off the top instead, matching the bottom-anchored side rows.
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.bleeds ? -Theme.barPlateContentOffset : 0
         active: _shouldBeActive || opacity > 0
         opacity: _shouldBeActive ? 1 : 0
         visible: opacity > 0
@@ -478,7 +483,13 @@ Item {
             || entryId === "timePill"
             || entryId === "systemPill"
 
-        Layout.alignment: root.bleeds ? Qt.AlignBottom : Qt.AlignVCenter
+        // Only entries that draw a PLATE carry the extra bleed height, so only
+        // they may bottom-align. Anything else (logo, power, workspaces spacer)
+        // is a short item and would be pinned to the bar's bottom edge instead
+        // of centred; it stays vertically centred, shifted onto the VISIBLE
+        // band by the same offset the plates use for their content.
+        Layout.alignment: (root.bleeds && hasPillMargins) ? Qt.AlignBottom : Qt.AlignVCenter
+        Layout.topMargin: (root.bleeds && !hasPillMargins) ? Theme.layout.barTopBleed : 0
         Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
         Layout.rightMargin: hasPillMargins ? root.pillExternalMargin : 0
         visible: entryEnabled

@@ -1,5 +1,6 @@
+pragma ComponentBehavior: Bound
+
 import ".."
-import qs.services
 import Quickshell
 import QtQuick
 
@@ -58,6 +59,19 @@ Item {
     readonly property real _sweepHalf: Math.max(0.02, (recipe?.sweepWidth ?? 0.3) / 2)
     readonly property real _sweepLeft: Math.max(0.0, _sweepCentre - _sweepHalf)
     readonly property real _sweepRight: Math.min(1.0, _sweepCentre + _sweepHalf)
+
+    // Same guarantee for the rim stops: a recipe value of 0 would land a stop
+    // exactly on 0.0 (top rim) or 1.0 (bottom rim), colliding with the fixed
+    // stop already there and producing a duplicate-position gradient.
+    readonly property real _rimStop: Math.max(0.002, Math.min(0.98, recipe?.rimStop ?? 0.05))
+    readonly property real _rimBottomStop: Math.max(0.002, Math.min(0.98, recipe?.rimBottomStop ?? 0.05))
+
+    // NOTE on the `recipe?.x ?? <literal>` reads throughout this file: the
+    // literals are belt-and-braces against a malformed recipe, NOT the
+    // authoritative defaults. Every real default lives in services/Theme.qml,
+    // whose contract is that each recipe block is written out in full. Do not
+    // tune the look by editing the fallbacks here — they should never be the
+    // value in play.
 
     // 1. Vertical sheen — lightens the top of the body and falls off by
     // mid-height. Makes the surface read as a curved extrusion catching
@@ -120,30 +134,40 @@ Item {
         }
     }
 
-    // 3. Brushed micro-texture. The tile is 128x128 noise smeared horizontally
-    // with wraparound, so it is seamless and anisotropic — vertical detail stays
-    // sharp, horizontal detail smears, which reads as "machined" rather than
-    // "film grain". Tiled (not stretched) so grain size stays constant
-    // regardless of how wide the surface is.
+    // 3. Brushed micro-texture. The tile is 96x96 noise smeared horizontally with
+    // wraparound, so it is seamless and anisotropic — vertical detail stays
+    // sharp, horizontal detail smears, which reads as "machined". The smear is
+    // deliberately SHORT (~2px correlation): an earlier 9px smear produced
+    // streaks long enough to read as wood grain instead of metal. Tiled (not
+    // stretched) so grain size stays constant regardless of surface width.
     //
-    // Wrapped in a StyledClippingRect because the gradient layers self-clip via
-    // their own `radius`, but a tiled Image cannot — and QML's `clip: true` only
-    // clips to the bounding RECTANGLE, so square grain corners would poke out
-    // past the rounded silhouette on any primitive whose body isn't already a
-    // clipping rect (PillCard's body is a plain StyledRect).
-    StyledClippingRect {
+    // StyledClippingRect, because the gradient layers self-clip via their own
+    // `radius` but a tiled Image cannot — and QML's `clip: true` clips only to
+    // the bounding RECTANGLE, so square grain corners would poke out past the
+    // rounded silhouette on any primitive whose body isn't already a clipping
+    // rect (PillCard's body is a plain StyledRect).
+    //
+    // Loader rather than `visible: false`, because unlike the gradient layers
+    // (plain Rectangles, near-free when hidden) this one costs a real clip node
+    // plus a tiled texture on EVERY surface in the shell. Under clay
+    // brushedAlpha is 0, so without the Loader every pill, toggle and card would
+    // carry a clip node it never draws through.
+    Loader {
         anchors.fill: parent
-        radius: root.radius
-        color: "transparent"
-        visible: (root.recipe?.brushedAlpha ?? 0) > 0
+        active: (root.recipe?.brushedAlpha ?? 0) > 0
 
-        Image {
-            anchors.fill: parent
-            source: `${Quickshell.shellDir}/assets/textures/brushed-noise.png`
-            fillMode: Image.Tile
-            opacity: root.recipe?.brushedAlpha ?? 0
-            smooth: false
-            cache: true
+        sourceComponent: StyledClippingRect {
+            radius: root.radius
+            color: "transparent"
+
+            Image {
+                anchors.fill: parent
+                source: `${Quickshell.shellDir}/assets/textures/brushed-noise.png`
+                fillMode: Image.Tile
+                opacity: root.recipe?.brushedAlpha ?? 0
+                smooth: false
+                cache: true
+            }
         }
     }
 
@@ -164,7 +188,7 @@ Item {
                 color: Qt.rgba(1, 1, 1, (root.recipe?.rimAlpha ?? 0) * root.specularFactor)
             }
             GradientStop {
-                position: root.recipe?.rimStop ?? 0.05
+                position: root._rimStop
                 color: Qt.rgba(1, 1, 1, 0)
             }
             GradientStop {
@@ -190,7 +214,7 @@ Item {
                 color: Qt.rgba(1, 1, 1, 0)
             }
             GradientStop {
-                position: 1.0 - (root.recipe?.rimBottomStop ?? 0.05)
+                position: 1.0 - root._rimBottomStop
                 color: Qt.rgba(1, 1, 1, 0)
             }
             GradientStop {

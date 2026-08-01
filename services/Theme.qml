@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
+import qs.config
 import Quickshell
 
 // Design-language selector — TWO ORTHOGONAL AXES.
@@ -235,6 +236,16 @@ Singleton {
     //   surfaceRounding Multiplier on the surface primitives' corner radius.
     //                   1 keeps the configured rounding, 0 squares them off.
     //
+    //                   SCOPE: this is SHELL-WIDE, not bar-only. It multiplies
+    //                   the radius of every PillSurface, PillToggleSurface and
+    //                   PillCard — control center, notifications, dashboard,
+    //                   launcher and toasts included. That is deliberate: form
+    //                   is a whole-shell silhouette choice, and a shell with
+    //                   square bar plates but rounded cards reads as unfinished
+    //                   rather than as a style. The screen-edge argument below
+    //                   motivates PAIRING rounding with bleed; it is not the
+    //                   limit of rounding's reach.
+    //
     // WHY ROUNDING AND BLEED LIVE IN THE SAME RECIPE: they are one decision, not
     // two. A capsule that bleeds past the screen edge gets its top arc sliced
     // off, leaving a flat-topped shape with curved sides — it reads as a
@@ -261,4 +272,34 @@ Singleton {
 
     // intentional var: JS recipe object from the table above
     readonly property var layout: _forms[form] ?? _forms.islands
+
+    // --- Derived bar-plate geometry ------------------------------------------
+    //
+    // CONTRACT: every bar entry that draws its own plate (PillContainer, Tray,
+    // Workspaces) MUST size itself with `barPlateHeight` and offset its content
+    // by `barPlateContentOffset`. Deriving both here rather than recomputing
+    // `innerWidth + bleed` and `bleed / 2` per file keeps the bleed a single
+    // source of truth — the first version of this feature open-coded it in two
+    // places and Workspaces was silently missed, which is exactly the drift this
+    // prevents. A fourth plate producer only has to read these two properties.
+    //
+    // The offset is ROUNDED: an odd bleed would otherwise place content on a
+    // half pixel and blur every icon and label in the bar.
+    readonly property int barPlateHeight: Config.bar.sizes.innerWidth + layout.barTopBleed
+    readonly property int barPlateContentOffset: Math.round(layout.barTopBleed / 2)
+
+    // Dev guard for the "every recipe exposes the SAME keys" invariant the
+    // header states. A material that omits a key renders `undefined` into a
+    // primitive's binding with no error at the definition site, so prose alone
+    // is not enough — this turns a silent mis-render into a startup warning.
+    Component.onCompleted: {
+        for (const role of ["pill", "toggle", "card"]) {
+            const reference = Object.keys(_recipes.clay[role]).sort().join(",");
+            for (const name of materials) {
+                const keys = Object.keys(_recipes[name][role]).sort().join(",");
+                if (keys !== reference)
+                    console.warn(`[Theme] recipe ${name}.${role} key set differs from clay.${role}`);
+            }
+        }
+    }
 }

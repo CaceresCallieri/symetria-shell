@@ -163,12 +163,15 @@ Singleton {
 
     // Metal constants — machined dark surface.
     //
-    // Unlike mattePill, the hue is FIXED rather than derived from the palette.
-    // Metal reads as metal by being chromatically neutral (a faint cool cast, as
-    // if lit by daylight); tinting it toward whatever the palette's hue happens
-    // to be turns it into coloured plastic. The palette still reaches metal
-    // surfaces through text, icons and accent colours — just not through the
-    // body of the material.
+    // For SURFACES the hue is FIXED rather than derived from the palette. Metal
+    // reads as metal by being chromatically neutral (a faint cool cast, as if
+    // lit by daylight); tinting a surface toward whatever the palette's hue
+    // happens to be turns it into coloured plastic.
+    //
+    // STATE colours are the deliberate exception: a caller passing a chromatic
+    // baseColor (error, urgency, checked, focused) is encoding meaning, not
+    // choosing a surface, so metalPill borrows that hue — capped and lifted so
+    // it reads as tinted metal. See the accent constants below.
     readonly property QtObject metalConstants: QtObject {
         // Darker than matte's 0.10 — metal needs headroom above the body for the
         // specular rim to read as bright. Contrast against the highlights is
@@ -178,9 +181,30 @@ Singleton {
         readonly property real baseLightness: 0.042
         readonly property real lightnessRange: 0.055
 
-        // Cool cast, barely saturated. ~209° at 5%.
+        // Cool cast, barely saturated. ~209° at 5%. Used for SURFACE colours —
+        // see the accent constants below for the state-coded path.
         readonly property real hue: 0.58
         readonly property real saturation: 0.05
+
+        // --- Accent path -----------------------------------------------------
+        // Above this saturation, a baseColor is treated as a deliberate STATE
+        // colour (error, urgency, checked, focused) rather than a surface
+        // container, and metalPill borrows its hue instead of forcing neutral.
+        //
+        // Without this, every accent collapses to the same near-black: toast
+        // types, notification urgency, filled-vs-secondary buttons, checked
+        // switches and focused agent chips all become indistinguishable, since
+        // the only surviving variable is `intensity` across a 0.042–0.097
+        // lightness span. Several call sites even wrap the result in
+        // Qt.lighter(…, 1.5), which cannot recover a hue that was discarded.
+        //
+        // The threshold sits above this palette's neutral containers (~0.02)
+        // and below its accents, so surfaces stay machined and states stay
+        // legible. Saturation is capped and lightness lifted so an accent still
+        // reads as tinted metal rather than as coloured plastic.
+        readonly property real accentSaturationThreshold: 0.05
+        readonly property real accentSaturationMax: 0.30
+        readonly property real accentLift: 0.10
 
         // The edge is derived from the BODY colour, lifted slightly in lightness
         // and fully opaque — it is not white at low alpha.
@@ -205,10 +229,18 @@ Singleton {
     // fixed-hue rationale on metalConstants.
     function metalPill(baseColor: color, intensity: real): var {
         const clampedIntensity = Math.max(0, Math.min(1, intensity));
-        const lightness = metalConstants.baseLightness + clampedIntensity * metalConstants.lightnessRange;
 
-        const background = Qt.hsla(metalConstants.hue, metalConstants.saturation, lightness, 1.0);
-        const border = Qt.hsla(metalConstants.hue, metalConstants.saturation, Math.min(1.0, lightness + metalConstants.borderLightnessLift), 1.0);
+        // A chromatic baseColor is a deliberate STATE colour, not a surface
+        // container — keep its hue so the state stays readable. Desaturated
+        // bases (the m3surface* family) take the neutral machined cast.
+        const accented = baseColor.hslSaturation > metalConstants.accentSaturationThreshold;
+
+        const hue = accented ? baseColor.hslHue : metalConstants.hue;
+        const saturation = accented ? Math.min(metalConstants.accentSaturationMax, baseColor.hslSaturation) : metalConstants.saturation;
+        const lightness = Math.min(1.0, metalConstants.baseLightness + clampedIntensity * metalConstants.lightnessRange + (accented ? metalConstants.accentLift : 0));
+
+        const background = Qt.hsla(hue, saturation, lightness, 1.0);
+        const border = Qt.hsla(hue, saturation, Math.min(1.0, lightness + metalConstants.borderLightnessLift), 1.0);
 
         return { background: background, border: border };
     }
@@ -223,6 +255,11 @@ Singleton {
     function pillStyle(baseColor: color, intensity: real): var {
         if (Theme.material === "metal")
             return metalPill(baseColor, intensity);
+        // Unreachable today: "glass" is not in Theme.materials, so isValidMaterial()
+        // rejects it and Theme.material can never hold it. Kept — with
+        // glassmorphism() — because glass is a named planned material in the
+        // Theme header; wiring it up means adding a recipe block and one array
+        // entry, not rewriting this dispatch. Do not delete either as dead code.
         if (Theme.material === "glass")
             return glassmorphism(baseColor, intensity);
         // Default "clay" — and any unrecognised value, matching Theme's own

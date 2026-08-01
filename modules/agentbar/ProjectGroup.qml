@@ -45,7 +45,9 @@ PillSurface {
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
-    // Pre-computed pill styles — not reactive to pillStyle config hot-reload (requires shell restart)
+    // Pre-computed pill styles. These ARE live across theme switches: QML captures
+    // binding dependencies dynamically, so Colours.pillStyle() re-evaluates when
+    // Theme.material changes — no restart needed.
     readonly property var focusedStyle: Colours.pillStyle(Colours.palette.m3primary, 1.0)
     readonly property var unfocusedStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.15)
 

@@ -89,8 +89,9 @@ Item {
     // Under clay: slightly asymmetric offsets (y > x on the dark shadow) mimic
     // an overhead light source, with a wider blur than PillToggleSurface's
     // interactive controls — warm ambient depth rather than austere contained
-    // depth. Under metal the light shadow nearly vanishes and the dark one
-    // tightens; see the recipe comments in services/Theme.qml.
+    // depth. Metal drops BOTH outer shadows to zero — a flat plate casts no
+    // convex halo; its silhouette comes from the border plus SurfaceFinish's
+    // sweep. See the recipe comments in services/Theme.qml.
     //
     // These stay plain writable properties so consumers can still override per
     // instance (several do); binding to Theme only changes the DEFAULT.
@@ -106,9 +107,9 @@ Item {
 
     // --- Inner rim highlight ---------------------------------------------
     // Clay: a visible broad top rim, no bottom inner shadow (a heavy one makes
-    // claymorphism feel dated). Metal inverts this — the broad wash goes to
-    // zero and SurfaceFinish's hard specular rim takes over, with a bottom
-    // inner shadow added back to keep the surface grounded.
+    // claymorphism feel dated). Metal zeroes BOTH — the broad wash and the
+    // inner shadow are convex/embedded cues that a flat plate does not have;
+    // SurfaceFinish's sweep and rim carry the lighting instead.
     property real highlightAlpha: Theme.pill.highlightAlpha
     property real innerShadowAlpha: Theme.pill.innerShadowAlpha
 

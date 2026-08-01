@@ -43,14 +43,17 @@ Item {
     // Index of primary content child (assumes single RowLayout child)
     readonly property int primaryContentIndex: 0
 
-    // FORM axis: `barTopBleed` grows the plate UPWARD so its top edge — border,
+    // FORM axis: the panel form grows the plate UPWARD so its top edge — border,
     // specular rim and all — falls outside the layer-shell surface and gets
     // clipped by the compositor. The plate then reads as a slab entering the
     // frame from off-screen rather than a chip sitting inside it. Bar.qml
     // bottom-aligns the row so the whole excess goes up, never down.
-    readonly property int topBleed: Theme.layout.barTopBleed
+    //
+    // Height and offset come from Theme so all three plate producers stay in
+    // step — see the CONTRACT note on barPlateHeight in services/Theme.qml.
+    readonly property int contentOffset: Theme.barPlateContentOffset
 
-    implicitHeight: Config.bar.sizes.innerWidth + topBleed
+    implicitHeight: Theme.barPlateHeight
     implicitWidth: contentArea.children[primaryContentIndex]?.implicitWidth ?? 0
 
     // Default property: children declared inside PillContainer { ... } are automatically
@@ -73,9 +76,9 @@ Item {
         id: contentArea
         anchors.centerIn: parent
         // Push the content down by half the bleed: the plate is centred on its
-        // FULL height, but the top `topBleed` px are off-screen, so without this
-        // the visible content would sit half a bleed too high.
-        anchors.verticalCenterOffset: root.topBleed / 2
+        // FULL height, but the top of it is off-screen, so without this the
+        // visible content would sit half a bleed too high.
+        anchors.verticalCenterOffset: root.contentOffset
         implicitWidth: children[root.primaryContentIndex]?.implicitWidth ?? 0
         implicitHeight: children[root.primaryContentIndex]?.implicitHeight ?? 0
     }
