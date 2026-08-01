@@ -1,22 +1,53 @@
 ---
 name: project_wifi_no_secret_agent
-description: "Why Symmetria's Wi-Fi connect can fail silently — no NetworkManager secret agent"
-metadata: 
+description: "Why Symmetria's Wi-Fi connect kept failing, how it was finally fixed and verified (2026-07-27)"
+metadata:
   node_type: memory
   type: project
   originSessionId: 467b4c9c-745e-4f0e-8f39-e50d201ffd94
+  modified: 2026-07-27T18:20:34.718Z
 ---
 
-Symmetria drives Wi-Fi via one-shot `nmcli` invocations (`NmcliCore.executeCommand`) and registers **NO NetworkManager D-Bus secret agent**. `nmtui` and `nm-applet` do register one, which is why they can prompt interactively when NM hits `need-auth`.
+**RESOLVED 2026-07-27** (commit `506290f1`), verified end-to-end on a virtual AP.
+Design rationale + regression guards now live in `docs/wifi-connect-flow.md` —
+read that first; this memory only records what is not derivable from the repo.
 
-Consequence: when NM needs a Wi-Fi secret that is missing/stale/rejected, it fails *instantly* with `no-secrets / "No agents were available for this request"` (visible in `journalctl -u NetworkManager`). There is no one to prompt.
+**The actual root cause of "the password dialog spins forever", after three
+failed rounds of fixes:** `modules/bar/popouts/WirelessPassword.qml` called
+`NetworkConnection.connectWithPassword` but never imported `qs.utils`. The click
+handler set `connecting = true` and then threw `ReferenceError: NetworkConnection
+is not defined` before running any nmcli command. QML resolves imported types
+lazily at first use, so this broke neither startup nor `qmllint` — it appeared
+only in `qs log -c symmetria`, only when that path ran. The control-center dialog
+had the import, which is why the bug looked path-specific.
 
-**The bug this caused (fixed 2026-06-07):** `utils/NetworkConnection.qml` had a `hasSavedProfile()` fast path that called `NmcliWifi.connectToNetwork(ssid, "", bssid, null)` with a **null callback** for saved profiles. A saved profile with a bad/stale secret → instant `no-secrets` failure → null callback → **totally silent**, no password dialog. Symptom: "I can only connect to networks I've connected to before." Fix: route ALL secured networks through `connectToNetworkWithPasswordCheck` (tries stored secret first, re-prompts on `needsPassword`). In-code REGRESSION GUARD comment warns against reintroducing the fast path.
+**Why three rounds of fixes missed it:** all three debugged the nmcli layer
+(psk injection, profile deletion, error-string matching). The bar popout never
+reached that layer. **Lesson: before fixing the layer you suspect, prove the
+call even arrives there.** `qs log` for ReferenceErrors is a ~10-second check
+that would have ended this months earlier.
 
-**Also fixed (code review 2026-06-07):** `detectPasswordRequired` in `NmcliWifi.qml` did not match the exact nmcli stderr string for the no-agents case: `"No agents were available for this request"`. None of the original keywords (`"Secrets"`, `"password"`, `"802.11"`) match that string, so `needsPassword` stayed `false` and the password dialog was never triggered even with the routing fix. Added `error.includes("No agents were available")` to `hasSecretKeyword`.
+**Second root cause, exposed once the import was fixed:** success/failure was
+inferred by polling `NmcliWifi.active` across three overlapping timers instead of
+read from nmcli's exit code. Measured: NM activated in 0.5s, the poll window
+closed at 3.0s, and the 12s timeout then *deleted the working profile*.
 
-**Also fixed same day:** `createConnectionWithPassword` (`services/NmcliWifi.qml`) used to pin `802-11-wireless.bssid` on every new profile (inherited from upstream Caelestia). Pinning makes profiles stop matching after AP reboot / on mesh / when revisiting venues. Removed → profiles now roam (SSID-only) like nmtui's.
+**How it was verified — reusable method:** `scripts/wifi-testbed.sh` builds a real
+WPA2 AP on `mac80211_hwsim` radios, so the flow is testable without touching
+`wlan0` or costing connectivity (the agent runs locally; its API calls go over
+that card). Ground truth = `journalctl -u NetworkManager` (`audit:` lines show
+profile create/delete; state machine shows real activation) + `qs log`. Use this
+for any future network work. Caveat: the test bed means TWO connected radios,
+which is what exposed the `active` ambiguity — do not report a two-radio-only
+failure as a user-visible bug on this single-radio machine.
 
-**Also fixed (2026-07-15):** the password the user typed still silently vanished for BSSID-advertising networks. `connectWireless` routed `password && hasBssid` into `createConnectionWithPassword`, which did delete → `connection add … psk` → on a duplicate-name warning fell back to `connection up <name>` on the OLD psk-less profile → instant `no-secrets` (never reached the WPA 4-way handshake; proof was zero `4way_handshake` lines for the SSID in `journalctl -u NetworkManager` while the psk-less profile sat on disk). Rewrote `services/NmcliWifi.qml`: removed the BSSID special-case + `createConnectionWithPassword`/`checkAndDeleteConnection`/`activateConnection`. New `connectWithSecret` deletes ALL same-named profiles by UUID (`deleteProfilesForSsid`, deterministic — no fixed-300ms `Qt.callLater`), then runs the atomic `nmcli device wifi connect <ssid> password <pw>` so the psk is in the SAME command that activates. Shared `handleConnectResult` DRYs the open/probe + secured paths. In-code REGRESSION GUARD on `connectWithSecret` warns against reintroducing the add/up dance.
+**Open follow-up:** `connectWithSecret` deletes same-named profiles before
+reconnecting, so re-typing a password destroys per-connection settings — notably
+the **custom DNS override on the Fibertel profile** (`1.1.1.1`, needed because the
+ISP resolver filters domains, see global CLAUDE.md). Fix is `connection modify
+<uuid> wifi-sec.psk` + `connection up` instead of delete-and-recreate. Not the
+old `connection add` + `up` dance removed 2026-07-15 — modifying a known UUID has
+no duplicate-name ambiguity.
 
-Proper long-term fix (still not done): implement an actual NM secret agent so NM can prompt Symmetria interactively. Big change (D-Bus service + GetSecrets). NOT needed for the reported symptom — if Symmetria always injects the psk itself (as it now does), NM never has to prompt an agent. See [[feedback_regression_documentation]].
+Still true: Symmetria registers **no NM secret agent**, so it must inject the psk
+in the same command that activates. See [[feedback_regression_documentation]].
