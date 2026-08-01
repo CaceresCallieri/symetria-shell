@@ -76,5 +76,12 @@ Singleton {
 
     // Best-effort restore on QML reload mid-duck. A hard shell crash still
     // leaves the volume low — accepted, one keypress fixes it.
+    //
+    // DIAGNOSTIC NOTE: with stt.ducking.volume at 0 (the current config) that
+    // stale state is total silence, and Audio.setVolume force-unmutes, so it
+    // presents as "no audio" with the sink unmuted — easily mistaken for the
+    // pipewire-pulse start-limit lockout. Tell them apart first:
+    // `wpctl get-volume @DEFAULT_AUDIO_SINK@` reading 0.00 while `pactl info`
+    // still answers means a stale duck, not a PipeWire fault.
     Component.onDestruction: restore()
 }

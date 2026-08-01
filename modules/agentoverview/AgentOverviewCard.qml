@@ -28,18 +28,10 @@ StyledRect {
     readonly property bool focusable: !root.isRemote && root.terminalPid > 0
     // Conversation preview: prefer the shell's read-side backfill (fresh, full
     // transcript keyed by session_id — fills even long-dormant cards), falling
-    // back to the bridge-pushed fields for remote agents. Reading
-    // AgentOverviewService.conversations here keeps the binding reactive.
-    readonly property var convo: {
-        const m = AgentOverviewService.conversations;
-        const sid = root.agent.session_id ?? "";
-        if (sid && m && m[sid])
-            return m[sid];
-        return ({
-            last_prompt: root.agent.last_prompt ?? "",
-            last_messages: root.agent.last_messages ?? []
-        });
-    }
+    // back to the bridge-pushed fields for remote agents. `conversations` is
+    // passed explicitly, not read inside the service, so this binding
+    // re-evaluates when the backfill lands.
+    readonly property var convo: AgentOverviewService.conversationFor(root.agent, AgentOverviewService.conversations)
     readonly property string lastPrompt: root.convo.last_prompt ?? ""
     // intentional var: JS array of recent assistant text strings
     readonly property var lastMessages: root.convo.last_messages ?? []
@@ -69,7 +61,14 @@ StyledRect {
     ColumnLayout {
         id: content
 
-        anchors.fill: parent
+        // Anchored top/left/right, NOT anchors.fill: root.implicitHeight is
+        // derived from content.implicitHeight, and filling would make content's
+        // height depend back on root's. Harmless while the content was fixed
+        // height; the wrapping conversation preview makes it variable. Same fix
+        // as Dash.Calendar — see MEMORY.md, calendar popout sizing.
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         anchors.margins: Appearance.padding.large
         spacing: Appearance.spacing.small
 
@@ -173,8 +172,11 @@ StyledRect {
         }
 
         // Recent conversation: the user's last prompt + the agent's last few
-        // assistant turns (push-side enrichment via the bridge). Hidden until the
-        // agent has reported any text (e.g. OpenCode, which doesn't yet forward it).
+        // assistant turns. Sourced from AgentOverviewService's read-side
+        // transcript backfill when available, else the bridge-pushed fields —
+        // check that service first when a preview looks wrong, not the bridge.
+        // Hidden until either source has text (e.g. OpenCode, which doesn't yet
+        // forward any).
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Appearance.spacing.small

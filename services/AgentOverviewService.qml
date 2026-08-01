@@ -2,6 +2,7 @@ pragma Singleton
 
 import qs.services
 import qs.config
+import qs.utils
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -41,8 +42,21 @@ Singleton {
     /// bridge always knows). This is what fills the cards immediately — even for
     /// long-dormant agents the push-side never captured. Remote agents (transcript
     /// not on this machine) stay absent here and fall back to their pushed fields.
+    ///
+    /// Deliberately NOT cleared on hide(): the map is a few KB, entries for dead
+    /// agents are simply never looked up again, and keeping it means reopening the
+    /// overlay renders the previews immediately instead of popping them in after
+    /// the first read completes.
     // intentional var: JS object map keyed by session id
     property var conversations: ({})
+
+    /// Raw stdout of the last accepted read, used to skip identical reassignments.
+    /// Reassigning `conversations` re-evaluates every card's `convo` binding, which
+    /// rebuilds the JS array behind each preview Repeater and destroys/recreates
+    /// its delegates (see CLAUDE.md, "Repeater over a rebuilt JS array"). At a 3s
+    /// poll that churn would be constant and — because StyledText animates its
+    /// colour — visible.
+    property string _lastReaderText: ""
 
     readonly property string _readerScript: Qt.resolvedUrl("../scripts/agent-overview-transcripts.py").toString().replace(/^file:\/\//, "")
 
@@ -153,7 +167,10 @@ Singleton {
 
         active = false;
         targetMonitor = null;
-        conversations = ({});
+        // Stop an in-flight read — the overlay it would have populated is gone.
+        // The map itself is kept as a warm cache; see `conversations` above.
+        convoReader.running = false;
+        convoWatchdog.stop();
     }
 
     function toggle(): void {
@@ -200,19 +217,29 @@ Singleton {
     /// Resolve an agent's conversation: prefer the read-side backfill (fresh,
     /// full transcript) keyed by session_id; fall back to the bridge-pushed
     /// fields (covers remote agents, whose transcript isn't readable locally).
-    function conversationFor(agent: var): var {
+    ///
+    /// `convosDep` must be passed `conversations` by callers. Same pattern as
+    /// _computeFilteredGrouping above: a plain function establishes no binding
+    /// dependency on the data it reads, so the map is threaded through as an
+    /// argument to make a caller's binding re-evaluate when it changes.
+    function conversationFor(agent: var, convosDep: var): var {
         const sid = agent?.session_id ?? "";
-        if (sid && root.conversations[sid])
-            return root.conversations[sid];
+        if (sid && convosDep && convosDep[sid])
+            return convosDep[sid];
         return {
             last_prompt: agent?.last_prompt ?? "",
             last_messages: agent?.last_messages ?? []
         };
     }
 
-    /// Re-read transcripts for every visible agent that has a session_id. Runs on
-    /// show() and every few seconds while open (so an active agent's text stays
-    /// current); skipped when closed or when a prior read is still in flight.
+    /// Re-read transcripts for every agent the overlay can actually show a
+    /// transcript for. Runs on show() and every few seconds while open (so an
+    /// active agent's text stays current); skipped when closed or when a prior
+    /// read is still in flight.
+    ///
+    /// Remote agents and agents hidden by the current filter are excluded: their
+    /// transcripts either live on another machine or aren't on screen, and each
+    /// id costs a glob across every project dir.
     function _refreshConversations(): void {
         if (!root.active)
             return;
@@ -220,16 +247,19 @@ Singleton {
             return;
         const sids = [];
         for (const a of AgentService.agents) {
+            if (a.remote === true)
+                continue;
+            if (!root._matchesFilter(a))
+                continue;
             const sid = a.session_id ?? "";
             if (sid)
                 sids.push(sid);
         }
-        if (sids.length === 0) {
-            root.conversations = ({});
+        if (sids.length === 0)
             return;
-        }
         convoReader.command = ["python3", root._readerScript].concat(sids);
         convoReader.running = true;
+        convoWatchdog.restart();
     }
 
     Process {
@@ -237,12 +267,44 @@ Singleton {
 
         stdout: StdioCollector {
             onStreamFinished: {
+                convoWatchdog.stop();
+                // Identical output → leave `conversations` alone; see _lastReaderText.
+                if (text === root._lastReaderText)
+                    return;
                 try {
-                    root.conversations = JSON.parse(text || "{}");
+                    const parsed = JSON.parse(text || "{}");
+                    root._lastReaderText = text;
+                    root.conversations = parsed;
                 } catch (e) {
                     // Keep the previous map on a parse failure rather than blanking.
+                    console.warn("[AgentOverview] transcript reader emitted unparseable output:", e);
                 }
             }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: ProcessUtils.logStderr("AgentOverview", "transcript reader", text)
+        }
+
+        onExited: (exitCode, exitStatus) => {
+            convoWatchdog.stop();
+            if (exitCode !== 0)
+                console.warn("[AgentOverview] transcript reader exited with code", exitCode);
+        }
+    }
+
+    // Watchdog for a reader that never finishes (blocked FS, stalled python).
+    // Without it, `convoReader.running` would stay true forever and the
+    // `running` guard in _refreshConversations would silently skip every
+    // subsequent refresh for the rest of the shell's lifetime. Declared as a
+    // sibling of the Process, not a child — see commit 04c5f9b3.
+    Timer {
+        id: convoWatchdog
+
+        interval: 5000
+        onTriggered: {
+            console.warn("[AgentOverview] transcript reader timed out; killing");
+            convoReader.running = false;
         }
     }
 

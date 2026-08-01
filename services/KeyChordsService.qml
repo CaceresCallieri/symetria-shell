@@ -42,7 +42,8 @@ Singleton {
     readonly property string activeGroupTitle: _activeGroupTitle
     property string _activeGroupTitle: ""
 
-    /// JS array of {key, label, command?, group?} for the current group.
+    /// JS array of {key, label, command?, group?, when?} for the current group,
+    /// already filtered by each entry's `when` condition.
     readonly property var activeChords: _activeChords
     property var _activeChords: []
 
@@ -56,31 +57,37 @@ Singleton {
     /// Activate a chord group by name. Toggles off if same group is already active.
     /// Note: the toggle-dismiss applies to sub-groups too — navigating to the same
     /// group twice in a row (e.g., pressing the same chord key again) dismisses the overlay.
-    function activate(group: string): void {
+    ///
+    /// Returns true only when a group was actually put on screen. Callers MUST
+    /// respect that: dispatchChord used to push the parent onto _groupHistory
+    /// before calling this, so any early return left history holding a duplicate
+    /// of the still-displayed group — and Escape then hit the toggle-dismiss
+    /// branch below and closed the overlay instead of navigating back.
+    function activate(group: string): bool {
         console.warn("[KeyChords:Service] activate() called with group:", group, "| current active:", active, "| current group:", _activeGroup);
         if (!group) {
             console.warn("[KeyChords:Service] activate() called with empty group");
-            return;
+            return false;
         }
 
         // Toggle behavior: same group → dismiss
         if (active && _activeGroup === group) {
             console.warn("[KeyChords:Service] Toggle-dismiss: same group, dismissing");
             dismiss();
-            return;
+            return false;
         }
 
         const groupData = chordGroups[group];
         if (!groupData) {
             console.warn("[KeyChords:Service] Unknown chord group:", group, "| available groups:", Object.keys(chordGroups));
-            return;
+            return false;
         }
 
         // Defensive: validateGroups guarantees chords is non-empty, but guard against
         // direct mutations of chordGroups outside the normal load/validate path.
         if (!groupData.chords || groupData.chords.length === 0) {
             console.warn("[KeyChords:Service] Chord group is empty:", group);
-            return;
+            return false;
         }
 
         // Conditional entries (`when`) are filtered once at activation, not bound
@@ -89,7 +96,7 @@ Singleton {
         const visibleChords = groupData.chords.filter(c => _conditionMet(c.when));
         if (visibleChords.length === 0) {
             console.warn("[KeyChords:Service] All chords hidden by conditions in group:", group);
-            return;
+            return false;
         }
 
         _activeGroup = group;
@@ -99,7 +106,8 @@ Singleton {
         if (!active)
             _targetMonitor = Hypr.focusedMonitor;
         active = true;
-        console.warn("[KeyChords:Service] Activated group:", group, "| chords:", groupData.chords.length, "| active is now:", active, "| targetMonitor:", targetMonitor?.name ?? "null");
+        console.warn("[KeyChords:Service] Activated group:", group, "| chords:", visibleChords.length, "of", groupData.chords.length, "| active is now:", active, "| targetMonitor:", targetMonitor?.name ?? "null");
+        return true;
     }
 
     /// Dismiss the overlay without executing any command. Clears navigation history.
@@ -117,7 +125,12 @@ Singleton {
         if (_groupHistory.length > 0) {
             const parent = _groupHistory.pop();
             _groupHistory = _groupHistory; // trigger binding update
-            activate(parent);
+            // The parent can legitimately fail to re-activate — e.g. every one of
+            // its entries is now hidden by a `when` condition that flipped while
+            // the sub-group was open. Dismiss rather than stranding the user on a
+            // sub-group whose Escape appears to do nothing.
+            if (!activate(parent))
+                dismiss();
         } else {
             dismiss();
         }
@@ -128,9 +141,12 @@ Singleton {
     /// If a chord has both `group` and `command`, `group` takes precedence.
     function dispatchChord(chord: var): void {
         if (chord.group) {
-            _groupHistory.push(_activeGroup);
-            _groupHistory = _groupHistory; // trigger binding update
-            activate(chord.group);
+            // Push history only if the navigation actually happened — see activate().
+            const previous = _activeGroup;
+            if (activate(chord.group)) {
+                _groupHistory.push(previous);
+                _groupHistory = _groupHistory; // trigger binding update
+            }
         } else {
             dismiss();
             _executeCommand(chord.command);
@@ -181,6 +197,11 @@ Singleton {
     /// negate (e.g. "recording", "!recording"). Missing/empty → always visible.
     /// Unknown names warn and default to visible so a chords.json typo degrades
     /// to the pre-`when` behavior instead of silently hiding an entry.
+    ///
+    /// Sharp edge on "recording": it reflects Recorder.running, which is not set
+    /// at start() but confirmed by polling for the gpu-screen-recorder process —
+    /// and for region captures not until slurp exits. Opening the menu during
+    /// that window still shows the pre-start variant.
     function _conditionMet(when: var): bool {
         if (typeof when !== "string" || when.length === 0)
             return true;

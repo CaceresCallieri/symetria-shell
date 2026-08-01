@@ -349,6 +349,10 @@ class AgentBridge:
                     "project": project,
                     "title": inst.get("title", ""),
                     "color_idx": inst.get("color_idx", 0),
+                    # Symmetria's own UI no longer renders this (the skip-perms
+                    # badge was dropped once dangerous mode became the norm), but
+                    # it stays in the snapshot for external consumers such as
+                    # vigiliad. Do not sweep it as dead code on the QML side alone.
                     "dangerous": inst.get("dangerous", False),
                     "active": inst.get("active", False),
                     "spawn_type": inst.get("spawn_type", "fresh"),
@@ -540,12 +544,16 @@ class AgentBridge:
             # Sticky conversation context (same overwrite-only-when-present
             # pattern as session_id): last_prompt arrives on UserPromptSubmit,
             # last_messages on Stop. Absent on every other event → keep prior.
+            # Clamped on ingest rather than trusted: these come from any client
+            # on the socket and then ride along in EVERY snapshot for the rest of
+            # the agent's life, so an oversized payload would permanently inflate
+            # every broadcast. Bounds mirror the hook's own 3 x 280 contract.
             last_prompt = msg.get("last_prompt", "")
-            if last_prompt:
-                self._last_prompts[agent_id] = last_prompt
+            if isinstance(last_prompt, str) and last_prompt:
+                self._last_prompts[agent_id] = last_prompt[:300]
             last_messages = msg.get("last_messages")
             if isinstance(last_messages, list) and last_messages:
-                self._last_messages[agent_id] = last_messages
+                self._last_messages[agent_id] = [str(m)[:300] for m in last_messages[-3:]]
 
             prev_entry = self._activities.get(agent_id)
             prev_state = prev_entry.get("state", "") if prev_entry else ""

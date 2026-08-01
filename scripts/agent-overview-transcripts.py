@@ -21,6 +21,7 @@ import glob
 import json
 import os
 import sys
+import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -36,8 +37,19 @@ _PROJECTS_DIR = os.path.join(
 
 
 def _transcript_for(session_id: str) -> str:
+    """Newest transcript matching this session id, or "" if there is none.
+
+    Duplicate hits do happen — a project dir that is a symlink to another globs
+    twice — so pick by mtime rather than trusting glob's filesystem-dependent
+    ordering. A file vanishing between glob and stat must not abort the batch.
+    """
     hits = glob.glob(os.path.join(_PROJECTS_DIR, "*", f"{session_id}.jsonl"))
-    return hits[0] if hits else ""
+    if not hits:
+        return ""
+    try:
+        return max(hits, key=os.path.getmtime)
+    except OSError:
+        return hits[0]
 
 
 def main() -> None:
@@ -58,4 +70,8 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
+        # stdout must stay valid JSON for the QML reader, so the trace goes to
+        # stderr — which AgentOverviewService collects into `qs log`. Without
+        # this the only symptom of a crash here is "the cards are blank".
+        traceback.print_exc(file=sys.stderr)
         sys.stdout.write("{}")

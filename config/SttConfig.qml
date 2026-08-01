@@ -110,8 +110,10 @@ JsonObject {
     // Audio ducking: lower the master sink volume while the mic is hot
     // (recording, not paused) so background audio contaminates the
     // transcription less. volume is ABSOLUTE: the sink is set to this level
-    // while ducked (0.3 = 30%), unless it was already lower — ducking never
-    // raises the volume.
+    // while ducked (0 = full silence, 0.3 = 30%), unless it was already lower —
+    // ducking never raises the volume. shell.json currently overrides this to 0;
+    // see the diagnostic note in AudioDucking.qml for how a crash mid-duck then
+    // presents.
     property JsonObject ducking: JsonObject {
         property bool enabled: true
         property real volume: 0.3

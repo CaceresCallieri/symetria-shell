@@ -30,6 +30,14 @@ try:
 except Exception:
     _TRANSCRIPT_OK = False
 
+    # The prompt arrives free in the event payload and needs nothing from the
+    # shared module but this three-line clip, so keep reporting it even when the
+    # import fails — only last_messages (which needs the transcript parser)
+    # depends on _TRANSCRIPT_OK.
+    def truncate(s, maxlen=280):
+        s = " ".join((s or "").split())
+        return s if len(s) <= maxlen else s[:maxlen].rstrip() + "…"
+
 SOCKET_PATH = os.environ.get(
     "SYMMETRIA_AGENT_SOCKET",
     f"/run/user/{os.getuid()}/symmetria-agents.sock",
@@ -323,7 +331,7 @@ def main():
     # payload; the recent assistant turns are read from the transcript tail only
     # at turn end (Stop), keeping transcript I/O off the per-tool hot path. The
     # bridge stores both stickily (like session_id) and forwards them in snapshots.
-    if _TRANSCRIPT_OK and hook_name in ("UserPromptSubmit", "UserPromptExpansion"):
+    if hook_name in ("UserPromptSubmit", "UserPromptExpansion"):
         prompt = event.get("prompt", "")
         if isinstance(prompt, str) and prompt.strip():
             activity_payload["last_prompt"] = truncate(prompt.strip(), 280)
