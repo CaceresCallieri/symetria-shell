@@ -8,20 +8,27 @@ Symmetria Shell is a Quickshell-based desktop shell for Hyprland — a fork of [
 
 **Do NOT use Chrome DevTools MCP tools** — this is a native Wayland desktop shell, not a web application. Use `grim` for screenshots.
 
-**Do NOT start, restart, or kill the shell process.** The user runs Symmetria as their active desktop shell. **NEVER run `qs -c symmetria`, `symmetria shell`, or any launch command** — not even for diagnostics. After QML/asset changes, clear the cache and inform the user that a restart is needed:
+**Do NOT start, restart, or kill the shell process.** The user runs Symmetria as their active desktop shell. **NEVER run `qs -c symmetria`, `symmetria shell -d`, `qs kill`, `pkill qs`, or any other launch/kill command** — not even for diagnostics. After QML/asset changes, clear the cache and inform the user that a restart is needed:
 ```bash
 rm -rf ~/.cache/quickshell/qmlcache
 # Let the user restart manually
 ```
 
-**Process management:** The QuickShell binary is `qs`, NOT `quickshell`. To kill: `pkill qs`. To check: `pgrep -fa qs | grep -v grep | grep -v zsh | grep -v python | grep -v claude`. Using `pkill quickshell` or `pgrep quickshell` does NOTHING — the process name is `qs`.
+This prohibits **launching and killing**. It does NOT prohibit **IPC against the already-running shell** — `symmetria shell <target> <function>` (e.g. `symmetria shell lock lock`) is normal usage and is how you exercise a running feature. The two are different commands that happen to share a prefix.
+
+**Process management:** The QuickShell binary is `qs`, NOT `quickshell`. To check: `pgrep -fa qs | grep -v grep | grep -v zsh | grep -v python | grep -v claude`. `pkill quickshell` / `pgrep quickshell` match NOTHING — the process name is `qs`, which is the only reason the `pkill qs` form is mentioned here at all; killing is prohibited (see above).
 
 ## Build & Run
 
-**QML / SVG / Asset changes** — no compilation needed:
+**QML / SVG / image changes** — no compilation needed. Clear the cache, then ask the user to restart (see the never-launch rule above):
 ```bash
 rm -rf ~/.cache/quickshell/qmlcache
-symmetria shell -d
+```
+
+**Shader changes** (`assets/shaders/*.frag`) — compilation IS needed. The shell loads the compiled `.qsb`, never the `.frag`, so editing the `.frag` alone changes nothing and reports no error:
+```bash
+/usr/lib/qt6/bin/qsb --glsl "100es,120,150" --hlsl 50 --msl 12 \
+  -o assets/shaders/NAME.frag.qsb assets/shaders/NAME.frag
 ```
 
 **C++ plugin changes** (`plugin/src/`):
@@ -182,6 +189,10 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Repeater over a rebuilt JS array resets all delegates** — A `Repeater` whose `model:` is a plain JS array cannot diff updates: every reassignment is a full reset (all delegates destroyed + recreated). When the array is re-parsed each update (e.g. bridge snapshots) and the delegate animates, frequent updates flash transient/wrong state onto unchanged siblings. Symptom: idle agent chips animated "busy" whenever an OpenCode sibling churned. Fix: wrap in `ScriptModel { values: <array>; objectProp: "id" }` (`"id"` is the agent-chip key; use whatever property is the stable unique key in your model) to key delegates on a stable id so they update in place. Use this for any animated Repeater bound to a rebuilt array. → `docs/qml-pitfalls.md`
 
+**`Component.onCompleted` in a singleton needs `import QtQuick`** — Quickshell's own modules do not bring `Component` into scope. A data-only singleton never needed `QtQuick`, so the import only becomes necessary the moment someone adds a lifecycle hook — and Quickshell resolves the whole singleton graph at startup, so the unresolvable attached object means **the shell does not start at all**. The error is ~35 lines of unrelated `Type X unavailable` with the real cause on the last line; read it bottom-up. `qmllint` cannot catch it (it exits 255 with no output on any file importing Quickshell types), so a singleton change is unverified until the shell has actually been restarted. → `docs/qml-pitfalls.md`
+
+**`ShaderEffect` binds uniforms BY NAME** — renaming a QML property without renaming it in the shader's `buf` block silently leaves the uniform zero-initialised; no error, and `status == Compiled`. Same silent-render class: a missing or stale `.qsb` draws nothing at all, and headless rendering without `QT_QUICK_BACKEND=rhi` falls back to the software renderer, which also draws `ShaderEffect` as nothing. → `docs/qml-pitfalls.md`
+
 **`readonly property` blocks ALL assignment** — `readonly` in QML means the property has ONE value source (its initializer) and forbids imperative assignment from *any* scope, including signal handlers in the same file — there is no "internal write" exception. Any property written imperatively by an internal `FileView`/`Process`/`Timer` handler must stay a plain writable `property`; marking it `readonly` makes the handler's assignment silently no-op, freezing the value. `qmllint` can't catch this by design (exits 255 on unresolved Quickshell imports). Symptom: `QuietMode.enabled` made `readonly` by a code review → `FileView.onLoaded` write failed → Silent toggle frozen false. → `docs/qml-pitfalls.md`
 
 ## Deep Dives
@@ -191,7 +202,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 **Architecture & Extension:**
 - [`drawer-extension-guide.md`](docs/drawer-extension-guide.md) — Panel backgrounds, bar pill pattern, FocusManager usage
 - [`ags-porting-reference.md`](docs/ags-porting-reference.md) — AGS bar features to port (workspace icons, updates, Kanata, submap)
-- [`beams-background.md`](docs/beams-background.md) — Metallic beams shader: why it needs no 3D, the calibrations that aren't obvious, the reveal animation, and how to iterate headless
+- [`beams-background.md`](docs/beams-background.md) — Read before touching the lock screen background, `Config.lock.beams`, or any `ShaderEffect`: shader calibration, the reveal-timing normalisation, `.qsb` recompilation, and headless iteration
 
 **Pitfalls & Research:**
 - [`qml-pitfalls.md`](docs/qml-pitfalls.md) — All QML gotchas consolidated

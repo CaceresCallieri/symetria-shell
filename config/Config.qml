@@ -377,13 +377,36 @@ Singleton {
 
     function serializeLock(): var {
         return {
-            recolourLogo: lock.recolourLogo,
             enableFprint: lock.enableFprint,
             maxFprintTries: lock.maxFprintTries,
             sizes: {
-                heightMult: lock.sizes.heightMult,
-                ratio: lock.sizes.ratio,
-                centerWidth: lock.sizes.centerWidth
+                fieldWidth: lock.sizes.fieldWidth
+            },
+            // Every Beams key must be listed. Config.save() rewrites shell.json
+            // wholesale from these serializers, so anything omitted here is
+            // silently DELETED from the user's file the next time any settings
+            // pane saves — which would quietly defeat the "tune it by editing
+            // shell.json" workflow this block exists for.
+            beams: {
+                speed: lock.beams.speed,
+                noiseScale: lock.beams.noiseScale,
+                grain: lock.beams.grain,
+                beamWidth: lock.beams.beamWidth,
+                rotation: lock.beams.rotation,
+                roughness: lock.beams.roughness,
+                lightIntensity: lock.beams.lightIntensity,
+                ambient: lock.beams.ambient,
+                edgeDarken: lock.beams.edgeDarken,
+                sheenRoughness: lock.beams.sheenRoughness,
+                sheenStrength: lock.beams.sheenStrength,
+                fresnel: lock.beams.fresnel,
+                stagger: lock.beams.stagger,
+                growSpan: lock.beams.growSpan,
+                beamQuantise: lock.beams.beamQuantise,
+                feather: lock.beams.feather,
+                frontGlow: lock.beams.frontGlow,
+                growFlip: lock.beams.growFlip,
+                revealDuration: lock.beams.revealDuration
             }
         };
     }

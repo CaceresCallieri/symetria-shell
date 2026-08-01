@@ -1,15 +1,18 @@
 pragma ComponentBehavior: Bound
 
-import qs.config
 import Quickshell
 import QtQuick
 
 // Animated metallic beams — a 2D port of the React Bits <Beams /> background.
 //
 // The shader (assets/shaders/beams.frag) does all the work; this wrapper exists
-// to give it a readable API, own the time animation, and read tuning values from
-// Config.lock.beams so the look can be adjusted by editing shell.json instead of
-// by recompiling anything.
+// to give it a readable API and own the time animation.
+//
+// Tuning values arrive via `cfg` rather than being read from Config here: this
+// lives in components/effects/ and must not know that a lock screen exists, or
+// a second consumer would silently inherit lock-screen tuning it cannot
+// override. The shape of `cfg` is the schema in config/LockConfig.qml
+// (component Beams).
 //
 // The item paints with PREMULTIPLIED alpha: revealed area is opaque, unrevealed
 // area is fully transparent. That is what lets it wipe in over whatever sits
@@ -34,17 +37,20 @@ Item {
     // settable directly only to reproduce a deterministic frame.
     property real time: 0
 
-    readonly property var cfg: Config.lock.beams
+    // intentional var: heterogeneous tuning block, see config/LockConfig.qml
+    required property var cfg
 
     NumberAnimation on time {
         running: root.animating && root.visible
         loops: Animation.Infinite
         from: 0
-        // Long cycle rather than a short loop: the noise is sampled at
-        // time * uSpeed * 3, so a short period would make the wave visibly
-        // repeat. 600s at this speed never reads as a loop.
-        to: 600
-        duration: 600000
+        // Long ramp rather than a short loop, for two reasons: the noise is
+        // sampled at time * uSpeed * 3, so a short period would make the wave
+        // visibly repeat — and every wrap back to 0 is a DISCONTINUITY in the
+        // height field, i.e. a one-frame jump. A day-long ramp puts that jump
+        // beyond any plausible lock session instead of every ten minutes.
+        to: 86400
+        duration: 86400000
     }
 
     ShaderEffect {
@@ -78,6 +84,12 @@ Item {
         property real uFresnel: root.cfg.fresnel
 
         property vector2d uResolution: Qt.vector2d(Math.max(width, 1), Math.max(height, 1))
+
+        // Deliberately NOT config-driven, unlike every other parameter above:
+        // the calibrations in docs/beams-background.md — the gain on D, the
+        // ambient level, the vignette falloff — were all solved against a white
+        // light along this direction. Exposing these would let a tint or angle
+        // change silently invalidate them.
         property vector4d uLightColour: Qt.vector4d(1, 1, 1, 1)
         property vector4d uLightDir: Qt.vector4d(0, 3, 10, 0)
 

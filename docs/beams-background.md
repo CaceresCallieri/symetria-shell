@@ -7,6 +7,14 @@ A 2D port of [React Bits `<Beams />`](https://reactbits.dev/backgrounds/beams).
 Used as the lock screen background, where it also plays the reveal animation that
 covers the desktop.
 
+**The lock screen deliberately shows nothing but the beams and a password
+field.** The upstream six-panel grid — clock, date, avatar, weather, fetch,
+media, resources, notifications — was removed because the panels competed with
+the background for attention; the wipe is the point of the screen. Re-adding
+informational panels reverses an explicit design decision rather than filling a
+gap. The eight deleted files are recoverable from history if that decision is
+ever revisited.
+
 ## Why it does not need three.js
 
 The original stacks N vertical planes, displaces their vertices in Z with 3D
@@ -44,7 +52,8 @@ has a tight highlight sitting on a wide sheen, so `uSheenRoughness` /
 breadth instead of making them a gradient.
 
 **The microstructure must stay static.** Established empirically before this port
-(`~/projects/chamba-hq/website/docs/beams-metal-eval.md`): animated surface noise
+(machine-local, outside this repo: `~/projects/chamba-hq/website/docs/beams-metal-eval.md`
+— if absent, treat the finding below as settled rather than re-litigating it): animated surface noise
 reads as fake, because real metal has fixed microstructure and only its
 *reflections* move. Here the noise-driven height field moves — that is the
 reflection — while the per-pixel grain is derived from `gl_FragCoord` and so is
@@ -59,7 +68,8 @@ field, which is the same thing the original computes per vertex.
 
 `uReveal` 0 → 1 wipes the beams in. The item paints with **premultiplied alpha**:
 revealed area is opaque, unrevealed area is fully transparent, so it composites
-over whatever is behind it (on the lock screen, the blurred desktop screencopy).
+over whatever is behind it (on the lock screen, the desktop screencopy — which is
+deliberately NOT blurred; see the comment at `modules/lock/LockSurface.qml`).
 
 The front is defined in the **rotated** beam frame, so it belongs to the beams
 rather than being a rectangle sliding over them:
@@ -92,6 +102,17 @@ A consequence worth knowing: **`uStagger` and `uGrowSpan` now set only the
 direction of the front (their ratio), never the duration.** Duration is always
 exactly one sweep of `uReveal`. Use `Config.lock.beams.revealDuration` for timing.
 
+**The `clamp(un, 0, 1)` after that normalisation is load-bearing, not tidying.**
+`halfRange` is solved from the *continuous* form of `u`, but with
+`uBeamQuantise > 0` the delay snaps to each beam's centre, which can sit up to
+half a beam-width outside the sampled range. Measured at the shipped defaults
+(16:10, quantise 1.0), `un` reached 1.025 — leaving the corner beam at
+`mask ≈ 0.82` when `uReveal` was 1, i.e. **18% of the desktop stayed visible for
+the entire lock session.** Verified by rendering reveal=1 over magenta and
+measuring the bleed: 47/255 before the clamp, 0/255 after. Any future change to
+how `delay` is derived must preserve that clamp or re-derive `halfRange` from the
+quantised form.
+
 ## Iterating on the look
 
 Values live in `~/.config/symmetria/shell.json` under `lock.beams` (symlinked to
@@ -115,6 +136,11 @@ QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=opengl QT_QUICK_BACKEND=rhi \
   QT_LOGGING_RULES='qml=true' QT_FORCE_STDERR_LOGGING=1 qml6 harness.qml
 ```
 
+`harness.qml` is written ad hoc — there is no tracked copy. The minimum is a
+`Window { id: win; visible: true }` holding the `ShaderEffect` with its uniforms
+set as literals, plus a `Timer` that calls `win.contentItem.grabToImage(...)` and
+`Qt.quit()`. Keep it in the scratch directory, not the repo.
+
 Without `QT_QUICK_BACKEND=rhi`, the offscreen platform falls back to the
 **software** renderer, which draws `ShaderEffect` as **nothing** — no error, no
 warning, and `status == Compiled`. It is easy to lose an hour chasing maths that
@@ -127,3 +153,7 @@ unversioned imports these harnesses use).
 `ShaderEffect` maps QML properties to uniforms **by name**. Renaming a property in
 `BeamsBackground.qml` without renaming it in the `buf` block silently drops it —
 the uniform keeps its zero-initialised value rather than raising an error.
+
+This applies to every `ShaderEffect` in the repo, not just this one, so the full
+writeup — along with the "missing/stale `.qsb` renders nothing" and headless
+rendering traps — lives in `docs/qml-pitfalls.md`.

@@ -1,16 +1,16 @@
 import Quickshell.Io
 
 JsonObject {
-    property bool recolourLogo: false
     property bool enableFprint: true
     property int maxFprintTries: 3
     property Sizes sizes: Sizes {}
     property Beams beams: Beams {}
 
     component Sizes: JsonObject {
-        property real heightMult: 0.7
-        property real ratio: 16 / 9
-        property int centerWidth: 600
+        // Width of the password field, in pixels. This is the ONLY geometry the
+        // lock screen has left — heightMult/ratio/centerWidth sized the panel
+        // grid that the beams rebuild removed.
+        property int fieldWidth: 261
     }
 
     // Tuning for the metallic beams background (components/effects/BeamsBackground.qml

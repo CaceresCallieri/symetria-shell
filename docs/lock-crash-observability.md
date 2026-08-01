@@ -18,12 +18,20 @@ hygiene task, not a fix for this.)
 Forensics on a real episode (2026-06-07) showed the `qs` shell **alive the whole
 time** (4h+ uptime across three resumes) with **no coredump in 6+ weeks**. So the
 failure is almost certainly **not a process crash**. The lock surface is
-`color: "transparent"`; its only opaque content is a live, blurred
-`ScreencopyView` of the screen. Hyprland removes/re-adds outputs across
+`color: "transparent"`; at the time of this episode its only opaque content was a
+blurred `ScreencopyView` of the screen. Hyprland removes/re-adds outputs across
 suspend/resume, and `WlSessionLockSurface` is per-output — so on resume the
 surface is recreated while the capture source churns. If the recreated
 `ScreencopyView` never gets a frame, the lock is a transparent sheet over the
 compositor's blank session-lock fallback: **armed but undrawn, qs still alive**.
+
+**Updated after the beams rebuild.** The `ScreencopyView` is no longer blurred and
+is no longer the surface's only opaque content — `BeamsBackground` sits above it
+and is fully opaque once revealed. So the *symptom* of this failure has changed:
+a blank capture now presents as beams-over-black rather than a fully transparent
+surface. The signal itself (`LockDiagnostics.markScreencopy`) is unchanged and
+still worth watching. Mitigation 3 below is correspondingly weaker as a
+suggestion, since the beams already provide the opaque fallback it asked for.
 
 That inverts the usual "supervise the locker process" approach: the highest-value
 vantage point is **in-process** (qs survives and can self-report why the surface

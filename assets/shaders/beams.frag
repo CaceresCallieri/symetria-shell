@@ -129,7 +129,12 @@ float beamHeight(float along, float seed, float t) {
 
 // GGX normal distribution. The blown-out core of this lobe IS the highlight.
 float ggx(float NdotH, float roughness) {
-    float a = roughness * roughness;
+    // Floor the roughness: at exactly 0, a2 is 0 and d collapses to
+    // 1 - NdotH*NdotH, so a fragment facing the half-vector returns 0/0 = NaN.
+    // NaN survives the max(col, 0.0) below and paints garbage. Reachable from
+    // shell.json, so it has to be guarded here rather than assumed.
+    float a = max(roughness, 0.01);
+    a = a * a;
     float a2 = a * a;
     float d = NdotH * NdotH * (a2 - 1.0) + 1.0;
     return a2 / (3.14159265 * d * d);
@@ -148,7 +153,12 @@ void main() {
     float s = sin(uRotation);
     vec2 q = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
 
-    float band = q.x / uBeamWidth;
+    // Guarded: beamWidth 0 in shell.json would give inf -> floor -> NaN, which
+    // propagates all the way to `mask`. The beams layer would then composite as
+    // fully transparent and the lock screen would show the bare desktop
+    // snapshot — a config typo turning into a privacy failure.
+    float beamWidth = max(uBeamWidth, 0.01);
+    float band = q.x / beamWidth;
     float bid = floor(band);
     float local = fract(band);
 
@@ -183,7 +193,7 @@ void main() {
     // beam's centre, so beams snap in one after another as discrete objects.
     // Within a beam `growth` still varies either way, so a beam always fills
     // along its own length rather than appearing all at once.
-    float bandCentreQx = (bid + 0.5) * uBeamWidth;
+    float bandCentreQx = (bid + 0.5) * beamWidth;
     float acrossQuantised = bandCentreQx / qxMax * 0.5 + 0.5;
     float delay = mix(across, acrossQuantised, uBeamQuantise);
 
@@ -203,6 +213,20 @@ void main() {
     float halfRange = max(abs(A) * hx + abs(B) * hy, 1e-4);
     float uCentre = 0.5 * (uStagger + uGrowSpan);
     float un = (u - (uCentre - halfRange)) / (2.0 * halfRange);
+
+    // The clamp is load-bearing, NOT defensive tidying.
+    //
+    // halfRange is solved from the CONTINUOUS form of u, but when
+    // uBeamQuantise > 0 the delay snaps to each beam's centre, which can sit up
+    // to half a beam-width outside the sampled range. un then overshoots [0,1]
+    // — measured at the shipped defaults (16:10, quantise 1.0): un reaches
+    // 1.025, leaving the corner beam at mask 0.82 when uReveal is 1. That is
+    // 18% of the desktop snapshot staying visible for the ENTIRE lock session,
+    // not a cosmetic seam. Symmetrically, a sliver of beam shows at reveal 0.
+    //
+    // Clamping costs only a negligible flattening of the timing at the two
+    // extremes, and guarantees full coverage at reveal 1 and none at reveal 0.
+    un = clamp(un, 0.0, 1.0);
 
     // A consequence worth knowing: because the range is renormalised, uStagger
     // and uGrowSpan now set only the DIRECTION of the front (their ratio), never
@@ -289,6 +313,12 @@ void main() {
     // covers whatever sits behind — on the lock screen that is the desktop
     // screencopy. Multiplying colour by mask as well keeps it premultiplied,
     // which is what Qt Quick's blend expects.
+    //
+    // Note rgb may exceed alpha at the blown GGX core and inside the front
+    // glow, which technically breaks the premultiplied invariant. Deliberate:
+    // the blowout IS the highlight, and the 8-bit UNORM target clamps it
+    // harmlessly. Revisit only if this is ever composited to a float/HDR
+    // target, where it would show as over-bright fringing.
     col = max(col, vec3(0.0)) * mask;
     fragColor = vec4(col, mask) * qt_Opacity;
 }

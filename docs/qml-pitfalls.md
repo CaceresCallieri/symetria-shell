@@ -573,3 +573,52 @@ correct; the missing import was not caught because `qmllint` cannot resolve
 Quickshell imports (it exits 255 and reports nothing), so nothing between writing
 the guard and launching the shell could have flagged it. **A change to a
 singleton is not verified until the shell has actually been restarted.**
+
+## ShaderEffect binds uniforms BY NAME — a mismatch is silent
+
+`ShaderEffect` maps QML properties onto shader uniforms by matching their names.
+There is no validation in either direction:
+
+- Rename a QML property without renaming it in the shader's `buf` block, and the
+  uniform silently keeps its zero-initialised value. No error, no warning, and
+  `status == ShaderEffect.Compiled`. The render just quietly changes.
+- The reverse (a uniform with no matching QML property) is equally quiet.
+
+So the uniform names are a **contract between two files** that no tool enforces.
+Rename both sides in one edit, and recompile the `.qsb`.
+
+Two more silent-render traps in the same family, both of which cost real time:
+
+- **A missing or stale `.qsb` renders NOTHING.** The shell loads the compiled
+  `.qsb`, never the `.frag`. Editing the `.frag` without recompiling ships the
+  old shader; pointing `fragmentShader` at a path that does not exist draws an
+  empty rectangle. Neither logs anything.
+- **Headless rendering needs three env vars, not two** (see below).
+
+Instances: `assets/shaders/beams.frag` ↔ `components/effects/BeamsBackground.qml`,
+and `assets/shaders/opacitymask.frag` ↔ `components/effects/OpacityMask.qml`.
+
+## Headless QML silently draws ShaderEffect as nothing without `QT_QUICK_BACKEND=rhi`
+
+To render QML offscreen — the way to iterate on a shader without touching the
+running shell — **all three** of these are required:
+
+```bash
+QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=opengl QT_QUICK_BACKEND=rhi \
+  QT_LOGGING_RULES='qml=true' QT_FORCE_STDERR_LOGGING=1 qml6 harness.qml
+```
+
+Without `QT_QUICK_BACKEND=rhi`, the offscreen platform falls back to the
+**software** renderer, which draws `ShaderEffect` as **nothing** — no error, no
+warning, and `status == Compiled`. It is easy to lose an hour chasing maths that
+was already correct.
+
+Two more details that are easy to miss:
+
+- Qt logging is off by default on this system, hence the last two variables —
+  without them `console.log` produces no output.
+- Use `qml6`, not `qml`. The unversioned binary rejects the unversioned imports
+  (`import QtQuick` with no version) that these harnesses use, with
+  `Library import requires a version`.
+
+Harnesses are written ad hoc and kept in the scratch directory, not the repo.

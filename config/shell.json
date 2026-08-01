@@ -391,13 +391,10 @@
     }
   },
   "lock": {
-    "recolourLogo": false,
     "enableFprint": true,
     "maxFprintTries": 3,
     "sizes": {
-      "heightMult": 0.7,
-      "ratio": 1.7777777777777777,
-      "centerWidth": 600
+      "fieldWidth": 261
     }
   },
   "utilities": {

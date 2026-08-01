@@ -38,6 +38,12 @@ WlSessionLockSurface {
         target: root.lock
 
         function onUnlock(): void {
+            // Stop the intro first: unlock can land DURING it (fingerprint, or
+            // an IPC/shortcut unlock right after locking). Both sequences drive
+            // beams.reveal and the prompt's opacity/scale, so leaving initAnim
+            // running lets them fight frame to frame — the reveal can animate
+            // back UP after the retract has started.
+            initAnim.stop();
             unlockAnim.start();
         }
     }
@@ -117,6 +123,12 @@ WlSessionLockSurface {
         anchors.fill: parent
         captureSource: root.screen
 
+        // Explicit, because the whole design depends on it: this is a SNAPSHOT
+        // of the desktop at lock time. If it ever went live, the view would
+        // capture the lock surface it sits inside — a feedback loop plus
+        // continuous capture cost for the entire lock session.
+        live: false
+
         // THE smoking-gun signal. If hasContent never flips true while locked,
         // the lock is "armed but undrawn" — the exact crash signature — with qs
         // still alive. Logged for post-mortem and fed into the heartbeat the
@@ -129,10 +141,16 @@ WlSessionLockSurface {
         onHasContentChanged: LockDiagnostics.markScreencopy(root.screenName, hasContent)
     }
 
+    // One instance per output, by design. The beam bands derive from this
+    // surface's own UV and aspect, so on a multi-monitor setup the pattern does
+    // NOT span the desktop — each screen gets its own beams and its own wipe.
+    // Making it span would mean feeding global desktop coordinates through
+    // uResolution/qt_TexCoord0. Recorded so it isn't refiled as a bug.
     BeamsBackground {
         id: beams
 
         anchors.fill: parent
+        cfg: Config.lock.beams
         reveal: 0
     }
 
@@ -140,7 +158,7 @@ WlSessionLockSurface {
         id: prompt
 
         anchors.centerIn: parent
-        lock: root
+        surface: root
 
         opacity: 0
         scale: 0.9

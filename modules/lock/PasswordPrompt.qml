@@ -27,8 +27,15 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    required property var lock
-    readonly property Pam pam: lock.pam
+    // Named `surface`, not `lock`: it holds the LockSurface, while Pam.qml uses
+    // `lock` for the actual WlSessionLock. Two meanings of one word inside a
+    // five-file module is how the wrong object gets passed.
+    //
+    // Left as `var` rather than typed `LockSurface` on purpose — LockSurface.qml
+    // instantiates this file, so naming its type here would make the two files
+    // circularly dependent, which QML's type compiler can reject outright.
+    required property var surface
+    readonly property Pam pam: surface.pam
 
     implicitWidth: column.implicitWidth
     implicitHeight: column.implicitHeight
@@ -43,7 +50,7 @@ Item {
     }
 
     Keys.onPressed: event => {
-        if (root.lock.unlocking)
+        if (root.surface.unlocking)
             return;
 
         root.pam.handleKey(event);
@@ -59,7 +66,7 @@ Item {
             id: field
 
             Layout.alignment: Qt.AlignHCenter
-            implicitWidth: Config.lock.sizes.centerWidth * 0.435
+            implicitWidth: Config.lock.sizes.fieldWidth
             implicitHeight: input.implicitHeight + Appearance.padding.small * 2
 
             StateLayer {

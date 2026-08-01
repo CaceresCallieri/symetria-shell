@@ -25,10 +25,7 @@ Item {
             if (root.pam.buffer.length > root.buffer.length) {
                 charList.bindImWidth();
             } else if (root.pam.buffer.length === 0) {
-                // Freeze the width by assigning the current value over the
-                // binding, so the dots animate out instead of the list snapping
-                // shut underneath them. Looks like a no-op; it is not.
-                charList.implicitWidth = charList.implicitWidth;
+                charList.freezeImWidth();
             }
 
             root.buffer = root.pam.buffer;
@@ -53,6 +50,15 @@ Item {
             imWidthBehavior.enabled = false;
             implicitWidth = Qt.binding(() => fullWidth);
             imWidthBehavior.enabled = true;
+        }
+
+        // Inverse of bindImWidth: assigning a property over its binding is how
+        // QML BREAKS that binding, so this pins the width at its current value.
+        // It looks like a self-assigning no-op and is not — without it the list
+        // collapses the instant the buffer empties and the dots vanish rather
+        // than animating out.
+        function freezeImWidth(): void {
+            implicitWidth = implicitWidth;
         }
 
         anchors.centerIn: parent
