@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.config
+import qs.services
 import qs.utils
 import Symmetria
 import Quickshell
@@ -160,13 +161,73 @@ Singleton {
         return { background: background, border: border };
     }
 
-    // Unified pill style accessor — delegates to glassmorphism or mattePill
-    // based on config toggle. Same signature and return type as glassmorphism().
+    // Metal constants — machined dark surface.
+    //
+    // Unlike mattePill, the hue is FIXED rather than derived from the palette.
+    // Metal reads as metal by being chromatically neutral (a faint cool cast, as
+    // if lit by daylight); tinting it toward whatever the palette's hue happens
+    // to be turns it into coloured plastic. The palette still reaches metal
+    // surfaces through text, icons and accent colours — just not through the
+    // body of the material.
+    readonly property QtObject metalConstants: QtObject {
+        // Darker than matte's 0.10 — metal needs headroom above the body for the
+        // specular rim to read as bright. Contrast against the highlights is
+        // what sells the material, so the body is pushed down rather than the
+        // highlights merely pushed up: a bright rim on a mid-grey body reads as
+        // lit plastic, the same rim on a near-black body reads as metal.
+        readonly property real baseLightness: 0.042
+        readonly property real lightnessRange: 0.055
+
+        // Cool cast, barely saturated. ~209° at 5%.
+        readonly property real hue: 0.58
+        readonly property real saturation: 0.05
+
+        // The edge is derived from the BODY colour, lifted slightly in lightness
+        // and fully opaque — it is not white at low alpha.
+        //
+        // This distinction is the whole point. White-at-low-alpha over a cool
+        // near-black desaturates it toward neutral grey, so the outline reads as
+        // a *drawn line on top of* the surface — a diagram convention. Lifting
+        // the body's own colour keeps the cool cast intact, so the same pixel
+        // width reads as the surface's own machined edge catching a little more
+        // light than its face. Same thickness, completely different impression.
+        //
+        // The lift is applied to the pill's FINAL lightness (after intensity),
+        // so plates at different intensities keep a consistent edge relationship
+        // rather than the brighter ones losing their edge.
+        readonly property real borderLightnessLift: 0.038
+    }
+
+    // Metal pill helper: near-black cool body + slightly brighter edge.
+    // Same signature and return type as glassmorphism() / mattePill().
+    //
+    // baseColor is accepted for API symmetry but intentionally unused — see the
+    // fixed-hue rationale on metalConstants.
+    function metalPill(baseColor: color, intensity: real): var {
+        const clampedIntensity = Math.max(0, Math.min(1, intensity));
+        const lightness = metalConstants.baseLightness + clampedIntensity * metalConstants.lightnessRange;
+
+        const background = Qt.hsla(metalConstants.hue, metalConstants.saturation, lightness, 1.0);
+        const border = Qt.hsla(metalConstants.hue, metalConstants.saturation, Math.min(1.0, lightness + metalConstants.borderLightnessLift), 1.0);
+
+        return { background: background, border: border };
+    }
+
+    // Unified pill style accessor — delegates to the active theme's colour
+    // recipe. Same signature and return type across all of them.
+    //
+    // Reading Theme.material HERE is what makes theme switching live: QML
+    // captures binding dependencies dynamically, including properties read
+    // inside a called function, so every `Colours.pillStyle(...)` binding in the
+    // shell re-evaluates the moment Theme.material changes. No reload, no signal.
     function pillStyle(baseColor: color, intensity: real): var {
-        if (Appearance.pillStyle === "matte")
-            return mattePill(baseColor, intensity);
-        // Default / "glass": use glassmorphism as fallback for any non-"matte" value
-        return glassmorphism(baseColor, intensity);
+        if (Theme.material === "metal")
+            return metalPill(baseColor, intensity);
+        if (Theme.material === "glass")
+            return glassmorphism(baseColor, intensity);
+        // Default "clay" — and any unrecognised value, matching Theme's own
+        // fallback so colours and structure never disagree about the theme.
+        return mattePill(baseColor, intensity);
     }
 
     // Glassmorphism intensity presets for common use cases

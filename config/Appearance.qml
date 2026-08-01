@@ -11,5 +11,6 @@ Singleton {
     readonly property AppearanceConfig.FontStuff font: Config.appearance.font
     readonly property AppearanceConfig.Anim anim: Config.appearance.anim
     readonly property AppearanceConfig.Transparency transparency: Config.appearance.transparency
-    readonly property string pillStyle: Config.appearance.pillStyle
+    // `pillStyle` was forwarded here; it moved to the Theme singleton
+    // (services/Theme.qml) — use `Theme.material`.
 }

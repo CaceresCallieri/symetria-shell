@@ -18,6 +18,8 @@ Item {
     required property PersistentProperties visibilities
     required property BarPopouts.Wrapper popouts
     readonly property int hPadding: Config.bar.sizes.edgePadding
+    // FORM axis: true when bar plates extend above the screen edge.
+    readonly property bool bleeds: Theme.layout.barTopBleed > 0
     // External margin between glassmorphism pill components and adjacent bar entries
     readonly property int pillExternalMargin: Appearance.spacing.small
 
@@ -287,7 +289,13 @@ Item {
         id: leftSection
         anchors.left: parent.left
         anchors.leftMargin: leftRepeater.count > 0 ? root.hPadding : 0
-        anchors.verticalCenter: parent.verticalCenter
+        // FORM axis: when plates bleed past the screen edge they grow UPWARD, so
+        // the row must hang from the bar's bottom instead of being centred in it
+        // — otherwise the extra height splits evenly and half of it pushes the
+        // content down instead of off-screen. Assigning `undefined` clears the
+        // unused anchor; setting both at once is an error.
+        anchors.bottom: root.bleeds ? parent.bottom : undefined
+        anchors.verticalCenter: root.bleeds ? undefined : parent.verticalCenter
         spacing: Appearance.spacing.normal
 
         Repeater {
@@ -432,7 +440,9 @@ Item {
         id: rightSection
         anchors.right: parent.right
         anchors.rightMargin: rightRepeater.count > 0 ? root.hPadding : 0
-        anchors.verticalCenter: parent.verticalCenter
+        // See leftSection for why this hangs from the bottom when bleeding.
+        anchors.bottom: root.bleeds ? parent.bottom : undefined
+        anchors.verticalCenter: root.bleeds ? undefined : parent.verticalCenter
         spacing: Appearance.spacing.normal
 
         Repeater {
@@ -468,7 +478,7 @@ Item {
             || entryId === "timePill"
             || entryId === "systemPill"
 
-        Layout.alignment: Qt.AlignVCenter
+        Layout.alignment: root.bleeds ? Qt.AlignBottom : Qt.AlignVCenter
         Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
         Layout.rightMargin: hasPillMargins ? root.pillExternalMargin : 0
         visible: entryEnabled

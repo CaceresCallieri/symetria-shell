@@ -1,8 +1,14 @@
+import qs.components.effects
 import qs.config
 import qs.services
 import QtQuick
 import QtQuick.Effects
 
+// THEMED: structure lives here, material numbers come from `Theme.card`.
+// The prose below describes the CLAY recipe. The SHIPPED DEFAULT is now
+// METAL — see `material` in services/Theme.qml. Clay is still first-class,
+// reachable with `symmetria shell surface material clay`.
+//
 // Section-card container — CLAYMORPHISM half of the shell's two-tier
 // design hierarchy. Where PillToggleSurface uses strict
 // dark-monochrome NEUMORPHISM (austere, depth-only state signaling),
@@ -50,38 +56,38 @@ Item {
     readonly property var _defaultStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerLow, Colours.glass.subtle)
 
     property color color: _defaultStyle.background
-    property real radius: Appearance.rounding.normal
+    // FORM axis multiplier — see PillSurface.qml.
+    property real radius: Appearance.rounding.normal * Theme.layout.surfaceRounding
 
     // --- Border ----------------------------------------------------------
     property color borderColor: _defaultStyle.border
-    property real borderWidth: 1
+    property real borderWidth: Theme.card.borderWidth
 
-    // --- Two-shadow convex depth (claymorphic) ---------------------------
-    // Wider blur and slightly larger offsets than the neumorphic pill
-    // primitives — claymorphism wants softer, more diffuse shadows that
-    // wrap the element in ambient depth rather than the contained, sharp-
-    // edged depth of neumorphism. Tuned to land between "too glowy"
-    // (original 18 blur was a halo against busy wallpaper) and "too austere"
-    // (the previous 10 blur stripped away the warmth we want for cards).
-    property real darkShadowOffsetX: 3
-    property real darkShadowOffsetY: 4
-    property real darkShadowBlur: 14
-    property real darkShadowAlpha: 0.28
+    // --- Two-shadow convex depth -----------------------------------------
+    // Clay: wider blur and slightly larger offsets than the pill primitives —
+    // softer, more diffuse shadows that wrap the element in ambient depth.
+    // Tuned to land between "too glowy" (the original 18 blur was a halo
+    // against busy wallpaper) and "too austere" (10 blur stripped the warmth).
+    // Metal replaces this with a single tight, dark shadow.
+    property real darkShadowOffsetX: Theme.card.darkShadowOffsetX
+    property real darkShadowOffsetY: Theme.card.darkShadowOffsetY
+    property real darkShadowBlur: Theme.card.darkShadowBlur
+    property real darkShadowAlpha: Theme.card.darkShadowAlpha
 
-    property real lightShadowOffsetX: -3
-    property real lightShadowOffsetY: -3
-    property real lightShadowBlur: 11
-    property real lightShadowAlpha: 0.07
+    property real lightShadowOffsetX: Theme.card.lightShadowOffsetX
+    property real lightShadowOffsetY: Theme.card.lightShadowOffsetY
+    property real lightShadowBlur: Theme.card.lightShadowBlur
+    property real lightShadowAlpha: Theme.card.lightShadowAlpha
 
-    // --- Inner rim highlight (clay-derived) ------------------------------
-    // The defining claymorphism cues — a visible top rim that catches
-    // overhead light + a faint bottom inner-shadow that grounds the card
-    // as "embedded into the panel." These overlays are what differentiate
-    // the warm claymorphic card from the cool neumorphic pills inside it.
-    // Without them, the card would collapse into another neumorphic surface
-    // and lose its role as the visual frame.
-    property real highlightAlpha: 0.08
-    property real innerShadowAlpha: 0.03
+    // --- Inner rim highlight ---------------------------------------------
+    // Clay: a visible top rim that catches overhead light + a faint bottom
+    // inner-shadow that grounds the card as "embedded into the panel." These
+    // overlays are what differentiate the warm claymorphic card from the cool
+    // neumorphic pills inside it; without them the card collapses into another
+    // flat surface and loses its role as the visual frame. Metal moves the top
+    // rim into SurfaceFinish (hard specular line) and deepens the bottom shadow.
+    property real highlightAlpha: Theme.card.highlightAlpha
+    property real innerShadowAlpha: Theme.card.innerShadowAlpha
 
     // --- Clipping --------------------------------------------------------
     // Default false: cards may host popovers that overflow card bounds
@@ -133,7 +139,7 @@ Item {
         // when both alphas are zero.
         Rectangle {
             anchors.fill: parent
-            radius: parent.radius
+            radius: root.radius
             color: "transparent"
             visible: root.highlightAlpha > 0 || root.innerShadowAlpha > 0
 
@@ -143,6 +149,15 @@ Item {
                 GradientStop { position: 0.55; color: Qt.rgba(0, 0, 0, 0.00) }
                 GradientStop { position: 1.00; color: Qt.rgba(0, 0, 0, root.innerShadowAlpha) }
             }
+        }
+
+        // Material finish (sheen + brushed grain + specular rim). Renders
+        // nothing under clay. Declared before contentHolder so it paints UNDER
+        // the card's content.
+        SurfaceFinish {
+            anchors.fill: parent
+            radius: root.radius
+            recipe: Theme.card
         }
 
         Item {

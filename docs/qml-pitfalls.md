@@ -456,3 +456,70 @@ root.networks = updated;   // succeeds, bindings fire
 Why this matters: someone applying the `QuietMode` lesson mechanically will read `root.networks = updated` as a latent frozen-value bug and "fix" the `readonly` away — a pointless diff — or, worse, will assume the reverse and mark some *other* imperatively-written property `readonly` because "this one works." Neither inference is safe. **Check the property's type before reasoning about `readonly`:** the freeze applies to value types; lists are the documented exception.
 
 This was surfaced during the 2026-07-27 wifi review, where it was flagged as suspicious-but-working rather than as a defect.
+
+## `parent.radius` is undefined inside a ClippingRectangle
+
+`ClippingRectangle` (Quickshell.Widgets, aliased here as `StyledClippingRect`)
+declares its default slot as `default property alias data: contentItem.data`.
+Children written inside it are therefore **reparented into `contentItem`** — a
+plain `Item` with no `radius`. So this silently breaks:
+
+```qml
+StyledClippingRect {
+    id: pillBody
+    radius: root.radius
+
+    Rectangle {
+        anchors.fill: parent
+        radius: parent.radius     // ← parent is contentItem, NOT pillBody. undefined.
+    }
+}
+```
+
+The symptom is a flood of `Unable to assign [undefined] to double` warnings —
+one per instance per evaluation, so a handful of pills produced ~280 lines at a
+single startup. Visually it is usually **invisible**, which is why it survives:
+the child gets `radius: 0` (square corners), but the enclosing
+ClippingRectangle clips the overflow away anyway. The bug only becomes visible
+if the same construct is later moved into a non-clipping container.
+
+**Fix:** bind to the owning component's own property, not to `parent`:
+
+```qml
+radius: root.radius
+```
+
+This is safe everywhere — it does not depend on what the body type is or on
+whether the default slot reparents — so prefer `root.<prop>` over
+`parent.<prop>` in these primitives as a rule, not just where it currently
+breaks.
+
+Note that `anchors.fill: parent` in the same block is still correct: filling
+`contentItem` is exactly the desired geometry. Only the *property read* is wrong.
+
+Found in: `components/PillSurface.qml`, `components/PillToggleSurface.qml`
+(pre-existing, since the primitives were written). `components/PillCard.qml`
+was unaffected — its body is a plain `StyledRect`, which does not reparent.
+
+## Quickshell drops the SECOND IpcHandler registered for a target
+
+`IpcHandler` targets are global. Registering two handlers with the same
+`target:` does not merge their functions — the second one is discarded, with
+only a warning at startup:
+
+```
+QML IpcHandler at @modules/Shortcuts.qml[246:5]: Handler was registered but
+will not be used because another handler is registered for target theme
+```
+
+The IPC call then fails, or silently hits the *other* handler's function set,
+with nothing at the call site to explain it. Before adding a handler, grep for
+the target name:
+
+```bash
+grep -rn 'target: "<name>"' --include='*.qml' .
+```
+
+Found in: a new `target: "theme"` handler for the surface design language
+collided with the palette-dump handler that `services/Colours.qml` has always
+registered. Renamed to `target: "surface"`.

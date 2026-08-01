@@ -239,4 +239,53 @@ Scope {
             Toaster.toast(title, message, icon, Toast.Info, 5000, imagePath);
         }
     }
+
+    // Surface design language — two orthogonal axes. Switching is live.
+    //   symmetria shell surface material metal    (clay | metal)
+    //   symmetria shell surface form panel        (islands | panel)
+    //   symmetria shell surface toggleMaterial
+    //   symmetria shell surface toggleForm
+    //   symmetria shell surface get
+    //
+    // Target is "surface", NOT "theme": services/Colours.qml already registers a
+    // "theme" handler (the palette dump). Quickshell silently drops the SECOND
+    // handler registered for a target — it logs "Handler was registered but will
+    // not be used" and the IPC call then fails with no obvious cause. "surface"
+    // is also the more accurate name: this selects the surface design language,
+    // while Colours' "theme" is about the colour palette.
+    IpcHandler {
+        target: "surface"
+
+        function material(name: string): void {
+            if (!Theme.isValidMaterial(name)) {
+                console.warn(`[IPC] Unknown material "${name}". Available: ${Theme.materials.join(", ")}`);
+                return;
+            }
+            Theme.material = name;
+        }
+
+        function form(name: string): void {
+            if (!Theme.isValidForm(name)) {
+                console.warn(`[IPC] Unknown form "${name}". Available: ${Theme.forms.join(", ")}`);
+                return;
+            }
+            Theme.form = name;
+        }
+
+        function toggleMaterial(): void {
+            Theme.cycleMaterial();
+        }
+
+        function toggleForm(): void {
+            Theme.cycleForm();
+        }
+
+        function get(): string {
+            return `${Theme.material} / ${Theme.form}`;
+        }
+
+        function list(): string {
+            return `materials: ${Theme.materials.join(", ")}\nforms: ${Theme.forms.join(", ")}`;
+        }
+    }
 }

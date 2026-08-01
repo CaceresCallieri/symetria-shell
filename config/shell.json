@@ -171,9 +171,10 @@
     }
   },
   "border": {
-    "thickness": 7,
+    "thickness": 0,
     "rounding": 25,
-    "keepAliveMargin": 50
+    "keepAliveMargin": 50,
+    "sideThickness": 0
   },
   "dashboard": {
     "enabled": false,
@@ -434,7 +435,7 @@
     }
   },
   "services": {
-    "weatherLocation": "C\u00f3rdoba",
+    "weatherLocation": "Córdoba",
     "useFahrenheit": false,
     "useTwelveHourClock": false,
     "gpuType": "",

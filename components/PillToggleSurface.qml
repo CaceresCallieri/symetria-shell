@@ -1,8 +1,17 @@
+import qs.components.effects
 import qs.config
 import qs.services
 import QtQuick
 import QtQuick.Effects
 
+// THEMED: structure lives here, material numbers come from `Theme.toggle`.
+// The `*Max` suffix on the depth properties is local vocabulary — it means
+// "value at full raised/inset strength", since each is multiplied by an
+// animated factor. Theme recipes use the unsuffixed names.
+// The prose below describes the CLAY recipe. The SHIPPED DEFAULT is now
+// METAL — see `material` in services/Theme.qml. Clay is still first-class,
+// reachable with `symmetria shell surface material clay`.
+//
 // Tier 2 toggle-button surface — pill primitive whose visual state encodes
 // "is this on?" via two reinforcing cues: a brighter body color *and* an
 // inverse-neumorphism (inset / debossed) shadow when active. The pill keeps
@@ -49,27 +58,34 @@ Item {
     property color activeColor: Colours.palette.m3primary
     property color borderColor: _defaultStyle.border
 
-    property real radius: Appearance.rounding.full
+    // FORM axis multiplier — see PillSurface.qml.
+    property real radius: Appearance.rounding.full * Theme.layout.surfaceRounding
 
     // --- Tunable depth params (apply when raised && !active) -------------
+    // Values come from the active theme; the rationale below is CLAY's.
+    //
     // Reference-aligned dark neumorphism: SHORT-RANGE blur (shadow stays
     // close to the pill edge — no outer-glow halo) but STRONG alpha (so the
     // depth cue actually reads against PillCard's solid backdrop). Reference
     // shadows are visibly punchy, just contained. Top rim highlight near
     // zero so dual shadows alone define the raised silhouette. Border width
     // dropped to zero — drawn outlines compete with shadow-defined edges.
-    property real darkShadowOffsetX: 2
-    property real darkShadowOffsetY: 4
-    property real darkShadowBlur: 10
-    property real darkShadowAlphaMax: 0.55
+    //
+    // Metal inverts that last point: its silhouette is defined by a drawn
+    // edge plus a hard specular rim rather than by shadow spread, so it sets
+    // borderWidth to 1. Do not re-hardcode these — see services/Theme.qml.
+    property real darkShadowOffsetX: Theme.toggle.darkShadowOffsetX
+    property real darkShadowOffsetY: Theme.toggle.darkShadowOffsetY
+    property real darkShadowBlur: Theme.toggle.darkShadowBlur
+    property real darkShadowAlphaMax: Theme.toggle.darkShadowAlpha
 
-    property real lightShadowOffsetX: -2
-    property real lightShadowOffsetY: -2
-    property real lightShadowBlur: 8
-    property real lightShadowAlphaMax: 0.12
+    property real lightShadowOffsetX: Theme.toggle.lightShadowOffsetX
+    property real lightShadowOffsetY: Theme.toggle.lightShadowOffsetY
+    property real lightShadowBlur: Theme.toggle.lightShadowBlur
+    property real lightShadowAlphaMax: Theme.toggle.lightShadowAlpha
 
-    property real highlightAlphaMax: 0.04
-    property real borderWidthMax: 0
+    property real highlightAlphaMax: Theme.toggle.highlightAlpha
+    property real borderWidthMax: Theme.toggle.borderWidth
 
     // --- Inverse-neumorphism (inset / pressed-in) depth params ----------
     // Applied when raised && active. The depression's depth is composed
@@ -94,9 +110,9 @@ Item {
     // Vertical bias keeps the lighting direction consistent with the
     // raised pills' overhead-light dual shadows — the whole shell feels
     // lit from the same direction.
-    property real darkInsetAlpha: 0.55
-    property real lightInsetAlpha: 0.12
-    property real horizontalInsetWeight: 0.50
+    property real darkInsetAlpha: Theme.toggle.darkInsetAlpha
+    property real lightInsetAlpha: Theme.toggle.lightInsetAlpha
+    property real horizontalInsetWeight: Theme.toggle.horizontalInsetWeight
 
     // --- Animation duration for the active↔inactive transition ----------
     property int transitionDuration: Appearance.anim.durations.normal
@@ -170,7 +186,7 @@ Item {
         // transitions to inset.
         Rectangle {
             anchors.fill: parent
-            radius: parent.radius
+            radius: root.radius
             color: "transparent"
             visible: root.raisedFactor > 0.01
 
@@ -186,7 +202,7 @@ Item {
         // bottom edge (reflected fill light). Full strength.
         Rectangle {
             anchors.fill: parent
-            radius: parent.radius
+            radius: root.radius
             color: "transparent"
             visible: root.insetFactor > 0.01
 
@@ -206,7 +222,7 @@ Item {
         // matches the reference.
         Rectangle {
             anchors.fill: parent
-            radius: parent.radius
+            radius: root.radius
             color: "transparent"
             visible: root.insetFactor > 0.01
 
@@ -217,6 +233,18 @@ Item {
                 GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
                 GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, root.lightInsetAlpha * root.horizontalInsetWeight * root.insetFactor) }
             }
+        }
+
+        // Material finish (sheen + brushed grain + specular rim). Renders
+        // nothing under clay. `specularFactor: raisedFactor` fades the LIT
+        // layers out as the toggle presses in — the grain stays, because the
+        // material doesn't change, only the lighting does. Declared before
+        // contentHolder so it paints UNDER the toggle's content.
+        SurfaceFinish {
+            anchors.fill: parent
+            radius: root.radius
+            recipe: Theme.toggle
+            specularFactor: root.raisedFactor
         }
 
         Item {

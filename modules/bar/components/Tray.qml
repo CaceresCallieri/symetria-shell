@@ -30,7 +30,13 @@ Item {
 
     visible: width > 0
 
-    implicitHeight: Config.bar.sizes.innerWidth
+    // FORM axis — see the topBleed comment in PillContainer.qml. Tray carries its
+    // own geometry rather than going through PillContainer, so it has to opt in
+    // here too, otherwise it would be the one plate that stops short of the
+    // screen edge.
+    readonly property int topBleed: Theme.layout.barTopBleed
+
+    implicitHeight: Config.bar.sizes.innerWidth + topBleed
     implicitWidth: nonAnimWidth
 
     // Shared pill background. Hidden when the tray is empty so the bar shows
@@ -46,6 +52,9 @@ Item {
         id: layout
 
         anchors.centerIn: parent
+        // Content sits centred on the VISIBLE part of the plate, not its full
+        // height — the top `topBleed` px are off-screen.
+        anchors.verticalCenterOffset: root.topBleed / 2
         spacing: Appearance.spacing.small
 
         // Row has built-in padding properties (unlike RowLayout)
@@ -91,6 +100,9 @@ Item {
         id: expandIcon
 
         anchors.verticalCenter: parent.verticalCenter
+        // Same visible-area correction as the tray Row above — this Loader is a
+        // direct child of the plate, so it inherits the off-screen bleed.
+        anchors.verticalCenterOffset: root.topBleed / 2
         anchors.right: parent.right
 
         active: Config.bar.tray.compact

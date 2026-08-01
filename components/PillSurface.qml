@@ -1,9 +1,17 @@
+import qs.components.effects
 import qs.config
 import qs.services
 import QtQuick
 import QtQuick.Effects
 
-// CLAYMORPHISM display-pill primitive — for STATIC display elements only.
+// Display-pill primitive — for STATIC display elements only.
+//
+// THEMED: this file owns the STRUCTURE of a display pill; the numbers that give
+// it a material character come from `Theme.pill`. Switching Theme.material
+// restyles every pill live (QML re-evaluates these bindings automatically).
+// The prose below describes the CLAY recipe. The SHIPPED DEFAULT is now
+// METAL — see `material` in services/Theme.qml. Clay is still first-class,
+// reachable with `symmetria shell surface material clay`.
 //
 // Used by the top bar's clock, date, weather, workspaces, sys tray, system
 // indicators — anything that DISPLAYS information without state changes.
@@ -60,7 +68,10 @@ Item {
     readonly property var _defaultStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     property color color: _defaultStyle.background
-    property real radius: Appearance.rounding.full
+    // FORM axis multiplier: 1 keeps the configured rounding, 0 squares the
+    // plate. Paired with barTopBleed in the same recipe — see services/Theme.qml
+    // for why a rounded plate must never bleed off-screen.
+    property real radius: Appearance.rounding.full * Theme.layout.surfaceRounding
 
     // --- Border ----------------------------------------------------------
     // Flat props (not a `border` group) so Item-based consumers can bind
@@ -72,31 +83,34 @@ Item {
     // wash out on bright wallpaper regions and the pill silhouette
     // disappears.
     property color borderColor: _defaultStyle.border
-    property real borderWidth: 1
+    property real borderWidth: Theme.pill.borderWidth
 
-    // --- Two-shadow convex depth (claymorphic) ---------------------------
-    // Slightly asymmetric offsets (y > x on the dark shadow) mimic an
-    // overhead light source — feels more organic than a perfect diagonal.
-    // Wider blur than PillToggleSurface's interactive controls to lean
-    // claymorphic (warm ambient depth) rather than neumorphic (austere
-    // contained depth).
-    property real darkShadowOffsetX: 2
-    property real darkShadowOffsetY: 3
-    property real darkShadowBlur: 12
-    property real darkShadowAlpha: 0.40
+    // --- Two-shadow convex depth -----------------------------------------
+    // Under clay: slightly asymmetric offsets (y > x on the dark shadow) mimic
+    // an overhead light source, with a wider blur than PillToggleSurface's
+    // interactive controls — warm ambient depth rather than austere contained
+    // depth. Under metal the light shadow nearly vanishes and the dark one
+    // tightens; see the recipe comments in services/Theme.qml.
+    //
+    // These stay plain writable properties so consumers can still override per
+    // instance (several do); binding to Theme only changes the DEFAULT.
+    property real darkShadowOffsetX: Theme.pill.darkShadowOffsetX
+    property real darkShadowOffsetY: Theme.pill.darkShadowOffsetY
+    property real darkShadowBlur: Theme.pill.darkShadowBlur
+    property real darkShadowAlpha: Theme.pill.darkShadowAlpha
 
-    property real lightShadowOffsetX: -2
-    property real lightShadowOffsetY: -2
-    property real lightShadowBlur: 8
-    property real lightShadowAlpha: 0.10
+    property real lightShadowOffsetX: Theme.pill.lightShadowOffsetX
+    property real lightShadowOffsetY: Theme.pill.lightShadowOffsetY
+    property real lightShadowBlur: Theme.pill.lightShadowBlur
+    property real lightShadowAlpha: Theme.pill.lightShadowAlpha
 
-    // --- Inner rim highlight (clay-derived) ------------------------------
-    // Visible top rim — defining claymorphism cue. The bottom inner shadow
-    // stays at 0 by default (heavy bottom-inner shadow makes pure
-    // claymorphism feel dated); consumers that want the full "embedded"
-    // feel can opt in by setting `innerShadowAlpha`.
-    property real highlightAlpha: 0.08
-    property real innerShadowAlpha: 0.0
+    // --- Inner rim highlight ---------------------------------------------
+    // Clay: a visible broad top rim, no bottom inner shadow (a heavy one makes
+    // claymorphism feel dated). Metal inverts this — the broad wash goes to
+    // zero and SurfaceFinish's hard specular rim takes over, with a bottom
+    // inner shadow added back to keep the surface grounded.
+    property real highlightAlpha: Theme.pill.highlightAlpha
+    property real innerShadowAlpha: Theme.pill.innerShadowAlpha
 
     // Default slot: children declared inside PillSurface { ... } get reparented
     // into contentHolder, which fills the pill body and is clipped to the
@@ -141,7 +155,7 @@ Item {
         // the alphas per-instance see immediate effect without a Loader.
         Rectangle {
             anchors.fill: parent
-            radius: parent.radius
+            radius: root.radius
             color: "transparent"
             visible: root.highlightAlpha > 0 || root.innerShadowAlpha > 0
 
@@ -151,6 +165,15 @@ Item {
                 GradientStop { position: 0.55; color: Qt.rgba(0, 0, 0, 0.00) }
                 GradientStop { position: 1.00; color: Qt.rgba(0, 0, 0, root.innerShadowAlpha) }
             }
+        }
+
+        // Material finish (sheen + brushed grain + specular rim). Renders
+        // nothing under clay — all four of its alphas are zero there. Declared
+        // before contentHolder so it paints UNDER the pill's content.
+        SurfaceFinish {
+            anchors.fill: parent
+            radius: root.radius
+            recipe: Theme.pill
         }
 
         // Holder for consumer content (default slot). anchors.fill so children

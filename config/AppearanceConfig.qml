@@ -7,7 +7,12 @@ JsonObject {
     property FontStuff font: FontStuff {}
     property Anim anim: Anim {}
     property Transparency transparency: Transparency {}
-    property string pillStyle: "matte"  // "glass" or "matte"
+    // NOTE: the former `pillStyle` key lived here and selected "glass"/"matte".
+    // It was superseded by the Theme singleton (services/Theme.qml), which
+    // selects the whole surface design language, not just pill colours. It was
+    // REMOVED rather than kept as an alias: a config key that silently does
+    // nothing is worse than an absent one. Theme.material is runtime-only for
+    // now — see the persistence note in services/Theme.qml.
 
     component Rounding: JsonObject {
         property real scale: 1

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.config
+import qs.services
 import "popouts" as BarPopouts
 import Quickshell
 import QtQuick
@@ -14,7 +15,13 @@ Item {
     required property BarPopouts.Wrapper popouts
     required property bool disabled
 
-    readonly property int padding: Math.max(Appearance.padding.smaller, Config.border.thickness)
+    // FORM axis. "border" reproduces the historical rule — the bar insets its
+    // content so it floats as a detached island below the screen edge, with a
+    // floor of padding.smaller so the island never collapses even when the
+    // border is configured to nothing. "flush" drops the inset entirely so bar
+    // content sits hard against the top of the screen; combined with
+    // Theme.layout.barTopBleed the plates then continue past it.
+    readonly property int padding: Theme.layout.barPaddingMode === "flush" ? 0 : Math.max(Appearance.padding.smaller, Config.border.thickness)
     readonly property int contentHeight: Config.bar.sizes.innerWidth + padding * 2
     readonly property int exclusiveZone: !disabled && (Config.bar.persistent || visibilities.bar) ? contentHeight : Config.border.thickness
     readonly property bool shouldBeVisible: !disabled && (Config.bar.persistent || visibilities.bar || isHovered)
