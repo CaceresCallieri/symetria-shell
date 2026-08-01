@@ -26,6 +26,23 @@ StyledRect {
     readonly property int terminalPid: root.agent.terminal_pid ?? 0
     // Local agents focus their window on click; remote/orphan agents have none.
     readonly property bool focusable: !root.isRemote && root.terminalPid > 0
+    // Conversation preview: prefer the shell's read-side backfill (fresh, full
+    // transcript keyed by session_id — fills even long-dormant cards), falling
+    // back to the bridge-pushed fields for remote agents. Reading
+    // AgentOverviewService.conversations here keeps the binding reactive.
+    readonly property var convo: {
+        const m = AgentOverviewService.conversations;
+        const sid = root.agent.session_id ?? "";
+        if (sid && m && m[sid])
+            return m[sid];
+        return ({
+            last_prompt: root.agent.last_prompt ?? "",
+            last_messages: root.agent.last_messages ?? []
+        });
+    }
+    readonly property string lastPrompt: root.convo.last_prompt ?? ""
+    // intentional var: JS array of recent assistant text strings
+    readonly property var lastMessages: root.convo.last_messages ?? []
 
     implicitWidth: Config.agentOverview.sizes.cardWidth
     implicitHeight: content.implicitHeight + Appearance.padding.large * 2
@@ -129,23 +146,17 @@ StyledRect {
             }
         }
 
-        // Status badges: remote / dangerous / plan mode
+        // Status badges: remote / plan mode. (skip-perms intentionally omitted —
+        // dangerous mode is the norm now and the badge was pure noise.)
         RowLayout {
             Layout.fillWidth: true
             spacing: Appearance.spacing.small
-            visible: root.isRemote || root.agent.dangerous === true || root.agent.in_plan_mode === true
+            visible: root.isRemote || root.agent.in_plan_mode === true
 
             MaterialIcon {
                 visible: root.isRemote
                 text: "cloud_queue"
                 color: Colours.palette.m3onSurfaceVariant
-                font.pointSize: Appearance.font.size.small
-            }
-
-            StyledText {
-                visible: root.agent.dangerous === true
-                text: "⚠ skip-perms"
-                color: Colours.palette.m3error
                 font.pointSize: Appearance.font.size.small
             }
 
@@ -158,6 +169,49 @@ StyledRect {
 
             Item {
                 Layout.fillWidth: true
+            }
+        }
+
+        // Recent conversation: the user's last prompt + the agent's last few
+        // assistant turns (push-side enrichment via the bridge). Hidden until the
+        // agent has reported any text (e.g. OpenCode, which doesn't yet forward it).
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Appearance.spacing.small
+            visible: root.lastPrompt !== "" || root.lastMessages.length > 0
+
+            StyledRect {
+                Layout.fillWidth: true
+                implicitHeight: 1
+                color: Colours.palette.m3outlineVariant
+                opacity: 0.4
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                visible: root.lastPrompt !== ""
+                text: "▸ " + root.lastPrompt
+                color: Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                font.italic: true
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+
+            Repeater {
+                model: root.lastMessages
+
+                StyledText {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    text: modelData
+                    color: Colours.palette.m3onSurface
+                    font.pointSize: Appearance.font.size.small
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ JsonObject {
 
     component Sizes: JsonObject {
         /// Fixed width of each agent card; the grid wraps cards to fit the screen.
-        property int cardWidth: 264
+        /// Wide enough for a readable recent-conversation preview.
+        property int cardWidth: 380
     }
 }

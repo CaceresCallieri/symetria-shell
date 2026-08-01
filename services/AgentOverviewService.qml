@@ -3,6 +3,7 @@ pragma Singleton
 import qs.services
 import qs.config
 import Quickshell
+import Quickshell.Io
 import QtQuick
 
 /// State and logic for the Agent Overview feature.
@@ -33,6 +34,17 @@ Singleton {
     /// Cycle order for cycleFilter() / the Tab key.
     // intentional var: JS array of the three filter modes
     readonly property var _filterOrder: ["all", "active", "dormant"]
+
+    /// Read-side conversation backfill: session_id -> {last_prompt, last_messages}.
+    /// Populated by the reader Process below while the overlay is open, by reading
+    /// each visible agent's Claude transcript directly (keyed by the session_id the
+    /// bridge always knows). This is what fills the cards immediately — even for
+    /// long-dormant agents the push-side never captured. Remote agents (transcript
+    /// not on this machine) stay absent here and fall back to their pushed fields.
+    // intentional var: JS object map keyed by session id
+    property var conversations: ({})
+
+    readonly property string _readerScript: Qt.resolvedUrl("../scripts/agent-overview-transcripts.py").toString().replace(/^file:\/\//, "")
 
     // ── Active vs dormant classification ─────────────────────────────
     // Active  = busy: thinking / working / needs_permission / starting / clearing.
@@ -132,6 +144,7 @@ Singleton {
 
         targetMonitor = mon;
         active = true;
+        root._refreshConversations();
     }
 
     function hide(): void {
@@ -140,6 +153,7 @@ Singleton {
 
         active = false;
         targetMonitor = null;
+        conversations = ({});
     }
 
     function toggle(): void {
@@ -181,5 +195,61 @@ Singleton {
         hide();
         if (pid > 0)
             Qt.callLater(() => AgentService.focusTerminal(pid));
+    }
+
+    /// Resolve an agent's conversation: prefer the read-side backfill (fresh,
+    /// full transcript) keyed by session_id; fall back to the bridge-pushed
+    /// fields (covers remote agents, whose transcript isn't readable locally).
+    function conversationFor(agent: var): var {
+        const sid = agent?.session_id ?? "";
+        if (sid && root.conversations[sid])
+            return root.conversations[sid];
+        return {
+            last_prompt: agent?.last_prompt ?? "",
+            last_messages: agent?.last_messages ?? []
+        };
+    }
+
+    /// Re-read transcripts for every visible agent that has a session_id. Runs on
+    /// show() and every few seconds while open (so an active agent's text stays
+    /// current); skipped when closed or when a prior read is still in flight.
+    function _refreshConversations(): void {
+        if (!root.active)
+            return;
+        if (convoReader.running)
+            return;
+        const sids = [];
+        for (const a of AgentService.agents) {
+            const sid = a.session_id ?? "";
+            if (sid)
+                sids.push(sid);
+        }
+        if (sids.length === 0) {
+            root.conversations = ({});
+            return;
+        }
+        convoReader.command = ["python3", root._readerScript].concat(sids);
+        convoReader.running = true;
+    }
+
+    Process {
+        id: convoReader
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.conversations = JSON.parse(text || "{}");
+                } catch (e) {
+                    // Keep the previous map on a parse failure rather than blanking.
+                }
+            }
+        }
+    }
+
+    Timer {
+        interval: 3000
+        repeat: true
+        running: root.active
+        onTriggered: root._refreshConversations()
     }
 }

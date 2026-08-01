@@ -19,6 +19,17 @@ import sys
 import time
 from datetime import datetime
 
+# Shared transcript extractor (DRY with the agent-overview read-side reader,
+# scripts/agent-overview-transcripts.py). Defensive import: if it can't load,
+# the hook still reports activity — it just omits the optional conversation
+# fields, so a broken/missing module can never block Claude Code.
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from symmetria_agent_transcript import extract_conversation, truncate
+    _TRANSCRIPT_OK = True
+except Exception:
+    _TRANSCRIPT_OK = False
+
 SOCKET_PATH = os.environ.get(
     "SYMMETRIA_AGENT_SOCKET",
     f"/run/user/{os.getuid()}/symmetria-agents.sock",
@@ -288,7 +299,7 @@ def main():
     _hook_log(f"hook | agent={agent_id} event={hook_name} state={state} tool={tool or '-'} plan={plan_mode} ts_ns={event_ts_ns}")
 
     # Build messages before opening socket
-    activity_msg = json.dumps({
+    activity_payload = {
         "type": "activity",
         "agent_id": agent_id,
         # This hook ONLY ever runs for Claude Code (it's wired into Claude's
@@ -305,7 +316,23 @@ def main():
         # joins this against `claude agents --json` sessionId to reconcile
         # stuck-busy agents whose cancellation fired no hook.
         "session_id": event.get("session_id", ""),
-    })
+    }
+
+    # Conversation context for the agent-overview cards (push-side enrichment).
+    # Optional fields: the user's prompt comes free from the UserPromptSubmit
+    # payload; the recent assistant turns are read from the transcript tail only
+    # at turn end (Stop), keeping transcript I/O off the per-tool hot path. The
+    # bridge stores both stickily (like session_id) and forwards them in snapshots.
+    if _TRANSCRIPT_OK and hook_name in ("UserPromptSubmit", "UserPromptExpansion"):
+        prompt = event.get("prompt", "")
+        if isinstance(prompt, str) and prompt.strip():
+            activity_payload["last_prompt"] = truncate(prompt.strip(), 280)
+    if _TRANSCRIPT_OK and hook_name in ("Stop", "StopFailure"):
+        convo = extract_conversation(event.get("transcript_path", ""))
+        if convo.get("last_messages"):
+            activity_payload["last_messages"] = convo["last_messages"]
+
+    activity_msg = json.dumps(activity_payload)
     notif = _build_notification(hook_name, event, agent_id)
 
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
