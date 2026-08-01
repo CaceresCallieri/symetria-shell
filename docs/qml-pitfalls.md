@@ -523,3 +523,53 @@ grep -rn 'target: "<name>"' --include='*.qml' .
 Found in: a new `target: "theme"` handler for the surface design language
 collided with the palette-dump handler that `services/Colours.qml` has always
 registered. Renamed to `target: "surface"`.
+
+## `Component.onCompleted` needs `import QtQuick` — and failing to have it takes down the WHOLE shell
+
+`Component` is a QtQml/QtQuick type. Quickshell's own modules do **not** bring it
+into scope, so a singleton written as
+
+```qml
+pragma Singleton
+import qs.config
+import Quickshell        // no QtQuick — a pure-data singleton doesn't obviously need it
+
+Singleton {
+    readonly property var recipes: ({ /* ... */ })
+
+    Component.onCompleted: { /* validation guard */ }   // <-- fails
+}
+```
+
+dies with:
+
+```
+caused by @services/Theme.qml[295:5]: Non-existent attached object
+```
+
+The trap is the **blast radius**, not the error. Quickshell resolves the whole
+singleton graph at startup, so one unresolvable attached object aborts the entire
+config load — the shell does not start at all, and the reported error chain is
+~35 lines of unrelated `Type X unavailable` entries with the real cause on the
+last line. Read the error chain bottom-up.
+
+It is easy to introduce because a data-only singleton has no visual types and so
+never needed `QtQuick`; the import only becomes necessary the moment someone adds
+a lifecycle hook. Every other service in this repo already imports `QtQuick` for
+other reasons, which is why this had not been hit before.
+
+Audit the whole repo for it with:
+
+```bash
+find . -name '*.qml' -not -path './build/*' | while read f; do
+  grep -qE "^\s*Component\.(onCompleted|onDestruction)" "$f" \
+    && ! grep -qE "^import (QtQuick|QtQml)" "$f" && echo "$f"
+done
+```
+
+Found in: `services/Theme.qml`, where a code review added a startup guard
+validating that every material recipe exposes the same key set. The guard was
+correct; the missing import was not caught because `qmllint` cannot resolve
+Quickshell imports (it exits 255 and reports nothing), so nothing between writing
+the guard and launching the shell could have flagged it. **A change to a
+singleton is not verified until the shell has actually been restarted.**

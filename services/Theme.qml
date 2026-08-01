@@ -3,6 +3,11 @@ pragma ComponentBehavior: Bound
 
 import qs.config
 import Quickshell
+// Required for the `Component.onCompleted` guard at the bottom: `Component` is a
+// QtQml/QtQuick type, and without this import it resolves to nothing and the
+// whole shell fails to load with "Non-existent attached object". Quickshell's
+// Singleton alone does not bring it into scope.
+import QtQuick
 
 // Design-language selector — TWO ORTHOGONAL AXES.
 //
