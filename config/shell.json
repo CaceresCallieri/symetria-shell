@@ -485,7 +485,7 @@
       "format": "wav",
       "sampleRate": 16000,
       "channels": 1,
-      "source": "echo-cancel-source"
+      "source": ""
     },
     "cache": {
       "enabled": true,
@@ -493,7 +493,7 @@
       "deleteOnSuccess": true
     },
     "ducking": {
-      "volume": 0.3
+      "volume": 0
     }
   },
   "keycaster": {
