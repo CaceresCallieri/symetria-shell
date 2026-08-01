@@ -11,7 +11,6 @@ Item {
     id: root
 
     required property Pam pam
-    readonly property alias placeholder: placeholder
     property string buffer
 
     Layout.fillWidth: true
@@ -26,38 +25,24 @@ Item {
             if (root.pam.buffer.length > root.buffer.length) {
                 charList.bindImWidth();
             } else if (root.pam.buffer.length === 0) {
+                // Freeze the width by assigning the current value over the
+                // binding, so the dots animate out instead of the list snapping
+                // shut underneath them. Looks like a no-op; it is not.
                 charList.implicitWidth = charList.implicitWidth;
-                placeholder.animate = true;
             }
 
             root.buffer = root.pam.buffer;
         }
     }
 
-    StyledText {
-        id: placeholder
-
-        anchors.centerIn: parent
-
-        text: {
-            if (root.pam.passwd.active)
-                return qsTr("Loading...");
-            if (root.pam.state === "max")
-                return qsTr("You have reached the maximum number of tries");
-            return qsTr("Enter your password");
-        }
-
-        animate: true
-        color: root.pam.passwd.active ? Colours.palette.m3secondary : Colours.palette.m3outline
-        font.pointSize: Appearance.font.size.normal
-        font.family: Appearance.font.family.mono
-
-        opacity: root.buffer ? 0 : 1
-
-        Behavior on opacity {
-            Anim {}
-        }
-    }
+    // NO placeholder text. An empty field shows nothing at all — the flat,
+    // unlabelled pill is the intended look.
+    //
+    // Nothing was lost by removing it: its three states are all covered
+    // elsewhere now. "Loading..." is the submit button turning into a spinner,
+    // the max-tries text is one of the PAM messages under the field, and
+    // "Enter your password" labelled the only input on an otherwise empty
+    // screen.
 
     ListView {
         id: charList

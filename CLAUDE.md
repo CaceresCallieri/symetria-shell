@@ -191,6 +191,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 **Architecture & Extension:**
 - [`drawer-extension-guide.md`](docs/drawer-extension-guide.md) — Panel backgrounds, bar pill pattern, FocusManager usage
 - [`ags-porting-reference.md`](docs/ags-porting-reference.md) — AGS bar features to port (workspace icons, updates, Kanata, submap)
+- [`beams-background.md`](docs/beams-background.md) — Metallic beams shader: why it needs no 3D, the calibrations that aren't obvious, the reveal animation, and how to iterate headless
 
 **Pitfalls & Research:**
 - [`qml-pitfalls.md`](docs/qml-pitfalls.md) — All QML gotchas consolidated
