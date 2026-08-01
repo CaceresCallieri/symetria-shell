@@ -269,11 +269,12 @@ Singleton {
     // recording would run but never appear as "recording" in the bar/utility
     // dashboard. The Record card uses these same start([...]) variants.
     //
-    // Stopping/pausing is intentionally NOT exposed here: the utility dashboard's
-    // Record card is the recording center and owns those controls. Do not add a
-    // stop()/togglePause() IPC without also giving togglePause() an in-progress
-    // guard — it flips props.paused optimistically and would desync under rapid
-    // external invocation.
+    // stop() is exposed for the keychords menu ("s" while recording) and the
+    // Super+Alt+Space Hyprland bind — it is safe under rapid external invocation
+    // because it no-ops unless running and guards re-entry via stopPending.
+    // togglePause() is intentionally NOT exposed: it flips props.paused
+    // optimistically with no in-progress guard and would desync under rapid
+    // external invocation — add that guard before ever exposing it.
     //
     // Target is "screenRecorder", NOT "recorder" — "recorder" is already owned by
     // the audio/STT recorder (modules/recorder/RecorderRoot.qml).
@@ -305,6 +306,10 @@ Singleton {
 
         function windowAudio(): void {
             root.start(["-w", "-s"]);
+        }
+
+        function stop(): void {
+            root.stop();
         }
 
         // Meeting mode: fullscreen + system audio + microphone merged into one

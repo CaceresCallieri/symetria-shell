@@ -1,6 +1,7 @@
 pragma Singleton
 
 import qs.config
+import qs.services
 import qs.utils
 import Quickshell
 import Quickshell.Hyprland
@@ -11,9 +12,12 @@ import QtQuick
 /// and manages active group state for the overlay UI.
 ///
 /// Chord groups are defined in ~/.config/symmetria/chords.json.
-/// Each group has a title and array of {key, label, command?, group?} entries.
+/// Each group has a title and array of {key, label, command?, group?, when?} entries.
 /// Use `command` for shell execution or `group` to navigate to a sub-group.
 /// If both are present, `group` takes precedence.
+/// An optional `when` names a shell-state condition (prefix "!" to negate) that
+/// gates the entry's visibility at activation time — see _conditionMet() for the
+/// known condition names.
 /// Commands are executed via "sh -c" for shell expansion ($HOME, pipes, etc.).
 ///
 /// A group may instead declare an `expand` object to be generated from the
@@ -79,9 +83,18 @@ Singleton {
             return;
         }
 
+        // Conditional entries (`when`) are filtered once at activation, not bound
+        // live — the overlay is short-lived, so state changing mid-display is not
+        // worth reactive plumbing here.
+        const visibleChords = groupData.chords.filter(c => _conditionMet(c.when));
+        if (visibleChords.length === 0) {
+            console.warn("[KeyChords:Service] All chords hidden by conditions in group:", group);
+            return;
+        }
+
         _activeGroup = group;
         _activeGroupTitle = groupData.title || group;
-        _activeChords = groupData.chords;
+        _activeChords = visibleChords;
         // Capture target monitor only on initial activation, not on sub-group navigation
         if (!active)
             _targetMonitor = Hypr.focusedMonitor;
@@ -161,6 +174,30 @@ Singleton {
         }
 
         return false;
+    }
+
+    /// Evaluate a chord entry's optional `when` visibility condition. `when` is a
+    /// condition name from the registry below, optionally prefixed with "!" to
+    /// negate (e.g. "recording", "!recording"). Missing/empty → always visible.
+    /// Unknown names warn and default to visible so a chords.json typo degrades
+    /// to the pre-`when` behavior instead of silently hiding an entry.
+    function _conditionMet(when: var): bool {
+        if (typeof when !== "string" || when.length === 0)
+            return true;
+
+        const negate = when.startsWith("!");
+        const name = negate ? when.slice(1) : when;
+
+        let value;
+        switch (name) {
+        case "recording":
+            value = Recorder.running;
+            break;
+        default:
+            console.warn("[KeyChords] Unknown `when` condition:", when, "— showing chord");
+            return true;
+        }
+        return negate ? !value : value;
     }
 
     /// Execute a chord command via shell. Internal — callers should use dispatchChord().
