@@ -501,6 +501,49 @@ Found in: `components/PillSurface.qml`, `components/PillToggleSurface.qml`
 (pre-existing, since the primitives were written). `components/PillCard.qml`
 was unaffected — its body is a plain `StyledRect`, which does not reparent.
 
+## A Repeater delegate's `parent` is null during its first binding pass
+
+A `Repeater` instantiates each delegate **before** reparenting it into the
+positioner, so every binding in the delegate root is evaluated once while
+`parent` is still `null`. A bare `parent.<prop>` read therefore throws on every
+delegate creation:
+
+```qml
+Repeater {
+    model: ScriptModel { values: root.agents; objectProp: "id" }
+
+    AgentChipFor {
+        anchors.verticalCenter: parent.verticalCenter   // ← TypeError on creation
+    }
+}
+```
+
+```
+WARN scene: @modules/agentbar/AgentChipGroup.qml[58:-1]:
+     TypeError: Cannot read property 'verticalCenter' of null
+```
+
+The anchor still ends up correct — `parent` has a change signal, so the binding
+re-evaluates the moment the delegate is reparented — which is exactly why this
+survives: it is pure log noise with no visual symptom, and it repeats once per
+delegate per model reset. With a `ScriptModel` over a churning bridge feed, that
+is a steady drip into the log that buries real warnings.
+
+**Fix:** use optional chaining so the first pass yields `undefined` (which
+simply leaves the anchor unset) instead of throwing:
+
+```qml
+anchors.verticalCenter: parent?.verticalCenter
+```
+
+**This applies ONLY to the delegate root.** An item nested *inside* the delegate
+already has its parent assigned when its own bindings run, so `parent.<prop>` is
+correct there and adding `?.` is noise. The distinguishing question is not "am I
+in a Repeater?" but "am I the item the Repeater instantiates?".
+
+Found in: `modules/agentbar/AgentChipGroup.qml`,
+`modules/agentbar/MergedWindowAgentRow.qml`.
+
 ## Quickshell drops the SECOND IpcHandler registered for a target
 
 `IpcHandler` targets are global. Registering two handlers with the same

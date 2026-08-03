@@ -55,10 +55,9 @@ Row {
             // intentional var: heterogeneous agent JS object from bridge JSON
             required property var modelData
 
-            // parent?. (not parent.) because a Repeater delegate evaluates its bindings
-            // once BEFORE it is reparented into the positioner — `parent` is null in that
-            // first pass and a bare `parent.verticalCenter` logs a TypeError on every
-            // delegate creation. The binding re-evaluates when parent is assigned.
+            // parent?. (not parent.) — a Repeater delegate root evaluates its bindings
+            // once before it is reparented, so the bare form throws on every creation.
+            // See docs/qml-pitfalls.md (Repeater delegate's parent is null).
             anchors.verticalCenter: parent?.verticalCenter
             agent: modelData
         }

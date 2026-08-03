@@ -91,7 +91,10 @@ Row {
         Loader {
             required property var modelData
 
-            anchors.verticalCenter: parent.verticalCenter
+            // parent?. (not parent.) — a Repeater delegate root evaluates its bindings
+            // once before it is reparented, so the bare form throws on every creation.
+            // See docs/qml-pitfalls.md (Repeater delegate's parent is null).
+            anchors.verticalCenter: parent?.verticalCenter
             sourceComponent: modelData.isGroup ? groupedContainer : singleEntry
 
             Component {
