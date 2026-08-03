@@ -303,6 +303,25 @@ Singleton {
         // stops reading as metal and starts recreating the pale disc this whole
         // rework replaced.
         readonly property real inGroove: 0.34
+
+        // A BROAD part: the active-workspace indicator, which can be 300px+ of
+        // continuous surface. The other two presets are for small controls, and
+        // AREA is the variable they do not account for — the same lightness that
+        // reads as a tidy highlight on a 30px disc reads as a slab that dominates
+        // the whole bar when it is ten times as wide, and it stops being an
+        // accent and becomes the thing you look at first.
+        //
+        // Measured on a real capture: at `standard` the indicator's body
+        // composited with the polished finish to lightness 0.50 against a bar
+        // plate at 0.09, and the light workspace label on top of it lost most of
+        // its contrast. This lands the composite near 0.30 — roughly midway
+        // between that and the inactive plate, which is where it stops competing
+        // with its own label.
+        //
+        // This is why the presets are a family rather than one number: three
+        // parts, all genuinely "engaged", none of which reads correctly at
+        // another's value.
+        readonly property real broad: 0.12
     }
 
     // The engaged accent every non-parameterised consumer wants: polished

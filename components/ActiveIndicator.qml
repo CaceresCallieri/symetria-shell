@@ -25,27 +25,31 @@ StyledRect {
 
     // --- Color customization (special workspaces use tertiary colors) ---
     property color indicatorColor: Colours.palette.m3primary
+
+    // MEASURED INERT — do not tune this expecting to see a result. A screen
+    // capture of the merged bar with a workspace active shows the label over
+    // this indicator rendering LIGHT, not in this dark m3onPrimary tint. Every
+    // consumer puts the indicator in a Loader at `z: -1`, i.e. below its own
+    // mask, and Colouriser is a MultiEffect that does not hide its source — so
+    // the real workspace labels paint over the tinted copy and this never
+    // reaches the screen.
+    //
+    // Left in place rather than deleted: it is part of the public API that
+    // SpecialWorkspaces and MergedBarContent both set, and removing it (with
+    // the Colouriser) is a separate change that deserves its own verification
+    // pass rather than riding along with a colour tweak.
     property color textColor: Colours.palette.m3onPrimary
 
     // --- Pill styling (strong intensity for active indicator) ---
-    // ENGAGED, not merely styled: this is the shell's canonical "which one is
-    // active" marker, so it takes the polished treatment that the connected
-    // network socket and the ON switch knob take. Before this it used plain
-    // pillStyle() and landed at lightness 0.180 under metal; the lift moves the
-    // body to 0.400.
+    // ENGAGED, but at the BROAD lift rather than the socket's `standard`.
     //
-    // OPEN QUESTION, deliberately not resolved here: `textColor` defaults to
-    // m3onPrimary and special workspaces pass m3onTertiary, both of which are
-    // DARK and would sit at roughly 2.3:1 on the new body. Whether that matters
-    // depends on something unverified — every consumer puts this indicator in a
-    // Loader with `z: -1`, i.e. below its own mask, and Colouriser is a
-    // MultiEffect that does not hide its source, so the real workspace labels
-    // may simply paint over the tinted copy and make `textColor` inert. The
-    // lift raises contrast either way (0.180 → 0.400 against a 0.20 glyph), so
-    // nothing regresses; but if the tint IS visible, these two should follow
-    // the m3onPrimary → m3onSurface move applied to the calendar and lock
-    // screen. Settle it with a grim capture of the bar with a workspace active.
-    readonly property var glassStyle: Colours.engagedPillStyle(indicatorColor, Colours.glass.strong, Colours.polish.standard) // intentional var: heterogeneous JS { background, border }
+    // This is the widest engaged surface in the shell — a workspace pill with a
+    // window title in it runs 300px+ — and area is the variable the small-control
+    // presets do not account for. Measured on a capture at `standard`: body plus
+    // polished finish composited to lightness 0.50 against a 0.09 bar plate, which
+    // made the indicator the loudest thing on screen and washed out the very label
+    // it sits behind. `broad` lands it near 0.30. See Colours.polish.
+    readonly property var glassStyle: Colours.engagedPillStyle(indicatorColor, Colours.glass.strong, Colours.polish.broad) // intentional var: heterogeneous JS { background, border }
 
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
