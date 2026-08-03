@@ -5,8 +5,18 @@ import QtQuick
 
 /// Matte/glass pill button using Colours.pillStyle() intensity system.
 /// Supports icon-only (omit text) and icon+text modes.
-/// Selected state matches ActiveIndicator visual language (strong intensity).
 /// Call triggerPress() for programmatic press feedback (e.g. keybind-triggered).
+///
+/// NOT MIGRATED: this used to say the selected state matched ActiveIndicator.
+/// It no longer does — ActiveIndicator moved to Colours.engagedPillStyle() plus
+/// the Theme.engaged finish, while `selectedBackground` below still hand-blends
+/// the accent over a matte base. That makes this a remaining dialect of
+/// "active", of the same kind the engaged-state work consolidated elsewhere.
+/// Left alone on purpose rather than migrated blind: this button is used across
+/// several panels whose look was not part of that change and was not visually
+/// checked. Migrating means replacing the blend with
+/// `Colours.engagedPillStyle(pillColor, Colours.glass.strong, Colours.polish.standard)`
+/// and deleting the helper — a small change, but one that needs eyes on it.
 Item {
     id: root
 

@@ -343,14 +343,38 @@ Singleton {
     // header states. A material that omits a key renders `undefined` into a
     // primitive's binding with no error at the definition site, so prose alone
     // is not enough — this turns a silent mis-render into a startup warning.
+    // The keys SurfaceFinish reads. Named here so the guard below can check
+    // against an absolute reference, not only material-against-material: a key
+    // misspelled identically in every material passes a peer comparison, and
+    // SurfaceFinish then silently uses the `?? <literal>` fallback its own
+    // comment says should never be the value in play.
+    // intentional var: plain JS array, for the array API the guard uses
+    readonly property var _finishKeys: ["sheenTop", "sweepAlpha", "sweepCentre", "sweepWidth", "brushedAlpha", "rimAlpha", "rimStop", "rimBottomAlpha", "rimBottomStop"]
+
     Component.onCompleted: {
-        for (const role of ["pill", "toggle", "card", "engaged"]) {
+        // Surface roles: every material must expose the same key set as clay,
+        // and must at minimum cover the finish keys.
+        for (const role of ["pill", "toggle", "card"]) {
             const reference = Object.keys(_recipes.clay[role]).sort().join(",");
             for (const name of materials) {
-                const keys = Object.keys(_recipes[name][role]).sort().join(",");
-                if (keys !== reference)
+                const keys = Object.keys(_recipes[name][role]);
+                if (keys.sort().join(",") !== reference)
                     console.warn(`[Theme] recipe ${name}.${role} key set differs from clay.${role}`);
+                const missing = _finishKeys.filter(k => !keys.includes(k));
+                if (missing.length)
+                    console.warn(`[Theme] recipe ${name}.${role} is missing finish keys: ${missing.join(",")}`);
             }
+        }
+
+        // `engaged` is finish-ONLY, not a surface role — it carries no shadow or
+        // border keys. Checking it for EXACT equality catches a shadow key added
+        // there as the category error it is, which a clay-vs-metal comparison
+        // would wave through as long as both materials made the same mistake.
+        const finishReference = [..._finishKeys].sort().join(",");
+        for (const name of materials) {
+            const keys = Object.keys(_recipes[name].engaged).sort().join(",");
+            if (keys !== finishReference)
+                console.warn(`[Theme] recipe ${name}.engaged must contain exactly the finish keys; got: ${keys}`);
         }
     }
 }

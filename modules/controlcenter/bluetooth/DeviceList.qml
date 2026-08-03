@@ -245,8 +245,6 @@ DeviceList {
                 }
 
                 ConnectToggleButton {
-                    id: connectBtn
-
                     connected: device.connected
                     loading: device.loading
 

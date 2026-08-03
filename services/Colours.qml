@@ -282,11 +282,13 @@ Singleton {
     // which is what a raw `m3primary` fill was faking.
     //
     // TWO presets, because the same body lightness does not read the same in
-    // every context. Measured side by side: the switch knob at 0.417 is
-    // objectively BRIGHTER than the connected socket at 0.400, and still looks
-    // dimmer in situ. Simultaneous contrast is the reason — the knob is a small
-    // disc ringed by a shadowed groove, the socket sits flat on the card — and
-    // the correction belongs in the value rather than in the viewer's eye.
+    // every context. THE MEASUREMENT THAT PRODUCED THEM: with both parts on the
+    // same 0.22 lift, the switch knob landed at 0.417 and the connected socket
+    // at 0.400 — the knob objectively brighter — and the knob still looked
+    // dimmer in situ. Simultaneous contrast is the reason: the knob is a small
+    // disc ringed by a shadowed groove, the socket sits flat on the card. The
+    // correction belongs in the value rather than in the viewer's eye, so the
+    // knob was moved to its own preset and now resolves to 0.537.
     //
     // Do not "simplify" these back into one constant on the grounds that the
     // numbers should match. They differ precisely so the RESULT matches.
@@ -296,10 +298,21 @@ Singleton {
 
         // A part ringed by a dark inset groove: the switch knob. Picked against
         // `standard` in a side-by-side render so the knob reads brighter than
-        // the socket, not merely equal to it. Past ~0.40 it stops reading as
-        // metal and starts recreating the pale disc this whole rework replaced.
+        // the socket, not merely equal to it. Past a LIFT of ~0.40 (not a
+        // resulting lightness of 0.40, which this preset already exceeds) it
+        // stops reading as metal and starts recreating the pale disc this whole
+        // rework replaced.
         readonly property real inGroove: 0.34
     }
+
+    // The engaged accent every non-parameterised consumer wants: polished
+    // primary at socket strength. Exists because the full call was written out
+    // verbatim at three sites, which is the same drift this change set out to
+    // remove — a tuning pass would have changed one and missed two.
+    // ActiveIndicator deliberately keeps its own call, since its base colour is
+    // supplied by the consumer (special workspaces pass tertiary).
+    // intentional var: heterogeneous JS { background, border }
+    readonly property var engagedAccent: engagedPillStyle(palette.m3primary, glass.strong, polish.standard)
 
     // pillStyle() for a part that is actuated / connected / on.
     //
@@ -317,16 +330,24 @@ Singleton {
         const body = style.background;
         const lit = Math.min(1.0, body.hslLightness + lift);
 
+        // The border must keep the SAME relationship to the body that its
+        // material defines, not merely inherit the unlifted edge — an edge
+        // derived from the old body against a lifted one makes the plate read
+        // as a flat swatch, which is the failure this function exists to avoid.
+        //
+        // Branch on the EDGE ITSELF, not on Theme.material. An opaque edge (as
+        // metal builds by lifting the body's lightness) has to be re-derived
+        // against the new body; a translucent one (clay's white-at-0.12)
+        // composites correctly over any body and passes through. Testing the
+        // property rather than the material name is what keeps this from
+        // becoming a second per-material dispatch site parallel to pillStyle():
+        // a future material gets correct behaviour by construction instead of
+        // silently falling into an else branch nobody remembered to update.
+        const opaqueEdge = style.border.a >= 1;
+
         return {
             background: Qt.hsla(body.hslHue, body.hslSaturation, lit, 1.0),
-            // The border must keep the SAME relationship to the body that its
-            // material defines, not merely inherit the unlifted edge. Metal
-            // derives the edge from the body colour, so it has to be re-derived
-            // against the lifted body or the plate loses its machined edge and
-            // reads as a flat swatch. Clay's edge is translucent white, which
-            // composites correctly over any body lightness, so it passes
-            // through untouched.
-            border: Theme.material === "metal" ? Qt.hsla(body.hslHue, body.hslSaturation, Math.min(1.0, lit + metalConstants.borderLightnessLift), 1.0) : style.border
+            border: opaqueEdge ? Qt.hsla(body.hslHue, body.hslSaturation, Math.min(1.0, lit + metalConstants.borderLightnessLift), 1.0) : style.border
         };
     }
 

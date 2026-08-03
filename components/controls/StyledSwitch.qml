@@ -37,10 +37,12 @@ import QtQuick.Templates
 // The tonal budget is the constraint worth knowing. Metal's neutral surfaces
 // span only lightness 0.042–0.097, so the OFF knob has very little room to
 // separate from the slot by tone. It is deliberately given the very top of that
-// range while the slot sits near the bottom: slot #0e0f10, OFF knob body
-// #1a1c1d, its border #242526 — roughly 12 levels of body separation carried by
-// a 36-level edge. ON is where the contrast budget was spent instead: body
-// #958d7d against the same #0e0f10 slot, plus the polished finish on top.
+// span while the slot sits near the bottom, and most of the actual separation
+// is carried by the knob's 1px lifted edge rather than by its face. (Deliberately
+// stated as a relation and not as hex values: the palette is user-editable in
+// ~/.config/symmetria/shell.json, so literals here would drift out of date
+// silently.) ON is where the contrast budget was spent instead — the polished
+// engaged body, plus the lit finish on top.
 //
 // That ON body is lifted MORE than the connected socket's, even though both are
 // "engaged" — see Colours.polish for the measurement behind that. The short
@@ -55,8 +57,14 @@ import QtQuick.Templates
 // special-case small surfaces), but do not reason about the OFF knob's
 // legibility as though the rim contributes — it does not at this scale.
 //
-// Under clay the same structure degrades to a raised neumorphic knob in a well,
-// which is the classic clay form.
+// UNVERIFIED under clay: the structure should degrade to a raised neumorphic
+// knob in a well, but the knob is a PillSurface reparented into the slot's
+// clipping body, so clay's outer drop shadows are rendered INSIDE the slot's
+// clip region and are likely cut off at the slot edge and at the knob's travel
+// extremes. Metal is unaffected (all its shadow alphas are zero) and is the
+// shipped default, so this was not chased. If clay is ever made default again,
+// check this first — the fix is to declare the knob as a sibling of the slot
+// rather than a child, or to inset it far enough to clear darkShadowBlur.
 Switch {
     id: root
 
@@ -74,6 +82,8 @@ Switch {
     implicitHeight: implicitIndicatorHeight
 
     indicator: PillToggleSurface {
+        id: slot
+
         active: true
         activeColor: root._slotStyle.background
         borderColor: root._slotStyle.border
@@ -81,25 +91,39 @@ Switch {
         implicitWidth: implicitHeight * 1.7
         implicitHeight: Appearance.font.size.normal + Appearance.padding.smaller * 2
 
-        // NOTE on `parent` in this scope: PillToggleSurface reparents its
-        // default-slot children into an internal content holder that is
-        // anchors.fill'd, so it has a real width/height but NO implicitWidth /
-        // implicitHeight and no radius. Read parent.width/parent.height, and
-        // take the radius from the knob itself.
+        // NOTE on sizing in this scope: read the SLOT by id, never `parent`.
+        // PillToggleSurface reparents its default-slot children into an internal
+        // content holder that is anchors.fill'd, so `parent` has a real
+        // width/height but NO implicitWidth / implicitHeight and no radius.
+        //
+        // Reading `parent.width` instead is a trap of its own and was the first
+        // attempt here: the holder's width is 0 until layout runs, so the knob
+        // computed a NEGATIVE implicitHeight at creation and then visibly grew
+        // into place one frame later, every time a switch was instantiated —
+        // because the Behaviors below were already live. The slot's implicit
+        // sizes are literal expressions, available immediately, so they have no
+        // such transient. Radius still comes from the knob itself.
         PillSurface {
             id: knob
 
-            readonly property real nonAnimWidth: root.pressed ? implicitHeight * 1.3 : implicitHeight
+            readonly property real nonAnimWidth: root.pressed ? knob.implicitHeight * 1.3 : knob.implicitHeight
 
             color: root._knobStyle.background
             borderColor: root._knobStyle.border
             // ON is polished, OFF is stock machined face. This is what carries
             // "whiter" — the body lift alone would only make it a paler grey.
+            //
+            // The swap is INSTANT while the body colour cross-fades, so the
+            // finish technically pops mid-transition. Left that way on purpose:
+            // cross-fading two stacked SurfaceFinishes would composite both
+            // sweeps at the midpoint and overshoot the brightness that was
+            // tuned by eye, and on this control the knob's travel dominates the
+            // transition anyway.
             finishRecipe: root.checked ? Theme.engaged : Theme.pill
 
-            x: root.checked ? parent.width - nonAnimWidth - Appearance.padding.small / 2 : Appearance.padding.small / 2
+            x: root.checked ? slot.implicitWidth - nonAnimWidth - Appearance.padding.small / 2 : Appearance.padding.small / 2
             implicitWidth: nonAnimWidth
-            implicitHeight: parent.height - Appearance.padding.small
+            implicitHeight: slot.implicitHeight - Appearance.padding.small
             anchors.verticalCenter: parent.verticalCenter
 
             StyledRect {

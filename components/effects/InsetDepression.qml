@@ -36,9 +36,12 @@ import QtQuick
 Item {
     id: root
 
+    // All three default to zero — "fail invisible". A non-zero default would be
+    // one material's number frozen into a shared component, which is the exact
+    // thing this extraction removed from ActiveIndicator and the calendar.
     property real darkAlpha: 0
     property real lightAlpha: 0
-    property real horizontalWeight: 0.5
+    property real horizontalWeight: 0
 
     // Animated strength. PillToggleSurface drives this from its inset factor so
     // the cue fades in as the raised cues fade out; static consumers leave it 1.
@@ -73,10 +76,14 @@ Item {
         }
     }
 
+    // Metal zeroes horizontalInsetWeight, so without this guard the whole pass
+    // is instantiated and painted with an entirely transparent gradient on
+    // every metal toggle, the bar's active indicator and the calendar cell.
     Rectangle {
         anchors.fill: parent
         radius: root.radius
         color: "transparent"
+        visible: root.horizontalWeight > 0
 
         gradient: Gradient {
             orientation: Gradient.Horizontal

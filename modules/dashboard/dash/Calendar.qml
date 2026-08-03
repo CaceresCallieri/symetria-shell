@@ -296,7 +296,7 @@ CustomMouseArea {
                         // up", which is what distinguishes this shell's active state
                         // from Material's. Border zeroed so no drawn outline competes
                         // with the gradient-defined depression edges.
-                        color: Colours.engagedPillStyle(Colours.palette.m3primary, Colours.glass.strong, Colours.polish.standard).background
+                        color: Colours.engagedAccent.background
                         border.width: 0
 
                         opacity: todayItem ? 1 : 0
@@ -308,6 +308,10 @@ CustomMouseArea {
                         // clay's depression after metal became the default material —
                         // the comment claimed it matched the other two while the code
                         // had stopped doing so.
+                        //
+                        // Like ActiveIndicator, this BORROWS the toggle role's inset
+                        // numbers: a date cell is not a toggle, but it should feel
+                        // like one. See the fuller note in components/ActiveIndicator.qml.
                         InsetDepression {
                             anchors.fill: parent
                             radius: todayIndicator.radius

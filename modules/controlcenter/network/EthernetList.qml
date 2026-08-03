@@ -142,8 +142,6 @@ DeviceList {
                 }
 
                 ConnectToggleButton {
-                    id: connectBtn
-
                     connected: modelData.connected
 
                     onClicked: {

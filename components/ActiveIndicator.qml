@@ -31,10 +31,20 @@ StyledRect {
     // ENGAGED, not merely styled: this is the shell's canonical "which one is
     // active" marker, so it takes the polished treatment that the connected
     // network socket and the ON switch knob take. Before this it used plain
-    // pillStyle() and landed at lightness 0.180 under metal — against a
-    // textColor of m3onPrimary (0.20) that is very nearly no contrast at all.
-    // The lift moves the body to 0.400, so the glyph gets MORE readable, never
-    // less, whichever textColor a consumer passes.
+    // pillStyle() and landed at lightness 0.180 under metal; the lift moves the
+    // body to 0.400.
+    //
+    // OPEN QUESTION, deliberately not resolved here: `textColor` defaults to
+    // m3onPrimary and special workspaces pass m3onTertiary, both of which are
+    // DARK and would sit at roughly 2.3:1 on the new body. Whether that matters
+    // depends on something unverified — every consumer puts this indicator in a
+    // Loader with `z: -1`, i.e. below its own mask, and Colouriser is a
+    // MultiEffect that does not hide its source, so the real workspace labels
+    // may simply paint over the tinted copy and make `textColor` inert. The
+    // lift raises contrast either way (0.180 → 0.400 against a 0.20 glyph), so
+    // nothing regresses; but if the tint IS visible, these two should follow
+    // the m3onPrimary → m3onSurface move applied to the calendar and lock
+    // screen. Settle it with a grim capture of the bar with a workspace active.
     readonly property var glassStyle: Colours.engagedPillStyle(indicatorColor, Colours.glass.strong, Colours.polish.standard) // intentional var: heterogeneous JS { background, border }
 
     // --- Mode detection ---
@@ -144,9 +154,20 @@ StyledRect {
     // is what makes it follow `symmetria shell surface material <name>` like
     // everything else.
     // Rendered before the Colouriser so the icon glyph stays crisp.
+    // `Theme.toggle` is BORROWED here, not owned: this indicator is not a
+    // toggle, but it should feel like one, so it reads the toggle role's inset
+    // numbers. The cost is that a material cannot give the active-workspace
+    // marker a different depression from the quick toggles without splitting
+    // them. Acceptable while they are meant to match; if that stops being true,
+    // add an `inset` sub-block to each material's `engaged` recipe.
+    //
+    // `root.radius`, not `parent.radius` — correct here either way since the
+    // root IS the rounded rect, but the parent-radius form is right in some
+    // primitives and silently wrong in others (docs/qml-pitfalls.md), so the
+    // codebase should not train it.
     InsetDepression {
         anchors.fill: parent
-        radius: parent.radius
+        radius: root.radius
         darkAlpha: Theme.toggle.darkInsetAlpha
         lightAlpha: Theme.toggle.lightInsetAlpha
         horizontalWeight: Theme.toggle.horizontalInsetWeight
@@ -158,7 +179,7 @@ StyledRect {
     // it the indicator is a flat swatch with no highlight.
     SurfaceFinish {
         anchors.fill: parent
-        radius: parent.radius
+        radius: root.radius
         recipe: Theme.engaged
     }
 

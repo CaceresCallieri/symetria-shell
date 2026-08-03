@@ -39,21 +39,20 @@ Item {
 
     signal clicked
 
-    // Polished accent metal. m3primary is chromatic enough to cross
-    // metalPill()'s accentSaturationThreshold, so this takes the accent path
-    // and keeps the palette's warm hue instead of collapsing to neutral
-    // near-black like a surface container would; engagedPillStyle then lifts it
-    // past the material's ceiling, which is what a connected part has earned
-    // and a container has not. Cached once — background and border must come
-    // from the SAME call or the edge stops matching the face.
-    readonly property var _socketStyle: Colours.engagedPillStyle(Colours.palette.m3primary, Colours.glass.strong, Colours.polish.standard)
-
     // Shared by the socket and the hover/ripple layer. Bound to the FORM axis
     // like every other surface, so `form: panel` squares this off with the rest
     // of the shell instead of leaving one stray capsule.
     readonly property real radius: Appearance.rounding.full * Theme.layout.surfaceRounding
 
     implicitWidth: implicitHeight
+    // SIZE NOTE: the six call sites this replaced did not agree. The three
+    // control-center lists used `padding.smaller * 2` (14); the three bar
+    // popouts used a bare `padding.small` (5, not doubled), so their rows were
+    // ~9px shorter. Unifying on the larger value is deliberate — one control
+    // should not be two sizes depending on which panel it is in, and the larger
+    // one is the better pointer target — but it does mean the bar popout rows
+    // grew. Expose a per-instance override here rather than reverting if a
+    // caller ever needs the compact form back.
     implicitHeight: icon.implicitHeight + Appearance.padding.smaller * 2
 
     // `active: true` unconditionally: this is a recess, and a recess is a
@@ -65,8 +64,15 @@ Item {
 
         anchors.fill: parent
         active: true
-        activeColor: root._socketStyle.background
-        borderColor: root._socketStyle.border
+        // Polished accent metal — m3primary is chromatic enough to cross
+        // metalPill()'s accentSaturationThreshold, so it keeps the palette's
+        // warm hue instead of collapsing to neutral near-black the way a
+        // surface container would, and engagedPillStyle then lifts it past the
+        // material's ceiling. Both colours come from the one cached accessor:
+        // background and border must originate in the SAME call or the edge
+        // stops matching the face.
+        activeColor: Colours.engagedAccent.background
+        borderColor: Colours.engagedAccent.border
 
         // Inset AND polished. `active: true` drives specularFactor to 0 by
         // default, which left this a flat warm swatch with no highlight at all;
@@ -105,17 +111,32 @@ Item {
         }
     }
 
+    // Behind a Loader, not instantiated unconditionally: CircularIndicator is a
+    // BusyIndicator whose contentItem is Shape-based and which owns two
+    // NumberAnimations. This component is a delegate in the wireless list,
+    // which routinely holds 20-40 scanned networks — and two of the six call
+    // sites it replaced had no indicator at all, so an always-on one would be
+    // pure new cost on every control-center open.
+    //
     // Transparent track: the indicator replaces the icon in place, and a filled
     // track would draw a disc on the rows that have no socket.
-    CircularIndicator {
+    Loader {
         anchors.fill: parent
-        running: root.loading
-        bgColour: "transparent"
+        active: root.loading
+
+        sourceComponent: CircularIndicator {
+            running: true
+            bgColour: "transparent"
+        }
     }
 
-    // Last, so it takes input above the socket and the icon. Explicit radius —
-    // StateLayer's default reads `parent.radius`, and `parent` here is a plain
-    // Item, so the ripple would clip to a square. See docs/qml-pitfalls.md.
+    // Last, so it takes input above the socket and the icon. The radius is
+    // bound explicitly rather than left to StateLayer's `parent?.radius ?? 0`
+    // default: that default WOULD resolve correctly here, since root declares
+    // `radius` above, but only by coincidence of this file's shape. Stating it
+    // keeps the ripple's clipping independent of whether a future refactor
+    // moves the StateLayer inside something that reparents. See the
+    // parent-radius entry in docs/qml-pitfalls.md.
     StateLayer {
         radius: root.radius
         color: Colours.palette.m3onSurface

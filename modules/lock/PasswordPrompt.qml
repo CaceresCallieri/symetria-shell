@@ -130,12 +130,18 @@ Item {
                     // something IS on. This is a call to action — the key is lit
                     // and waiting, not depressed — so it keeps the raised
                     // silhouette and only takes the highlight.
-                    readonly property var style: armed ? Colours.engagedPillStyle(Colours.palette.m3primary, Colours.glass.strong, Colours.polish.standard) : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+                    readonly property var submitStyle: armed ? Colours.engagedAccent : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
-                    color: style.background
+                    color: submitStyle.background
                     radius: Appearance.rounding.full
+                    // The PILL role's border width, deliberately, in both states:
+                    // this key keeps a raised silhouette even when armed, so it
+                    // wants a display pill's edge. Only the FINISH switches to the
+                    // engaged recipe. A material that wanted an edgeless armed key
+                    // would express that by zeroing pill.borderWidth, which is the
+                    // same lever every other raised plate in the shell answers to.
                     border.width: Theme.pill.borderWidth
-                    border.color: style.border
+                    border.color: submitStyle.border
 
                     SurfaceFinish {
                         anchors.fill: parent
