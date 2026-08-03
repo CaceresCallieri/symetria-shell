@@ -198,12 +198,9 @@ PillSurface {
         }
 
         // Project name label
-        StyledText {
+        ProjectNameLabel {
             Layout.alignment: Qt.AlignVCenter
             text: root.project
-            color: Colours.palette.m3primary
-            font.weight: Font.Bold
-            font.pointSize: Appearance.font.size.small
         }
 
         // Agent chips. Use AgentChipFor (not a bare AgentChip) so the agent→chip

@@ -1,7 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
-import qs.services
 import qs.config
 import Quickshell
 import QtQuick
@@ -33,13 +31,10 @@ Row {
 
     // Project name — sits before the chip(s): [icon] (project name) ⭐ when used inside
     // HostedAgentIcon, or (project name) ⭐ standalone in the trailing cluster.
-    StyledText {
+    ProjectNameLabel {
         anchors.verticalCenter: parent.verticalCenter
         visible: root.showName
         text: root.project
-        color: Colours.palette.m3primary
-        font.weight: Font.Bold
-        font.pointSize: Appearance.font.size.small
     }
 
     Repeater {
@@ -60,7 +55,11 @@ Row {
             // intentional var: heterogeneous agent JS object from bridge JSON
             required property var modelData
 
-            anchors.verticalCenter: parent.verticalCenter
+            // parent?. (not parent.) because a Repeater delegate evaluates its bindings
+            // once BEFORE it is reparented into the positioner — `parent` is null in that
+            // first pass and a bare `parent.verticalCenter` logs a TypeError on every
+            // delegate creation. The binding re-evaluates when parent is assigned.
+            anchors.verticalCenter: parent?.verticalCenter
             agent: modelData
         }
     }
