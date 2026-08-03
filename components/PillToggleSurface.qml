@@ -114,6 +114,21 @@ Item {
     property real lightInsetAlpha: Theme.toggle.lightInsetAlpha
     property real horizontalInsetWeight: Theme.toggle.horizontalInsetWeight
 
+    // --- Finish override --------------------------------------------------
+    // See the matching properties on PillSurface. `specularFactor` defaults to
+    // raisedFactor, which zeroes the lit layers when the pill presses in — a
+    // surface depressed into its housing is in shadow.
+    //
+    // A consumer overrides that ONLY for a part that is both inset AND
+    // polished, which is a real thing rather than a contradiction: the lip of a
+    // worn socket catches light precisely because it is a recess something has
+    // been seated into repeatedly. Without the override such a part renders
+    // with no highlights at all and reads as a flat coloured swatch — which is
+    // the failure this override was added to fix.
+    // intentional var: heterogeneous JS recipe block from Theme
+    property var finishRecipe: Theme.toggle
+    property real specularFactor: raisedFactor
+
     // --- Animation duration for the active↔inactive transition ----------
     property int transitionDuration: Appearance.anim.durations.normal
 
@@ -197,42 +212,17 @@ Item {
             }
         }
 
-        // Inset-cue overlay (vertical axis): dark band on top edge (shadow
-        // falling into the well from overhead light) + light band on the
-        // bottom edge (reflected fill light). Full strength.
-        Rectangle {
+        // Inset cue — see components/effects/InsetDepression.qml for the
+        // geometry. The alphas stay declared on this primitive rather than
+        // being read from Theme inside the effect, because consumers override
+        // them per instance.
+        InsetDepression {
             anchors.fill: parent
             radius: root.radius
-            color: "transparent"
-            visible: root.insetFactor > 0.01
-
-            gradient: Gradient {
-                GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, root.darkInsetAlpha * root.insetFactor) }
-                GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
-                GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-                GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, root.lightInsetAlpha * root.insetFactor) }
-            }
-        }
-
-        // Inset-cue overlay (horizontal axis): dark band on left edge,
-        // light band on right edge. Weighted by horizontalInsetWeight so
-        // the vertical axis stays dominant (overhead-light bias). Together
-        // with the vertical overlay, this composites into the diagonal
-        // top-left-shadow / bottom-right-highlight neumorphic well that
-        // matches the reference.
-        Rectangle {
-            anchors.fill: parent
-            radius: root.radius
-            color: "transparent"
-            visible: root.insetFactor > 0.01
-
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, root.darkInsetAlpha * root.horizontalInsetWeight * root.insetFactor) }
-                GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
-                GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-                GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, root.lightInsetAlpha * root.horizontalInsetWeight * root.insetFactor) }
-            }
+            darkAlpha: root.darkInsetAlpha
+            lightAlpha: root.lightInsetAlpha
+            horizontalWeight: root.horizontalInsetWeight
+            factor: root.insetFactor
         }
 
         // Material finish (sheen + brushed grain + specular rim). Renders
@@ -243,8 +233,8 @@ Item {
         SurfaceFinish {
             anchors.fill: parent
             radius: root.radius
-            recipe: Theme.toggle
-            specularFactor: root.raisedFactor
+            recipe: root.finishRecipe
+            specularFactor: root.specularFactor
         }
 
         Item {

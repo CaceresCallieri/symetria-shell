@@ -105,43 +105,17 @@ PillCardSection {
                     text: device.modelData.name
                 }
 
-                StyledRect {
+                // `connected`, not `state === Connected`: the old block drove
+                // the plate and the ripple colour from `state` but the glyph
+                // from `connected`, so mid-transition the button showed a
+                // seated socket with an unplugged icon. One source now.
+                ConnectToggleButton {
                     id: connectBtn
 
-                    implicitWidth: implicitHeight
-                    implicitHeight: connectIcon.implicitHeight + Appearance.padding.small
+                    connected: device.modelData.connected
+                    loading: device.loading
 
-                    radius: Appearance.rounding.full
-                    color: Qt.alpha(Colours.palette.m3primary, device.modelData.state === BluetoothDeviceState.Connected ? 1 : 0)
-
-                    CircularIndicator {
-                        anchors.fill: parent
-                        running: device.loading
-                    }
-
-                    StateLayer {
-                        color: device.modelData.state === BluetoothDeviceState.Connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                        disabled: device.loading
-
-                        function onClicked(): void {
-                            device.modelData.connected = !device.modelData.connected;
-                        }
-                    }
-
-                    MaterialIcon {
-                        id: connectIcon
-
-                        anchors.centerIn: parent
-                        animate: true
-                        text: device.modelData.connected ? "link_off" : "link"
-                        color: device.modelData.state === BluetoothDeviceState.Connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                        opacity: device.loading ? 0 : 1
-
-                        Behavior on opacity {
-                            Anim {}
-                        }
-                    }
+                    onClicked: device.modelData.connected = !device.modelData.connected
                 }
 
                 Loader {

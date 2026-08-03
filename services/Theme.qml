@@ -143,6 +143,13 @@ Singleton {
                 highlightAlpha: 0.08, innerShadowAlpha: 0.03, borderWidth: 1,
                 sheenTop: 0.0, sweepAlpha: 0.0, sweepCentre: 0.5, sweepWidth: 0.3,
                 brushedAlpha: 0.0, rimAlpha: 0.0, rimStop: 0.03, rimBottomAlpha: 0.0, rimBottomStop: 0.03
+            },
+            // Clay's whole identity is that SurfaceFinish paints NOTHING, so its
+            // polished variant is zeroed like the rest. Clay signals an engaged
+            // control through depth direction, not through reflection.
+            engaged: {
+                sheenTop: 0.0, sweepAlpha: 0.0, sweepCentre: 0.5, sweepWidth: 0.3,
+                brushedAlpha: 0.0, rimAlpha: 0.0, rimStop: 0.05, rimBottomAlpha: 0.0, rimBottomStop: 0.05
             }
         },
 
@@ -200,6 +207,42 @@ Singleton {
                 highlightAlpha: 0.0, innerShadowAlpha: 0.0, borderWidth: 1,
                 sheenTop: 0.0, sweepAlpha: 0.055, sweepCentre: 0.26, sweepWidth: 0.52,
                 brushedAlpha: 0.032, rimAlpha: 0.15, rimStop: 0.008, rimBottomAlpha: 0.0, rimBottomStop: 0.01
+            },
+
+            // POLISHED. Not a surface role — a FINISH-ONLY block, which is why
+            // it carries no shadow or border keys. Consumers pass it to a
+            // primitive's `finishRecipe` to say "this particular part is worn
+            // bright", while the part keeps whatever structure its role gives
+            // it. Today: the ON knob of a switch, and a connected socket.
+            //
+            // The point of this block is that "brighter" and "whiter" are not
+            // the same instruction. Lifting the BODY toward white flattens a
+            // plate into a pale swatch — that is what the raw `m3primary` fill
+            // this whole rework replaced was doing. A polished part instead
+            // returns far more light in ONE place and stays dark elsewhere, so
+            // every number here is a reflection, not a fill:
+            //
+            //   sweep      3x the alpha of a stock plate and NARROWER (0.34 vs
+            //              0.46). Wide and dim is a matte face catching ambient
+            //              light; tight and bright is a mirror returning the
+            //              source. Narrowing it is what stops the extra alpha
+            //              from just reading as "lighter grey".
+            //   rimStop    0.10, not the stock 0.020. This is the fix for a
+            //              measured bug rather than a taste call: rimStop is a
+            //              fraction of surface HEIGHT, so on a ~27px knob the
+            //              stock value renders a HALF-PIXEL band that lands
+            //              inside the border and contributes nothing. At 0.10
+            //              the lip is ~3px and actually reads.
+            //   rimBottom  present here and absent everywhere else in metal. A
+            //              top rim alone reads as a lit sheet; adding the dim
+            //              bottom bevel is what makes it read as a solid piece
+            //              with thickness — worth paying for on the one part
+            //              the eye lands on.
+            //   brushed    slightly LOWER than stock (0.030 vs 0.040). Polished
+            //              means the machining grain has been worn down.
+            engaged: {
+                sheenTop: 0.10, sweepAlpha: 0.22, sweepCentre: 0.32, sweepWidth: 0.34,
+                brushedAlpha: 0.030, rimAlpha: 0.45, rimStop: 0.10, rimBottomAlpha: 0.12, rimBottomStop: 0.08
             }
         }
     })
@@ -213,6 +256,9 @@ Singleton {
     readonly property var pill: recipe.pill
     readonly property var toggle: recipe.toggle
     readonly property var card: recipe.card
+    // Finish-only — see the block comment. Passed to a primitive's
+    // `finishRecipe`, never used as a role on its own.
+    readonly property var engaged: recipe.engaged
 
     // --- FORM axis -----------------------------------------------------------
     //
@@ -298,7 +344,7 @@ Singleton {
     // primitive's binding with no error at the definition site, so prose alone
     // is not enough — this turns a silent mis-render into a startup warning.
     Component.onCompleted: {
-        for (const role of ["pill", "toggle", "card"]) {
+        for (const role of ["pill", "toggle", "card", "engaged"]) {
             const reference = Object.keys(_recipes.clay[role]).sort().join(",");
             for (const name of materials) {
                 const keys = Object.keys(_recipes[name][role]).sort().join(",");

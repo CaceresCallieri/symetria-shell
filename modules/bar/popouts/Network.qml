@@ -105,56 +105,29 @@ PillCardSection {
                     color: networkItem.modelData.active ? Colours.palette.m3primary : Colours.palette.m3onSurface
                 }
 
-                StyledRect {
-                    implicitWidth: implicitHeight
-                    implicitHeight: wirelessConnectIcon.implicitHeight + Appearance.padding.small
+                ConnectToggleButton {
+                    connected: networkItem.modelData.active
+                    loading: networkItem.loading
+                    disabled: !NmcliWifi.wifiEnabled
 
-                    radius: Appearance.rounding.full
-                    color: Qt.alpha(Colours.palette.m3primary, networkItem.modelData.active ? 1 : 0)
-
-                    CircularIndicator {
-                        anchors.fill: parent
-                        running: networkItem.loading
-                    }
-
-                    StateLayer {
-                        color: networkItem.modelData.active ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                        disabled: networkItem.loading || !NmcliWifi.wifiEnabled
-
-                        function onClicked(): void {
-                            if (networkItem.modelData.active) {
-                                NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
-                            } else {
-                                root.connectingToSsid = networkItem.modelData.ssid;
-                                NetworkConnection.handleConnect(
-                                    networkItem.modelData,
-                                    null,
-                                    (network) => {
-                                        root.passwordNetwork = network;
-                                        root.showPasswordDialog = true;
-                                        root.wrapper.currentName = "wirelesspassword";
-                                    },
-                                    // Clears the row spinner on EVERY terminal outcome.
-                                    // This is the only thing that clears it — see the
-                                    // regression guard on the Connections block below.
-                                    () => root.connectingToSsid = ""
-                                );
-                            }
-                        }
-                    }
-
-                    MaterialIcon {
-                        id: wirelessConnectIcon
-
-                        anchors.centerIn: parent
-                        animate: true
-                        text: networkItem.modelData.active ? "link_off" : "link"
-                        color: networkItem.modelData.active ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                        opacity: networkItem.loading ? 0 : 1
-
-                        Behavior on opacity {
-                            Anim {}
+                    onClicked: {
+                        if (networkItem.modelData.active) {
+                            NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
+                        } else {
+                            root.connectingToSsid = networkItem.modelData.ssid;
+                            NetworkConnection.handleConnect(
+                                networkItem.modelData,
+                                null,
+                                (network) => {
+                                    root.passwordNetwork = network;
+                                    root.showPasswordDialog = true;
+                                    root.wrapper.currentName = "wirelesspassword";
+                                },
+                                // Clears the row spinner on EVERY terminal outcome.
+                                // This is the only thing that clears it — see the
+                                // regression guard on the Connections block below.
+                                () => root.connectingToSsid = ""
+                            );
                         }
                     }
                 }
@@ -284,43 +257,15 @@ PillCardSection {
                     color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurface
                 }
 
-                StyledRect {
-                    implicitWidth: implicitHeight
-                    implicitHeight: connectIcon.implicitHeight + Appearance.padding.small
+                ConnectToggleButton {
+                    connected: ethernetItem.modelData.connected
+                    loading: ethernetItem.loading
 
-                    radius: Appearance.rounding.full
-                    color: Qt.alpha(Colours.palette.m3primary, ethernetItem.modelData.connected ? 1 : 0)
-
-                    CircularIndicator {
-                        anchors.fill: parent
-                        running: ethernetItem.loading
-                    }
-
-                    StateLayer {
-                        color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                        disabled: ethernetItem.loading
-
-                        function onClicked(): void {
-                            if (ethernetItem.modelData.connected && ethernetItem.modelData.connection) {
-                                NmcliEthernet.disconnectEthernet(ethernetItem.modelData.connection, () => {});
-                            } else {
-                                NmcliEthernet.connectEthernet(ethernetItem.modelData.connection || "", ethernetItem.modelData.interface || "", () => {});
-                            }
-                        }
-                    }
-
-                    MaterialIcon {
-                        id: connectIcon
-
-                        anchors.centerIn: parent
-                        animate: true
-                        text: ethernetItem.modelData.connected ? "link_off" : "link"
-                        color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                        opacity: ethernetItem.loading ? 0 : 1
-
-                        Behavior on opacity {
-                            Anim {}
+                    onClicked: {
+                        if (ethernetItem.modelData.connected && ethernetItem.modelData.connection) {
+                            NmcliEthernet.disconnectEthernet(ethernetItem.modelData.connection, () => {});
+                        } else {
+                            NmcliEthernet.connectEthernet(ethernetItem.modelData.connection || "", ethernetItem.modelData.interface || "", () => {});
                         }
                     }
                 }

@@ -28,7 +28,14 @@ StyledRect {
     property color textColor: Colours.palette.m3onPrimary
 
     // --- Pill styling (strong intensity for active indicator) ---
-    readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
+    // ENGAGED, not merely styled: this is the shell's canonical "which one is
+    // active" marker, so it takes the polished treatment that the connected
+    // network socket and the ON switch knob take. Before this it used plain
+    // pillStyle() and landed at lightness 0.180 under metal — against a
+    // textColor of m3onPrimary (0.20) that is very nearly no contrast at all.
+    // The lift moves the body to 0.400, so the glyph gets MORE readable, never
+    // less, whichever textColor a consumer passes.
+    readonly property var glassStyle: Colours.engagedPillStyle(indicatorColor, Colours.glass.strong, Colours.polish.standard) // intentional var: heterogeneous JS { background, border }
 
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
@@ -130,37 +137,29 @@ StyledRect {
     // never animates the border up.)
     border.width: 0
 
-    // Inset depression overlays — mirror PillToggleSurface's diagonal "well":
-    // top-dark + bottom-light (vertical, full strength) composited with a
-    // horizontal pass at 50% weight so the top-LEFT corner is darkest and the
-    // bottom-RIGHT brightest. Stops match PillToggleSurface so the bar's
-    // active workspace and the utility toggles share the same pressed feel.
+    // Inset depression — shared with PillToggleSurface and the calendar's today
+    // cell. These alphas used to be written here as literals (0.55 / 0.12 /
+    // × 0.5), which are CLAY's numbers, so this indicator kept drawing clay's
+    // depression after metal became the default material. Reading Theme.toggle
+    // is what makes it follow `symmetria shell surface material <name>` like
+    // everything else.
     // Rendered before the Colouriser so the icon glyph stays crisp.
-    Rectangle {
+    InsetDepression {
         anchors.fill: parent
         radius: parent.radius
-        color: "transparent"
-
-        gradient: Gradient {
-            GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, 0.55) }
-            GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
-            GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-            GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.12) }
-        }
+        darkAlpha: Theme.toggle.darkInsetAlpha
+        lightAlpha: Theme.toggle.lightInsetAlpha
+        horizontalWeight: Theme.toggle.horizontalInsetWeight
     }
 
-    Rectangle {
+    // Polished finish. `specularFactor` is not defaulted away here the way
+    // PillToggleSurface defaults it to zero for a pressed pill: this surface is
+    // inset AND lit, which is the same call the connected socket makes. Without
+    // it the indicator is a flat swatch with no highlight.
+    SurfaceFinish {
         anchors.fill: parent
         radius: parent.radius
-        color: "transparent"
-
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, 0.55 * 0.5) }
-            GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
-            GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-            GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.12 * 0.5) }
-        }
+        recipe: Theme.engaged
     }
 
     Colouriser {

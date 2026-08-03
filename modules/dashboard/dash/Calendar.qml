@@ -289,50 +289,37 @@ CustomMouseArea {
 
                         clip: true
                         radius: Appearance.rounding.full
-                        // Match the bar's active workspace pill (ActiveIndicator.qml) and
-                        // the active quick toggles (PillToggleSurface.qml): translucent
-                        // strong-glass base + two gradient passes producing a top-LEFT
-                        // dark / bottom-RIGHT bright depression. Replaces the prior
-                        // solid m3primary fill so today's cell reads as "pressed in"
-                        // rather than "lit up". Border zeroed so no drawn outline
-                        // competes with the gradient-defined depression edges.
-                        color: Colours.pillStyle(Colours.palette.m3primary, Colours.glass.strong).background
+                        // Today is an ENGAGED element, and is drawn with the same
+                        // recipe as the connected network socket and the ON switch
+                        // knob: polished accent body + inset depression + lit finish.
+                        // It reads as "pressed in and worn bright" rather than "lit
+                        // up", which is what distinguishes this shell's active state
+                        // from Material's. Border zeroed so no drawn outline competes
+                        // with the gradient-defined depression edges.
+                        color: Colours.engagedPillStyle(Colours.palette.m3primary, Colours.glass.strong, Colours.polish.standard).background
                         border.width: 0
 
                         opacity: todayItem ? 1 : 0
                         scale: todayItem ? 1 : 0.7
 
-                        // Vertical depression — top dark, bottom light. Stops mirror
-                        // ActiveIndicator / PillToggleSurface so the three pressed
-                        // surfaces share an identical feel.
-                        Rectangle {
+                        // Shared with PillToggleSurface and ActiveIndicator. The two
+                        // gradients used to be open-coded here with clay's literal
+                        // alphas (0.55 / 0.12 / × 0.5), so this cell kept drawing
+                        // clay's depression after metal became the default material —
+                        // the comment claimed it matched the other two while the code
+                        // had stopped doing so.
+                        InsetDepression {
                             anchors.fill: parent
                             radius: todayIndicator.radius
-                            color: "transparent"
-
-                            gradient: Gradient {
-                                GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, 0.55) }
-                                GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
-                                GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-                                GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.12) }
-                            }
+                            darkAlpha: Theme.toggle.darkInsetAlpha
+                            lightAlpha: Theme.toggle.lightInsetAlpha
+                            horizontalWeight: Theme.toggle.horizontalInsetWeight
                         }
 
-                        // Horizontal depression at 50% weight — combined with the
-                        // vertical pass, the diagonal makes top-LEFT darkest and
-                        // bottom-RIGHT brightest.
-                        Rectangle {
+                        SurfaceFinish {
                             anchors.fill: parent
                             radius: todayIndicator.radius
-                            color: "transparent"
-
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.00; color: Qt.rgba(0, 0, 0, 0.55 * 0.5) }
-                                GradientStop { position: 0.45; color: Qt.rgba(0, 0, 0, 0.00) }
-                                GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-                                GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.12 * 0.5) }
-                            }
+                            recipe: Theme.engaged
                         }
 
                         // Colouriser declared LAST so the day-number glyph paints on
@@ -346,10 +333,14 @@ CustomMouseArea {
 
                             source: grid
                             sourceColor: Colours.palette.m3onSurface
-                            // Tint with m3onSurface, not m3onPrimary. The today pill renders dark
-                            // (translucent strong-glass + top-dark depression gradient), so dark
-                            // m3onPrimary text disappeared against it. Keep this in sync if the
-                            // pill's background recipe is ever lightened.
+                            // Tint with m3onSurface, not m3onPrimary. Dark m3onPrimary
+                            // text disappeared against this cell when the body was
+                            // plain strong-glass. The body is now the polished engaged
+                            // recipe (lightness 0.400 rather than 0.180), which widens
+                            // the gap to this light glyph rather than closing it — but
+                            // the pairing still has to be re-checked if the body is
+                            // ever pushed further up, since past roughly 0.6 a light
+                            // glyph starts to lose the same contrast m3onPrimary lost.
                             colorizationColor: Colours.palette.m3onSurface
                         }
 

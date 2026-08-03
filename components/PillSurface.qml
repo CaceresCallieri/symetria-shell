@@ -113,6 +113,18 @@ Item {
     property real highlightAlpha: Theme.pill.highlightAlpha
     property real innerShadowAlpha: Theme.pill.innerShadowAlpha
 
+    // --- Finish override --------------------------------------------------
+    // Which SurfaceFinish recipe paints the sheen / sweep / grain / rims.
+    // Defaults to this role's own block; a consumer swaps in `Theme.engaged`
+    // for a part that is worn bright (see that block in services/Theme.qml).
+    //
+    // Kept SEPARATE from `color` on purpose: the body colour says what the part
+    // is made of, this says how its surface has been finished. Bundling them
+    // would mean a caller could not brighten one without the other, which is
+    // precisely the mistake — a pale body with a matte finish is plastic.
+    // intentional var: heterogeneous JS recipe block from Theme
+    property var finishRecipe: Theme.pill
+
     // Default slot: children declared inside PillSurface { ... } get reparented
     // into contentHolder, which fills the pill body and is clipped to the
     // rounded shape.
@@ -174,7 +186,7 @@ Item {
         SurfaceFinish {
             anchors.fill: parent
             radius: root.radius
-            recipe: Theme.pill
+            recipe: root.finishRecipe
         }
 
         // Holder for consumer content (default slot). anchors.fill so children

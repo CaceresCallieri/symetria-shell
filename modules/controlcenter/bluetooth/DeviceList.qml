@@ -244,52 +244,19 @@ DeviceList {
                     }
                 }
 
-                StyledRect {
+                ConnectToggleButton {
                     id: connectBtn
 
-                    implicitWidth: implicitHeight
-                    implicitHeight: connectIcon.implicitHeight + Appearance.padding.smaller * 2
+                    connected: device.connected
+                    loading: device.loading
 
-                    radius: Appearance.rounding.full
-                    color: device.connected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
-
-                    CircularIndicator {
-                        anchors.fill: parent
-                        running: device.loading
-                    }
-
-                    StateLayer {
-                        color: Colours.palette.m3onSurface
-                        disabled: device.loading
-
-                        function onClicked(): void {
-                            if (device.loading)
-                                return;
-
-                            if (device.connected) {
-                                device.modelData.connected = false;
-                            } else {
-                                if (device.modelData.bonded) {
-                                    device.modelData.connected = true;
-                                } else {
-                                    device.modelData.pair();
-                                }
-                            }
-                        }
-                    }
-
-                    MaterialIcon {
-                        id: connectIcon
-
-                        anchors.centerIn: parent
-                        animate: true
-                        text: device.connected ? "link_off" : "link"
-                        color: Colours.palette.m3onSurface
-
-                        opacity: device.loading ? 0 : 1
-
-                        Behavior on opacity {
-                            Anim {}
+                    onClicked: {
+                        if (device.connected) {
+                            device.modelData.connected = false;
+                        } else if (device.modelData.bonded) {
+                            device.modelData.connected = true;
+                        } else {
+                            device.modelData.pair();
                         }
                     }
                 }

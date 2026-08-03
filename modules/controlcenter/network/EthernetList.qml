@@ -141,34 +141,17 @@ DeviceList {
                     }
                 }
 
-                StyledRect {
+                ConnectToggleButton {
                     id: connectBtn
 
-                    implicitWidth: implicitHeight
-                    implicitHeight: connectIcon.implicitHeight + Appearance.padding.smaller * 2
+                    connected: modelData.connected
 
-                    radius: Appearance.rounding.full
-                    color: modelData.connected ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
-
-                    StateLayer {
-                        color: Colours.palette.m3onSurface
-
-                        function onClicked(): void {
-                            if (modelData.connected && modelData.connection) {
-                                NmcliEthernet.disconnectEthernet(modelData.connection, () => {});
-                            } else {
-                                NmcliEthernet.connectEthernet(modelData.connection || "", modelData.interface || "", () => {});
-                            }
+                    onClicked: {
+                        if (modelData.connected && modelData.connection) {
+                            NmcliEthernet.disconnectEthernet(modelData.connection, () => {});
+                        } else {
+                            NmcliEthernet.connectEthernet(modelData.connection || "", modelData.interface || "", () => {});
                         }
-                    }
-
-                    MaterialIcon {
-                        id: connectIcon
-
-                        anchors.centerIn: parent
-                        animate: true
-                        text: modelData.connected ? "link_off" : "link"
-                        color: Colours.palette.m3onSurface
                     }
                 }
             }

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.components.controls
+import qs.components.effects
 import qs.services
 import qs.config
 import QtQuick
@@ -117,13 +118,35 @@ Item {
                     implicitWidth: implicitHeight
                     implicitHeight: enterIcon.implicitHeight + Appearance.padding.small * 2
 
-                    color: armed ? Colours.palette.m3primary : Colours.layer(Colours.palette.m3surfaceContainerHigh, 2)
+                    // Armed takes the shell's ENGAGED treatment — the same
+                    // polished accent metal as a connected network socket — via
+                    // a lit finish rather than a raw m3primary fill. The raw
+                    // fill was the last near-white blob left on the lock screen
+                    // and read as a Material Design control sitting on a
+                    // machined panel.
+                    //
+                    // Polished but NOT inset, unlike the socket or the ON switch
+                    // knob. Those are engaged states: something IS connected,
+                    // something IS on. This is a call to action — the key is lit
+                    // and waiting, not depressed — so it keeps the raised
+                    // silhouette and only takes the highlight.
+                    readonly property var style: armed ? Colours.engagedPillStyle(Colours.palette.m3primary, Colours.glass.strong, Colours.polish.standard) : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+
+                    color: style.background
                     radius: Appearance.rounding.full
+                    border.width: Theme.pill.borderWidth
+                    border.color: style.border
+
+                    SurfaceFinish {
+                        anchors.fill: parent
+                        radius: submit.radius
+                        recipe: submit.armed ? Theme.engaged : Theme.pill
+                    }
 
                     StateLayer {
                         // No re-submitting an attempt that is already in flight.
                         disabled: submit.busy
-                        color: submit.armed ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
+                        color: Colours.palette.m3onSurface
 
                         function onClicked(): void {
                             root.pam.passwd.start();
@@ -135,7 +158,11 @@ Item {
 
                         anchors.centerIn: parent
                         text: "arrow_forward"
-                        color: submit.armed ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
+                        // One colour for both states: the armed body is now polished metal at
+                        // lightness 0.400, and dark m3onPrimary (0.20) would have almost no
+                        // contrast against it. The calendar's today cell hit the same trap
+                        // and left a note about it; this is that note being applied.
+                        color: Colours.palette.m3onSurface
                         font.weight: 500
                         opacity: submit.busy ? 0 : 1
 

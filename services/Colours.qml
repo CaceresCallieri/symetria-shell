@@ -267,6 +267,69 @@ Singleton {
         return mattePill(baseColor, intensity);
     }
 
+    // How far above its material's ceiling an ENGAGED part is pushed.
+    //
+    // Every surface recipe caps hard — metal accents top out at lightness 0.197,
+    // clay at 0.18 — because a SURFACE that drifts bright stops reading as the
+    // material and starts reading as coloured plastic. That cap is correct for
+    // the hundreds of pills that merely carry state.
+    //
+    // It is wrong for the one or two controls the eye actually lands on. This
+    // lift is the exception, and it is physically honest rather than a fudge:
+    // an engaged part is POLISHED, not emitting. A machined face that has been
+    // worn bright by use returns far more of the light source than the matte
+    // stock around it, and that is a real thing metal does — unlike glowing,
+    // which is what a raw `m3primary` fill was faking.
+    //
+    // TWO presets, because the same body lightness does not read the same in
+    // every context. Measured side by side: the switch knob at 0.417 is
+    // objectively BRIGHTER than the connected socket at 0.400, and still looks
+    // dimmer in situ. Simultaneous contrast is the reason — the knob is a small
+    // disc ringed by a shadowed groove, the socket sits flat on the card — and
+    // the correction belongs in the value rather than in the viewer's eye.
+    //
+    // Do not "simplify" these back into one constant on the grounds that the
+    // numbers should match. They differ precisely so the RESULT matches.
+    readonly property QtObject polish: QtObject {
+        // A part sitting in the panel plane: the connected socket.
+        readonly property real standard: 0.22
+
+        // A part ringed by a dark inset groove: the switch knob. Picked against
+        // `standard` in a side-by-side render so the knob reads brighter than
+        // the socket, not merely equal to it. Past ~0.40 it stops reading as
+        // metal and starts recreating the pale disc this whole rework replaced.
+        readonly property real inGroove: 0.34
+    }
+
+    // pillStyle() for a part that is actuated / connected / on.
+    //
+    // Use this ONLY for the engaged state of an interactive control, never for
+    // a container or a static display pill. It deliberately breaks the material
+    // ceiling, so applying it broadly would flatten the contrast it exists to
+    // create.
+    //
+    // `lift` is required rather than defaulted: a caller has to state which
+    // context its part lives in, because picking the wrong one is invisible in
+    // code review and only shows up as a control that looks flat on screen.
+    // Pass a `Colours.polish.*` preset, not a literal.
+    function engagedPillStyle(baseColor: color, intensity: real, lift: real): var {
+        const style = pillStyle(baseColor, intensity);
+        const body = style.background;
+        const lit = Math.min(1.0, body.hslLightness + lift);
+
+        return {
+            background: Qt.hsla(body.hslHue, body.hslSaturation, lit, 1.0),
+            // The border must keep the SAME relationship to the body that its
+            // material defines, not merely inherit the unlifted edge. Metal
+            // derives the edge from the body colour, so it has to be re-derived
+            // against the lifted body or the plate loses its machined edge and
+            // reads as a flat swatch. Clay's edge is translucent white, which
+            // composites correctly over any body lightness, so it passes
+            // through untouched.
+            border: Theme.material === "metal" ? Qt.hsla(body.hslHue, body.hslSaturation, Math.min(1.0, lit + metalConstants.borderLightnessLift), 1.0) : style.border
+        };
+    }
+
     // Glassmorphism intensity presets for common use cases
     //
     // Usage Guidelines - Base Color Selection:
