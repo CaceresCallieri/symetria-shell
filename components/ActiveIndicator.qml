@@ -34,10 +34,11 @@ StyledRect {
     // the real workspace labels paint over the tinted copy and this never
     // reaches the screen.
     //
-    // Left in place rather than deleted: it is part of the public API that
-    // SpecialWorkspaces and MergedBarContent both set, and removing it (with
-    // the Colouriser) is a separate change that deserves its own verification
-    // pass rather than riding along with a colour tweak.
+    // Left in place rather than deleted: SpecialWorkspaces sets it explicitly
+    // (to m3onTertiary) while Workspaces and MergedBarContent take this default,
+    // so it is live public API on all three paths. Removing it along with the
+    // Colouriser is a separate change that deserves its own verification pass
+    // rather than riding along with a colour tweak.
     property color textColor: Colours.palette.m3onPrimary
 
     // --- Pill styling (strong intensity for active indicator) ---
@@ -45,10 +46,12 @@ StyledRect {
     //
     // This is the widest engaged surface in the shell — a workspace pill with a
     // window title in it runs 300px+ — and area is the variable the small-control
-    // presets do not account for. Measured on a capture at `standard`: body plus
-    // polished finish composited to lightness 0.50 against a 0.09 bar plate, which
-    // made the indicator the loudest thing on screen and washed out the very label
-    // it sits behind. `broad` lands it near 0.30. See Colours.polish.
+    // presets do not account for. At `standard` its 0.400 body rendered ~0.42
+    // against a 0.09 bar plate and peaked past 0.50 across the specular sweep,
+    // which made the indicator the loudest thing on screen and washed out the
+    // very label it sits behind. `broad` puts the body at 0.300. The full set of
+    // measurements, and why the computed and rendered figures differ, is in
+    // Colours.polish.
     readonly property var glassStyle: Colours.engagedPillStyle(indicatorColor, Colours.glass.strong, Colours.polish.broad) // intentional var: heterogeneous JS { background, border }
 
     // --- Mode detection ---

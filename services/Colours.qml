@@ -311,12 +311,21 @@ Singleton {
         // the whole bar when it is ten times as wide, and it stops being an
         // accent and becomes the thing you look at first.
         //
-        // Measured on a real capture: at `standard` the indicator's body
-        // composited with the polished finish to lightness 0.50 against a bar
-        // plate at 0.09, and the light workspace label on top of it lost most of
-        // its contrast. This lands the composite near 0.30 — roughly midway
-        // between that and the inactive plate, which is where it stops competing
-        // with its own label.
+        // Numbers, kept separate because they measure different things and
+        // conflating them produced a wrong rationale the first time:
+        //
+        //   computed body   0.1805 + lift        (this file's arithmetic)
+        //   rendered        body + ~0.015, and MUCH higher inside the specular
+        //                   sweep band, which on a 300px plate is wide enough
+        //                   to sample by accident
+        //   bar plate       0.090                (measured)
+        //
+        // At `standard` that is a 0.400 body rendering ~0.42, peaking past 0.50
+        // across the sweep — against a 0.09 plate, with a light workspace label
+        // sitting on top of it that lost most of its contrast. This preset puts
+        // the body at 0.300, rendering ~0.315: not a precise midpoint, but the
+        // value that stopped the plate competing with its own label when the
+        // candidates were rendered side by side.
         //
         // This is why the presets are a family rather than one number: three
         // parts, all genuinely "engaged", none of which reads correctly at
