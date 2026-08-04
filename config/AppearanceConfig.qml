@@ -42,8 +42,15 @@ JsonObject {
 
     component FontFamily: JsonObject {
         property string sans: "Rubik"
-        property string mono: "CaskaydiaCove NF"
-        property string material: "Material Symbols Rounded"
+        // Monospaced (spacing=100) on purpose: the bar's readouts are live
+        // numerals (clock, CPU%, RAM, updates) and a proportional face makes
+        // them jitter in width as digits change. The previous shell.json
+        // override used JetBrainsMono NF *Propo*, which is the proportional
+        // variant — check `fc-match -f '%{spacing}' <family>` before swapping.
+        property string mono: "IBM Plex Mono"
+        // Sharp, not Rounded: the shipped material is `metal` (services/Theme.qml)
+        // and rounded glyph terminals read soft against a machined surface.
+        property string material: "Material Symbols Sharp"
         property string clock: "Rubik"
     }
 

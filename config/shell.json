@@ -12,8 +12,8 @@
     "font": {
       "family": {
         "sans": "JetBrainsMono Nerd Font Propo",
-        "mono": "JetBrainsMono Nerd Font Propo",
-        "material": "Material Symbols Rounded",
+        "mono": "IBM Plex Mono",
+        "material": "Material Symbols Sharp",
         "clock": "JetBrainsMono Nerd Font Propo"
       },
       "size": {
@@ -145,7 +145,7 @@
     },
     "tray": {
       "background": false,
-      "recolour": false,
+      "recolour": true,
       "compact": false,
       "iconSubs": []
     },

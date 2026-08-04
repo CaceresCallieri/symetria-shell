@@ -26,8 +26,10 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    // Content color passed to child components (default: m3tertiary for info pills).
-    // StatusIcons uses m3secondary for visual distinction between status and info pills.
+    // Content color passed to child components. Single source of truth for every
+    // pill's foreground — StatusIcons used to override this with m3secondary and
+    // no longer does, so do not reintroduce a per-pill tone without updating the
+    // note in StatusIcons.qml that explains why it was removed.
     property color colour: Colours.palette.m3tertiary
 
     // Popout interface: reference to the child's content container for Bar.qml's
