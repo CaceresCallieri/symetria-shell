@@ -665,3 +665,51 @@ Two more details that are easy to miss:
   `Library import requires a version`.
 
 Harnesses are written ad hoc and kept in the scratch directory, not the repo.
+
+## A derived property reads STALE inside a sibling's change handler
+
+Two `readonly` bindings over the same source do not update atomically. When the
+source changes, each dependent binding is re-evaluated in its own step, and any
+`onXChanged` handler runs *as part of* that cascade — so a handler for one
+derived property can observe another derived property still holding its
+**pre-change** value.
+
+`services/SuspendTimer.qml` shipped this shape:
+
+```qml
+readonly property bool running: props.deadlineMs > 0
+readonly property int  remainingSeconds: running ? Math.ceil((props.deadlineMs - Time.date.getTime()) / 1000) : 0
+
+onRunningChanged: {
+    if (running && remainingSeconds <= 0)  // <-- remainingSeconds is still 0 here
+        _expire();                          //     even though the deadline is 30 min out
+}
+```
+
+Arming the timer (`deadlineMs = now + 30min`) flipped `running` false→true while
+`remainingSeconds` was still the idle-state `0`, so the handler concluded the
+timer had *expired* and ran `systemctl suspend` — the machine slept the instant
+the toggle was switched on.
+
+**Two rules come out of this:**
+
+1. **A change handler must re-derive its verdict from raw state**, not from
+   sibling bindings. `_expire()` now recomputes the overshoot from
+   `props.deadlineMs` and `Time.date` and returns early when the deadline is
+   still ahead. The cheap derived test survives only as a pre-filter.
+2. **Never write a binding's dependency synchronously from that binding's own
+   change handler.** `_expire()` assigned `props.deadlineMs = 0` from inside the
+   `running` binding pass; Qt reported
+
+   ```
+   Binding loop detected for property "running"
+   ```
+
+   and aborted the re-evaluation, leaving `running` frozen at `true` against a
+   `deadlineMs` of `0`. The service then read as *armed with 0:00 remaining*
+   permanently and could never be re-armed — a corrupted property, not just a
+   log warning. Defer such writes with `Qt.callLater(fn)`, which also coalesces
+   repeat calls within the same event-loop turn.
+
+The user-visible symptom (immediate suspend) and the frozen state were the same
+bug; the binding-loop warning in `qs log` was the only direct evidence.

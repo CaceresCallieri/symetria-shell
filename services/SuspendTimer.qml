@@ -42,10 +42,7 @@ Singleton {
     // Live-process resume: the machine slept with a deadline still armed,
     // running stayed true across the sleep, and Time.date jumps past the
     // deadline on wake — driving remainingSeconds to 0.
-    onRemainingSecondsChanged: {
-        if (running && remainingSeconds <= 0)
-            _expire();
-    }
+    onRemainingSecondsChanged: _requestExpiry()
 
     // Reload/restore with an already-stale deadline: PersistentProperties
     // repopulates deadlineMs after construction, flipping running false→true
@@ -53,9 +50,27 @@ Singleton {
     // fires (0→0). Keying off running makes this guard order-independent of
     // when the restore lands, which a one-shot Component.onCompleted is not
     // (restore may complete after onCompleted has already run).
-    onRunningChanged: {
+    onRunningChanged: _requestExpiry()
+
+    // REGRESSION GUARD — both handlers above used to call _expire() directly,
+    // gated on `running && remainingSeconds <= 0`. That looks correct and is
+    // not: on a normal start(), `running` flips false→true while the
+    // `remainingSeconds` binding has NOT yet been re-evaluated, so the handler
+    // reads the stale idle value 0, concludes the timer just expired, and
+    // suspends the machine the instant the card is toggled on. It also wrote
+    // props.deadlineMs from inside the `running` binding pass, which Qt aborts
+    // as a binding loop ("Binding loop detected for property running") and
+    // leaves `running` frozen true against deadlineMs 0 — the timer then reads
+    // as armed at 0:00 forever and can never be re-armed.
+    //
+    // So: never trust a derived property inside a sibling's change handler,
+    // and never write a binding's dependency synchronously from it. The cheap
+    // derived test stays only as a filter (it fires at most once per second);
+    // _expire() re-derives the verdict from raw state and is deferred out of
+    // the binding pass by Qt.callLater (which also coalesces repeat calls).
+    function _requestExpiry(): void {
         if (running && remainingSeconds <= 0)
-            _expire();
+            Qt.callLater(_expire);
     }
 
     function start(minutes: int): void {
@@ -79,7 +94,14 @@ Singleton {
     }
 
     function _expire(): void {
+        // Authoritative expiry test, computed from raw state only — see the
+        // regression guard on _requestExpiry() for why the derived
+        // remainingSeconds cannot be trusted as the trigger.
+        if (props.deadlineMs <= 0)
+            return;
         const overshootMs = Time.date.getTime() - props.deadlineMs;
+        if (overshootMs < 0)
+            return; // deadline still ahead — spurious trigger, stay armed
         // Clear BEFORE dispatching: on resume the timer must read as idle,
         // otherwise the persisted deadline would immediately re-suspend.
         props.deadlineMs = 0;
