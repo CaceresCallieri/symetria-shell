@@ -24,9 +24,14 @@ Item {
     required property Session session
 
     property real animDurationsScale: Config.appearance.anim.durations.scale ?? 1
-    property string fontFamilyMaterial: Config.appearance.font.family.material ?? "Material Symbols Rounded"
-    property string fontFamilyMono: Config.appearance.font.family.mono ?? "CaskaydiaCove NF"
-    property string fontFamilySans: Config.appearance.font.family.sans ?? "Rubik"
+    // No `?? "<family>"` fallbacks here. They were a third copy of the defaults
+    // that AppearanceConfig.qml already owns, and they had drifted stale — but
+    // the drift was invisible because they are also unreachable: these are QML
+    // `property string`s, which default to "" and are never null or undefined,
+    // so `??` can never fire.
+    property string fontFamilyMaterial: Config.appearance.font.family.material
+    property string fontFamilyMono: Config.appearance.font.family.mono
+    property string fontFamilySans: Config.appearance.font.family.sans
     property real fontSizeScale: Config.appearance.font.size.scale ?? 1
     property real paddingScale: Config.appearance.padding.scale ?? 1
     property real roundingScale: Config.appearance.rounding.scale ?? 1

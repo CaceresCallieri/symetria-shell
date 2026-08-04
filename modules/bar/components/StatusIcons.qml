@@ -16,14 +16,9 @@ import QtQuick.Layouts
 PillContainer {
     id: root
 
-    // `colour` is INHERITED from PillContainer (m3tertiary) on purpose. This
-    // used to redeclare it as m3secondary to set status pills apart from info
-    // pills, which shadowed the base property and split one value across two
-    // files — PillContainer's own comment documented the exception too, so the
-    // rule lived in two places. It also cost 13 points of lightness (65.5% vs
-    // 78.4%) against text that now shares its hue, which read as the icons
-    // being a different colour rather than a lower rank. Distinction between
-    // pill kinds comes from grouping and glyph vocabulary, not tone.
+    // `colour` is inherited from PillContainer on purpose — see the rationale
+    // on that property. Do not redeclare it here; that shadows rather than
+    // overrides.
 
     // Popout interface: container with named WrappedLoader children (each has 'name' property)
     iconContainer: iconColumn

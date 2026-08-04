@@ -40,18 +40,36 @@ JsonObject {
         property int large: 15 * scale
     }
 
+    // Every default here must name a font that is actually installed. These are
+    // what a fresh clone gets before shell.json exists, and fontconfig silently
+    // substitutes a miss rather than erroring — "Rubik" used to sit in `sans`
+    // and `clock` and had been resolving to Nimbus Sans on this machine for who
+    // knows how long. Verify with `fc-match -f '%{family[0]}\n' <family>`: if it
+    // echoes back a different family, the font is not installed.
     component FontFamily: JsonObject {
-        property string sans: "Rubik"
-        // Monospaced (spacing=100) on purpose: the bar's readouts are live
-        // numerals (clock, CPU%, RAM, updates) and a proportional face makes
-        // them jitter in width as digits change. The previous shell.json
-        // override used JetBrainsMono NF *Propo*, which is the proportional
-        // variant — check `fc-match -f '%{spacing}' <family>` before swapping.
+        property string sans: "JetBrainsMono Nerd Font Propo"
+        // Monospaced on purpose: the bar's readouts are live numerals (bar
+        // clock, CPU%, RAM, update count) and a proportional face makes them
+        // jitter in width as digits change. The previous shell.json override
+        // used JetBrainsMono NF *Propo*, the proportional variant. Verify with
+        // `fc-match -f '%{family[0]} spacing=%{spacing}\n' <family>` — a
+        // monospaced face prints `spacing=100`, a proportional one prints
+        // `spacing=` (empty), which is easy to misread as a failed query.
         property string mono: "IBM Plex Mono"
         // Sharp, not Rounded: the shipped material is `metal` (services/Theme.qml)
         // and rounded glyph terminals read soft against a machined surface.
+        // Sharp exposes the same [FILL,GRAD,opsz,wght] axes, so MaterialIcon's
+        // font.variableAxes block needs no change.
         property string material: "Material Symbols Sharp"
-        property string clock: "Rubik"
+        // The DESKTOP clock only (modules/background/DesktopClock.qml and the
+        // dashboard's DateTime) — the bar clock uses `mono`.
+        property string clock: "JetBrainsMono Nerd Font Propo"
+        // Nerd Font private-use glyphs (distro and package-manager marks) have
+        // no Material Symbols equivalent, so they need a face that carries the
+        // PUA ranges. Kept separate from `mono` precisely so `mono` is free to
+        // be a plain text font: IBM Plex Mono has no PUA coverage, and a glyph
+        // rendered without it degrades to tofu rather than to a visible error.
+        property string nerd: "Symbols Nerd Font"
     }
 
     component FontSize: JsonObject {

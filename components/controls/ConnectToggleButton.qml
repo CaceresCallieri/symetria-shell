@@ -65,8 +65,9 @@ Item {
         anchors.fill: parent
         active: true
         // Polished accent metal — m3primary is chromatic enough to cross
-        // metalPill()'s accentSaturationThreshold, so it keeps the palette's
-        // warm hue instead of collapsing to neutral near-black the way a
+        // metalPill()'s accentSaturationThreshold, so it keeps its own hue
+        // (currently the metal-aligned 210°, see config/color-scheme.json)
+        // instead of collapsing to neutral near-black the way a
         // surface container would, and engagedPillStyle then lifts it past the
         // material's ceiling. Both colours come from the one cached accessor:
         // background and border must originate in the SAME call or the edge

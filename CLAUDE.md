@@ -155,6 +155,14 @@ staging rather than assuming its whole diff belongs to your change.
 
 **Color scheme:** QML reads from `~/.local/state/symmetria/scheme.json` (the same file the CLI writes to). On first launch, `Colours.qml` copies the bundled default from `config/color-scheme.json` to the state path. The version-controlled file serves only as the initial seed template.
 
+**Editing the seed does NOT change a running install.** `_initScheme` copies `config/color-scheme.json` only when the state file is *absent*, so a palette commit is invisible on every machine that has already launched the shell once. To apply one, write the state file too:
+```bash
+cp config/color-scheme.json ~/.local/state/symmetria/scheme.json
+```
+`Colours.qml`'s `FileView` has `watchChanges: true`, so this takes effect live — no restart. Two caveats: the state file also carries `name`/`flavour`/`mode`/`variant` keys the repo seed lacks (harmless — `load()` reads only `.colours` — but a blind copy drops them), and editing in place preserves the inode, which matters because an atomic replace can drop the watch.
+
+**Palette saturation is load-bearing.** `metalPill()` splits "neutral surface" from "state colour" purely on `hslSaturation > metalConstants.accentSaturationThreshold` (0.05), so desaturating an accent role past that line silently strips its hue *and* its `accentLift`. JSON holds no comments; `Colours._warnOnUnderSaturatedAccents()` enforces the accent side at runtime. The container side has a hard floor — see the comment on `accentSaturationThreshold` for why the darkest containers must be achromatic.
+
 ## Critical Pitfalls
 
 These are hard-won lessons from past bugs. Each is a brief summary — full explanations with code examples are in the linked docs.

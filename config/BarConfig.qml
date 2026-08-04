@@ -99,7 +99,12 @@ JsonObject {
     }
     component Tray: JsonObject {
         property bool background: false
-        property bool recolour: false
+        // Matches the shipped shell.json. Kept in sync deliberately: a QML
+        // default that disagrees with the shipped override means anyone who
+        // deletes or regenerates shell.json silently gets different behaviour —
+        // here, raw app pixmaps blowing past the palette's brightness ceiling.
+        // Rationale for flattening tray icons is on TrayItem.qml's layer.enabled.
+        property bool recolour: true
         property bool compact: false
         property list<var> iconSubs: []
     }

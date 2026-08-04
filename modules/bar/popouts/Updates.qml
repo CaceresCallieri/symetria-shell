@@ -300,7 +300,10 @@ Column {
 
         StyledText {
             text: parent.icon
-            font.family: Appearance.font.family.mono
+            // `nerd`, not `mono`: these are Nerd Font private-use glyphs and
+            // `mono` is no longer a Nerd Font build. A missing PUA range is
+            // silent — the glyph degrades to tofu, not to an error.
+            font.family: Appearance.font.family.nerd
             color: Colours.palette.m3primary
         }
 

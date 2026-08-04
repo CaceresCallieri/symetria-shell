@@ -198,11 +198,28 @@ Singleton {
         // lightness span. Several call sites even wrap the result in
         // Qt.lighter(…, 1.5), which cannot recover a hue that was discarded.
         //
-        // The threshold sits above this palette's neutral containers (~0.02)
-        // and below its accents, so surfaces stay machined and states stay
-        // legible. Saturation is capped and lightness lifted so an accent still
-        // reads as tinted metal rather than as coloured plastic.
+        // The threshold sits above the palette's neutral containers (0.017–0.048)
+        // and below its accent roles (0.073–0.082), so surfaces stay machined and
+        // states stay legible. Saturation is capped and lightness lifted so an
+        // accent still reads as tinted metal rather than as coloured plastic.
+        //
+        // THIS CONSTANT MAKES PALETTE SATURATION LOAD-BEARING. The scheme file is
+        // JSON and cannot say so itself, so `_warnOnUnderSaturatedAccents()` in
+        // load() enforces the accent side at runtime — keep its role list current.
+        //
+        // The container side has a floor the palette cannot go under: hue is only
+        // expressible in 8-bit hex as a spread between channels, so at L<0.08 the
+        // smallest non-zero step at this hue is max−min = 2, which already works
+        // out to S≈0.067 — ABOVE this threshold. The darkest containers are
+        // therefore achromatic by necessity, not by preference. Do not "restore
+        // the cool cast" to surfaceDim / surfaceContainerLowest / mantle / crust:
+        // the only representable tint pushes them onto the accent path.
         readonly property real accentSaturationThreshold: 0.05
+
+        // Currently inert: the palette's most saturated accent is 0.082, so the
+        // cap never binds and its value is untested against real data. It exists
+        // for schemes with genuinely chromatic accents (the pre-monochrome
+        // palettes reached 0.37) — do not tune it by observing today's shell.
         readonly property real accentSaturationMax: 0.30
         readonly property real accentLift: 0.10
 
@@ -421,6 +438,31 @@ Singleton {
             }
         }
         root._paletteKeys = keys;
+        _warnOnUnderSaturatedAccents();
+    }
+
+    // Roles that are passed to pillStyle()/engagedPillStyle() as ACCENT bases —
+    // i.e. callers that need metalPill() to take the state-colour path rather
+    // than the neutral-surface one. Kept next to the check that enforces it.
+    readonly property var _accentBaseRoles: ["m3primary", "m3secondary", "m3tertiary", "m3success"]
+
+    // Dev guard for the invariant the scheme file cannot express.
+    //
+    // metalPill() decides between "neutral machined surface" and "deliberate
+    // state colour" purely on hslSaturation > accentSaturationThreshold, so a
+    // palette edit that desaturates an accent role past that line silently
+    // strips its hue AND its accentLift — a visibly duller control with no
+    // error anywhere. JSON holds no comments, so without this the constraint
+    // would live only in a commit message.
+    //
+    // Warn, never clamp: a scheme is user data and a shell that quietly
+    // rewrites it is harder to debug than one that complains.
+    function _warnOnUnderSaturatedAccents(): void {
+        for (const role of _accentBaseRoles) {
+            const sat = current[role].hslSaturation;
+            if (sat <= metalConstants.accentSaturationThreshold)
+                console.warn(`[Colours] ${role} saturation ${sat.toFixed(4)} is at or below metalConstants.accentSaturationThreshold (${metalConstants.accentSaturationThreshold}) — metalPill() will treat it as a neutral surface, dropping its hue and accent lift.`);
+        }
     }
 
     // Read scheme from state directory (where the CLI writes).

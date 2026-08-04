@@ -26,10 +26,17 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    // Content color passed to child components. Single source of truth for every
-    // pill's foreground — StatusIcons used to override this with m3secondary and
-    // no longer does, so do not reintroduce a per-pill tone without updating the
-    // note in StatusIcons.qml that explains why it was removed.
+    // Content colour for every pill's children, and the canonical rationale for
+    // why the bar's foreground is uniform — this type owns the property, so the
+    // explanation lives here rather than in the subclasses that inherit it.
+    //
+    // StatusIcons used to redeclare this as m3secondary to rank status pills
+    // below info pills. A subclass redeclaration does not override a base
+    // property, it SHADOWS it — so one rule lived as two values in two files,
+    // free to drift. It also cost 13 points of lightness (65.5% vs 78.4%)
+    // against text that shares its hue, which reads as a mismatched colour
+    // rather than as a lower rank. Pill kinds are distinguished by grouping and
+    // glyph vocabulary instead. Do not reintroduce a per-pill tone.
     property color colour: Colours.palette.m3tertiary
 
     // Popout interface: reference to the child's content container for Bar.qml's

@@ -23,10 +23,14 @@ MouseArea {
     readonly property string tooltipText: {
         if (!Updates.hasData) return "Loading...";
 
-        const pacmanLine = `󰮯 Pacman: ${Updates.pacmanUpdates}`;
-        const aurLine = `󰣇 AUR: ${Updates.aurUpdates}`;
+        // No Nerd Font glyphs here: Tooltip exposes no font-family control, so
+        // this string renders in whatever face the tooltip uses — which is no
+        // longer guaranteed to carry the private-use ranges. The labels already
+        // say what the glyphs said.
+        const pacmanLine = `Pacman: ${Updates.pacmanUpdates}`;
+        const aurLine = `AUR: ${Updates.aurUpdates}`;
         const total = Updates.pacmanUpdates + Updates.aurUpdates;
-        const totalLine = `󰒠 Total: ${total}`;
+        const totalLine = `Total: ${total}`;
 
         return `${pacmanLine}\n${aurLine}\n${totalLine}`;
     }
