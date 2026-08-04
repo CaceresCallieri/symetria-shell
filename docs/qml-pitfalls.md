@@ -666,19 +666,22 @@ Two more details that are easy to miss:
 
 Harnesses are written ad hoc and kept in the scratch directory, not the repo.
 
-## A derived property reads STALE inside a sibling's change handler
+## A derived property reads STALE inside a change handler that fires upstream of it
 
-Two `readonly` bindings over the same source do not update atomically. When the
-source changes, each dependent binding is re-evaluated in its own step, and any
-`onXChanged` handler runs *as part of* that cascade — so a handler for one
-derived property can observe another derived property still holding its
-**pre-change** value.
+Inside `onXChanged`, any property whose binding depends on `X` — directly or
+transitively — may not have been re-evaluated yet. The handler runs *as part of*
+the change cascade, not after it: each dependent binding is re-evaluated in its
+own step, and a handler that happens to run early observes the later ones still
+holding their **pre-change** values. The same applies to two bindings sharing one
+source, and it has nothing to do with `readonly` — any derived binding behaves
+this way.
 
-`services/SuspendTimer.qml` shipped this shape:
+`services/SuspendTimer.qml` shipped this shape (note that `remainingSeconds`
+*depends on* `running`, so it is downstream of the handler below, not a sibling):
 
 ```qml
 readonly property bool running: props.deadlineMs > 0
-readonly property int  remainingSeconds: running ? Math.ceil((props.deadlineMs - Time.date.getTime()) / 1000) : 0
+readonly property int  remainingSeconds: running ? Math.max(0, Math.ceil((props.deadlineMs - Time.date.getTime()) / 1000)) : 0
 
 onRunningChanged: {
     if (running && remainingSeconds <= 0)  // <-- remainingSeconds is still 0 here
@@ -694,9 +697,11 @@ the toggle was switched on.
 **Two rules come out of this:**
 
 1. **A change handler must re-derive its verdict from raw state**, not from
-   sibling bindings. `_expire()` now recomputes the overshoot from
+   other bindings. `_expire()` now recomputes the overshoot from
    `props.deadlineMs` and `Time.date` and returns early when the deadline is
-   still ahead. The cheap derived test survives only as a pre-filter.
+   still ahead. The handlers were left with no pre-filter at all: keeping the
+   cheap derived test "just as an optimisation" would have left the hazardous
+   read in the code for a future edit to widen back into the bug.
 2. **Never write a binding's dependency synchronously from that binding's own
    change handler.** `_expire()` assigned `props.deadlineMs = 0` from inside the
    `running` binding pass; Qt reported
@@ -709,7 +714,11 @@ the toggle was switched on.
    `deadlineMs` of `0`. The service then read as *armed with 0:00 remaining*
    permanently and could never be re-armed — a corrupted property, not just a
    log warning. Defer such writes with `Qt.callLater(fn)`, which also coalesces
-   repeat calls within the same event-loop turn.
+   repeat calls within the same event-loop turn — but only when the *same
+   function object* is passed. A named QML method (`Qt.callLater(root._expire)`)
+   coalesces; an arrow function or closure built at the call site
+   (`Qt.callLater(() => root._expire())`) is a fresh object every time and
+   silently does not.
 
 The user-visible symptom (immediate suspend) and the frozen state were the same
 bug; the binding-loop warning in `qs log` was the only direct evidence.

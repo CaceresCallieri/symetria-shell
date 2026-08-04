@@ -42,7 +42,7 @@ Singleton {
     // Live-process resume: the machine slept with a deadline still armed,
     // running stayed true across the sleep, and Time.date jumps past the
     // deadline on wake — driving remainingSeconds to 0.
-    onRemainingSecondsChanged: _requestExpiry()
+    onRemainingSecondsChanged: Qt.callLater(root._expire)
 
     // Reload/restore with an already-stale deadline: PersistentProperties
     // repopulates deadlineMs after construction, flipping running false→true
@@ -50,28 +50,23 @@ Singleton {
     // fires (0→0). Keying off running makes this guard order-independent of
     // when the restore lands, which a one-shot Component.onCompleted is not
     // (restore may complete after onCompleted has already run).
-    onRunningChanged: _requestExpiry()
+    onRunningChanged: Qt.callLater(root._expire)
 
     // REGRESSION GUARD — both handlers above used to call _expire() directly,
-    // gated on `running && remainingSeconds <= 0`. That looks correct and is
-    // not: on a normal start(), `running` flips false→true while the
-    // `remainingSeconds` binding has NOT yet been re-evaluated, so the handler
-    // reads the stale idle value 0, concludes the timer just expired, and
-    // suspends the machine the instant the card is toggled on. It also wrote
-    // props.deadlineMs from inside the `running` binding pass, which Qt aborts
-    // as a binding loop ("Binding loop detected for property running") and
-    // leaves `running` frozen true against deadlineMs 0 — the timer then reads
-    // as armed at 0:00 forever and can never be re-armed.
-    //
-    // So: never trust a derived property inside a sibling's change handler,
-    // and never write a binding's dependency synchronously from it. The cheap
-    // derived test stays only as a filter (it fires at most once per second);
-    // _expire() re-derives the verdict from raw state and is deferred out of
-    // the binding pass by Qt.callLater (which also coalesces repeat calls).
-    function _requestExpiry(): void {
-        if (running && remainingSeconds <= 0)
-            Qt.callLater(_expire);
-    }
+    // gated on `running && remainingSeconds <= 0`. Both halves of that were
+    // wrong. The gate read `remainingSeconds` before its binding had been
+    // re-evaluated, so arming the timer looked like an expiry and suspended the
+    // machine the instant the card was toggled on; and _expire()'s write to
+    // deadlineMs re-entered the `running` binding it was firing from, which Qt
+    // aborts as a binding loop ("Binding loop detected for property running"),
+    // freezing `running` true against a cleared deadline — armed at 0:00
+    // forever, impossible to re-arm. Hence: no gate at all (_expire() derives
+    // the verdict from raw state) and Qt.callLater to keep the write out of the
+    // binding pass. Qt.callLater collapses the per-second repeat calls only
+    // because `_expire` is a stable named method — an arrow function or closure
+    // built at the call site is a fresh object every time and would NOT
+    // coalesce. Full write-up: docs/qml-pitfalls.md § "A derived property reads
+    // STALE inside a change handler that fires upstream of it".
 
     function start(minutes: int): void {
         if (minutes > 0)
@@ -94,25 +89,33 @@ Singleton {
     }
 
     function _expire(): void {
-        // Authoritative expiry test, computed from raw state only — see the
-        // regression guard on _requestExpiry() for why the derived
-        // remainingSeconds cannot be trusted as the trigger.
+        // Authoritative expiry test, from raw state only. The handlers above
+        // fire unconditionally, so rejecting spurious triggers is this
+        // function's job — see the regression guard for why no caller may
+        // pre-filter on the derived remainingSeconds.
         if (props.deadlineMs <= 0)
             return;
         const overshootMs = Time.date.getTime() - props.deadlineMs;
+        // `< 0`, never `<= 0`: deadlineMs is derived from the same
+        // second-precision Time.date that drives the tick, so the on-time
+        // expiry lands exactly on overshootMs === 0 and MUST pass through.
         if (overshootMs < 0)
             return; // deadline still ahead — spurious trigger, stay armed
         // Clear BEFORE dispatching: on resume the timer must read as idle,
         // otherwise the persisted deadline would immediately re-suspend.
         props.deadlineMs = 0;
-        if (overshootMs > root.staleGraceMs)
+        if (overshootMs > root.staleGraceMs) {
+            console.log(`[SuspendTimer] discarding stale deadline — overshoot ${overshootMs}ms > ${root.staleGraceMs}ms grace`);
             return;
+        }
         // Guard an empty override: session.commands.suspend is user-editable
         // via shell.json, and execDetached([]) would silently no-op after the
         // deadline is already cleared.
         const cmd = Config.session.commands.suspend;
         if (cmd && cmd.length > 0)
             Quickshell.execDetached(cmd);
+        else
+            console.warn("[SuspendTimer] session.commands.suspend is empty — deadline cleared, nothing dispatched");
     }
 
     PersistentProperties {
