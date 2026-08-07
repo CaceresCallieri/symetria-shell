@@ -792,7 +792,7 @@ QtObject {
         };
         // Pass the JSON via base64 to avoid quote-escaping hell in the shell
         // command — the output is ASCII-safe and won't interact with `sh -c`.
-        const sidecarB64 = Qt.btoa(JSON.stringify(sidecar, null, 2));
+        const sidecarB64 = TextEncoding.base64(JSON.stringify(sidecar, null, 2));
         const maxEntries = Config.stt?.cache?.maxEntries ?? 10;
 
         recoveryPersistProcess.savedAudioPath = `${SttService._recoveryDir}/session_${sessionId}.wav`;
@@ -830,7 +830,7 @@ QtObject {
             targetWindowClass: _targetWindowClass,
             transcript: _transcribedText
         };
-        const sidecarB64 = Qt.btoa(JSON.stringify(sidecar, null, 2));
+        const sidecarB64 = TextEncoding.base64(JSON.stringify(sidecar, null, 2));
         const retainHours = Config.stt?.cache?.retainSuccessHours ?? 24;
         const maxEntries = Config.stt?.cache?.maxSuccessEntries ?? 50;
 

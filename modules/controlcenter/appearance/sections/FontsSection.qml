@@ -35,8 +35,6 @@ CollapsibleSection {
 
             sourceComponent: StyledListView {
                 id: materialFontList
-                property alias contentHeight: materialFontList.contentHeight
-
                 clip: true
                 spacing: Appearance.spacing.small / 2
                 model: Qt.fontFamilies()
@@ -118,8 +116,6 @@ CollapsibleSection {
 
             sourceComponent: StyledListView {
                 id: monoFontList
-                property alias contentHeight: monoFontList.contentHeight
-
                 clip: true
                 spacing: Appearance.spacing.small / 2
                 model: Qt.fontFamilies()
@@ -201,8 +197,6 @@ CollapsibleSection {
 
             sourceComponent: StyledListView {
                 id: sansFontList
-                property alias contentHeight: sansFontList.contentHeight
-
                 clip: true
                 spacing: Appearance.spacing.small / 2
                 model: Qt.fontFamilies()

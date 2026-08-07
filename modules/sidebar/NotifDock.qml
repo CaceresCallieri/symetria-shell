@@ -184,12 +184,16 @@ Item {
             font.pointSize: Math.round(Appearance.font.size.large * 1.2)
             onClicked: clearTimer.start()
 
-            Elevation {
-                anchors.fill: parent
-                radius: parent.radius
-                z: -1
-                level: clearBtn.stateLayer.containsMouse ? 4 : 3
-            }
+            // Note: previously had an `Elevation` here for a hover-reactive
+            // shadow. It never rendered and cannot: IconButton is a
+            // PillToggleSurface, whose default property reparents children into
+            // `contentHolder`, nested inside a ClippingRectangle. A RectangularShadow
+            // paints OUTSIDE its own bounds, so clipping erased all of it. The
+            // same reparenting also made `radius: parent.radius` resolve against
+            // that plain content Item, which has no radius — logging "Unable to
+            // assign [undefined] to double" on every open. PillToggleSurface
+            // already supplies the depth recipe, so this is redundant as well as
+            // invisible. Same reasoning as modules/toasts/ToastItem.qml.
         }
 
         Behavior on scale {

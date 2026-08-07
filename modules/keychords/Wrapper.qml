@@ -13,12 +13,12 @@ Scope {
         target: "chords"
 
         function activate(group: string): void {
-            console.warn("[KeyChords:IPC] activate IPC received, group:", group);
+            console.log("[KeyChords:IPC] activate IPC received, group:", group);
             KeyChordsService.activate(group);
         }
 
         function dismiss(): void {
-            console.warn("[KeyChords:IPC] dismiss IPC received");
+            console.log("[KeyChords:IPC] dismiss IPC received");
             KeyChordsService.dismiss();
         }
     }

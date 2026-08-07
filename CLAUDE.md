@@ -207,6 +207,8 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **`readonly property` blocks ALL assignment** — `readonly` in QML means the property has ONE value source (its initializer) and forbids imperative assignment from *any* scope, including signal handlers in the same file — there is no "internal write" exception. Any property written imperatively by an internal `FileView`/`Process`/`Timer` handler must stay a plain writable `property`; marking it `readonly` makes the handler's assignment silently no-op, freezing the value. `qmllint` can't catch this by design (exits 255 on unresolved Quickshell imports). Symptom: `QuietMode.enabled` made `readonly` by a code review → `FileView.onLoaded` write failed → Silent toggle frozen false. → `docs/qml-pitfalls.md`
 
+**A `Component`-typed default property turns children into templates** — most containers take `list<QObject>`, but some declare a `QQmlComponent` default property, and then EVERY child written inside is implicitly wrapped in a `Component`: never instantiated as a sibling, and its `id` invisible to the enclosing file. `WlSessionLock`'s default property is `surface` (a `QQmlComponent`), so a `Timer` declared inside it never ran and `onUnlock` threw `ReferenceError: <id> is not defined` on every unlock — the lock's unlock-failsafe had never once executed. Only the per-surface object belongs inside; everything else goes in the enclosing `Scope`. Check `defaultProperty` + its `type` in the module's `.qmltypes` before nesting. Tell-tale: a `ReferenceError` for an id plainly visible a few lines above. → `docs/qml-pitfalls.md`
+
 ## Deep Dives
 
 Detailed documentation in `docs/` — read on-demand when working on specific areas:

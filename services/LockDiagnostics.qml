@@ -87,7 +87,7 @@ Singleton {
                 for (const k in extra)
                     ev[k] = extra[k];
 
-            const b64 = Qt.btoa(JSON.stringify(ev));
+            const b64 = TextEncoding.base64(JSON.stringify(ev));
             // base64 alphabet (A-Za-z0-9+/=) contains no shell metacharacters,
             // so single-quoting the payload is safe. Append + newline.
             Quickshell.execDetached(["sh", "-c", `printf '%s' '${b64}' | base64 -d >> '${root.logPath}'; printf '\\n' >> '${root.logPath}'`]);
@@ -210,7 +210,7 @@ Singleton {
                 screencopyHealthy: root.screencopyHealthy,
                 surfaces: root.surfaces
             };
-            const b64 = Qt.btoa(JSON.stringify(hb));
+            const b64 = TextEncoding.base64(JSON.stringify(hb));
             Quickshell.execDetached(["sh", "-c", `printf '%s' '${b64}' | base64 -d > '${root.heartbeatPath}'`]);
         } catch (e) {
             console.warn("[LockDiagnostics] heartbeat failed:", e);

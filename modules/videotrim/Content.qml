@@ -299,7 +299,14 @@ Item {
                                 // mid-session-regenerated frames. A frame that
                                 // doesn't exist yet simply renders nothing until the
                                 // next version bump.
-                                source: `file://${VideoTrimService.thumbnailDir}/thumb_${("00" + (index + 1)).slice(-3)}.jpg?v=${VideoTrimService.thumbnailVersion}`
+                                //
+                                // The version guard is not cosmetic: these delegates
+                                // are built before ffmpeg has written anything, and
+                                // version 0 means "no batch has landed yet". Without
+                                // it, every open logged one "Cannot open" warning per
+                                // frame (12) for files that are merely not extracted
+                                // YET — burying real image failures.
+                                source: VideoTrimService.thumbnailVersion > 0 ? `file://${VideoTrimService.thumbnailDir}/thumb_${("00" + (index + 1)).slice(-3)}.jpg?v=${VideoTrimService.thumbnailVersion}` : ""
                             }
                         }
                     }

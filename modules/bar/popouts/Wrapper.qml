@@ -60,10 +60,16 @@ Item {
 
     function close(): void {
         const wasDetached = isDetached;
+        // `gen` must be declared at function scope, not inside the `if` below:
+        // the release callback at the bottom of this function reads it from a
+        // SECOND `if` block. A block-scoped `const` there threw
+        // "ReferenceError: gen is not defined" on every detached close, so the
+        // early release never ran and _suppressAnim stayed set until
+        // _closingTimer fired. Mirrors detach(), which gets this right.
+        let gen = 0;
         if (wasDetached) {
             _closingFromDetached = true;
-            _suppressGeneration++;
-            const gen = _suppressGeneration;
+            gen = ++_suppressGeneration;
             _suppressAnim = true;
             _closingTimer.start();
         }

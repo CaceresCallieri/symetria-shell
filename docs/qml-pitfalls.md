@@ -501,6 +501,20 @@ Found in: `components/PillSurface.qml`, `components/PillToggleSurface.qml`
 (pre-existing, since the primitives were written). `components/PillCard.qml`
 was unaffected — its body is a plain `StyledRect`, which does not reparent.
 
+**It reaches consumers too, not just the primitives.** Any component whose
+default slot lands inside one of these — e.g. anything written as a child of
+`IconButton`, which *is* a `PillToggleSurface` — inherits the same reparenting.
+`modules/sidebar/NotifDock.qml` hit this with an `Elevation` child.
+
+That case also shows the "usually invisible" caveat has a sharp edge: `Elevation`
+is a `RectangularShadow`, which paints **outside** its own bounds. Clipping did
+not merely hide an unwanted square corner — it erased the entire effect. The
+shadow had never rendered, and the only trace it left was the `[undefined]`
+warning. When you find this warning on an effect rather than a plain rectangle,
+check whether the effect was doing anything at all before "fixing" the radius;
+the answer may be to delete it (the pill surfaces already carry their own depth
+recipe — see the note in `modules/toasts/ToastItem.qml`).
+
 ## A Repeater delegate's `parent` is null during its first binding pass
 
 A `Repeater` instantiates each delegate **before** reparenting it into the
@@ -722,3 +736,73 @@ the toggle was switched on.
 
 The user-visible symptom (immediate suspend) and the frozen state were the same
 bug; the binding-loop warning in `qs log` was the only direct evidence.
+
+## A `Component`-typed default property turns children into templates, silently
+
+Most QML container types have a default property of type `list<QObject>` or
+`data`, so a child written inside them becomes a live sibling object. **Some
+types declare a default property of type `QQmlComponent` instead** — and then
+every child written inside is implicitly wrapped in a `Component`. It becomes a
+*template* that the parent instantiates on its own terms, not an object that
+exists in the enclosing file.
+
+Two things break at once, both quietly:
+
+1. **The object may never be instantiated.** If the parent only ever builds that
+   component under some condition (or, for a non-list property, if a second
+   child overwrites the first), the child simply never runs.
+2. **Its `id` is invisible to the enclosing file.** Ids resolve per *component
+   scope*, and the implicit wrap creates a new one. Any handler in the outer
+   file referring to it throws `ReferenceError: <id> is not defined` at runtime.
+
+`Quickshell.Wayland.WlSessionLock` is the case that bit us — its default
+property is `surface`, of type `QQmlComponent`:
+
+```qml
+WlSessionLock {
+    id: lock
+
+    Timer { id: unlockFailsafe }        // ← wrapped in a Component. Never runs.
+    LockSurface { }                     // ← also assigned to `surface`; wins.
+
+    onUnlock: unlockFailsafe.restart()  // ← ReferenceError, every unlock
+}
+```
+
+The `Timer` here was the failsafe that releases an already-authenticated session
+if the unlock animation never completes. It had never executed once. The only
+evidence was the `ReferenceError` in `qs log` — the lock screen otherwise looked
+and behaved fine, because the *surface* still worked.
+
+**Fix:** declare the object in an enclosing container whose default property
+accepts arbitrary children (`Scope` does), leaving only the real surface inside:
+
+```qml
+Scope {
+    WlSessionLock {
+        id: lock
+        onUnlock: unlockFailsafe.restart()
+        LockSurface { }
+    }
+
+    Timer { id: unlockFailsafe }        // ← real object, id in file scope
+}
+```
+
+**How to check before you nest anything:** read the type's `defaultProperty` in
+its `.qmltypes`. For Quickshell types:
+
+```bash
+python3 -c "
+s=open('/usr/lib/qt6/qml/Quickshell/Wayland/quickshell-wayland.qmltypes').read()
+i=s.find('name: \"WlSessionLock\"'); print(s[i-200:i+400])"
+```
+
+Look for `defaultProperty:` and then that property's declared `type`. If it is
+`QQmlComponent`, only the thing meant to be instantiated per-surface (or
+per-item, per-window…) belongs inside.
+
+A related tell: this class of bug produces a `ReferenceError` for an id that is
+*plainly visible* a few lines above in the same file. When an id that obviously
+exists reports as undefined, suspect a component-scope boundary rather than a
+typo.

@@ -64,7 +64,7 @@ Singleton {
     /// of the still-displayed group — and Escape then hit the toggle-dismiss
     /// branch below and closed the overlay instead of navigating back.
     function activate(group: string): bool {
-        console.warn("[KeyChords:Service] activate() called with group:", group, "| current active:", active, "| current group:", _activeGroup);
+        console.log("[KeyChords:Service] activate() called with group:", group, "| current active:", active, "| current group:", _activeGroup);
         if (!group) {
             console.warn("[KeyChords:Service] activate() called with empty group");
             return false;
@@ -72,7 +72,7 @@ Singleton {
 
         // Toggle behavior: same group → dismiss
         if (active && _activeGroup === group) {
-            console.warn("[KeyChords:Service] Toggle-dismiss: same group, dismissing");
+            console.log("[KeyChords:Service] Toggle-dismiss: same group, dismissing");
             dismiss();
             return false;
         }
@@ -106,7 +106,7 @@ Singleton {
         if (!active)
             _targetMonitor = Hypr.focusedMonitor;
         active = true;
-        console.warn("[KeyChords:Service] Activated group:", group, "| chords:", visibleChords.length, "of", groupData.chords.length, "| active is now:", active, "| targetMonitor:", targetMonitor?.name ?? "null");
+        console.log("[KeyChords:Service] Activated group:", group, "| chords:", visibleChords.length, "of", groupData.chords.length, "| active is now:", active, "| targetMonitor:", targetMonitor?.name ?? "null");
         return true;
     }
 

@@ -63,15 +63,15 @@ Scope {
             // to avoid HyprlandFocusGrab clearing the visibility flag.
             readonly property bool shouldShow: Config.keychords.enabled && KeyChordsService.active && KeyChordsService.targetMonitor === Hypr.monitorFor(modelData)
 
-            onShouldShowChanged: console.warn("[KeyChords:Overlay]", modelData.name, "shouldShow:", shouldShow,
+            onShouldShowChanged: console.log("[KeyChords:Overlay]", modelData.name, "shouldShow:", shouldShow,
                 "| enabled:", Config.keychords.enabled,
                 "| service.active:", KeyChordsService.active,
                 "| targetMonitor:", KeyChordsService.targetMonitor?.name ?? "null",
                 "| myMonitor:", Hypr.monitorFor(modelData)?.name ?? "null")
-            onVisibleChanged: console.warn("[KeyChords:Overlay]", modelData.name, "window visible:", visible,
+            onVisibleChanged: console.log("[KeyChords:Overlay]", modelData.name, "window visible:", visible,
                 "| dialogOpacity:", dialogOpacity, "| shouldShow:", shouldShow)
 
-            Component.onCompleted: console.warn("[KeyChords:Overlay]", modelData.name, "window created",
+            Component.onCompleted: console.log("[KeyChords:Overlay]", modelData.name, "window created",
                 "| monitor:", Hypr.monitorFor(modelData)?.name ?? "null")
 
             // Agent bar reference for bottom offset positioning.
@@ -108,8 +108,8 @@ Scope {
             FocusManager {
                 active: win.shouldShow
                 target: dialog
-                onOpen: () => console.warn("[KeyChords:Overlay]", win.modelData.name, "FocusManager: focus granted to dialog")
-                onClose: () => console.warn("[KeyChords:Overlay]", win.modelData.name, "FocusManager: focus released")
+                onOpen: () => console.log("[KeyChords:Overlay]", win.modelData.name, "FocusManager: focus granted to dialog")
+                onClose: () => console.log("[KeyChords:Overlay]", win.modelData.name, "FocusManager: focus released")
             }
 
             // Transparent click catcher — dismiss when clicking outside the dialog.
@@ -151,14 +151,14 @@ Scope {
                     focus: true
 
                     Keys.onPressed: event => {
-                        console.warn("[KeyChords:Overlay] Key pressed:", event.text, "| key:", event.key, "| focus:", dialog.activeFocus);
+                        console.log("[KeyChords:Overlay] Key pressed:", event.text, "| key:", event.key, "| focus:", dialog.activeFocus);
                         event.accepted = true;
                         if (event.text && event.text.length > 0)
                             KeyChordsService.handleKey(event.text);
                     }
 
                     Keys.onEscapePressed: event => {
-                        console.warn("[KeyChords:Overlay] Escape pressed");
+                        console.log("[KeyChords:Overlay] Escape pressed");
                         event.accepted = true;
                         KeyChordsService.navigateBack();
                     }
