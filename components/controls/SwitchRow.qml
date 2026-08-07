@@ -43,7 +43,6 @@ StyledRect {
 
         StyledSwitch {
             checked: root.checked
-            enabled: root.enabled
             onToggled: {
                 root.onToggled(checked);
             }

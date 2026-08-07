@@ -54,7 +54,6 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.IBeamCursor
             acceptedButtons: Qt.NoButton
-            enabled: root.enabled
         }
 
         StyledTextField {
@@ -64,7 +63,6 @@ Item {
             horizontalAlignment: root.horizontalAlignment
             validator: root.validator
             readOnly: root.readOnly
-            enabled: root.enabled
             
             Binding {
                 target: inputField

@@ -14,12 +14,33 @@ Scope {
     WlSessionLock {
         id: lock
 
+        // NOTE: this SHADOWS WlSessionLock's own `unlock()` method (declared as
+        // `Method { name: "unlock" }` in quickshell-wayland.qmltypes). Every
+        // `lock.unlock()` in the codebase therefore EMITS THIS SIGNAL — it never
+        // reaches the C++ method. That is the intended flow (the surface runs its
+        // retract animation, whose last step sets `locked = false`), but the
+        // collision is invisible at the call site. Renaming this to
+        // `unlockRequested` would remove the trap; it touches Pam.qml,
+        // LockSurface.qml and IdleMonitors.qml, so it wants a runtime pass on the
+        // lock path rather than a blind rename.
         signal unlock
 
         // Single source of truth for diagnostics' locked state (see
         // services/LockDiagnostics.qml). Mirroring the real property here means
         // every lock path — idle, logind, shortcut, IPC — is captured uniformly.
-        onLockedChanged: LockDiagnostics.noteLocked(locked)
+        //
+        // Cancelling the failsafe here is what makes it safe to arm at all.
+        // Without this, unlocking and then RE-locking inside the failsafe
+        // interval (revealDuration + 2s ≈ 3.4s — trivially reachable via the lock
+        // shortcut, IPC, or an idle timeout) lets the stale timer fire against the
+        // NEW lock and force it open with no authentication. `locked` never
+        // changes between the `unlock` signal and the animation's closing
+        // PropertyAction, so cancelling on any transition cannot shorten the
+        // window the failsafe exists to cover.
+        onLockedChanged: {
+            LockDiagnostics.noteLocked(locked);
+            unlockFailsafe.stop();
+        }
 
         onUnlock: unlockFailsafe.restart()
 
@@ -41,9 +62,13 @@ Scope {
     //
     // This timer outlives any single surface, which is the whole point — a
     // per-surface timer dies exactly when the case it guards against occurs.
-    // It cannot weaken security: `unlock` is only emitted after PAM has
-    // already succeeded, so the worst it can do is release a session the user
-    // has already unlocked. When the animation wins the race, setting
+    //
+    // It grants nothing that `unlock` does not already grant. That signal is
+    // reachable WITHOUT PAM by design (lock shortcut, IPC, idle-unlock — only
+    // Pam.qml's two call sites are authenticated), so the timer merely completes
+    // a teardown something already asked for. What it must never do is complete
+    // a teardown for a lock cycle that has since ended — see the cancellation in
+    // `onLockedChanged` above. When the animation wins the race, setting
     // `locked = false` twice is a no-op.
     //
     // PLACEMENT IS LOAD-BEARING — do NOT move this back inside WlSessionLock.

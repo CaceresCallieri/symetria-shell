@@ -12,7 +12,13 @@ Singleton {
 
     /// Encode a JS string to its UTF-8 bytes as a plain array of ints.
     /// Surrogate pairs are combined into a single 4-byte sequence.
+    /// Empty or nullish input yields an empty array (and `base64("")` yields
+    /// `""`, which the callers' `base64 -d` shell path handles as an empty
+    /// payload).
     function utf8Bytes(text: string): var {
+        if (!text)
+            return [];
+
         const bytes = [];
         for (let i = 0; i < text.length; i++) {
             const cp = text.codePointAt(i);
@@ -21,6 +27,18 @@ Singleton {
             // re-encoded on its own.
             if (cp > 0xFFFF)
                 i++;
+
+            // An UNPAIRED surrogate reaching here would otherwise be encoded as
+            // a 3-byte CESU-8 sequence (U+D800 -> ED A0 80), which is NOT valid
+            // UTF-8. Qt's V4 JSON.stringify does not escape lone surrogates, so
+            // one can arrive verbatim; the deprecated Qt.btoa(string) silently
+            // dropped it. Emitting invalid UTF-8 is worse than either: it makes
+            // the whole appended JSONL file unreadable to json.load/jq, not just
+            // the one record. Substitute U+FFFD, per the WHATWG encoding spec.
+            if (cp >= 0xD800 && cp <= 0xDFFF) {
+                bytes.push(0xEF, 0xBF, 0xBD);
+                continue;
+            }
 
             if (cp < 0x80) {
                 bytes.push(cp);

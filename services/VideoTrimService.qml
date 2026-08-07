@@ -79,6 +79,13 @@ Singleton {
             `rm -rf ${dir} && mkdir -p ${dir} && ` +
             `ffmpeg -y -i ${src} -vf "fps=${rate},scale=-1:96" ` +
             `-frames:v ${count} ${dir}/thumb_%03d.jpg >/dev/null 2>&1`];
+        // Back to 0 BEFORE the rm -rf lands: the Content filmstrip treats
+        // version 0 as "no batch on disk" and skips requesting frames. Without
+        // this reset the counter only ever climbs, so from the second clip of a
+        // session onward the view would request frames from a directory that
+        // ffmpeg has just deleted — which is exactly the "Cannot open" warning
+        // the guard was added to remove.
+        root.thumbnailVersion = 0;
         thumbProc.running = true;
     }
 
@@ -171,6 +178,12 @@ Singleton {
             // new frames, so bumping would force reloads against missing files.
             if (code === 0)
                 root.thumbnailVersion++;
+            else
+                // Say so explicitly: with the version guard in place a failure
+                // is now completely silent (blank filmstrip, no per-frame image
+                // warnings), and ffmpeg's own output is discarded by the >/dev/null
+                // in the command above.
+                console.warn("[VideoTrim] thumbnail extraction failed, exit", code, "— filmstrip stays blank");
         }
     }
 

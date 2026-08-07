@@ -176,8 +176,6 @@ Item {
         active: opacity > 0
 
         sourceComponent: IconButton {
-            id: clearBtn
-
             icon: "clear_all"
             radius: Appearance.rounding.normal
             padding: Appearance.padding.normal
@@ -191,9 +189,16 @@ Item {
             // paints OUTSIDE its own bounds, so clipping erased all of it. The
             // same reparenting also made `radius: parent.radius` resolve against
             // that plain content Item, which has no radius — logging "Unable to
-            // assign [undefined] to double" on every open. PillToggleSurface
-            // already supplies the depth recipe, so this is redundant as well as
-            // invisible. Same reasoning as modules/toasts/ToastItem.qml.
+            // assign [undefined] to double" on every open. Same clipping trap as
+            // modules/toasts/ToastItem.qml.
+            //
+            // This button is deliberately flat: IconButton derives
+            // `raised: toggle && type !== Text`, and this instance sets no
+            // `toggle`, so the pill renders without depth by design — do not read
+            // the removal as "the surface already draws the shadow". If a
+            // hover-reactive shadow is ever wanted here, it must be a SIBLING of
+            // the IconButton inside the Loader (behind it, z: -1), never a child;
+            // children are reparented into the clipped content holder.
         }
 
         Behavior on scale {

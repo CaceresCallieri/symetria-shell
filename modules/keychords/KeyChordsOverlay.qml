@@ -151,7 +151,11 @@ Scope {
                     focus: true
 
                     Keys.onPressed: event => {
-                        console.log("[KeyChords:Overlay] Key pressed:", event.text, "| key:", event.key, "| focus:", dialog.activeFocus);
+                        // Logs event.key (the Qt keycode), NEVER event.text — the
+                        // overlay grabs the keyboard, so the literal characters
+                        // typed while it is open would otherwise be written to a
+                        // persisted log. The keycode is equally diagnostic here.
+                        console.log("[KeyChords:Overlay] Key pressed | key:", event.key, "| focus:", dialog.activeFocus);
                         event.accepted = true;
                         if (event.text && event.text.length > 0)
                             KeyChordsService.handleKey(event.text);
