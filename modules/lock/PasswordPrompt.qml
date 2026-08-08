@@ -60,7 +60,9 @@ Item {
     ColumnLayout {
         id: column
 
-        anchors.centerIn: parent
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: (feedback.implicitHeight + spacing) / 2
         spacing: Appearance.spacing.large
 
         PillSurface {
@@ -200,6 +202,8 @@ Item {
         // cross-fade, so the field above never shifts when one appears — a
         // password box that jumps while you are typing into it is unpleasant.
         Item {
+            id: feedback
+
             Layout.fillWidth: true
             Layout.preferredWidth: field.implicitWidth
 
