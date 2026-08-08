@@ -92,6 +92,13 @@ Item {
                 anchors.margins: Appearance.padding.small
                 spacing: Appearance.spacing.normal
 
+                // Balance the submit slot so the password dots are centred on
+                // the whole pill rather than on the space left beside it.
+                Item {
+                    implicitWidth: submit.implicitWidth
+                    implicitHeight: 1
+                }
+
                 InputField {
                     pam: root.pam
                 }
@@ -203,35 +210,47 @@ Item {
             }
 
             // Keyboard-state hint. Suppressed while a real error is showing:
-            // "caps lock is on" is a guess at why you failed, and the actual
-            // PAM message is always the better answer.
-            StyledText {
+            // the active-lock icons are only a guess at why you failed, and
+            // the actual PAM message is always the better answer.
+            Item {
                 id: stateMessage
 
-                readonly property string msg: {
-                    const layout = Hypr.kbLayout !== Hypr.defaultKbLayout ? qsTr("Keyboard layout: %1").arg(Hypr.kbLayoutFull) : "";
-                    const locks = [Hypr.capsLock ? qsTr("Caps lock") : "", Hypr.numLock ? qsTr("Num lock") : ""].filter(s => s);
-
-                    if (locks.length && layout)
-                        return qsTr("%1 ON. %2").arg(locks.join(qsTr(" and "))).arg(layout);
-                    if (locks.length)
-                        return qsTr("%1 ON.").arg(locks.join(qsTr(" and ")));
-                    return layout;
-                }
+                readonly property bool hasLayout: Hypr.kbLayout !== Hypr.defaultKbLayout
+                readonly property bool active: Hypr.capsLock || Hypr.numLock || hasLayout
 
                 anchors.left: parent.left
                 anchors.right: parent.right
+                implicitHeight: keyboardStateRow.implicitHeight
 
-                scale: msg && !message.msg ? 1 : 0.7
-                opacity: msg && !message.msg ? 1 : 0
-                text: msg
-                color: Colours.palette.m3onSurfaceVariant
+                scale: active && !message.msg ? 1 : 0.7
+                opacity: active && !message.msg ? 1 : 0
 
-                font.pointSize: Appearance.font.size.small
-                font.family: Appearance.font.family.mono
-                horizontalAlignment: Qt.AlignHCenter
-                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                lineHeight: 1.2
+                Row {
+                    id: keyboardStateRow
+
+                    anchors.centerIn: parent
+                    spacing: Appearance.spacing.small
+
+                    MaterialIcon {
+                        visible: Hypr.capsLock
+                        text: "keyboard_capslock_badge"
+                        color: Colours.palette.m3onSurfaceVariant
+                    }
+
+                    MaterialIcon {
+                        visible: Hypr.numLock
+                        text: "looks_one"
+                        color: Colours.palette.m3onSurfaceVariant
+                    }
+
+                    StyledText {
+                        visible: stateMessage.hasLayout
+                        text: qsTr("Keyboard layout: %1").arg(Hypr.kbLayoutFull)
+                        color: Colours.palette.m3onSurfaceVariant
+                        font.pointSize: Appearance.font.size.small
+                        font.family: Appearance.font.family.mono
+                    }
+                }
 
                 Behavior on scale {
                     Anim {}
