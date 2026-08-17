@@ -62,11 +62,15 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: (feedback.implicitHeight + spacing) / 2
+        anchors.verticalCenterOffset: field.visible ? (feedback.implicitHeight + spacing) / 2 : 0
         spacing: Appearance.spacing.large
 
         PillSurface {
             id: field
+
+            // PAM clears the buffer as soon as it consumes the password, so
+            // keep the pill around while the submit button is the spinner.
+            visible: root.pam.buffer.length > 0 || root.pam.passwd.active
 
             Layout.alignment: Qt.AlignHCenter
             implicitWidth: Config.lock.sizes.fieldWidth
@@ -220,11 +224,11 @@ Item {
                 id: stateMessage
 
                 readonly property bool hasLayout: Hypr.kbLayout !== Hypr.defaultKbLayout
-                readonly property bool active: Hypr.capsLock || Hypr.numLock || hasLayout
+                readonly property bool active: field.visible && (Hypr.capsLock || Hypr.numLock || hasLayout)
 
                 anchors.left: parent.left
                 anchors.right: parent.right
-                implicitHeight: keyboardStateRow.implicitHeight
+                implicitHeight: active ? keyboardStateRow.implicitHeight : 0
 
                 scale: active && !message.msg ? 1 : 0.7
                 opacity: active && !message.msg ? 1 : 0
