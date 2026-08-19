@@ -43,15 +43,11 @@ Scope {
 
             Region {
                 id: contentRegion
-                x: win.showing ? osdContent.x : 0
+                x: win.showing ? osdContent.x + slideTransform.x : 0
                 y: win.showing ? osdContent.y : 0
                 width: win.showing ? osdContent.width : 0
                 height: win.showing ? osdContent.height : 0
             }
-
-            // Per-screen visibilities from Drawers' PersistentProperties.
-            // Content.qml uses visibilities.session to decide mic slider visibility.
-            readonly property var screenVisibilities: Visibilities.getForMonitor(Hypr.monitorFor(modelData))
 
             // Brightness monitor for this screen
             readonly property Brightness.Monitor monitor: Brightness.getMonitorForScreen(modelData)
@@ -59,11 +55,21 @@ Scope {
             // OSD state
             property bool showing: false
             property bool hovered: false
+            property string activeMetric: "volume"
             property real volume
             property bool muted
             property real sourceVolume
             property bool sourceMuted
             property real brightness
+            readonly property bool contentInteracting: content.interacting
+
+            function anotherOverlayInteracting(): bool {
+                for (const overlay of Visibilities.osdOverlays.values()) {
+                    if (overlay !== win && overlay.contentInteracting)
+                        return true;
+                }
+                return false;
+            }
 
             function show(): void {
                 if (!Config.osd.enabled) return;
@@ -99,21 +105,49 @@ Scope {
 
                 function onVolumeChanged(): void {
                     win.volume = Audio.volume;
+                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
+                        return;
+                    if (win.anotherOverlayInteracting())
+                        return;
+                    if (!content.interacting)
+                        win.activeMetric = "volume";
                     win.show();
                 }
 
                 function onMutedChanged(): void {
                     win.muted = Audio.muted;
+                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
+                        return;
+                    if (win.anotherOverlayInteracting())
+                        return;
+                    if (!content.interacting)
+                        win.activeMetric = "volume";
                     win.show();
                 }
 
                 function onSourceVolumeChanged(): void {
                     win.sourceVolume = Audio.sourceVolume;
+                    if (!Config.osd.enableMicrophone)
+                        return;
+                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
+                        return;
+                    if (win.anotherOverlayInteracting())
+                        return;
+                    if (!content.interacting)
+                        win.activeMetric = "microphone";
                     win.show();
                 }
 
                 function onSourceMutedChanged(): void {
                     win.sourceMuted = Audio.sourceMuted;
+                    if (!Config.osd.enableMicrophone)
+                        return;
+                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
+                        return;
+                    if (win.anotherOverlayInteracting())
+                        return;
+                    if (!content.interacting)
+                        win.activeMetric = "microphone";
                     win.show();
                 }
             }
@@ -123,6 +157,10 @@ Scope {
 
                 function onBrightnessChanged(): void {
                     win.brightness = win.monitor?.brightness ?? 0;
+                    if (!Config.osd.enableBrightness)
+                        return;
+                    if (!content.interacting)
+                        win.activeMetric = "brightness";
                     win.show();
                 }
             }
@@ -158,6 +196,8 @@ Scope {
 
                 // Slide right-to-left on show, left-to-right on hide
                 transform: Translate {
+                    id: slideTransform
+
                     x: win.showing ? 0 : osdContent.width
                     Behavior on x {
                         Anim {}
@@ -170,7 +210,7 @@ Scope {
                     anchors.fill: parent
 
                     monitor: win.monitor
-                    visibilities: win.screenVisibilities ?? ({session: false})
+                    activeMetric: win.activeMetric
                     volume: win.volume
                     muted: win.muted
                     sourceVolume: win.sourceVolume
