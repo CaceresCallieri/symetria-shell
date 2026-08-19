@@ -22,8 +22,93 @@ PillCardSection {
     // intentional var: nullable JS object from network scan data ({ ssid, bssid, security, ... })
     property var passwordNetwork: null
     property bool showPasswordDialog: false
+    property string selectedNetworkKey: ""
 
     implicitWidth: Config.bar.sizes.networkWidth
+    focus: wrapper.keyboardNavigationActive && wrapper.hasCurrent && wrapper.currentName === "network"
+
+    function networkKey(network: var): string {
+        return network?.bssid || network?.ssid || "";
+    }
+
+    function networkAt(index: int): var {
+        return networkList.model.values[index] ?? null;
+    }
+
+    function restoreNetworkSelection(): void {
+        if (networkList.count === 0) {
+            networkList.currentIndex = -1;
+            return;
+        }
+
+        let fallbackIndex = 0;
+        for (let i = 0; i < networkList.count; i++) {
+            const network = networkAt(i);
+            if (network?.active)
+                fallbackIndex = i;
+            if (selectedNetworkKey.length > 0 && networkKey(network) === selectedNetworkKey) {
+                networkList.currentIndex = i;
+                networkList.positionViewAtIndex(i, ListView.Contain);
+                return;
+            }
+        }
+
+        networkList.currentIndex = fallbackIndex;
+        selectedNetworkKey = networkKey(networkAt(fallbackIndex));
+        networkList.positionViewAtIndex(fallbackIndex, ListView.Contain);
+    }
+
+    function moveNetworkSelection(offset: int): void {
+        if (networkList.count === 0)
+            return;
+
+        const currentIndex = networkList.currentIndex < 0 ? 0 : networkList.currentIndex;
+        const nextIndex = Math.max(0, Math.min(networkList.count - 1, currentIndex + offset));
+        networkList.currentIndex = nextIndex;
+        selectedNetworkKey = networkKey(networkAt(nextIndex));
+        networkList.positionViewAtIndex(nextIndex, ListView.Contain);
+    }
+
+    function activateSelectedNetwork(): void {
+        networkList.currentItem?.toggleConnection();
+    }
+
+    function focusForKeyboardNavigation(): void {
+        if (!focus)
+            return;
+        restoreNetworkSelection();
+        Qt.callLater(() => root.forceActiveFocus());
+    }
+
+    onFocusChanged: focusForKeyboardNavigation()
+    Component.onCompleted: focusForKeyboardNavigation()
+
+    Keys.onUpPressed: event => {
+        moveNetworkSelection(-1);
+        event.accepted = true;
+    }
+    Keys.onDownPressed: event => {
+        moveNetworkSelection(1);
+        event.accepted = true;
+    }
+    Keys.onReturnPressed: event => {
+        activateSelectedNetwork();
+        event.accepted = true;
+    }
+    Keys.onEnterPressed: event => {
+        activateSelectedNetwork();
+        event.accepted = true;
+    }
+    Keys.onSpacePressed: event => {
+        NmcliWifi.enableWifi(!NmcliWifi.wifiEnabled);
+        event.accepted = true;
+    }
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_R && event.modifiers === Qt.NoModifier) {
+            NmcliWifi.rescanWifi();
+            event.accepted = true;
+        }
+    }
 
     ColumnLayout {
         id: layout
@@ -70,9 +155,31 @@ PillCardSection {
                         return b.active - a.active;
                     return b.strength - a.strength;
                 })
+
+                onValuesChanged: Qt.callLater(() => root.restoreNetworkSelection())
             }
             clip: true
             spacing: Appearance.spacing.small
+
+            preferredHighlightBegin: 0
+            preferredHighlightEnd: height
+            highlightRangeMode: ListView.ApplyRange
+            highlightFollowsCurrentItem: false
+            highlight: StyledRect {
+                visible: root.wrapper.keyboardNavigationActive
+                radius: Appearance.rounding.normal
+                color: Colours.palette.m3onSurface
+                opacity: 0.1
+                y: networkList.currentItem?.y ?? 0
+                implicitWidth: networkList.width
+                implicitHeight: networkList.currentItem?.implicitHeight ?? 0
+
+                Behavior on y {
+                    Anim {
+                        duration: Appearance.anim.durations.small
+                    }
+                }
+            }
 
             delegate: RowLayout {
                 id: networkItem
@@ -83,6 +190,28 @@ PillCardSection {
 
                 width: networkList.width
                 spacing: Appearance.spacing.small
+
+                function toggleConnection(): void {
+                    if (!NmcliWifi.wifiEnabled || networkItem.loading)
+                        return;
+
+                    if (networkItem.modelData.active) {
+                        NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
+                    } else {
+                        root.connectingToSsid = networkItem.modelData.ssid;
+                        NetworkConnection.handleConnect(
+                            networkItem.modelData,
+                            null,
+                            (network) => {
+                                root.passwordNetwork = network;
+                                root.showPasswordDialog = true;
+                                root.wrapper.currentName = "wirelesspassword";
+                            },
+                            // Every terminal result clears the row spinner.
+                            () => root.connectingToSsid = ""
+                        );
+                    }
+                }
 
                 MaterialIcon {
                     text: Icons.getNetworkIcon(networkItem.modelData.strength)
@@ -110,26 +239,7 @@ PillCardSection {
                     loading: networkItem.loading
                     disabled: !NmcliWifi.wifiEnabled
 
-                    onClicked: {
-                        if (networkItem.modelData.active) {
-                            NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
-                        } else {
-                            root.connectingToSsid = networkItem.modelData.ssid;
-                            NetworkConnection.handleConnect(
-                                networkItem.modelData,
-                                null,
-                                (network) => {
-                                    root.passwordNetwork = network;
-                                    root.showPasswordDialog = true;
-                                    root.wrapper.currentName = "wirelesspassword";
-                                },
-                                // Clears the row spinner on EVERY terminal outcome.
-                                // This is the only thing that clears it — see the
-                                // regression guard on the Connections block below.
-                                () => root.connectingToSsid = ""
-                            );
-                        }
-                    }
+                    onClicked: networkItem.toggleConnection()
                 }
             }
 

@@ -39,6 +39,10 @@ Item {
         content.item?.handleWheel(x, angleDelta);
     }
 
+    function openNamedPopout(popoutName: string): bool {
+        return content.item?.openNamedPopout(popoutName) ?? false;
+    }
+
     visible: height > Config.border.thickness
     implicitHeight: Config.border.thickness
 

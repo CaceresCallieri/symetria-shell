@@ -74,6 +74,38 @@ Scope {
         }
     }
 
+    function activeShellScreen(): var {
+        for (const screen of Visibilities.popouts.keys()) {
+            if (Hypr.monitorFor(screen) === Hypr.focusedMonitor)
+                return screen;
+        }
+        return null;
+    }
+
+    function toggleWirelessPopout(): void {
+        const screen = activeShellScreen();
+        const popout = screen ? Visibilities.popouts.get(screen) : null;
+        if (!popout) {
+            console.warn("[WirelessShortcut] No popout is registered for the focused monitor");
+            return;
+        }
+
+        if (popout.keyboardNavigationActive && popout.hasCurrent) {
+            popout.close();
+            return;
+        }
+
+        popout.keyboardNavigationActive = true;
+        const bar = Visibilities.bars.get(screen);
+        if (!bar?.openNamedPopout("network")) {
+            // The network indicator can be hidden by configuration. Keep the
+            // keyboard entry point usable and center the popout in that case.
+            popout.currentName = "network";
+            popout.currentCenter = screen.width / 2;
+            popout.hasCurrent = true;
+        }
+    }
+
     CustomShortcut {
         name: "controlCenter"
         description: "Open control center"
@@ -192,6 +224,14 @@ Scope {
 
         function open(): void {
             WindowFactory.create();
+        }
+    }
+
+    IpcHandler {
+        target: "wifi"
+
+        function toggle(): void {
+            root.toggleWirelessPopout();
         }
     }
 

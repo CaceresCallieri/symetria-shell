@@ -108,7 +108,8 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
+            if (!popouts.keyboardNavigationActive
+                    && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                     && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
                     && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
                 _popoutThrottleTimer.stop();
@@ -123,6 +124,12 @@ CustomMouseArea {
 
     onPositionChanged: event => {
         if (popouts.isDetached)
+            return;
+
+        // A keyboard-opened popout remains stable until Escape, the keybind, or
+        // a click outside closes its focus grab. Pointer motion must not switch
+        // its content or close it while the user navigates the list.
+        if (popouts.keyboardNavigationActive)
             return;
 
         const x = event.x;
@@ -214,7 +221,10 @@ CustomMouseArea {
     Timer {
         id: _popoutThrottleTimer
         interval: 16
-        onTriggered: root.bar.checkPopout(root._pendingPopoutX)
+        onTriggered: {
+            if (!root.popouts.keyboardNavigationActive)
+                root.bar.checkPopout(root._pendingPopoutX);
+        }
     }
 
     // Monitor individual visibility changes

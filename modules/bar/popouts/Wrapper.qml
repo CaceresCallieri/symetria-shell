@@ -22,6 +22,7 @@ Item {
     property string currentName
     property real currentCenter
     property bool hasCurrent
+    property bool keyboardNavigationActive: false
 
     property string detachedMode
     property string queuedMode
@@ -73,6 +74,7 @@ Item {
             _closingTimer.start();
         }
         hasCurrent = false;
+        keyboardNavigationActive = false;
         animLength = Appearance.anim.durations.normal;
         detachedMode = "";
         queuedMode = "";
@@ -149,7 +151,7 @@ Item {
         && UpdateRunner.phase === "password"
 
     HyprlandFocusGrab {
-        active: root.isDetached || root._vocabHintsActive || root._updatesPasswordActive
+        active: root.isDetached || (root.keyboardNavigationActive && root.hasCurrent) || root._vocabHintsActive || root._updatesPasswordActive
         windows: [QsWindow.window]
         onCleared: {
             if (root._vocabHintsActive)
@@ -174,7 +176,7 @@ Item {
     }
 
     Binding {
-        when: root.hasCurrent && root.currentName === "wirelesspassword"
+        when: root.hasCurrent && (root.keyboardNavigationActive || root.currentName === "wirelesspassword")
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"

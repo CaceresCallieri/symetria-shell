@@ -83,6 +83,32 @@ Item {
         }
     }
 
+    function activatePopoutAtChild(popoutName: string, child: Item): void {
+        popouts.currentName = popoutName;
+        popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
+        popouts.hasCurrent = true;
+    }
+
+    function openNamedPopout(popoutName: string): bool {
+        const repeaters = [leftRepeater, rightRepeater];
+        for (const repeater of repeaters) {
+            for (let i = 0; i < repeater.count; i++) {
+                const container = repeater.itemAt(i)?.item?.iconContainer;
+                if (!container)
+                    continue;
+
+                for (const child of container.children) {
+                    if (child?.name === popoutName && child.visible) {
+                        activatePopoutAtChild(popoutName, child);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Popout Detection System
     //
@@ -115,9 +141,7 @@ Item {
         const popoutName = nameResolver(child);
         if (!popoutName) return false;
 
-        popouts.currentName = popoutName;
-        popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
-        popouts.hasCurrent = true;
+        activatePopoutAtChild(popoutName, child);
         return true;
     }
 
