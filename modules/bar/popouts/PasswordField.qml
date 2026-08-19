@@ -9,27 +9,58 @@ import QtQuick
 
 /// Animated password input with dot visualization.
 ///
-/// Manages its own key handling (typing, backspace, Ctrl+Backspace, Enter),
-/// focus lifecycle, and displays each character as an animated dot in a
-/// horizontal ListView.  Extracted from WirelessPassword.qml.
+/// Manages its own key handling (typing, backspace, Ctrl+Backspace, Enter,
+/// Ctrl+H), focus lifecycle, and masked or visible password rendering.
+/// Extracted from WirelessPassword.qml.
 FocusScope {
     id: root
 
     property string password: ""
     property bool hasError: false
     property bool isActive: false
+    property bool passwordVisible: false
+    property bool cancelOnEscape: false
+    property string placeholderText: qsTr("Password")
+    readonly property real caretGap: Appearance.spacing.small / 2
+    readonly property real passwordContentWidth: Math.max(0, width
+        - revealButton.implicitWidth * 2
+        - focusCaret.implicitWidth * 2
+        - Appearance.padding.normal * 2
+        - Appearance.spacing.small * 2)
 
     signal submitted()
     signal errorCleared()
+    signal cancelled()
 
     implicitHeight: Math.max(48, charList.implicitHeight + Appearance.padding.normal * 2)
 
     focus: true
     activeFocusOnTab: true
 
+    function togglePasswordVisibility(): void {
+        passwordVisible = !passwordVisible;
+        forceActiveFocus();
+    }
+
     Keys.onPressed: event => {
         if (!activeFocus) {
             forceActiveFocus();
+        }
+
+        if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_H) {
+            togglePasswordVisibility();
+            event.accepted = true;
+            return;
+        }
+
+        if (event.key === Qt.Key_Escape) {
+            if (cancelOnEscape) {
+                cancelled();
+                event.accepted = true;
+            } else {
+                event.accepted = false;
+            }
+            return;
         }
 
         if (hasError && event.text && event.text.length > 0) {
@@ -57,6 +88,8 @@ FocusScope {
         if (isActive) {
             _focusTimer.start();
             password = "";
+        } else {
+            passwordVisible = false;
         }
     }
 
@@ -72,32 +105,15 @@ FocusScope {
             _focusTimer.start();
     }
 
-    // --- Visual: background rectangle with focus/error border ---
+    // An input well is permanently inset. Focus and error state change its
+    // edge colour without introducing another surface dialect.
 
-    StyledRect {
+    PillToggleSurface {
         anchors.fill: parent
+        active: true
+        activeColor: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
+        borderColor: root.hasError ? Colours.palette.m3error : root.activeFocus ? Colours.palette.m3primary : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).border
         radius: Appearance.rounding.normal
-        color: root.activeFocus ? Qt.lighter(Colours.tPalette.m3surfaceContainer, 1.05) : Colours.tPalette.m3surfaceContainer
-        border.width: root.activeFocus || root.hasError ? 4 : (root.isActive ? 1 : 0)
-        border.color: {
-            if (root.hasError)
-                return Colours.palette.m3error;
-            if (root.activeFocus)
-                return Colours.palette.m3primary;
-            return root.isActive ? Colours.palette.m3outline : "transparent";
-        }
-
-        Behavior on border.color {
-            CAnim {}
-        }
-
-        Behavior on border.width {
-            CAnim {}
-        }
-
-        Behavior on color {
-            CAnim {}
-        }
     }
 
     StateLayer {
@@ -113,12 +129,14 @@ FocusScope {
     // --- Placeholder ---
 
     StyledText {
+        id: placeholder
+
         anchors.centerIn: parent
-        text: qsTr("Password")
+        text: root.placeholderText
         color: Colours.palette.m3outline
         font.pointSize: Appearance.font.size.normal
         font.family: Appearance.font.family.mono
-        opacity: root.password ? 0 : 1
+        opacity: root.password || !text ? 0 : 1
 
         Behavior on opacity {
             Anim {}
@@ -133,12 +151,18 @@ FocusScope {
         readonly property int fullWidth: count * (implicitHeight + spacing) - spacing
 
         anchors.centerIn: parent
-        implicitWidth: fullWidth
+        anchors.horizontalCenterOffset: root.activeFocus && root.password.length > 0
+            ? -(focusCaret.implicitWidth + root.caretGap) / 2
+            : 0
+        visible: !root.passwordVisible
+        implicitWidth: Math.min(fullWidth, root.passwordContentWidth)
         implicitHeight: Appearance.font.size.normal
 
         orientation: Qt.Horizontal
         spacing: Appearance.spacing.small / 2
         interactive: false
+        contentX: Math.max(0, contentWidth - width)
+        clip: true
 
         model: ScriptModel {
             values: root.password.split("")
@@ -203,5 +227,102 @@ FocusScope {
         Behavior on implicitWidth {
             Anim {}
         }
+
+        Behavior on anchors.horizontalCenterOffset {
+            Anim {}
+        }
+    }
+
+    StyledText {
+        id: revealedPassword
+
+        anchors.centerIn: parent
+        width: root.passwordContentWidth
+        visible: root.passwordVisible && root.password.length > 0
+        text: root.password
+        color: Colours.palette.m3onSurface
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
+        font.family: Appearance.font.family.mono
+    }
+
+    Rectangle {
+        id: focusCaret
+
+        anchors.verticalCenter: parent.verticalCenter
+        implicitWidth: 2
+        implicitHeight: Appearance.font.size.normal
+
+        function restartBlink(): void {
+            caretBlink.stop();
+            opacity = 1;
+            if (visible)
+                caretBlink.start();
+        }
+
+        x: {
+            let desiredX;
+            if (root.password.length === 0) {
+                desiredX = root.placeholderText
+                    ? placeholder.x + (placeholder.width + placeholder.paintedWidth) / 2 + root.caretGap
+                    : (root.width - implicitWidth) / 2;
+            } else if (root.passwordVisible) {
+                desiredX = revealedPassword.x + (revealedPassword.width + revealedPassword.paintedWidth) / 2 + root.caretGap;
+            } else {
+                desiredX = charList.x + charList.width + root.caretGap;
+            }
+            return Math.min(desiredX, revealButton.x - implicitWidth - Appearance.spacing.small);
+        }
+        visible: root.activeFocus
+        color: Colours.palette.m3primary
+        radius: width / 2
+
+        SequentialAnimation on opacity {
+            id: caretBlink
+
+            loops: Animation.Infinite
+
+            NumberAnimation {
+                to: 0.15
+                duration: 500
+                easing.type: Easing.InOutSine
+            }
+            NumberAnimation {
+                to: 1
+                duration: 500
+                easing.type: Easing.InOutSine
+            }
+        }
+
+        onVisibleChanged: restartBlink()
+        Component.onCompleted: restartBlink()
+
+        Connections {
+            target: root
+
+            function onPasswordChanged(): void {
+                focusCaret.restartBlink();
+            }
+        }
+    }
+
+    IconButton {
+        id: revealButton
+
+        anchors.right: parent.right
+        anchors.rightMargin: Appearance.padding.small
+        anchors.verticalCenter: parent.verticalCenter
+        toggle: true
+        checked: root.passwordVisible
+        icon: root.passwordVisible ? "visibility_off" : "visibility"
+        type: IconButton.Tonal
+        padding: Appearance.padding.small
+
+        onClicked: root.togglePasswordVisibility()
+    }
+
+    Tooltip {
+        target: revealButton
+        text: root.passwordVisible ? qsTr("Hide password (Ctrl+H)") : qsTr("Show password (Ctrl+H)")
     }
 }

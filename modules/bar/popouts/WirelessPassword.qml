@@ -28,11 +28,8 @@ ColumnLayout {
 
     Timer {
         id: focusTimer
-        // PasswordField manages its own focus via isActive → _focusTimer (50ms).
-        // WirelessPassword only needs to ensure the outer ColumnLayout has focus
-        // so keyboard events route into the component tree.
         interval: 150
-        onTriggered: root.forceActiveFocus()
+        onTriggered: passwordField.forceActiveFocus()
     }
 
     spacing: Appearance.spacing.normal
@@ -66,13 +63,11 @@ ColumnLayout {
 
     Keys.onEscapePressed: closeDialog()
 
-    StyledRect {
+    PillCardSection {
+        id: dialogSurface
+
         Layout.fillWidth: true
         Layout.preferredWidth: 400
-        implicitHeight: content.implicitHeight + Appearance.padding.large * 2
-
-        radius: Appearance.rounding.normal
-        color: Colours.tPalette.m3surfaceContainer
         visible: root.shouldBeVisible || root.isClosing
         opacity: root.shouldBeVisible && !root.isClosing ? 1 : 0
         scale: root.shouldBeVisible && !root.isClosing ? 1 : 0.7
@@ -94,12 +89,12 @@ ColumnLayout {
             }
 
             Anim {
-                target: parent
+                target: dialogSurface
                 property: "opacity"
                 to: 0
             }
             Anim {
-                target: parent
+                target: dialogSurface
                 property: "scale"
                 to: 0.7
             }
@@ -113,7 +108,6 @@ ColumnLayout {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            anchors.margins: Appearance.padding.large
 
             spacing: Appearance.spacing.normal
 
@@ -165,15 +159,27 @@ ColumnLayout {
                 Layout.maximumWidth: parent.width - Appearance.padding.large * 2
             }
 
+            StyledText {
+                Layout.fillWidth: true
+                Layout.topMargin: Appearance.spacing.large
+                Layout.leftMargin: Appearance.padding.small
+                text: qsTr("Password")
+                color: Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                font.weight: 500
+            }
+
             PasswordField {
                 id: passwordField
 
-                Layout.topMargin: Appearance.spacing.large
                 Layout.fillWidth: true
                 isActive: root.shouldBeVisible
                 hasError: connectButton.hasError
-                onSubmitted: { if (connectButton.enabled) connectButton.clicked(); }
+                cancelOnEscape: true
+                placeholderText: ""
+                onSubmitted: { if (!connectButton.disabled) connectButton.clicked(); }
                 onErrorCleared: connectButton.hasError = false
+                onCancelled: root.closeDialog()
             }
 
             RowLayout {
@@ -181,17 +187,15 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Appearance.spacing.normal
 
-                TextButton {
+                RaisedTextButton {
                     Layout.fillWidth: true
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-                    inactiveOnColour: Colours.palette.m3onSurface
                     text: qsTr("Cancel")
 
                     onClicked: root.closeDialog()
                 }
 
-                TextButton {
+                RaisedTextButton {
                     id: connectButton
 
                     property bool connecting: false
@@ -199,15 +203,13 @@ ColumnLayout {
 
                     Layout.fillWidth: true
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.palette.m3primary
-                    inactiveOnColour: Colours.palette.m3onPrimary
                     // Both stay declarative. REGRESSION GUARD: do NOT assign
-                    // `enabled` or `text` imperatively — an imperative write severs
+                    // `disabled` or `text` imperatively — an imperative write severs
                     // the binding permanently, which is what previously left Connect
                     // clickable with an empty password after a failed attempt.
-                    // `connecting` alone drives both.
+                    // `connecting` remains the only imperative state.
                     text: connecting ? qsTr("Connecting...") : qsTr("Connect")
-                    enabled: passwordField.password.length > 0 && !connecting
+                    disabled: passwordField.password.length === 0 || connecting
 
                     onClicked: {
                         if (!root.network || connecting) {
@@ -238,6 +240,7 @@ ColumnLayout {
                             connecting = false;
                             hasError = true;
                             passwordField.password = "";
+                            passwordField.passwordVisible = false;
 
                             // REGRESSION GUARD: do NOT call forgetNetwork() here.
                             // This ran on every failure, including failures that
@@ -279,4 +282,3 @@ ColumnLayout {
         }
     }
 }
-
