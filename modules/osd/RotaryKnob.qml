@@ -23,9 +23,9 @@ RotaryControl {
 
                 required property int index
 
-                width: tickRing.width
-                height: tickRing.height
-                anchors.centerIn: tickRing
+                // Anchored to `tickRing` by id rather than to `parent`, because a
+                // Repeater delegate has no parent during its first binding pass.
+                anchors.fill: tickRing
                 rotation: -135 + index * 5.4
 
                 Rectangle {

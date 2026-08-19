@@ -30,9 +30,6 @@ import QtQuick.Shapes
 RotaryControl {
     id: root
 
-    /// The whole disc is the control — there is no surrounding scale to miss.
-    hitSize: 2 * bladeOuterRadiusUnits
-
     /// Drives the shutter gesture: the iris sweeps open as the OSD arrives and
     /// snaps shut as it leaves, instead of sliding away frozen at its last value.
     required property bool revealed
@@ -47,6 +44,10 @@ RotaryControl {
     readonly property real rimRadiusUnits: 72.5
     readonly property real recessRadiusUnits: 79
     readonly property real apertureMaxUnits: 51
+
+    /// The whole disc is the control — there is no surrounding scale to miss.
+    hitSize: 2 * bladeOuterRadiusUnits
+
     /// The blades sweep as they open, the way a real diaphragm ring does. Well
     /// under `bladeStep`: a full step would land every blade where its neighbour
     /// started and the rotation would read as no rotation at all.
@@ -61,18 +62,41 @@ RotaryControl {
     /// (0 = right, -90 = up). Upper left, matching RotaryKnob's baked highlight.
     readonly property real lightAngle: -125
 
-    // `reveal` must stay writable: a Behavior assigns imperatively, and a
-    // `readonly` property rejects every assignment including that one, which
-    // would silently freeze the shutter open.
-    property real reveal: revealed ? 1 : 0
+    readonly property int openDuration: 360
+    readonly property int shutDuration: 150
 
-    Behavior on reveal {
-        // Reads the plain bool, never `reveal` itself, so the direction is
-        // unambiguous at the moment the animation starts. Opening is a sweep,
-        // closing is a snap — that asymmetry is what a shutter sounds like.
-        Anim {
-            duration: root.revealed ? 360 : 150
-        }
+    // Animated imperatively rather than through `Behavior on reveal`. A Behavior
+    // would need its duration to depend on `revealed` — the very property whose
+    // change starts the animation — and both bindings hang off the same change
+    // signal, so the animation can start while `duration` still holds the value
+    // computed for the PREVIOUS direction, silently swapping the sweep and the
+    // snap. Driving it from the handler makes the direction unambiguous.
+    property real reveal: 0
+
+    Anim {
+        id: revealAnim
+
+        target: root
+        property: "reveal"
+    }
+
+    function playReveal(): void {
+        revealAnim.stop();
+        revealAnim.from = root.reveal;
+        revealAnim.to = root.revealed ? 1 : 0;
+        revealAnim.duration = root.revealed ? root.openDuration : root.shutDuration;
+        revealAnim.start();
+    }
+
+    onRevealedChanged: playReveal()
+
+    // A dial built while the OSD is ALREADY showing — the Loader swaps dials on
+    // a metric change, so this is the normal case for volume → brightness — must
+    // still sweep. An initial binding of `reveal` would have started it wide open,
+    // because animations never run on a property's first evaluation.
+    Component.onCompleted: {
+        if (revealed)
+            playReveal();
     }
 
     /// 0 = fully shut, 1 = wide open. Everything mechanical derives from this
@@ -99,16 +123,17 @@ RotaryControl {
         return Qt.rgba(0.20 + 0.58 * t, 0.22 + 0.585 * t, 0.25 + 0.585 * t, 1);
     }
 
-    function pointAt(radius: real, degrees: real): string {
-        const rad = degrees * Math.PI / 180;
-        return `${(centreX + radius * Math.cos(rad)).toFixed(2)} ${(centreY + radius * Math.sin(rad)).toFixed(2)}`;
-    }
-
     // ── Spill: the faint wash the assembly throws on the card around it ──
     // Deliberately weak. It is ambience, not the story — the story is the bloom
     // over the blades further down.
+    //
+    // NOTE: this reaches u(94), overdrawing RotaryControl's 176-unit design box
+    // by ~12 units on each side. It renders only because no ancestor clips.
+    // Setting `clip: true` on the Column, the Loader or osdContent in
+    // Content.qml/OsdOverlay.qml would slice the glow into a visible square.
     Shape {
         anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
         opacity: 0.04 + root.openness * 0.34
 
         ShapePath {
@@ -156,8 +181,11 @@ RotaryControl {
     //    visible silhouette is exactly the rounded polygon they leave. ──
     Shape {
         anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
         visible: root.apertureRadius > 0.5
-        opacity: 0.4 + root.animatedValue * 0.6
+        // Scaled by `reveal` as well as by value, so the light dims in step with
+        // the closing blades instead of blazing behind a shut diaphragm.
+        opacity: root.reveal * (0.4 + root.animatedValue * 0.6)
 
         ShapePath {
             strokeWidth: -1
@@ -194,20 +222,19 @@ RotaryControl {
         Repeater {
             model: root.bladeCount
 
-            // Sized off `bladeRing` rather than `parent`: a Repeater delegate has
-            // no parent during its first binding pass.
+            // Anchored to `bladeRing` by id rather than to `parent`, because a
+            // Repeater delegate has no parent during its first binding pass.
             delegate: Shape {
                 id: blade
 
                 required property int index
 
-                width: bladeRing.width
-                height: bladeRing.height
-                anchors.centerIn: bladeRing
+                anchors.fill: bladeRing
+                preferredRendererType: Shape.CurveRenderer
 
                 readonly property real startAngle: root.spin + index * root.bladeStep - 90
-                readonly property real endAngle: startAngle + root.bladeStep
                 readonly property real bisector: startAngle + root.bladeStep / 2
+                readonly property real endAngle: startAngle + root.bladeStep
 
                 /// How squarely this blade faces the key light. Because it is
                 /// computed from `bisector`, which carries `spin`, every blade
@@ -215,14 +242,17 @@ RotaryControl {
                 /// around the ring instead of being painted on.
                 readonly property real facing: 0.5 + 0.5 * Math.cos((bisector - root.lightAngle) * Math.PI / 180)
 
-                readonly property string outline: {
-                    const outer = root.bladeRadius;
-                    const inner = root.apertureRadius;
-                    return `M ${root.pointAt(outer, startAngle)}`
-                        + ` A ${outer.toFixed(2)} ${outer.toFixed(2)} 0 0 1 ${root.pointAt(outer, endAngle)}`
-                        + ` L ${root.pointAt(inner, endAngle)}`
-                        + ` Q ${root.pointAt(inner * root.innerBow, bisector)} ${root.pointAt(inner, startAngle)} Z`;
-                }
+                // Inner edge, as three points: the two aperture corners this blade
+                // spans, plus the control point that bows the edge outward.
+                // Expressed as numbers rather than an SVG path string — the path
+                // changes every frame of both the sweep and the value animation,
+                // and a string would be rebuilt and re-parsed on each one.
+                readonly property real innerEndX: root.centreX + root.apertureRadius * Math.cos(endAngle * Math.PI / 180)
+                readonly property real innerEndY: root.centreY + root.apertureRadius * Math.sin(endAngle * Math.PI / 180)
+                readonly property real innerStartX: root.centreX + root.apertureRadius * Math.cos(startAngle * Math.PI / 180)
+                readonly property real innerStartY: root.centreY + root.apertureRadius * Math.sin(startAngle * Math.PI / 180)
+                readonly property real bowX: root.centreX + root.apertureRadius * root.innerBow * Math.cos(bisector * Math.PI / 180)
+                readonly property real bowY: root.centreY + root.apertureRadius * root.innerBow * Math.sin(bisector * Math.PI / 180)
 
                 ShapePath {
                     strokeWidth: -1
@@ -233,15 +263,35 @@ RotaryControl {
                     fillGradient: LinearGradient {
                         x1: root.centreX + root.bladeRadius * Math.cos(blade.bisector * Math.PI / 180)
                         y1: root.centreY + root.bladeRadius * Math.sin(blade.bisector * Math.PI / 180)
-                        x2: root.centreX + root.apertureRadius * Math.cos(blade.bisector * Math.PI / 180)
-                        y2: root.centreY + root.apertureRadius * Math.sin(blade.bisector * Math.PI / 180)
+                        x2: blade.bowX
+                        y2: blade.bowY
 
                         GradientStop { position: 0.00; color: root.metal(blade.facing * 0.62) }
                         GradientStop { position: 0.55; color: root.metal(blade.facing * 0.86) }
                         GradientStop { position: 1.00; color: root.metal(blade.facing * 1.05 + 0.06) }
                     }
 
-                    PathSvg { path: blade.outline }
+                    PathAngleArc {
+                        centerX: root.centreX
+                        centerY: root.centreY
+                        radiusX: root.bladeRadius
+                        radiusY: root.bladeRadius
+                        startAngle: blade.startAngle
+                        sweepAngle: root.bladeStep
+                        moveToStart: true
+                    }
+
+                    PathLine {
+                        x: blade.innerEndX
+                        y: blade.innerEndY
+                    }
+
+                    PathQuad {
+                        controlX: blade.bowX
+                        controlY: blade.bowY
+                        x: blade.innerStartX
+                        y: blade.innerStartY
+                    }
                 }
             }
         }
@@ -263,9 +313,7 @@ RotaryControl {
 
                 required property int index
 
-                width: seamRing.width
-                height: seamRing.height
-                anchors.centerIn: seamRing
+                anchors.fill: seamRing
                 rotation: root.spin + index * root.bladeStep
 
                 Rectangle {
@@ -294,8 +342,9 @@ RotaryControl {
     //    escaping through the opening rather than pasted onto it. ──
     Shape {
         anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
         visible: root.apertureRadius > 0.5
-        opacity: 0.22 + root.animatedValue * 0.58
+        opacity: root.reveal * (0.22 + root.animatedValue * 0.58)
 
         ShapePath {
             strokeWidth: -1
@@ -334,6 +383,7 @@ RotaryControl {
     //    filled. Do not "simplify" this back to a Rectangle.
     Shape {
         anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
 
         ShapePath {
             fillColor: "transparent"

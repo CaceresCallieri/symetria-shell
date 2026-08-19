@@ -46,12 +46,19 @@ Item {
     readonly property real dialScale: contentScale * (showingBrightness ? 0.92 : 0.75)
 
     /// Falls back to the raw value while the Loader swaps dials, so the readout
-    /// never blinks through 0 on a metric change.
+    /// never blinks through 0 on a metric change. The fallback duplicates
+    /// RotaryControl.normalizedValue — keep the two in step if either changes.
     readonly property real displayValue: dial?.animatedValue
         ?? Math.max(0, Math.min(1, currentValue / Math.max(maximumValue, 0.001)))
 
-    implicitWidth: showingBrightness ? 120 : Math.round(212 * contentScale)
-    implicitHeight: showingBrightness ? 152 : 132
+    // Both card sizes are expressed in the same design units as the dial and
+    // scaled by contentScale, so changing contentScale still resizes the whole
+    // OSD. A raw pixel constant on one branch would have scaled only the other.
+    readonly property real cardWidthUnits: showingBrightness ? 231 : 212
+    readonly property real cardHeightUnits: showingBrightness ? 292 : 254
+
+    implicitWidth: Math.round(cardWidthUnits * contentScale)
+    implicitHeight: Math.round(cardHeightUnits * contentScale)
 
     // A metric can change while the OSD is already on screen (volume, then
     // brightness, inside the hide delay). Without these the card would snap to
@@ -103,7 +110,12 @@ Item {
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-        asynchronous: true
+        // MUST stay synchronous. The implicitWidth/implicitHeight Behaviors below
+        // animate root.width/height on a metric change, so this path is rebuilt
+        // every frame of the resize; built off-thread it lands a frame late and
+        // the outline visibly trails the PillCard it wraps. It is five segments —
+        // building it inline is cheap.
+        asynchronous: false
 
         ShapePath {
             startX: root.width

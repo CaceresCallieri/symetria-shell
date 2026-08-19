@@ -115,6 +115,10 @@ Singleton {
         }
 
         // Handles brightness value like brightnessctl: 0.1, +0.1, 0.1-, 10%, +10%, 10%-
+        //
+        // Values below Config.services.minBrightness are floored, so 0 is not
+        // reachable by design — a request for it returns success and reports the
+        // floor in its result string.
         function setFor(query: string, value: string): string {
             const monitor = root.getMonitor(query);
             if (!monitor)
@@ -187,8 +191,12 @@ Singleton {
 
         function setBrightness(value: real): void {
             // Clamped to minBrightness, not to 0: a display driven to true black
-            // cannot be read to be turned back up.
-            value = Math.max(Config.services.minBrightness, Math.min(1, value));
+            // cannot be read to be turned back up. The floor is itself clamped
+            // into [0, 1] first — it comes from user-editable shell.json, and an
+            // out-of-range entry there would otherwise reach the backend as e.g.
+            // `brightnessctl s 150%`.
+            const floor = Math.max(0, Math.min(1, Config.services.minBrightness));
+            value = Math.max(floor, Math.min(1, value));
             const rounded = Math.round(value * 100);
             if (Math.round(brightness * 100) === rounded)
                 return;

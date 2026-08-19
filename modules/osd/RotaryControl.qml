@@ -21,11 +21,15 @@ Item {
     id: root
 
     /// The dial's visuals. Rendered below the hit area, in declaration order.
+    ///
+    /// Children are REPARENTED into the internal `visuals` Item, so `parent`
+    /// inside a dial file means `visuals`, not this control. That is invisible
+    /// today only because `visuals` is `anchors.fill: parent` with no margins —
+    /// give it padding and every dial's geometry silently shifts.
     default property alias content: visuals.data
 
     required property real value
     required property real to
-    property bool interactive: true
     property real sizeScale: 1
 
     /// Design-space width of the draggable centre. Anything outside it is
@@ -68,7 +72,6 @@ Item {
         anchors.centerIn: parent
         width: Math.round(root.hitSize * root.sizeScale)
         height: width
-        enabled: root.interactive
         cursorShape: Qt.PointingHandCursor
 
         function onWheel(event: WheelEvent): void {
@@ -91,7 +94,20 @@ Item {
             root.moved(normalized * root.to);
         }
 
-        onPressed: event => updateValue(event.x, event.y)
+        // The hit area is a square but every dial is a disc, so a press in a
+        // corner would map an angle from a point over visibly empty recess and
+        // jump the value. Rejected presses do not start a drag at all.
+        //
+        // Only the PRESS is guarded — onPositionChanged deliberately is not, so
+        // that once a drag has started it keeps tracking when the pointer leaves
+        // the disc, which is how a real knob behaves under the finger.
+        onPressed: event => {
+            if (Math.hypot(event.x - width / 2, event.y - height / 2) > width / 2) {
+                event.accepted = false;
+                return;
+            }
+            updateValue(event.x, event.y);
+        }
         onPositionChanged: event => {
             if (pressed)
                 updateValue(event.x, event.y);
@@ -101,6 +117,10 @@ Item {
     Timer {
         id: wheelInteractionTimer
 
+        // How long a wheel gesture keeps `interacting` true. It spans the gap
+        // between notches of one scroll, so a burst does not read as several
+        // separate interactions — and, because OsdOverlay gates metric switching
+        // on `interacting`, so another metric cannot steal the OSD mid-scroll.
         interval: 180
     }
 }

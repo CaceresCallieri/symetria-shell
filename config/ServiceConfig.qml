@@ -9,10 +9,15 @@ JsonObject {
     property string gpuType: ""
     property int visualiserBars: 45
     property real audioIncrement: 0.1
-    property real brightnessIncrement: 0.1
+    // Matches the STEP in hypr/scripts/brightnesscontrol.sh, so the keyboard
+    // chord and the OSD wheel move brightness by the same amount. Brightness
+    // takes a finer step than audio: 10% per notch overshoots comfortable levels.
+    property real brightnessIncrement: 0.05
     // Floor for every brightness write, so no key repeat or drag to the bottom of
-    // the dial can black out a panel the user then cannot see to recover. Set to 0
-    // only if every display here has a physical control to bring it back.
+    // the dial leaves the panel at true black. Note 1% is still very dark on most
+    // panels — this guarantees a non-zero backlight, NOT a readable screen. It is
+    // deliberately low so a dark room can still be dimmed right down; raise it if
+    // recovering from the bottom of the range matters more than that.
     property real minBrightness: 0.01
     property real maxVolume: 1.0
     property string defaultPlayer: "Spotify"
