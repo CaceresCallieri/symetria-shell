@@ -24,6 +24,11 @@ Item {
     property bool hasCurrent
     property bool keyboardNavigationActive: false
 
+    onHasCurrentChanged: {
+        if (!hasCurrent)
+            keyboardNavigationActive = false;
+    }
+
     property string detachedMode
     property string queuedMode
     readonly property bool isDetached: detachedMode.length > 0

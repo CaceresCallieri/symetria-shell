@@ -28,7 +28,7 @@ PillCardSection {
     focus: wrapper.keyboardNavigationActive && wrapper.hasCurrent && wrapper.currentName === "network"
 
     function networkKey(network: var): string {
-        return network?.bssid || network?.ssid || "";
+        return network?.ssid || network?.bssid || "";
     }
 
     function networkAt(index: int): var {

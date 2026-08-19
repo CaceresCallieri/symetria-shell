@@ -102,7 +102,13 @@ CustomMouseArea {
     anchors.fill: parent
     hoverEnabled: true
 
-    onPressed: event => dragStart = Qt.point(event.x, event.y)
+    onPressed: event => {
+        dragStart = Qt.point(event.x, event.y);
+        if (popouts.keyboardNavigationActive
+                && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
+            popouts.close();
+        }
+    }
     onContainsMouseChanged: {
         if (!containsMouse) {
             if (!utilitiesShortcutActive)

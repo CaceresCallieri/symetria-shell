@@ -227,6 +227,12 @@ Variants {
                     disabled: scope.barDisabled
 
                     Component.onCompleted: { Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
+                    Component.onDestruction: {
+                        if (Visibilities.bars.get(scope.modelData) === bar) {
+                            Visibilities.bars.delete(scope.modelData);
+                            Visibilities.barsVersion++;
+                        }
+                    }
                 }
 
                 AgentBarModule.Wrapper {
