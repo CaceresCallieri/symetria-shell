@@ -17,15 +17,20 @@ Item {
     required property real sourceVolume
     required property bool sourceMuted
     required property real brightness
+    /// Whether the OSD is on its way in or already showing. The iris uses it to
+    /// sweep open on arrival and snap shut on the way out.
+    required property bool revealed
 
-    readonly property bool interacting: knob.interacting
-    readonly property real currentValue: activeMetric === "brightness"
+    readonly property bool showingBrightness: activeMetric === "brightness"
+    readonly property var dial: dialLoader.item
+    readonly property bool interacting: dial?.interacting ?? false
+    readonly property real currentValue: showingBrightness
         ? brightness
         : activeMetric === "microphone" ? sourceVolume : volume
     readonly property bool activeMuted: activeMetric === "microphone"
         ? sourceMuted
         : activeMetric === "volume" && muted
-    readonly property real maximumValue: activeMetric === "brightness" ? 1 : Config.services.maxVolume
+    readonly property real maximumValue: showingBrightness ? 1 : Config.services.maxVolume
     readonly property real contentScale: 0.52
     readonly property real attachmentCurve: Math.min(Config.border.rounding, height / 2)
     readonly property real surroundWidth: Appearance.padding.large
@@ -34,11 +39,42 @@ Item {
         Appearance.transparency.base
     )
 
-    implicitWidth: Math.round(212 * contentScale)
-    implicitHeight: 132
+    /// The iris needs more diameter than the knob does: it carries no printed
+    /// scale, so its whole reading comes from blade edges that blur together
+    /// below roughly 80 px. The card grows with it rather than the dial being
+    /// squeezed to fit — verified against a real-size render before porting.
+    readonly property real dialScale: contentScale * (showingBrightness ? 0.92 : 0.75)
+
+    /// Falls back to the raw value while the Loader swaps dials, so the readout
+    /// never blinks through 0 on a metric change.
+    readonly property real displayValue: dial?.animatedValue
+        ?? Math.max(0, Math.min(1, currentValue / Math.max(maximumValue, 0.001)))
+
+    implicitWidth: showingBrightness ? 120 : Math.round(212 * contentScale)
+    implicitHeight: showingBrightness ? 152 : 132
+
+    // A metric can change while the OSD is already on screen (volume, then
+    // brightness, inside the hide delay). Without these the card would snap to
+    // the new size mid-show.
+    Behavior on implicitWidth {
+        Anim {}
+    }
+
+    Behavior on implicitHeight {
+        Anim {}
+    }
+
+    /// Single place that turns a wheel delta into a step, shared by the card and
+    /// by whichever dial is loaded.
+    function scrollBy(delta: real): void {
+        if (delta > 0)
+            increment();
+        else if (delta < 0)
+            decrement();
+    }
 
     function increment(): void {
-        if (activeMetric === "brightness")
+        if (showingBrightness)
             monitor?.setBrightness(brightness + Config.services.brightnessIncrement);
         else if (activeMetric === "microphone")
             Audio.incrementSourceVolume();
@@ -47,7 +83,7 @@ Item {
     }
 
     function decrement(): void {
-        if (activeMetric === "brightness")
+        if (showingBrightness)
             monitor?.setBrightness(brightness - Config.services.brightnessIncrement);
         else if (activeMetric === "microphone")
             Audio.decrementSourceVolume();
@@ -56,7 +92,7 @@ Item {
     }
 
     function setValue(value: real): void {
-        if (activeMetric === "brightness")
+        if (showingBrightness)
             monitor?.setBrightness(value);
         else if (activeMetric === "microphone")
             Audio.setSourceVolume(value);
@@ -114,10 +150,7 @@ Item {
         anchors.fill: parent
 
         function onWheel(event: WheelEvent): void {
-            if (event.angleDelta.y > 0)
-                root.increment();
-            else if (event.angleDelta.y < 0)
-                root.decrement();
+            root.scrollBy(event.angleDelta.y);
         }
 
         Column {
@@ -133,28 +166,48 @@ Item {
 
             StyledText {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: Math.round(knob.animatedValue * root.maximumValue * 100)
+                text: Math.round(root.displayValue * root.maximumValue * 100)
                 color: Colours.palette.m3onSurface
                 font.family: Appearance.font.family.mono
                 font.pointSize: Appearance.font.size.extraLarge * root.contentScale
                 font.weight: Font.Medium
             }
 
-            RotaryKnob {
-                id: knob
+            // Brightness and volume are different mechanisms, not one dial with a
+            // different label, so the visual is swapped rather than reskinned.
+            // Both sides derive from RotaryControl, which is what keeps the drag
+            // and wheel behaviour identical between them.
+            Loader {
+                id: dialLoader
 
                 anchors.horizontalCenter: parent.horizontalCenter
-                sizeScale: root.contentScale * 0.75
-                value: root.currentValue
-                to: root.maximumValue
-                onMoved: value => root.setValue(value)
-                onWheelMoved: delta => {
-                    if (delta > 0)
-                        root.increment();
-                    else if (delta < 0)
-                        root.decrement();
-                }
+                sourceComponent: root.showingBrightness ? irisDial : knobDial
             }
+        }
+    }
+
+    Component {
+        id: knobDial
+
+        RotaryKnob {
+            sizeScale: root.dialScale
+            value: root.currentValue
+            to: root.maximumValue
+            onMoved: value => root.setValue(value)
+            onWheelMoved: delta => root.scrollBy(delta)
+        }
+    }
+
+    Component {
+        id: irisDial
+
+        BrightnessIris {
+            sizeScale: root.dialScale
+            value: root.currentValue
+            to: root.maximumValue
+            revealed: root.revealed
+            onMoved: value => root.setValue(value)
+            onWheelMoved: delta => root.scrollBy(delta)
         }
     }
 }

@@ -186,7 +186,9 @@ Singleton {
         }
 
         function setBrightness(value: real): void {
-            value = Math.max(0, Math.min(1, value));
+            // Clamped to minBrightness, not to 0: a display driven to true black
+            // cannot be read to be turned back up.
+            value = Math.max(Config.services.minBrightness, Math.min(1, value));
             const rounded = Math.round(value * 100);
             if (Math.round(brightness * 100) === rounded)
                 return;

@@ -10,6 +10,10 @@ JsonObject {
     property int visualiserBars: 45
     property real audioIncrement: 0.1
     property real brightnessIncrement: 0.1
+    // Floor for every brightness write, so no key repeat or drag to the bottom of
+    // the dial can black out a panel the user then cannot see to recover. Set to 0
+    // only if every display here has a physical control to bring it back.
+    property real minBrightness: 0.01
     property real maxVolume: 1.0
     property string defaultPlayer: "Spotify"
     property list<var> playerAliases: [

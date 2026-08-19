@@ -198,6 +198,7 @@ Scope {
                     sourceVolume: win.sourceVolume
                     sourceMuted: win.sourceMuted
                     brightness: win.brightness
+                    revealed: win.showing
                 }
 
                 // Hover detection without consuming wheel/click events.
