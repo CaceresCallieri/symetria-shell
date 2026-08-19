@@ -26,12 +26,6 @@ ColumnLayout {
 
     readonly property bool shouldBeVisible: root.wrapper.currentName === "wirelesspassword"
 
-    Timer {
-        id: focusTimer
-        interval: 150
-        onTriggered: passwordField.forceActiveFocus()
-    }
-
     spacing: Appearance.spacing.normal
 
     implicitWidth: 400
@@ -40,13 +34,6 @@ ColumnLayout {
     visible: shouldBeVisible || isClosing
     enabled: shouldBeVisible && !isClosing
     focus: enabled
-
-    Component.onCompleted: {
-        if (shouldBeVisible) {
-            // Use Timer for actual delay to ensure dialog is fully rendered
-            focusTimer.start();
-        }
-    }
 
     onShouldBeVisibleChanged: {
         if (shouldBeVisible) {
@@ -57,7 +44,6 @@ ColumnLayout {
             root.attemptToken++;
             connectButton.hasError = false;
             connectButton.connecting = false;
-            focusTimer.start();
         }
     }
 

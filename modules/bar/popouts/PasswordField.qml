@@ -15,7 +15,7 @@ import QtQuick
 FocusScope {
     id: root
 
-    property string password: ""
+    property alias password: editor.text
     property bool hasError: false
     property bool isActive: false
     property bool passwordVisible: false
@@ -35,60 +35,21 @@ FocusScope {
     implicitHeight: Math.max(48, charList.implicitHeight + Appearance.padding.normal * 2)
 
     focus: true
-    activeFocusOnTab: true
 
     function togglePasswordVisibility(): void {
         passwordVisible = !passwordVisible;
-        forceActiveFocus();
-    }
-
-    Keys.onPressed: event => {
-        if (!activeFocus) {
-            forceActiveFocus();
-        }
-
-        if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_H) {
-            togglePasswordVisibility();
-            event.accepted = true;
-            return;
-        }
-
-        if (event.key === Qt.Key_Escape) {
-            if (cancelOnEscape) {
-                cancelled();
-                event.accepted = true;
-            } else {
-                event.accepted = false;
-            }
-            return;
-        }
-
-        if (hasError && event.text && event.text.length > 0) {
-            hasError = false;
-            errorCleared();
-        }
-
-        if (event.key === Qt.Key_Enter || event.key === Qt.Key_Return) {
-            submitted();
-            event.accepted = true;
-        } else if (event.key === Qt.Key_Backspace) {
-            if (event.modifiers & Qt.ControlModifier) {
-                password = "";
-            } else {
-                password = password.slice(0, -1);
-            }
-            event.accepted = true;
-        } else if (event.text && event.text.length > 0) {
-            password += event.text;
-            event.accepted = true;
-        }
+        if (!passwordVisible)
+            editor.cursorPosition = editor.text.length;
+        editor.forceActiveFocus();
     }
 
     onIsActiveChanged: {
         if (isActive) {
+            editor.clear();
             _focusTimer.start();
-            password = "";
         } else {
+            _focusTimer.stop();
+            editor.clear();
             passwordVisible = false;
         }
     }
@@ -97,12 +58,85 @@ FocusScope {
         id: _focusTimer
 
         interval: 50
-        onTriggered: root.forceActiveFocus()
+        onTriggered: {
+            if (root.isActive)
+                editor.forceActiveFocus();
+        }
     }
 
     Component.onCompleted: {
         if (isActive)
             _focusTimer.start();
+    }
+
+    TextInput {
+        id: editor
+
+        anchors.centerIn: parent
+        width: root.passwordContentWidth
+        focus: root.isActive
+        activeFocusOnTab: true
+        z: 1
+        color: root.passwordVisible ? Colours.palette.m3onSurface : "transparent"
+        selectionColor: root.passwordVisible ? Colours.palette.m3primary : "transparent"
+        selectedTextColor: root.passwordVisible ? Colours.palette.m3onPrimary : "transparent"
+        cursorVisible: root.passwordVisible && activeFocus
+        echoMode: root.passwordVisible ? TextInput.Normal : TextInput.Password
+        inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
+        horizontalAlignment: TextInput.AlignHCenter
+        verticalAlignment: TextInput.AlignVCenter
+        font.family: Appearance.font.family.mono
+        font.pointSize: Appearance.font.size.normal
+        clip: true
+
+        Accessible.role: Accessible.EditableText
+        Accessible.name: root.placeholderText || qsTr("Password")
+        Accessible.passwordEdit: true
+
+        onAccepted: root.submitted()
+        onCursorPositionChanged: {
+            if (!root.passwordVisible && cursorPosition !== text.length)
+                cursorPosition = text.length;
+        }
+        onTextChanged: {
+            if (!root.passwordVisible && cursorPosition !== text.length)
+                cursorPosition = text.length;
+        }
+        onTextEdited: {
+            if (root.hasError) {
+                root.hasError = false;
+                root.errorCleared();
+            }
+        }
+
+        Keys.onPressed: event => {
+            if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_H) {
+                root.togglePasswordVisibility();
+                event.accepted = true;
+                return;
+            }
+
+            if (event.key === Qt.Key_Escape) {
+                if (root.cancelOnEscape) {
+                    root.cancelled();
+                    event.accepted = true;
+                } else {
+                    event.accepted = false;
+                }
+                return;
+            }
+
+            if (!root.passwordVisible
+                    && (event.key === Qt.Key_Left
+                        || event.key === Qt.Key_Right
+                        || event.key === Qt.Key_Home
+                        || event.key === Qt.Key_End
+                        || event.key === Qt.Key_Up
+                        || event.key === Qt.Key_Down
+                        || ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_A))) {
+                event.accepted = true;
+            }
+        }
     }
 
     // An input well is permanently inset. Focus and error state change its
@@ -117,12 +151,14 @@ FocusScope {
     }
 
     StateLayer {
+        z: 2
+        visible: !root.passwordVisible
         hoverEnabled: false
         cursorShape: Qt.IBeamCursor
         radius: Appearance.rounding.normal
 
         function onClicked(): void {
-            root.forceActiveFocus();
+            editor.forceActiveFocus();
         }
     }
 
@@ -148,7 +184,7 @@ FocusScope {
     ListView {
         id: charList
 
-        readonly property int fullWidth: count * (implicitHeight + spacing) - spacing
+        readonly property int fullWidth: Math.max(0, count * (implicitHeight + spacing) - spacing)
 
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root.activeFocus && root.password.length > 0
@@ -233,23 +269,11 @@ FocusScope {
         }
     }
 
-    StyledText {
-        id: revealedPassword
-
-        anchors.centerIn: parent
-        width: root.passwordContentWidth
-        visible: root.passwordVisible && root.password.length > 0
-        text: root.password
-        color: Colours.palette.m3onSurface
-        horizontalAlignment: Text.AlignHCenter
-        elide: Text.ElideRight
-        font.family: Appearance.font.family.mono
-    }
-
     Rectangle {
         id: focusCaret
 
         anchors.verticalCenter: parent.verticalCenter
+        z: 3
         implicitWidth: 2
         implicitHeight: Appearance.font.size.normal
 
@@ -266,14 +290,12 @@ FocusScope {
                 desiredX = root.placeholderText
                     ? placeholder.x + (placeholder.width + placeholder.paintedWidth) / 2 + root.caretGap
                     : (root.width - implicitWidth) / 2;
-            } else if (root.passwordVisible) {
-                desiredX = revealedPassword.x + (revealedPassword.width + revealedPassword.paintedWidth) / 2 + root.caretGap;
             } else {
                 desiredX = charList.x + charList.width + root.caretGap;
             }
             return Math.min(desiredX, revealButton.x - implicitWidth - Appearance.spacing.small);
         }
-        visible: root.activeFocus
+        visible: root.activeFocus && !root.passwordVisible
         color: Colours.palette.m3primary
         radius: width / 2
 
@@ -312,6 +334,7 @@ FocusScope {
         anchors.right: parent.right
         anchors.rightMargin: Appearance.padding.small
         anchors.verticalCenter: parent.verticalCenter
+        z: 3
         toggle: true
         checked: root.passwordVisible
         icon: root.passwordVisible ? "visibility_off" : "visibility"
