@@ -22,6 +22,9 @@ Item {
     readonly property real currentValue: activeMetric === "brightness"
         ? brightness
         : activeMetric === "microphone" ? sourceVolume : volume
+    readonly property bool activeMuted: activeMetric === "microphone"
+        ? sourceMuted
+        : activeMetric === "volume" && muted
     readonly property real maximumValue: activeMetric === "brightness" ? 1 : Config.services.maxVolume
     readonly property real contentScale: 0.52
     readonly property real attachmentCurve: Math.min(Config.border.rounding, height / 2)
@@ -110,7 +113,7 @@ Item {
     CustomMouseArea {
         anchors.fill: parent
 
-        function onWheel(event: WheelEvent) {
+        function onWheel(event: WheelEvent): void {
             if (event.angleDelta.y > 0)
                 root.increment();
             else if (event.angleDelta.y < 0)
@@ -120,6 +123,13 @@ Item {
         Column {
             anchors.centerIn: parent
             spacing: Appearance.spacing.normal
+            opacity: root.activeMuted ? 0.38 : 1
+
+            Behavior on opacity {
+                Anim {
+                    duration: Appearance.anim.durations.small
+                }
+            }
 
             StyledText {
                 anchors.horizontalCenter: parent.horizontalCenter

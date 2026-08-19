@@ -71,6 +71,16 @@ Scope {
                 return false;
             }
 
+            function showAudioMetric(metric: string, enabled: bool): void {
+                if (!enabled || Hypr.monitorFor(modelData) !== Hypr.focusedMonitor)
+                    return;
+                if (anotherOverlayInteracting())
+                    return;
+                if (!content.interacting)
+                    activeMetric = metric;
+                show();
+            }
+
             function show(): void {
                 if (!Config.osd.enabled) return;
                 showing = true;
@@ -105,50 +115,22 @@ Scope {
 
                 function onVolumeChanged(): void {
                     win.volume = Audio.volume;
-                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
-                        return;
-                    if (win.anotherOverlayInteracting())
-                        return;
-                    if (!content.interacting)
-                        win.activeMetric = "volume";
-                    win.show();
+                    win.showAudioMetric("volume", true);
                 }
 
                 function onMutedChanged(): void {
                     win.muted = Audio.muted;
-                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
-                        return;
-                    if (win.anotherOverlayInteracting())
-                        return;
-                    if (!content.interacting)
-                        win.activeMetric = "volume";
-                    win.show();
+                    win.showAudioMetric("volume", true);
                 }
 
                 function onSourceVolumeChanged(): void {
                     win.sourceVolume = Audio.sourceVolume;
-                    if (!Config.osd.enableMicrophone)
-                        return;
-                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
-                        return;
-                    if (win.anotherOverlayInteracting())
-                        return;
-                    if (!content.interacting)
-                        win.activeMetric = "microphone";
-                    win.show();
+                    win.showAudioMetric("microphone", Config.osd.enableMicrophone);
                 }
 
                 function onSourceMutedChanged(): void {
                     win.sourceMuted = Audio.sourceMuted;
-                    if (!Config.osd.enableMicrophone)
-                        return;
-                    if (Hypr.monitorFor(win.modelData) !== Hypr.focusedMonitor)
-                        return;
-                    if (win.anotherOverlayInteracting())
-                        return;
-                    if (!content.interacting)
-                        win.activeMetric = "microphone";
-                    win.show();
+                    win.showAudioMetric("microphone", Config.osd.enableMicrophone);
                 }
             }
 

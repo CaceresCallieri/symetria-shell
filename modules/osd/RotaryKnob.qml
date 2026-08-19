@@ -40,6 +40,8 @@ Item {
             model: 51
 
             delegate: Item {
+                id: tick
+
                 required property int index
 
                 width: tickRing.width
@@ -48,12 +50,12 @@ Item {
                 rotation: -135 + index * 5.4
 
                 Rectangle {
-                    width: parent.index % 5 === 0 ? Math.max(2, 2.5 * root.sizeScale) : 1
-                    height: parent.index % 5 === 0 ? Math.round(14 * root.sizeScale) : Math.round(8 * root.sizeScale)
+                    width: tick.index % 5 === 0 ? Math.max(2, 2.5 * root.sizeScale) : 1
+                    height: tick.index % 5 === 0 ? Math.round(14 * root.sizeScale) : Math.round(8 * root.sizeScale)
                     anchors.top: parent.top
                     anchors.horizontalCenter: parent.horizontalCenter
                     radius: width / 2
-                    color: parent.index / 50 <= root.animatedValue
+                    color: tick.index / 50 <= root.animatedValue
                         ? Colours.palette.m3onSurface
                         : Qt.alpha(Colours.palette.m3onSurfaceVariant, 0.22)
                 }
