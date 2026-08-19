@@ -112,8 +112,8 @@
     "dragThreshold": 20,
     "scrollActions": {
       "workspaces": false,
-      "volume": true,
-      "brightness": true
+      "volume": false,
+      "brightness": false
     },
     "popouts": {
       "tray": true,

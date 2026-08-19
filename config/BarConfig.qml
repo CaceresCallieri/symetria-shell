@@ -51,6 +51,11 @@ JsonObject {
             enabled: true
         }
     ]
+    // Upstream defaults, all three ON. The tracked shell.json turns all of them
+    // OFF, and that is what actually applies — a JSON override always beats the
+    // QML default, and shell.json ships with the repo. Read the rationale on
+    // Bar.qml's handleWheel before switching any of these back on: the regions
+    // are half-screen bands with no visual affordance, not widget-bound gestures.
     component ScrollActions: JsonObject {
         property bool workspaces: true
         property bool volume: true
