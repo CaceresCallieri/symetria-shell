@@ -56,26 +56,34 @@ Item {
     // own destination: volume above, brightness below. Both halves come from the
     // single Config.osd.triggerHeight, which also sets how far each card sits
     // from centre — see the note on that property before changing either.
-    Item {
-        id: osdVolume
+    /// A zone is only as wide as it is useful. Width is what carves it out of the
+    /// drawers input mask, so a zone for a switched-off metric would go on taking
+    /// those pixels away from the window underneath while doing nothing at all.
+    /// The floor of 1 also guards the documented "must be greater than zero" on
+    /// triggerWidth, which nothing else enforces — a 0 there restores the exact
+    /// silent failure this trigger was just rescued from.
+    component OsdTriggerZone: Item {
+        required property bool zoneEnabled
 
-        implicitWidth: Config.osd.triggerWidth
+        implicitWidth: zoneEnabled ? Math.max(1, Config.osd.triggerWidth) : 0
         implicitHeight: Config.osd.triggerHeight / 2
 
-        y: root.screenCentreY - height
         anchors.right: parent.right
         anchors.rightMargin: sidebar.width
     }
 
-    Item {
+    OsdTriggerZone {
+        id: osdVolume
+
+        zoneEnabled: Config.osd.enabled
+        y: root.screenCentreY - height
+    }
+
+    OsdTriggerZone {
         id: osdBrightness
 
-        implicitWidth: Config.osd.triggerWidth
-        implicitHeight: Config.osd.triggerHeight / 2
-
+        zoneEnabled: Config.osd.enabled && Config.osd.enableBrightness
         y: root.screenCentreY
-        anchors.right: parent.right
-        anchors.rightMargin: sidebar.width
     }
 
     // Session menu lives in modules/session/SessionOverlay.qml (mounted from

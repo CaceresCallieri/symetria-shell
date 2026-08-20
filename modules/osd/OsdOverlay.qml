@@ -64,7 +64,13 @@ Scope {
             /// the zone that summons it. Panels.qml splits the same
             /// Config.osd.triggerHeight into those zones — the /4 here and the /2
             /// there are one derivation, not two constants.
-            readonly property real metricOffset: Config.osd.triggerHeight / 4
+            ///
+            /// Clamped to half a card so the pair can never overlap: below a
+            /// triggerHeight of about 264 the derived offset is smaller than the
+            /// cards are tall, and they would collide on screen and merge their
+            /// input masks. Past that floor the card simply stops being centred in
+            /// its (now smaller) zone, which is the milder failure.
+            readonly property real metricOffset: Math.max(Config.osd.triggerHeight / 4, audioCard.height / 2)
 
             readonly property bool showing: audioCard.showing || brightnessCard.showing
             readonly property bool contentInteracting: audioCard.interacting || brightnessCard.interacting
@@ -85,10 +91,18 @@ Scope {
                 if (anotherOverlayInteracting())
                     return;
 
-                if (metric === "brightness")
+                if (metric === "brightness") {
                     brightnessCard.show();
-                else
-                    audioCard.show();
+                    return;
+                }
+
+                // Hovering the audio zone asks for VOLUME, so say so. Without this
+                // the card would keep showing whatever audio metric last moved —
+                // reach for the volume spot after touching the microphone and you
+                // would get the microphone, which is not what the zone advertises.
+                if (!audioCard.interacting)
+                    audioMetric = metric;
+                audioCard.show();
             }
 
             function showAudioMetric(metric: string, enabled: bool): void {
@@ -169,9 +183,12 @@ Scope {
                 id: audioCard
 
                 monitor: win.monitor
-                metric: win.audioMetric
-                // Volume is never switched off; the microphone rides this card and
-                // is gated at the trigger in showAudioMetric instead.
+                // Falls back to volume if the microphone is switched off while it
+                // is the metric on show: the trigger in showAudioMetric gates new
+                // microphone events, but the card would otherwise sit there
+                // rendering a metric the user has turned off.
+                metric: win.audioMetric === "microphone" && !Config.osd.enableMicrophone ? "volume" : win.audioMetric
+                // Volume itself is never switched off, so this card is always live.
                 metricEnabled: true
                 offset: -win.metricOffset
 
@@ -202,11 +219,13 @@ Scope {
             // the window underneath it; Combine unions the two rects and leaves
             // the gap click-through.
             //
-            // MUST be declared after both cards. `inputRegion` is a readonly
-            // alias that never emits a change, so if this list were evaluated
-            // before the cards existed it would latch [null, null] and never
-            // re-evaluate — the OSD would render but refuse hover and scroll,
-            // with nothing logged. QML creates objects in declaration order.
+            // `inputRegion` is a readonly alias, so this list is evaluated once
+            // and never again — which is correct: it captures two objects that
+            // live as long as the cards do, and each keeps its own live bindings
+            // for x/y/width/height. Declaration order is irrelevant here; QML
+            // registers every id in the component before evaluating any binding,
+            // as Wrapper.qml's mask does when it references a Variants declared
+            // below it.
             Region {
                 id: maskRegion
 

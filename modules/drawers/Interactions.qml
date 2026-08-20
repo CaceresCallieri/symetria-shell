@@ -19,7 +19,7 @@ CustomMouseArea {
     property bool utilitiesShortcutActive
     property real _pendingPopoutX
 
-    function withinPanelHeight(panel: Item, x: real, y: real): bool {
+    function withinPanelHeight(panel: Item, y: real): bool {
         // `panel` lives inside `panels`, which is inset from this MouseArea by the
         // bar, while `y` arrives in THIS item's coordinates. Map the panel across
         // before comparing. Wrapper.qml's Region template already does exactly
@@ -30,18 +30,25 @@ CustomMouseArea {
         return y >= panelY - Config.border.rounding && y <= panelY + panel.height + Config.border.rounding;
     }
 
+    // Same mapping on the x axis, through the live container rather than through
+    // Config.border.sideThickness. The two agree only because Panels' leftMargin
+    // happens to BE that constant — which is exactly the coincidence that let the
+    // y axis drift out of step with the input mask and go unnoticed for so long.
     function withinPanelWidth(panel: Item, x: real, y: real): bool {
-        const panelX = Config.border.sideThickness + panel.x;
+        const panelX = panels.x + panel.x;
         return x >= panelX - Config.border.rounding && x <= panelX + panel.width + Config.border.rounding;
     }
 
     /// x-only edge test, for gestures where the pointer's height is irrelevant.
+    /// Inclusive of the panel's left column: the input Region carved out of the
+    /// mask spans [panel.x, panel.x + width], so a strict `>` rejected the first
+    /// pixel of an already narrow strip after the pointer had been delivered to it.
     function pastRightEdgeOf(panel: Item, x: real): bool {
-        return x > Config.border.sideThickness + panel.x;
+        return x >= panels.x + panel.x;
     }
 
     function inRightPanel(panel: Item, x: real, y: real): bool {
-        return pastRightEdgeOf(panel, x) && withinPanelHeight(panel, x, y);
+        return pastRightEdgeOf(panel, x) && withinPanelHeight(panel, y);
     }
 
     /// The right edge carries two OSD destinations stacked around the screen's
@@ -56,12 +63,17 @@ CustomMouseArea {
     /// seam. Asking inRightPanel twice instead would hand the whole overlap — two
     /// roundings wide, straddling the centre — to whichever half ran first, and
     /// the split would sit off-centre by a band you cannot see.
+    ///
+    /// The cheap geometry test runs BEFORE resolving the overlay: this is called
+    /// from onPositionChanged for every pointer sample across the whole window,
+    /// and monitorFor plus a Map lookup on each one is real work for a question
+    /// that is almost always "no".
     function showOsdForZone(x: real, y: real): void {
-        const overlay = Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen));
-        if (!overlay)
+        if (!inRightPanel(panels.osdVolume, x, y) && !inRightPanel(panels.osdBrightness, x, y))
             return;
 
-        if (!inRightPanel(panels.osdVolume, x, y) && !inRightPanel(panels.osdBrightness, x, y))
+        const overlay = Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen));
+        if (!overlay)
             return;
 
         const seam = panels.y + panels.osdBrightness.y;

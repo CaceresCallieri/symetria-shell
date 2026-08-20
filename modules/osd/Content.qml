@@ -39,15 +39,25 @@ Item {
         Appearance.transparency.base
     )
 
-    /// The iris runs bigger than the knob because it carries no printed scale —
-    /// its whole reading comes from blade edges, and those blur together as it
-    /// shrinks. It still fits the shared card: the readout is only 21 px tall, so
-    /// a 78 px dial leaves 7 px of slack inside the 114 px interior. Verified
-    /// against a real-size render; below roughly 70 px the blades stop reading.
-    readonly property real dialScale: contentScale * (showingBrightness ? 0.852 : 0.75)
+    /// Target width of the iris, in pixels. It runs bigger than the volume knob
+    /// because it carries no printed scale — its whole reading comes from blade
+    /// edges, and those blur together as it shrinks; below roughly 70 px they
+    /// stop reading at all. Verified against a real-size render.
+    ///
+    /// It fits the shared card only at the SHIPPED appearance scales
+    /// (`padding.scale` 0.6, `spacing.scale` 0.7 in shell.json): readout 21 px +
+    /// spacing 8 + dial 78 = 107 inside a 114 px interior. At the bare QML
+    /// defaults the interior is 102 px and this overflows the card — raise the
+    /// scales and this number has to come down with them.
+    readonly property real irisWidth: 78
 
-    /// Falls back to the raw value while the Loader swaps dials, so the readout
-    /// never blinks through 0 on a metric change. The fallback duplicates
+    /// Stated as a width rather than a factor so it keeps meaning 78 px when
+    /// contentScale moves. RotaryControl lays dials out in a 176-unit space.
+    readonly property real dialScale: showingBrightness ? irisWidth / 176 : contentScale * 0.75
+
+    /// Covers the first frame, before dialLoader has built its item. (It used to
+    /// also cover dial swaps on a metric change; each OSD card now owns a fixed
+    /// metric, so the Loader never swaps.) The fallback duplicates
     /// RotaryControl.normalizedValue — keep the two in step if either changes.
     readonly property real displayValue: dial?.animatedValue
         ?? Math.max(0, Math.min(1, currentValue / Math.max(maximumValue, 0.001)))

@@ -127,10 +127,12 @@ RotaryControl {
     // Deliberately weak. It is ambience, not the story — the story is the bloom
     // over the blades further down.
     //
-    // NOTE: this reaches u(94), overdrawing RotaryControl's 176-unit design box
-    // by ~12 units on each side. It renders only because no ancestor clips.
-    // Setting `clip: true` on the Column or the Loader in Content.qml, or on the
-    // card in OsdCard.qml, would slice the glow into a visible square.
+    // Reaches exactly u(88) — half of RotaryControl's 176-unit design box, so the
+    // glow stops at the dial's own bounds. It used to overdraw to u(94), which
+    // left under a pixel of clearance to the PillCard edge once the dial and the
+    // card were sized to match: the readout, the spacing and the dial fill the
+    // card's interior to within 3.5 px, and the glow was eating 2.65 of them.
+    // Do not push this past 88 without redoing that budget.
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
@@ -142,7 +144,7 @@ RotaryControl {
             fillGradient: RadialGradient {
                 centerX: root.centreX
                 centerY: root.centreY
-                centerRadius: root.u(94)
+                centerRadius: root.u(88)
                 focalX: centerX
                 focalY: centerY
 

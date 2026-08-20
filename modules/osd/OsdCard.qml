@@ -36,7 +36,13 @@ Item {
     required property real brightness
 
     property bool showing: false
-    property bool hovered: false
+
+    /// Bound straight to the handler rather than mirrored into a writable
+    /// property from onHoveredChanged. A mirror only updates while the handler
+    /// keeps emitting: if Qt does not report un-hover when the card is hidden out
+    /// from under a resting pointer, the mirror latches true and the card never
+    /// auto-hides again. A binding cannot latch.
+    readonly property bool hovered: hoverHandler.hovered
 
     readonly property bool interacting: content.interacting
     /// Exposed so the window can union both cards into one input mask. Sits with
@@ -52,6 +58,23 @@ Item {
 
     function hide(): void {
         showing = false;
+        // An explicit hide (IPC, the showall shortcut) would otherwise leave the
+        // timer armed to fire a second, pointless hide up to hideDelay later.
+        hideTimer.stop();
+    }
+
+    // A metric switched off while its card is on screen should take the card with
+    // it, not wait out the timer.
+    onMetricEnabledChanged: {
+        if (!metricEnabled)
+            hide();
+    }
+
+    onHoveredChanged: {
+        if (hovered)
+            hideTimer.stop();
+        else if (showing)
+            hideTimer.restart();
     }
 
     anchors.right: parent.right
@@ -112,16 +135,10 @@ Item {
         revealed: card.showing
     }
 
-    // Hover detection without consuming wheel/click events. Pauses THIS card's
+    // Hover detection without consuming wheel/click events. Feeds THIS card's
     // auto-hide only, so resting on one card does not keep the other alive.
     HoverHandler {
-        onHoveredChanged: {
-            card.hovered = hovered;
-            if (hovered)
-                hideTimer.stop();
-            else if (card.showing)
-                hideTimer.restart();
-        }
+        id: hoverHandler
     }
 
     Timer {

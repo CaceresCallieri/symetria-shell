@@ -18,6 +18,11 @@ JsonObject {
     /// each other's geometry. Do not add a second constant for the offset — the
     /// two would drift and the card would stop landing under the pointer, which
     /// is invisible when reading either file alone.
+    ///
+    /// FLOOR: twice the card height, which is 132 px at the shipped scales, so
+    /// roughly 264. The cards sit half a strip apart, so anything smaller makes
+    /// them overlap on screen and merges their input masks. OsdOverlay clamps the
+    /// offset it derives, so a smaller value here only shrinks the hover zones.
     property int triggerHeight: 320
 
     /// Width of that strip, in pixels, measured in from the right screen edge.
