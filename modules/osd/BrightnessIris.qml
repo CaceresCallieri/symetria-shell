@@ -43,21 +43,37 @@ RotaryControl {
     readonly property real bladeOuterRadiusUnits: 70
     readonly property real rimRadiusUnits: 72.5
     readonly property real recessRadiusUnits: 79
-    readonly property real apertureMaxUnits: 51
+    readonly property real apertureMaxUnits: 66
 
     /// The whole disc is the control — there is no surrounding scale to miss.
     hitSize: 2 * bladeOuterRadiusUnits
 
-    /// The blades sweep as they open, the way a real diaphragm ring does. Well
-    /// under `bladeStep`: a full step would land every blade where its neighbour
-    /// started and the rotation would read as no rotation at all.
-    readonly property real spinDegrees: 34
-    /// How far each blade's inner edge bows away from the centre, as a multiple
-    /// of the aperture radius. Real blades are curved, so the opening is a
-    /// rounded polygon; 1.13 would make it a circle, and flat sides would be
-    /// 0.87. Just under 1 keeps the hexagon legible while killing the pie-chart
-    /// look that straight edges give.
-    readonly property real innerBow: 0.96
+    // ── Blade geometry, measured off a real diaphragm ─────────────────────────
+    //
+    // A blade is a TRIANGLE anchored to the housing, not a wedge of the disc.
+    // Two of its corners sit on the rim, `rimSpan` apart; the third is a tip
+    // that plunges toward the centre. Because the tip leads the arc by
+    // `tipLeadDegrees`, each blade spans about 96° while the blades are only 60°
+    // apart — so every blade lies across its neighbour, and what you see is a
+    // stack of leaves rather than a tiled pie. The opening is whatever polygon
+    // their straight leading edges leave in the middle.
+    //
+    // The numbers come from measuring a reference diaphragm animation and
+    // rescaling from its 288-unit rim to this 70-unit one: rim footprint 58°,
+    // tip 38° ahead of the arc, tip radius sweeping 31→275 of 288 (here 6→66 of
+    // 70) and the whole rim footprint turning ~52° over the travel.
+
+    /// The blade's footprint on the housing. Constant — a real blade is rigid.
+    /// Deliberately WIDER than the 60° between blades: at the reference's 58° the
+    /// footprints leave a 2° gap that fans out into a visible hairline of
+    /// background between every pair of leaves. Overlapping on the rim as well as
+    /// at the tip means no gap can open at any aperture.
+    readonly property real rimSpanDegrees: 64
+    /// How far the tip leads its own rim arc. This is what makes blades overlap:
+    /// at 38° each blade covers 96°, well past the 60° between them.
+    readonly property real tipLeadDegrees: 38
+    /// How far the rim footprint turns over the full travel.
+    readonly property real spinDegrees: 52
     /// Where the key light hangs, in the same degree convention as the blades
     /// (0 = right, -90 = up). Upper left, matching RotaryKnob's baked highlight.
     readonly property real lightAngle: -125
@@ -106,6 +122,11 @@ RotaryControl {
     readonly property real centreX: width / 2
     readonly property real centreY: height / 2
     readonly property real bladeRadius: u(bladeOuterRadiusUnits)
+    /// Distance from the centre to a blade tip — and therefore the circumradius
+    /// of the opening the blades leave, since the tips ARE its corners. Scales
+    /// straight off `openness` with no floor, so `reveal` reaching 0 drives the
+    /// tips onto the centre and the shutter genuinely shuts. The sqrt inside
+    /// `openness` already keeps low brightness values apart.
     readonly property real apertureRadius: u(apertureMaxUnits) * openness
     readonly property real spin: openness * spinDegrees
 
@@ -234,110 +255,80 @@ RotaryControl {
                 anchors.fill: bladeRing
                 preferredRendererType: Shape.CurveRenderer
 
-                readonly property real startAngle: root.spin + index * root.bladeStep - 90
-                readonly property real bisector: startAngle + root.bladeStep / 2
-                readonly property real endAngle: startAngle + root.bladeStep
+                /// Leading end of this blade's footprint on the rim. The arc runs
+                /// BACKWARD from here by rimSpanDegrees; the tip leads it.
+                readonly property real rimLead: root.spin + index * root.bladeStep - 90
+                readonly property real tipAngle: rimLead + root.tipLeadDegrees
+                /// Points into the blade's own body, roughly where its mass sits —
+                /// used only for lighting.
+                readonly property real bisector: rimLead - root.rimSpanDegrees / 2
 
                 /// How squarely this blade faces the key light. Because it is
-                /// computed from `bisector`, which carries `spin`, every blade
+                /// computed from an angle that carries `spin`, every blade
                 /// brightens and dims as the iris turns — the highlight travels
                 /// around the ring instead of being painted on.
                 readonly property real facing: 0.5 + 0.5 * Math.cos((bisector - root.lightAngle) * Math.PI / 180)
 
-                // Inner edge, as three points: the two aperture corners this blade
-                // spans, plus the control point that bows the edge outward.
-                // Expressed as numbers rather than an SVG path string — the path
-                // changes every frame of both the sweep and the value animation,
-                // and a string would be rebuilt and re-parsed on each one.
-                readonly property real innerEndX: root.centreX + root.apertureRadius * Math.cos(endAngle * Math.PI / 180)
-                readonly property real innerEndY: root.centreY + root.apertureRadius * Math.sin(endAngle * Math.PI / 180)
-                readonly property real innerStartX: root.centreX + root.apertureRadius * Math.cos(startAngle * Math.PI / 180)
-                readonly property real innerStartY: root.centreY + root.apertureRadius * Math.sin(startAngle * Math.PI / 180)
-                readonly property real bowX: root.centreX + root.apertureRadius * root.innerBow * Math.cos(bisector * Math.PI / 180)
-                readonly property real bowY: root.centreY + root.apertureRadius * root.innerBow * Math.sin(bisector * Math.PI / 180)
+                readonly property real tipX: root.centreX + root.apertureRadius * Math.cos(tipAngle * Math.PI / 180)
+                readonly property real tipY: root.centreY + root.apertureRadius * Math.sin(tipAngle * Math.PI / 180)
+                readonly property real rimLeadX: root.centreX + root.bladeRadius * Math.cos(rimLead * Math.PI / 180)
+                readonly property real rimLeadY: root.centreY + root.bladeRadius * Math.sin(rimLead * Math.PI / 180)
 
                 ShapePath {
-                    strokeWidth: -1
+                    // A hairline of its own darkness along every edge. With
+                    // overlapping blades this is what separates one leaf from the
+                    // one beneath it — the old design needed a separate ring of
+                    // seam rectangles because its blades merely abutted.
+                    strokeColor: Qt.rgba(0.03, 0.035, 0.045, 0.85)
+                    strokeWidth: Math.max(1, root.u(1.6))
+                    joinStyle: ShapePath.MiterJoin
 
-                    // Runs along the blade's own bisector, from the rim inward, so
-                    // each face is brightest at the edge nearest the opening —
-                    // the aperture lighting the metal it passes.
+                    // Runs from the rim toward the tip, so each face is brightest
+                    // at the edge nearest the opening — the aperture lighting the
+                    // metal it passes.
                     fillGradient: LinearGradient {
                         x1: root.centreX + root.bladeRadius * Math.cos(blade.bisector * Math.PI / 180)
                         y1: root.centreY + root.bladeRadius * Math.sin(blade.bisector * Math.PI / 180)
-                        x2: blade.bowX
-                        y2: blade.bowY
+                        x2: blade.tipX
+                        y2: blade.tipY
 
                         GradientStop { position: 0.00; color: root.metal(blade.facing * 0.62) }
                         GradientStop { position: 0.55; color: root.metal(blade.facing * 0.86) }
                         GradientStop { position: 1.00; color: root.metal(blade.facing * 1.05 + 0.06) }
                     }
 
+                    // Rim footprint, swept backward from the leading end.
                     PathAngleArc {
                         centerX: root.centreX
                         centerY: root.centreY
                         radiusX: root.bladeRadius
                         radiusY: root.bladeRadius
-                        startAngle: blade.startAngle
-                        sweepAngle: root.bladeStep
+                        startAngle: blade.rimLead
+                        sweepAngle: -root.rimSpanDegrees
                         moveToStart: true
                     }
 
+                    // Trailing rim corner -> tip. This straight edge is the one
+                    // that cuts the opening.
                     PathLine {
-                        x: blade.innerEndX
-                        y: blade.innerEndY
+                        x: blade.tipX
+                        y: blade.tipY
                     }
 
-                    PathQuad {
-                        controlX: blade.bowX
-                        controlY: blade.bowY
-                        x: blade.innerStartX
-                        y: blade.innerStartY
+                    // Tip -> back to the leading rim corner, closing the triangle.
+                    PathLine {
+                        x: blade.rimLeadX
+                        y: blade.rimLeadY
                     }
                 }
             }
         }
     }
 
-    // ── Contact shadow where each blade slides under its neighbour. A real
-    //    diaphragm is a stack, not a tiling: the dark line is the gap, the light
-    //    line beside it is the lit thickness of the blade on top. ──
-    Item {
-        id: seamRing
-
-        anchors.fill: parent
-
-        Repeater {
-            model: root.bladeCount
-
-            delegate: Item {
-                id: seam
-
-                required property int index
-
-                anchors.fill: seamRing
-                rotation: root.spin + index * root.bladeStep
-
-                Rectangle {
-                    id: shadow
-
-                    width: Math.max(1, root.u(2.2))
-                    height: Math.max(0, root.bladeRadius - root.apertureRadius)
-                    y: seam.height / 2 - root.bladeRadius
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    color: Qt.rgba(0.03, 0.035, 0.045, 0.82)
-                }
-
-                Rectangle {
-                    width: Math.max(1, root.u(1.1))
-                    height: shadow.height
-                    x: shadow.x + shadow.width
-                    y: shadow.y
-                    color: Qt.rgba(1, 1, 1, 0.16)
-                }
-            }
-        }
-    }
+    // NOTE: there is deliberately no ring of seam rectangles here any more. The
+    // old blades merely abutted, so the joins had to be drawn on top as separate
+    // radial bars. These blades genuinely lie across one another, so each one's
+    // own dark stroke IS the join, and the leaf beneath shows through under it.
 
     // ── Bloom: light bleeding over the blade edges. Sits ABOVE the metal on
     //    purpose — this is the layer that makes the light look like it is
