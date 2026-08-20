@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
 import qs.components.containers
 import qs.services
 import qs.config
@@ -14,6 +13,11 @@ import QtQuick
 /// Renders above fullscreen windows (unlike the former drawer-based OSD on WlrLayer.Top).
 /// Triggers via volume/brightness key changes (always) and right-edge hover (non-fullscreen,
 /// driven by Interactions.qml in the Drawers module via Visibilities.osdOverlays).
+///
+/// TWO INDEPENDENT CARDS, not one card that switches metric: audio above the
+/// screen's centre, brightness below, each owning its own visibility and timer.
+/// Raising one never dismisses the other, so a volume nudge followed by a
+/// brightness nudge leaves both standing.
 Scope {
     id: root
 
@@ -37,31 +41,33 @@ Scope {
             anchors.left: true
             anchors.right: true
 
-            // Click-through when hidden, content area when visible (enables hover + scroll).
-            // Always bound to contentRegion so geometry changes re-evaluate the mask.
-            mask: contentRegion
-
-            Region {
-                id: contentRegion
-                x: win.showing ? osdContent.x + slideTransform.x : 0
-                y: win.showing ? osdContent.y : 0
-                width: win.showing ? osdContent.width : 0
-                height: win.showing ? osdContent.height : 0
-            }
+            // Declared at the BOTTOM of this object, after both cards exist —
+            // see the note there.
+            mask: maskRegion
 
             // Brightness monitor for this screen
             readonly property Brightness.Monitor monitor: Brightness.getMonitorForScreen(modelData)
 
-            // OSD state
-            property bool showing: false
-            property bool hovered: false
-            property string activeMetric: "volume"
             property real volume
             property bool muted
             property real sourceVolume
             property bool sourceMuted
             property real brightness
-            readonly property bool contentInteracting: content.interacting
+
+            /// The upper card carries whichever audio metric last moved. Volume
+            /// and microphone share one spot because they are the same kind of
+            /// thing; brightness gets its own.
+            property string audioMetric: "volume"
+
+            /// How far each card sits from the screen's vertical centre. A quarter
+            /// of the trigger strip is half a zone, which centres each card inside
+            /// the zone that summons it. Panels.qml splits the same
+            /// Config.osd.triggerHeight into those zones — the /4 here and the /2
+            /// there are one derivation, not two constants.
+            readonly property real metricOffset: Config.osd.triggerHeight / 4
+
+            readonly property bool showing: audioCard.showing || brightnessCard.showing
+            readonly property bool contentInteracting: audioCard.interacting || brightnessCard.interacting
 
             function anotherOverlayInteracting(): bool {
                 for (const overlay of Visibilities.osdOverlays.values()) {
@@ -71,29 +77,45 @@ Scope {
                 return false;
             }
 
+            /// Hover entry point — the pointer's half of the right-edge strip
+            /// picks the card. Deliberately NOT gated on the focused monitor the
+            /// way showAudioMetric is: the pointer is physically on THIS screen,
+            /// which is the whole point of an edge trigger.
+            function showMetric(metric: string): void {
+                if (anotherOverlayInteracting())
+                    return;
+
+                if (metric === "brightness")
+                    brightnessCard.show();
+                else
+                    audioCard.show();
+            }
+
             function showAudioMetric(metric: string, enabled: bool): void {
                 if (!enabled || Hypr.monitorFor(modelData) !== Hypr.focusedMonitor)
                     return;
                 if (anotherOverlayInteracting())
                     return;
-                if (!content.interacting)
-                    activeMetric = metric;
-                show();
+                if (!audioCard.interacting)
+                    audioMetric = metric;
+                audioCard.show();
             }
 
             function show(): void {
-                if (!Config.osd.enabled) return;
-                showing = true;
-                autoHideTimer.restart();
+                audioCard.show();
+                brightnessCard.show();
             }
 
             function hide(): void {
-                showing = false;
+                audioCard.hide();
+                brightnessCard.hide();
             }
 
             function toggle(): void {
-                if (showing) hide();
-                else show();
+                if (showing)
+                    hide();
+                else
+                    show();
             }
 
             Component.onCompleted: {
@@ -139,79 +161,56 @@ Scope {
 
                 function onBrightnessChanged(): void {
                     win.brightness = win.monitor?.brightness ?? 0;
-                    if (!Config.osd.enableBrightness)
-                        return;
-                    if (!content.interacting)
-                        win.activeMetric = "brightness";
-                    win.show();
+                    brightnessCard.show();
                 }
             }
 
-            Timer {
-                id: autoHideTimer
+            OsdCard {
+                id: audioCard
 
-                interval: Config.osd.hideDelay
-                onTriggered: {
-                    if (!win.hovered)
-                        win.hide();
-                }
+                monitor: win.monitor
+                metric: win.audioMetric
+                // Volume is never switched off; the microphone rides this card and
+                // is gated at the trigger in showAudioMetric instead.
+                metricEnabled: true
+                offset: -win.metricOffset
+
+                volume: win.volume
+                muted: win.muted
+                sourceVolume: win.sourceVolume
+                sourceMuted: win.sourceMuted
+                brightness: win.brightness
             }
 
-            // OSD content — right-aligned, vertically centered
-            Item {
-                id: osdContent
+            OsdCard {
+                id: brightnessCard
 
-                anchors.right: parent.right
-                anchors.rightMargin: 0
-                anchors.verticalCenter: parent.verticalCenter
+                monitor: win.monitor
+                metric: "brightness"
+                metricEnabled: Config.osd.enableBrightness
+                offset: win.metricOffset
 
-                width: content.implicitWidth
-                height: content.implicitHeight
+                volume: win.volume
+                muted: win.muted
+                sourceVolume: win.sourceVolume
+                sourceMuted: win.sourceMuted
+                brightness: win.brightness
+            }
 
-                // opacity drives the Behavior animation; visible gates layout costs and the input Region mask
-                opacity: win.showing ? 1 : 0
-                visible: opacity > 0
+            // Union of the two cards' own regions. A single bounding box would
+            // also swallow the 28 px gap between the cards and steal clicks from
+            // the window underneath it; Combine unions the two rects and leaves
+            // the gap click-through.
+            //
+            // MUST be declared after both cards. `inputRegion` is a readonly
+            // alias that never emits a change, so if this list were evaluated
+            // before the cards existed it would latch [null, null] and never
+            // re-evaluate — the OSD would render but refuse hover and scroll,
+            // with nothing logged. QML creates objects in declaration order.
+            Region {
+                id: maskRegion
 
-                Behavior on opacity {
-                    Anim {}
-                }
-
-                // Slide right-to-left on show, left-to-right on hide
-                transform: Translate {
-                    id: slideTransform
-
-                    x: win.showing ? 0 : osdContent.width
-                    Behavior on x {
-                        Anim {}
-                    }
-                }
-
-                Content {
-                    id: content
-
-                    anchors.fill: parent
-
-                    monitor: win.monitor
-                    activeMetric: win.activeMetric
-                    volume: win.volume
-                    muted: win.muted
-                    sourceVolume: win.sourceVolume
-                    sourceMuted: win.sourceMuted
-                    brightness: win.brightness
-                    revealed: win.showing
-                }
-
-                // Hover detection without consuming wheel/click events.
-                // Pauses auto-hide while cursor is over the OSD content.
-                HoverHandler {
-                    onHoveredChanged: {
-                        win.hovered = hovered;
-                        if (hovered)
-                            autoHideTimer.stop();
-                        else if (win.showing)
-                            autoHideTimer.restart();
-                    }
-                }
+                regions: [audioCard.inputRegion, brightnessCard.inputRegion]
             }
         }
     }
@@ -225,6 +224,8 @@ Scope {
             return overlay ?? null;
         }
 
+        // These act on the PAIR — an explicit request to see the OSD means both
+        // cards, unlike the metric-specific triggers.
         function toggle(): void { _focusedOverlay()?.toggle(); }
         function show(): void { _focusedOverlay()?.show(); }
         function hide(): void { _focusedOverlay()?.hide(); }

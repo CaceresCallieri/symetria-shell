@@ -20,7 +20,13 @@ CustomMouseArea {
     property real _pendingPopoutX
 
     function withinPanelHeight(panel: Item, x: real, y: real): bool {
-        const panelY = panel.y;
+        // `panel` lives inside `panels`, which is inset from this MouseArea by the
+        // bar, while `y` arrives in THIS item's coordinates. Map the panel across
+        // before comparing. Wrapper.qml's Region template already does exactly
+        // this (`y: modelData.y + bar.implicitHeight`) when it carves the panel
+        // out of the input mask; reading panel.y raw here put the hit test one
+        // bar-height above the strip that actually receives the pointer.
+        const panelY = panels.y + panel.y;
         return y >= panelY - Config.border.rounding && y <= panelY + panel.height + Config.border.rounding;
     }
 
@@ -29,12 +35,37 @@ CustomMouseArea {
         return x >= panelX - Config.border.rounding && x <= panelX + panel.width + Config.border.rounding;
     }
 
-    function inLeftPanel(panel: Item, x: real, y: real): bool {
-        return x < Config.border.sideThickness + panel.x + panel.width && withinPanelHeight(panel, x, y);
+    /// x-only edge test, for gestures where the pointer's height is irrelevant.
+    function pastRightEdgeOf(panel: Item, x: real): bool {
+        return x > Config.border.sideThickness + panel.x;
     }
 
     function inRightPanel(panel: Item, x: real, y: real): bool {
-        return x > Config.border.sideThickness + panel.x && withinPanelHeight(panel, x, y);
+        return pastRightEdgeOf(panel, x) && withinPanelHeight(panel, x, y);
+    }
+
+    /// The right edge carries two OSD destinations stacked around the screen's
+    /// vertical centre: volume above, brightness below. Whichever half the
+    /// pointer is in picks the metric, so the card appears under the hand rather
+    /// than wherever the last keypress left it.
+    ///
+    /// The two halves answer two different questions, and mixing them is a trap:
+    /// membership uses the padded panel test (withinPanelHeight adds
+    /// Config.border.rounding on each side, which is what makes the strip
+    /// forgiving), but the metric is chosen by an UNPADDED comparison against the
+    /// seam. Asking inRightPanel twice instead would hand the whole overlap — two
+    /// roundings wide, straddling the centre — to whichever half ran first, and
+    /// the split would sit off-centre by a band you cannot see.
+    function showOsdForZone(x: real, y: real): void {
+        const overlay = Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen));
+        if (!overlay)
+            return;
+
+        if (!inRightPanel(panels.osdVolume, x, y) && !inRightPanel(panels.osdBrightness, x, y))
+            return;
+
+        const seam = panels.y + panels.osdBrightness.y;
+        overlay.showMetric(y < seam ? "volume" : "brightness");
     }
 
     function inTopPanel(panel: Item, x: real, y: real): bool {
@@ -156,9 +187,8 @@ CustomMouseArea {
         }
 
         if (panels.sidebar.width === 0) {
-            // Show OSD overlay on right-edge hover
-            if (inRightPanel(panels.osd, x, y))
-                Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
+            // Right-edge hover: upper zone summons volume, lower zone brightness
+            showOsdForZone(x, y);
 
             const showSidebar = pressed && dragStart.x > 2 + panels.sidebar.x;
 
@@ -167,12 +197,15 @@ CustomMouseArea {
         } else {
             const outOfSidebar = x < width - panels.sidebar.width;
 
-            // Show OSD overlay on right-edge hover (outside sidebar)
-            if (outOfSidebar && inRightPanel(panels.osd, x, y))
-                Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
+            // Right-edge hover, outside the sidebar
+            if (outOfSidebar)
+                showOsdForZone(x, y);
 
-            // Hide sidebar on drag
-            if (pressed && inRightPanel(panels.sidebar, dragStart.x, 0) && dragX > Config.sidebar.dragThreshold)
+            // Hide sidebar on drag. Only the drag's starting x matters, which is
+            // why this used to pass a literal y of 0 to neuter the height test —
+            // now that withinPanelHeight maps coordinates properly, that trick
+            // would reject every drag, so ask the x-only question directly.
+            if (pressed && pastRightEdgeOf(panels.sidebar, dragStart.x) && dragX > Config.sidebar.dragThreshold)
                 visibilities.sidebar = false;
         }
 

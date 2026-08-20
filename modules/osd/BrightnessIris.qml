@@ -129,8 +129,8 @@ RotaryControl {
     //
     // NOTE: this reaches u(94), overdrawing RotaryControl's 176-unit design box
     // by ~12 units on each side. It renders only because no ancestor clips.
-    // Setting `clip: true` on the Column, the Loader or osdContent in
-    // Content.qml/OsdOverlay.qml would slice the glow into a visible square.
+    // Setting `clip: true` on the Column or the Loader in Content.qml, or on the
+    // card in OsdCard.qml, would slice the glow into a visible square.
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer

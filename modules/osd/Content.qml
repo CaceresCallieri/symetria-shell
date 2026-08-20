@@ -39,11 +39,12 @@ Item {
         Appearance.transparency.base
     )
 
-    /// The iris needs more diameter than the knob does: it carries no printed
-    /// scale, so its whole reading comes from blade edges that blur together
-    /// below roughly 80 px. The card grows with it rather than the dial being
-    /// squeezed to fit — verified against a real-size render before porting.
-    readonly property real dialScale: contentScale * (showingBrightness ? 0.92 : 0.75)
+    /// The iris runs bigger than the knob because it carries no printed scale —
+    /// its whole reading comes from blade edges, and those blur together as it
+    /// shrinks. It still fits the shared card: the readout is only 21 px tall, so
+    /// a 78 px dial leaves 7 px of slack inside the 114 px interior. Verified
+    /// against a real-size render; below roughly 70 px the blades stop reading.
+    readonly property real dialScale: contentScale * (showingBrightness ? 0.852 : 0.75)
 
     /// Falls back to the raw value while the Loader swaps dials, so the readout
     /// never blinks through 0 on a metric change. The fallback duplicates
@@ -51,25 +52,17 @@ Item {
     readonly property real displayValue: dial?.animatedValue
         ?? Math.max(0, Math.min(1, currentValue / Math.max(maximumValue, 0.001)))
 
-    // Both card sizes are expressed in the same design units as the dial and
-    // scaled by contentScale, so changing contentScale still resizes the whole
-    // OSD. A raw pixel constant on one branch would have scaled only the other.
-    readonly property real cardWidthUnits: showingBrightness ? 231 : 212
-    readonly property real cardHeightUnits: showingBrightness ? 292 : 254
+    // ONE size for every metric. Each metric has a fixed spot on the right edge
+    // that you aim at from muscle memory, and a card that changed shape between
+    // them would undercut that — brightness used to run wider and taller to give
+    // the iris room, and the dial was shrunk to fit here instead. Expressed in
+    // the same design units as the dial and scaled by contentScale, so
+    // contentScale still resizes the whole OSD.
+    readonly property real cardWidthUnits: 212
+    readonly property real cardHeightUnits: 254
 
     implicitWidth: Math.round(cardWidthUnits * contentScale)
     implicitHeight: Math.round(cardHeightUnits * contentScale)
-
-    // A metric can change while the OSD is already on screen (volume, then
-    // brightness, inside the hide delay). Without these the card would snap to
-    // the new size mid-show.
-    Behavior on implicitWidth {
-        Anim {}
-    }
-
-    Behavior on implicitHeight {
-        Anim {}
-    }
 
     /// Single place that turns a wheel delta into a step, shared by the card and
     /// by whichever dial is loaded.
@@ -110,11 +103,11 @@ Item {
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-        // MUST stay synchronous. The implicitWidth/implicitHeight Behaviors below
-        // animate root.width/height on a metric change, so this path is rebuilt
-        // every frame of the resize; built off-thread it lands a frame late and
-        // the outline visibly trails the PillCard it wraps. It is five segments —
-        // building it inline is cheap.
+        // Synchronous on purpose. The card is one fixed size today so nothing
+        // rebuilds this path mid-animation, but it is five segments and the
+        // inline build costs nothing — whereas if a metric ever gets its own card
+        // size again, an off-thread rebuild lands a frame late and the outline
+        // visibly trails the PillCard it wraps.
         asynchronous: false
 
         ShapePath {

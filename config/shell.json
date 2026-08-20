@@ -352,10 +352,8 @@
     "hideDelay": 2000,
     "enableBrightness": true,
     "enableMicrophone": false,
-    "sizes": {
-      "sliderWidth": 30,
-      "sliderHeight": 150
-    }
+    "triggerHeight": 320,
+    "triggerWidth": 5
   },
   "session": {
     "enabled": true,

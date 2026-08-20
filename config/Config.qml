@@ -342,10 +342,8 @@ Singleton {
             hideDelay: osd.hideDelay,
             enableBrightness: osd.enableBrightness,
             enableMicrophone: osd.enableMicrophone,
-            sizes: {
-                sliderWidth: osd.sizes.sliderWidth,
-                sliderHeight: osd.sizes.sliderHeight
-            }
+            triggerHeight: osd.triggerHeight,
+            triggerWidth: osd.triggerWidth
         };
     }
 

@@ -22,7 +22,15 @@ Item {
     required property Item bar
     required property Item agentBar
 
-    readonly property alias osd: osd
+    readonly property alias osdVolume: osdVolume
+    readonly property alias osdBrightness: osdBrightness
+
+    /// The screen's vertical centre, expressed in this container's coordinates.
+    /// Needed because the container is inset by the bar and the agent bar while
+    /// the OSD lives in its own full-screen overlay window and centres on the
+    /// screen — anchoring the trigger zones to `parent.verticalCenter` would
+    /// offset them from the cards they summon by half the difference.
+    readonly property real screenCentreY: height / 2 + (agentBar.implicitHeight - bar.implicitHeight) / 2
     readonly property alias launcher: launcher
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
@@ -40,23 +48,32 @@ Item {
     anchors.topMargin: bar.implicitHeight
     anchors.bottomMargin: agentBar.implicitHeight
 
-    // Invisible placeholder — OSD now lives in its own overlay window (OsdOverlay.qml).
-    // This Item preserves the position reference for Interactions.qml's hover zone
-    // calculation (inRightPanel uses x, y, height to define the trigger area).
+    // Invisible placeholders — the OSD lives in its own overlay window
+    // (OsdOverlay.qml). These only define the right-edge hover zones that
+    // Interactions.qml tests; inRightPanel reads x, y and height.
+    //
+    // The strip is split at the screen's vertical centre so each metric has its
+    // own destination: volume above, brightness below. Both halves come from the
+    // single Config.osd.triggerHeight, which also sets how far each card sits
+    // from centre — see the note on that property before changing either.
     Item {
-        id: osd
+        id: osdVolume
 
-        implicitWidth: 0
-        implicitHeight: {
-            let h = Config.osd.sizes.sliderHeight;
-            if (Config.osd.enableMicrophone)
-                h += Config.osd.sizes.sliderHeight + Appearance.spacing.normal;
-            if (Config.osd.enableBrightness)
-                h += Config.osd.sizes.sliderHeight + Appearance.spacing.normal;
-            return h + Appearance.padding.large * 2;
-        }
+        implicitWidth: Config.osd.triggerWidth
+        implicitHeight: Config.osd.triggerHeight / 2
 
-        anchors.verticalCenter: parent.verticalCenter
+        y: root.screenCentreY - height
+        anchors.right: parent.right
+        anchors.rightMargin: sidebar.width
+    }
+
+    Item {
+        id: osdBrightness
+
+        implicitWidth: Config.osd.triggerWidth
+        implicitHeight: Config.osd.triggerHeight / 2
+
+        y: root.screenCentreY
         anchors.right: parent.right
         anchors.rightMargin: sidebar.width
     }
