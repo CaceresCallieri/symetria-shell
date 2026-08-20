@@ -46,6 +46,22 @@ Item {
         return n * sizeScale;
     }
 
+    /// A point on a circle around the dial's centre, in the degree convention the
+    /// dials use throughout: 0 is right, and the angle rises clockwise because
+    /// screen y grows downward. `radius` is in pixels, so pass it through `u()`.
+    ///
+    /// Exists so that a shape which must close on exactly the point it started
+    /// from can derive both from one expression. BrightnessIris lost a whole blade
+    /// for a frame when two spellings of the same corner disagreed by a float
+    /// epsilon — see the note above its blade Shape.
+    function polarX(angle: real, radius: real): real {
+        return width / 2 + radius * Math.cos(angle * Math.PI / 180);
+    }
+
+    function polarY(angle: real, radius: real): real {
+        return height / 2 + radius * Math.sin(angle * Math.PI / 180);
+    }
+
     readonly property real normalizedValue: Math.max(0, Math.min(1, value / Math.max(to, 0.001)))
     readonly property bool interacting: interaction.pressed || wheelInteractionTimer.running
     property real animatedValue: normalizedValue

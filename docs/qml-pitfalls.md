@@ -806,3 +806,71 @@ A related tell: this class of bug produces a `ReferenceError` for an id that is
 *plainly visible* a few lines above in the same file. When an id that obviously
 exists reports as undefined, suspect a component-scope boundary rather than a
 typo.
+
+## A ShapePath that ends on a near-zero segment renders NOTHING
+
+**Symptom:** an animated `Shape` occasionally drops out for a single frame. It
+looks like a random flicker, so it gets filed as a timing race and chased in the
+wrong place. It is neither random nor a race — the same *value* fails every time.
+
+**Cause:** the path closes on a point that two different pieces of code each
+computed. `PathAngleArc` derives its own start from `centerX`/`centerY`/
+`radiusX`/`startAngle`; if the closing `PathLine` returns to that same corner
+spelled out in QML with `cos`/`sin`, the two agree only to a float epsilon. The
+path therefore ends on a segment of length ~1e-15, and at some geometries
+`Shape.CurveRenderer` cannot tessellate that. It does not skip the segment — it
+emits **nothing for the entire path**, and the whole shape vanishes.
+
+```qml
+// WRONG — the arc derives its start; the closing line recomputes it here.
+PathAngleArc { startAngle: a; sweepAngle: -span; moveToStart: true /* ...*/ }
+PathLine { x: tipX; y: tipY }
+PathLine { x: cx + r * Math.cos(a * Math.PI / 180)      // same corner,
+           y: cy + r * Math.sin(a * Math.PI / 180) }    // different spelling
+
+// RIGHT — one spelling per point; the arc is stated endpoint-to-endpoint.
+readonly property real tipX: /* ... */          // computed ONCE, read twice
+startX: tipX
+startY: tipY
+PathLine { x: arcEndX; y: arcEndY }
+PathArc  { x: rimLeadX; y: rimLeadY; radiusX: r; radiusY: r
+           useLargeArc: false; direction: PathArc.Clockwise }
+PathLine { x: tipX; y: tipY }                   // reads the property startX read
+```
+
+**The rule:** every corner of a closed `ShapePath` must come from ONE expression,
+read by everything that needs it. Never let a path element derive a point that
+another element also computes. Binding both to the same `readonly property` makes
+the closure exact by construction rather than by luck.
+
+**Not exposed:** a `PathAngleArc` that sweeps a full 360° with no closing
+`PathLine` (a plain disc or ring). The fill closes on a point Qt itself produced,
+so there is no second spelling to disagree with. Measured: 0 failures over 297
+re-tessellations.
+
+**Rejected fixes**, so nobody re-tries them:
+
+- `Shape.GeometryRenderer` does stop the dropouts, because it tolerates the
+  degenerate segment — but it has no antialiasing, and curved edges come out
+  visibly stepped.
+- The gradient is innocent. Swapping `fillGradient` for a solid `fillColor`
+  leaves the failure count identical.
+- The number of `Shape` items is innocent. Tessellation is per `ShapePath`, so
+  collecting several paths into one `Shape` changes nothing. (It also needs
+  `Instantiator` + `data.push`, since a `Repeater` delegate must be an `Item` and
+  `ShapePath` is not — and that pairing **segfaults the process** if the model
+  count ever changes, because the `Instantiator` deletes paths the `Shape` still
+  points at. An `onObjectRemoved` that splices `data` does not repair it.)
+
+**How to reproduce.** This is the part that matters, because the obvious test
+reports the widget as healthy. Drive the animated value in fine steps over ONE
+instance, grab an image per step, and diff each frame against its two neighbours;
+a dropout is a frame that differs from both while they agree with each other.
+
+Building N separate instances and grabbing each once does NOT work — that
+exercises the FIRST tessellation, and the failure is in the re-tessellation that
+runs when a live path changes. A 240-instance sweep found nothing; a 3000-step
+sweep over one instance found 234 failures immediately.
+
+Seen in `modules/osd/BrightnessIris.qml`, where one iris blade disappeared for a
+frame roughly once a second.

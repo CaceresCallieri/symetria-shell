@@ -236,79 +236,82 @@ RotaryControl {
         }
     }
 
-    // ── The blades: six lit surfaces, all inside ONE Shape ──
+    // ── The blades: six independent surfaces, each lit on its own ──
     //
     // BLADES DISAPPEARING FOR A FRAME — read this before touching the path.
+    // The general rule is in docs/qml-pitfalls.md ("A ShapePath that ends on a
+    // near-zero segment renders nothing"); what follows is this file's share.
     //
-    // Symptom: on a screen recording, one blade failed to draw for a single frame,
-    // exposing the recess colour near the rim and the bloom colour further in
-    // across its whole ~70° exclusive sector. It looked like a random flicker.
+    // Symptom: one blade failed to draw for a single frame, exposing the recess
+    // colour near the rim and the bloom colour further in across its whole ~70°
+    // exclusive sector. It read as a random flicker. It is neither random nor a
+    // race: the same aperture value fails every time, and about 8% of values fail.
     //
-    // Cause: the blade used to be drawn as `PathAngleArc(moveToStart) -> PathLine
-    // to the tip -> PathLine back to the arc's start`. PathAngleArc computes its
-    // own start point from centre/radius/startAngle, while that closing PathLine
-    // returned to the same corner recomputed HERE with cos/sin. The two agree to
-    // roughly a float epsilon, so the path ends with a segment of length ~1e-15 —
-    // and at some geometries the CurveRenderer cannot tessellate that and emits
-    // NOTHING for the whole path. It is deterministic, not a race: the same
-    // aperture value fails every time, and about 8% of values fail.
+    // Cause: the blade used to be `PathAngleArc(moveToStart) -> PathLine to the
+    // tip -> PathLine back to the arc's start`. PathAngleArc derives its own start
+    // from centre/radius/startAngle, while that closing PathLine returned to the
+    // same corner spelled out HERE with cos/sin. Two spellings of one point agree
+    // only to a float epsilon, so the path ended on a ~1e-15 segment that the
+    // CurveRenderer sometimes cannot tessellate — and it then emits NOTHING for
+    // the whole path.
     //
-    // Fix: EVERY corner is now a coordinate this file computes, the arc is stated
-    // endpoint-to-endpoint with PathArc instead of computing its own start, and
-    // the closing line lands on startX/startY through the same expression, so the
-    // closure is exact instead of nearly exact. Zero failures across a 3000-step
-    // aperture sweep.
-    //
-    // The same bug also had the lighting inverted: the corrupted fill put the
-    // bright facet opposite `lightAngle`. Fixing the path put the key light back
-    // where the property asks for it, which changes the look most at nearly-shut
-    // apertures. That is a correction, not a regression.
+    // Fix: every corner is a coordinate this file computes (through
+    // RotaryControl.polarX/polarY, so there is one spelling and not two), the arc
+    // is stated endpoint-to-endpoint with PathArc, and the closing line lands on
+    // startX/startY by reading the same properties. Zero failures across a
+    // 3000-step aperture sweep, against 234 before.
     //
     // Do NOT re-try any of these — each was measured and rejected:
-    //  - `preferredRendererType: Shape.GeometryRenderer`. It does fix the
+    //  - `preferredRendererType: Shape.GeometryRenderer`. It does stop the
     //    dropouts, because it tolerates the degenerate segment. It also has no
     //    antialiasing here, and the blade edges come out visibly stepped. The
     //    curve renderer is why this widget reads as machined metal.
-    //  - Blaming the gradient. Replacing it with a solid fillColor changes
-    //    nothing: the failure count stays identical.
-    //  - Blaming the number of Shapes. The consolidation below was an earlier,
-    //    WRONG fix for this same symptom, kept only because it is cheaper. It
-    //    does not affect the dropouts at all — tessellation is per ShapePath, so
-    //    one path can still fail inside a shared Shape.
+    //  - Blaming the gradient. Replacing it with a solid fillColor leaves the
+    //    failure count identical.
+    //  - Blaming the number of Shapes. Six ShapePaths inside one Shape renders
+    //    pixel-identically and costs one node instead of six, but it does NOT
+    //    affect the dropouts — tessellation is per ShapePath, so one path fails
+    //    just the same inside a shared Shape. It was tried as a fix and it is not
+    //    one. (It also has to be built with Instantiator + `data.push`, because a
+    //    Repeater delegate must be an Item and ShapePath is not; that pairing
+    //    segfaults the process if the model count ever changes, since the
+    //    Instantiator deletes paths the Shape still points at.)
     //
-    // To reproduce: drive `value` in fine steps from a script, grabbing one image
-    // per step, and diff each frame against its two neighbours. Stepping the value
-    // is what matters — building N separate instances and grabbing each once
-    // exercises the FIRST tessellation, not the re-tessellation that fails, and
-    // reports the widget as healthy.
-    //
-    // Instantiator rather than Repeater because a Repeater delegate must be an
-    // Item and ShapePath is not one. `data.push` is how the generated paths join
-    // the Shape; they arrive in model order, which preserves the pinwheel overlap.
-    // No onObjectRemoved handler is needed: the model is a fixed count, so the
-    // six paths are built once and live as long as the Shape does.
-    Shape {
+    // To reproduce: drive `value` in fine steps, grab one image per step, and diff
+    // each frame against its two neighbours. Stepping ONE instance is what
+    // matters — building N instances and grabbing each once exercises the FIRST
+    // tessellation, not the re-tessellation that fails, and reports the widget as
+    // healthy.
+    Item {
         id: bladeRing
 
         anchors.fill: parent
-        preferredRendererType: Shape.CurveRenderer
 
-        Instantiator {
+        Repeater {
             model: root.bladeCount
-            onObjectAdded: (index, object) => bladeRing.data.push(object)
 
-            delegate: ShapePath {
+            // Anchored to `bladeRing` by id rather than to `parent`, because a
+            // Repeater delegate has no parent during its first binding pass.
+            delegate: Shape {
                 id: blade
 
                 required property int index
 
-                /// Leading end of this blade's footprint on the rim. The arc runs
-                /// BACKWARD from here by rimSpanDegrees; the tip leads it.
+                anchors.fill: bladeRing
+                preferredRendererType: Shape.CurveRenderer
+
+                /// Leading end of this blade's footprint on the rim. The footprint
+                /// extends BACKWARD from here to `arcEndAngle`, but the path walks
+                /// it forward, from `arcEndAngle` to here. The tip leads it.
                 readonly property real rimLead: root.spin + index * root.bladeStep - 90
                 readonly property real tipAngle: rimLead + root.tipLeadDegrees
                 /// Points into the blade's own body, roughly where its mass sits —
                 /// used only for lighting.
                 readonly property real bisector: rimLead - root.rimSpanDegrees / 2
+                /// Trailing corner of the rim footprint. Exists so the arc can be
+                /// stated as "from this point to that point" — see above for why
+                /// the arc must not derive a start of its own.
+                readonly property real arcEndAngle: rimLead - root.rimSpanDegrees
 
                 /// How squarely this blade faces the key light. Because it is
                 /// computed from an angle that carries `spin`, every blade
@@ -316,70 +319,68 @@ RotaryControl {
                 /// around the ring instead of being painted on.
                 readonly property real facing: 0.5 + 0.5 * Math.cos((bisector - root.lightAngle) * Math.PI / 180)
 
-                readonly property real tipX: root.centreX + root.apertureRadius * Math.cos(tipAngle * Math.PI / 180)
-                readonly property real tipY: root.centreY + root.apertureRadius * Math.sin(tipAngle * Math.PI / 180)
-                readonly property real rimLeadX: root.centreX + root.bladeRadius * Math.cos(rimLead * Math.PI / 180)
-                readonly property real rimLeadY: root.centreY + root.bladeRadius * Math.sin(rimLead * Math.PI / 180)
-                /// Trailing corner of the rim footprint. Exists so the arc can be
-                /// stated as "from this point to that point" — see the note above
-                /// the Shape for why the arc must not compute its own start.
-                readonly property real arcEndAngle: rimLead - root.rimSpanDegrees
-                readonly property real arcEndX: root.centreX + root.bladeRadius * Math.cos(arcEndAngle * Math.PI / 180)
-                readonly property real arcEndY: root.centreY + root.bladeRadius * Math.sin(arcEndAngle * Math.PI / 180)
+                readonly property real tipX: root.polarX(tipAngle, root.apertureRadius)
+                readonly property real tipY: root.polarY(tipAngle, root.apertureRadius)
+                readonly property real rimLeadX: root.polarX(rimLead, root.bladeRadius)
+                readonly property real rimLeadY: root.polarY(rimLead, root.bladeRadius)
+                readonly property real arcEndX: root.polarX(arcEndAngle, root.bladeRadius)
+                readonly property real arcEndY: root.polarY(arcEndAngle, root.bladeRadius)
 
-                // A hairline of its own darkness along every edge. With
-                // overlapping blades this is what separates one leaf from the one
-                // beneath it — the old design needed a separate ring of seam
-                // rectangles because its blades merely abutted.
-                strokeColor: Qt.rgba(0.03, 0.035, 0.045, 0.85)
-                strokeWidth: Math.max(1, root.u(1.6))
-                joinStyle: ShapePath.MiterJoin
+                ShapePath {
+                    // A hairline of its own darkness along every edge. With
+                    // overlapping blades this is what separates one leaf from the
+                    // one beneath it — the old design needed a separate ring of
+                    // seam rectangles because its blades merely abutted.
+                    strokeColor: Qt.rgba(0.03, 0.035, 0.045, 0.85)
+                    strokeWidth: Math.max(1, root.u(1.6))
+                    joinStyle: ShapePath.MiterJoin
 
-                // Runs from the rim toward the tip, so each face is brightest at
-                // the edge nearest the opening — the aperture lighting the metal
-                // it passes.
-                fillGradient: LinearGradient {
-                    x1: root.centreX + root.bladeRadius * Math.cos(blade.bisector * Math.PI / 180)
-                    y1: root.centreY + root.bladeRadius * Math.sin(blade.bisector * Math.PI / 180)
-                    x2: blade.tipX
-                    y2: blade.tipY
+                    // Runs from the rim toward the tip, so each face is brightest
+                    // at the edge nearest the opening — the aperture lighting the
+                    // metal it passes.
+                    fillGradient: LinearGradient {
+                        x1: root.polarX(blade.bisector, root.bladeRadius)
+                        y1: root.polarY(blade.bisector, root.bladeRadius)
+                        x2: blade.tipX
+                        y2: blade.tipY
 
-                    GradientStop { position: 0.00; color: root.metal(blade.facing * 0.62) }
-                    GradientStop { position: 0.55; color: root.metal(blade.facing * 0.86) }
-                    GradientStop { position: 1.00; color: root.metal(blade.facing * 1.05 + 0.06) }
-                }
+                        GradientStop { position: 0.00; color: root.metal(blade.facing * 0.62) }
+                        GradientStop { position: 0.55; color: root.metal(blade.facing * 0.86) }
+                        GradientStop { position: 1.00; color: root.metal(blade.facing * 1.05 + 0.06) }
+                    }
 
-                // The triangle is walked from the tip, and every corner it visits
-                // is a coordinate THIS file computes. That is the whole point of
-                // the shape being written this way — see the note above the Shape.
-                startX: blade.tipX
-                startY: blade.tipY
+                    // The triangle is walked from the tip, and every corner it
+                    // visits is a property of this delegate — never a point some
+                    // path element derived for itself. See the note above.
+                    startX: blade.tipX
+                    startY: blade.tipY
 
-                // Tip -> trailing rim corner. This straight edge is the one that
-                // cuts the opening.
-                PathLine {
-                    x: blade.arcEndX
-                    y: blade.arcEndY
-                }
+                    // Tip -> trailing rim corner. This straight edge is the one
+                    // that cuts the opening.
+                    PathLine {
+                        x: blade.arcEndX
+                        y: blade.arcEndY
+                    }
 
-                // The blade's footprint on the housing, walked forward to the
-                // leading corner. Clockwise because screen y grows downward, so a
-                // rising angle turns clockwise.
-                PathArc {
-                    x: blade.rimLeadX
-                    y: blade.rimLeadY
-                    radiusX: root.bladeRadius
-                    radiusY: root.bladeRadius
-                    useLargeArc: false
-                    direction: PathArc.Clockwise
-                }
+                    // The blade's footprint on the housing, walked forward to the
+                    // leading corner. Clockwise because screen y grows downward,
+                    // so a rising angle turns clockwise.
+                    PathArc {
+                        x: blade.rimLeadX
+                        y: blade.rimLeadY
+                        radiusX: root.bladeRadius
+                        radiusY: root.bladeRadius
+                        useLargeArc: false
+                        direction: PathArc.Clockwise
+                    }
 
-                // Leading rim corner -> back to the tip, closing the triangle.
-                // Lands on startX/startY through the SAME expression, so the
-                // closure is exact rather than merely very close.
-                PathLine {
-                    x: blade.tipX
-                    y: blade.tipY
+                    // Leading rim corner -> back to the tip, closing the triangle.
+                    // Reads the SAME properties startX/startY read, so the closure
+                    // is exact rather than merely very close.
+                    PathLine {
+                        x: blade.tipX
+                        y: blade.tipY
+                    }
                 }
             }
         }
