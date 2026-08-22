@@ -22,7 +22,7 @@ Item {
     readonly property real clientHeight: clientIpc?.size?.[1] ?? 0
     readonly property bool compact: width < 210 || height < 150
     readonly property real iconSize: compact ? 28 : 36
-    readonly property real maximumTitleWidth: Math.max(64, Math.min(260, width - iconSize - Appearance.spacing.normal - Appearance.padding.normal * 2))
+    readonly property real maximumTitleWidth: Math.max(0, Math.min(260, width - iconSize - Appearance.spacing.normal - Appearance.padding.normal * 2))
 
     x: clientX - screen.x
     y: clientY - screen.y
@@ -50,6 +50,7 @@ Item {
         }
 
         PillSurface {
+            visible: root.maximumTitleWidth >= 64
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(root.maximumTitleWidth, titleText.implicitWidth + Appearance.padding.normal * 2)
             height: titleText.implicitHeight + Appearance.padding.small * 2

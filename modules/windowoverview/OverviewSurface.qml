@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import qs.components.containers
 import qs.components.misc
 import qs.services
-import qs.config
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Wayland

@@ -33,7 +33,7 @@ Singleton {
     property int sourceFullscreen: 0
     property int sourceFullscreenClient: 0
 
-    /// One entry per visible Dwindle slot: { isGroup, repClient, addr, label }.
+    /// One entry per visible Dwindle slot: { repClient, addr, label }.
     property var tiles: []
 
     /// Fast lookup from an uppercase label to a client address.
@@ -42,6 +42,11 @@ Singleton {
     /// Invalidates deferred focus/state callbacks when a new action starts.
     property int _actionToken: 0
     property int _revealRetries: 0
+    property int _focusRestoreToken: 0
+    property int _focusRestoreRetries: 0
+    property string _focusRestoreAddress: ""
+    property int _focusRestoreInternal: 0
+    property int _focusRestoreClient: 0
 
     /// Home row first, then top row. Return occupies the easy right-pinky slot.
     readonly property var labelSequence: [
@@ -55,7 +60,7 @@ Singleton {
         "openwindow", "closewindow",
         "movewindow", "movewindowv2",
         "togglegroup", "moveintogroup", "moveoutofgroup",
-        "changegroupactive", "changefloatingmode", "minimize"
+        "activewindowv2", "changegroupactive", "changefloatingmode", "minimize"
     ])
 
     function show(): void {
@@ -75,6 +80,7 @@ Singleton {
             return;
         }
 
+        _clearPendingFocusRestore();
         const revealToken = ++_actionToken;
         targetMonitorName = monitor.name;
         targetWorkspaceId = workspace.id;
@@ -84,7 +90,7 @@ Singleton {
         _revealRetries = 0;
         revealing = true;
 
-        if (sourceFullscreen !== 0) {
+        if (_hasFullscreenState(sourceFullscreen, sourceFullscreenClient)) {
             // Clear both halves explicitly. The selected window receives the
             // exact captured pair after focus changes, while Escape restores it
             // to this source window.
@@ -148,8 +154,8 @@ Singleton {
         _finish(address, fullscreen, fullscreenClient);
     }
 
-    /// Unmap before changing focus. The second callLater waits for the focus
-    /// dispatcher before applying fullscreenstate to its implicit active target.
+    /// Unmap before changing focus. Fullscreen state waits for Hyprland to
+    /// confirm the target focus because dispatch() uses asynchronous socket IPC.
     function _finish(address: string, fullscreen: int, fullscreenClient: int): void {
         const token = ++_actionToken;
         _resetSession();
@@ -160,12 +166,13 @@ Singleton {
 
             Hypr.dispatch(`focuswindow address:${address}`);
 
-            if (fullscreen !== 0) {
-                Qt.callLater(() => {
-                    if (token !== root._actionToken)
-                        return;
-                    Hypr.dispatch(`fullscreenstate ${fullscreen} ${fullscreenClient} set`);
-                });
+            if (root._hasFullscreenState(fullscreen, fullscreenClient)) {
+                root._focusRestoreToken = token;
+                root._focusRestoreAddress = address;
+                root._focusRestoreInternal = fullscreen;
+                root._focusRestoreClient = fullscreenClient;
+                root._focusRestoreRetries = 0;
+                focusRestoreTimer.start();
             }
         });
     }
@@ -182,7 +189,10 @@ Singleton {
         }
 
         const source = _clientForAddress(sourceAddress);
-        if (sourceFullscreen !== 0 && (source?.lastIpcObject?.fullscreen ?? 0) !== 0) {
+        const currentInternal = source?.lastIpcObject?.fullscreen ?? 0;
+        const currentClient = source?.lastIpcObject?.fullscreenClient ?? 0;
+        if (_hasFullscreenState(sourceFullscreen, sourceFullscreenClient)
+                && _hasFullscreenState(currentInternal, currentClient)) {
             if (_revealRetries < 3) {
                 _revealRetries++;
                 Hyprland.refreshToplevels();
@@ -222,7 +232,6 @@ Singleton {
             const labelIndex = nextTiles.length;
             const label = labelIndex < labelSequence.length ? labelSequence[labelIndex] : "";
             nextTiles.push({
-                isGroup: entry.isGroup,
                 repClient: representative,
                 addr: address,
                 label: label
@@ -261,11 +270,25 @@ Singleton {
         return Hypr.toplevels.values.find(client => client.lastIpcObject?.address === address) ?? null;
     }
 
+    function _hasFullscreenState(internal: int, client: int): bool {
+        return internal !== 0 || client !== 0;
+    }
+
+    function _clearPendingFocusRestore(): void {
+        focusRestoreTimer.stop();
+        _focusRestoreToken = 0;
+        _focusRestoreRetries = 0;
+        _focusRestoreAddress = "";
+        _focusRestoreInternal = 0;
+        _focusRestoreClient = 0;
+    }
+
     function _resetSession(): void {
         active = false;
         revealing = false;
         revealSettleTimer.stop();
         revealRefreshTimer.stop();
+        _clearPendingFocusRestore();
         targetMonitorName = "";
         targetWorkspaceId = -1;
         sourceAddress = "";
@@ -293,6 +316,38 @@ Singleton {
         interval: 40
         repeat: false
         onTriggered: root._finishReveal()
+    }
+
+    /// `focuswindow` and `fullscreenstate` both target compositor state through
+    /// asynchronous IPC. Poll the authoritative active toplevel for at most
+    /// 500ms so fullscreenstate never lands on the previously focused client.
+    Timer {
+        id: focusRestoreTimer
+        interval: 20
+        repeat: true
+
+        onTriggered: {
+            const address = root._focusRestoreAddress;
+            if (root._focusRestoreToken !== root._actionToken || !root._addressExists(address)) {
+                root._clearPendingFocusRestore();
+                return;
+            }
+
+            const activeAddress = Hyprland.activeToplevel?.lastIpcObject?.address ?? "";
+            if (activeAddress === address) {
+                const internal = root._focusRestoreInternal;
+                const client = root._focusRestoreClient;
+                root._clearPendingFocusRestore();
+                Hypr.dispatch(`fullscreenstate ${internal} ${client} set`);
+                return;
+            }
+
+            root._focusRestoreRetries++;
+            if (root._focusRestoreRetries >= 25) {
+                console.warn(`[WindowOverview] Focus did not reach ${address}; fullscreen state was not restored`);
+                root._clearPendingFocusRestore();
+            }
+        }
     }
 
     Connections {
