@@ -18,8 +18,16 @@ import Symmetria
 /// Mesura names its socket with its own pid, the way the dictation one is
 /// named. The shell knows the pid there because `SttJob` starts from a target
 /// WINDOW; the bar has no such context, so it looks the socket up instead.
-/// `discoverProcess` lists the runtime directory and takes the first match —
+/// `discoverProcess` lists the runtime directory and takes the NEWEST match —
 /// one shot per connection attempt, not a pipe held open.
+///
+/// Newest rather than first, because a Unix socket file outlives the process
+/// that bound it when that process is killed rather than stopped. Sorting
+/// lexicographically would let a stale socket from a crashed instance shadow a
+/// live one forever whenever its pid happened to sort earlier; sorting by
+/// modification time picks the most recently started Mesura instead. It is not
+/// a liveness check — connecting is — but it makes the common stale case
+/// self-correcting.
 ///
 /// ## Reconnection is the ordinary case
 ///
@@ -34,10 +42,6 @@ Singleton {
     /// Array of `{ project: string, agents: array }`, the shape ProjectGroup
     /// consumes. Empty whenever nothing is connected.
     readonly property var projectGroups: root._groupsFrom(root._threads, root._projects)
-
-    /// Whether a socket is currently attached. Read by the bar to decide
-    /// nothing at all — kept for the log line and for a future indicator.
-    readonly property bool attached: sock.connected
 
     // ── Stream state ───────────────────────────────────────────────────
     // Mirrors the contract's own consumer semantics: a stream opens with a
@@ -83,7 +87,13 @@ Singleton {
     function _asAgent(thread: var, projectName: string): var {
         const running = thread.session?.status === "running";
         return {
-            id: thread.threadId,
+            // Namespaced, because bridge agents and these threads are
+            // concatenated into ONE ScriptModel keyed on `id`. The two id
+            // spaces are defined by different systems and nothing guarantees
+            // they stay disjoint; a collision would silently make one row
+            // render the other's data. A prefix makes it structurally
+            // impossible rather than merely unlikely.
+            id: "mesura:" + thread.threadId,
             project: projectName,
             title: thread.title ?? "",
             // The vocabulary AgentChip branches on. Only the busy/idle
@@ -97,8 +107,7 @@ Singleton {
             // No local window, so no workspace. AgentService.workspaceForAgents
             // looks this up by pid and yields null, which is what makes
             // ProjectGroup draw no workspace badge for these rows.
-            terminal_pid: 0,
-            mesura: true
+            terminal_pid: 0
         };
     }
 
@@ -137,8 +146,13 @@ Singleton {
             // waiting: reopen and take a fresh snapshot.
             Logger.log("qml", "mesura", `gap | at=${root._revision} got=${item.sequence}`);
             root._reset();
+            // Dropping the connection is the whole recovery: `reconnect.running`
+            // is BOUND to `!sock.connected`, so the timer starts itself. Calling
+            // `restart()` here would write that bound property and sever the
+            // binding for the life of the process — after which the timer never
+            // stops again, and only the guard in `onTriggered` keeps the extra
+            // ticks harmless. Review caught it working by accident.
             sock.connected = false;
-            reconnect.restart();
             return;
         }
 
@@ -193,7 +207,9 @@ Singleton {
             } else {
                 Logger.log("qml", "mesura", "detached");
                 root._reset();
-                reconnect.restart();
+                // No `restart()` here either, and for the same reason: the
+                // binding on `running` has already started the timer by the
+                // time this handler runs.
             }
         }
     }
@@ -202,7 +218,7 @@ Singleton {
     Process {
         id: discoverProcess
 
-        command: ["sh", "-c", "ls -1 \"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}\"/symmetria-mesura-threads-*.sock 2>/dev/null | head -1"]
+        command: ["sh", "-c", "ls -1t \"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}\"/symmetria-mesura-threads-*.sock 2>/dev/null | head -1"]
 
         stdout: SplitParser {
             onRead: data => {

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
@@ -58,7 +59,19 @@ Item {
         spacing: Appearance.spacing.small
 
         Repeater {
-            model: root.projectGroups
+            // ScriptModel keyed on the project NAME, for the reason
+            // `docs/qml-pitfalls.md` records under "Repeater over a
+            // freshly-rebuilt JS array resets ALL delegates every update" — and
+            // which `ProjectGroup`'s own chip Repeater already answers the same
+            // way. This outer one was left on a plain array while the only
+            // source pushed rarely; a second source that emits a delta per
+            // thread update makes the full teardown constant, and it would tear
+            // down every pill in the bar, bridge pills included, whenever an
+            // unrelated Mesura thread moved.
+            model: ScriptModel {
+                values: root.projectGroups
+                objectProp: "project"
+            }
 
             ProjectGroup {
                 required property var modelData

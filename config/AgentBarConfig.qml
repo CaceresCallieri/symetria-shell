@@ -10,7 +10,7 @@ JsonObject {
     // is organised BY workspace — has nowhere to put them. The separate layout
     // asks for none: a project pill needs a name and a list of agents.
     //
-    // The cost is accepted and not free: the IDE'"'"'s own agents lose their
+    // The cost is accepted and not free: the IDE's own agents lose their
     // workspace association in the top bar too, for as long as the IDE is
     // still in use.
     property bool mergeWorkspaces: false
