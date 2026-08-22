@@ -18,9 +18,9 @@ import QtQuick.Layouts
 /// filter, and a LIVE workspace-grouped grid of agent cards. Esc dismisses; Tab
 /// (or 1/2/3) cycles the filter; clicking a card focuses that agent and closes.
 ///
-/// Unlike WindowOverview this does NOT freeze a snapshot — content binds
-/// reactively to AgentService via AgentOverviewService.filteredGrouping, so cards
-/// appear/disappear and update in place as agents work.
+/// Content binds reactively to AgentService via
+/// AgentOverviewService.filteredGrouping, so cards appear, disappear, and
+/// update in place as agents work.
 ///
 /// Layout note: the card grid uses plain Column/Flow with explicit widths
 /// (availWidth threaded down), NOT a Flow inside a Layout — a Flow's

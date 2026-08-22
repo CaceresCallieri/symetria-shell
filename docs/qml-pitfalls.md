@@ -312,7 +312,7 @@ function activate(addr) {
 **Correct (defer dispatch one event-loop tick):**
 ```qml
 function activate(addr) {
-    hide();                                                       // unmap first
+    unmapOverlay();                                               // unmap first
     Qt.callLater(() => Hypr.dispatch(`focuswindow address:${addr}`));  // dispatch after restoration
 }
 ```
@@ -323,22 +323,20 @@ function activate(addr) {
 
 **Diagnosis hint:** if you log the dispatch and verify the same `hyprctl dispatch` works from the CLI, but the QML version "does nothing", suspect this race.
 
-Found in: `services/WindowOverviewService.qml:activateAddr()` for the Window Overview feature.
+Found in: `services/WindowOverviewService.qml:_finish()` for the Dwindle window navigator.
 
-## ScreencopyView captures off-screen surfaces as empty buffers
+## ScreencopyView cannot provide a reliable external window overview
 
-`ScreencopyView` captures from a wayland surface's most recently committed buffer. **A surface that is currently off-screen has no recent commit, so the capture is empty (black).** This happens systematically with Hyprland's scrolling layout — windows past the viewport edge stop painting until they're scrolled back into view.
+`ScreencopyView` captures a Wayland surface's most recently committed buffer.
+An off-screen or non-painting surface can therefore produce an empty capture.
+Refreshing Hyprland IPC data does not make the application commit a new buffer.
 
-There is **no client-side fix.** Only the compositor can force off-screen surfaces to render. That is precisely how compositor-internal exposé tools (`hyprexpo`, KWin Present Windows) work — they trigger renders from inside the compositor's render loop. As an external Quickshell client we have no equivalent capability.
-
-**Do not spend time trying:**
-- Toggling `live: true` momentarily — the surface still doesn't paint when off-screen
-- Calling `Hyprland.refreshToplevels()` — only refreshes IPC state, has no effect on rendering
-- Repositioning the off-screen window briefly — visible to the user, brittle, breaks scrolling state
-
-**The right fix:** show a fallback view (app icon + class name + title) so the tile is always identifiable even without a thumbnail. See `modules/windowoverview/Tile.qml` for the reference implementation.
-
-Found in: Window Overview tiles for windows scrolled off the visible viewport.
+The former Window Overview tried to compensate with icon and title fallbacks.
+That still left two competing representations of the layout: Hyprland's real
+windows and a synthetic QuickShell grid. The Dwindle navigator now exposes the
+real layout temporarily and positions labels from each client's `at` and `size`
+fields. Do not restore the snapshot grid without a compositor-provided capture
+contract that guarantees current content for every target surface.
 
 ## Property Contract Drift Across Container/Item Boundaries
 

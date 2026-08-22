@@ -6,221 +6,335 @@ import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 
-/// State and logic for the Window Overview feature.
+/// State and transitions for the Dwindle window navigator.
 ///
-/// The overview is a fullscreen layer-shell overlay on the focused monitor that
-/// snapshots the active workspace's windows into a labeled grid. Pressing a
-/// label key focuses that window and dismisses; Esc dismisses without focusing.
-///
-/// IPC entry point lives in modules/windowoverview/Wrapper.qml — that file
-/// routes `symmetria shell overview {show,hide,toggle}` here. The overlay UI
-/// lives in modules/windowoverview/OverviewSurface.qml and binds reactively to
-/// this singleton's state.
+/// The navigator labels the real windows in the focused workspace. When it is
+/// invoked from maximized or fullscreen state, it temporarily returns the
+/// focused window to the layout, then transfers the captured fullscreen state
+/// to the selected window. Cancelling restores the original window and state.
 Singleton {
     id: root
 
-    /// Whether the overview is currently visible.
+    /// True when window labels are ready for selection.
     property bool active: false
 
-    /// Monitor frozen at show() time. Overlay only renders on this monitor —
-    /// switching focus to a different monitor mid-overview triggers auto-hide.
-    // intentional var: nullable HyprlandMonitor — null until show()
-    property var targetMonitor: null
+    /// True while Hyprland exposes and settles the Dwindle tree.
+    property bool revealing: false
 
-    /// Workspace id frozen at show() time. The auto-close watcher compares
-    /// against Hypr.activeWsId and dismisses if they diverge.
+    readonly property bool sessionActive: active || revealing
+
+    /// Stable monitor and workspace identity captured before layout mutation.
+    property string targetMonitorName: ""
     property int targetWorkspaceId: -1
 
-    /// Tile slot model. Each entry: { isGroup, repClient, addr, label }.
-    /// repClient is the HyprlandToplevel whose surface is captured.
-    /// label is one of the 16 letters in labelSequence, or "" for unreachable
-    /// overflow slots (17+ windows). Recomputed via _rebuildTiles().
-    // intentional var: JS array of plain objects — Repeater consumes by index
+    /// Original focus and fullscreen state. `fullscreen` is Hyprland's internal
+    /// state; `fullscreenClient` is the state communicated to the application.
+    property string sourceAddress: ""
+    property int sourceFullscreen: 0
+    property int sourceFullscreenClient: 0
+
+    /// One entry per visible Dwindle slot: { isGroup, repClient, addr, label }.
     property var tiles: []
 
-    /// Fast lookup from label letter (uppercase) to client address.
-    /// Populated by _rebuildTiles(); consulted by activate().
-    // intentional var: JS Map<string, string>
+    /// Fast lookup from an uppercase label to a client address.
     property var labelMap: new Map()
 
-    /// Cached AppIconsProcessor result. Compared via modelsEqual to short-circuit
-    /// no-op rebuilds (e.g., focus-only events that don't change layout) — without
-    /// this, every Hyprland event burst destroys and recreates all ScreencopyView
-    /// instances, causing thumbnail flicker.
-    // intentional var: JS array of { isGroup, clients[] } from AppIconsProcessor
-    property var _cachedProcessedModel: []
+    /// Invalidates deferred focus/state callbacks when a new action starts.
+    property int _actionToken: 0
+    property int _revealRetries: 0
 
-    /// 16-slot label sequence: home row first (slots 1-8), top row second (9-16).
-    /// Skips index-finger stretches (G/H, T/Y) and pinky reaches.
-    /// Bottom row reserved for a future tier-3 extension to 24 slots.
-    /// "Return" matches Qt.Key_Return / Qt.Key_Enter when normalized to text.
+    /// Home row first, then top row. Return occupies the easy right-pinky slot.
     readonly property var labelSequence: [
         "A", "S", "D", "F", "J", "K", "L", "Return",
         "Q", "W", "E", "R", "U", "I", "O", "P"
     ]
 
-    /// Hyprland events that mutate window layout — drive reactive rebuilds while open.
-    /// Duplicated from components/WorkspaceWindowModel._windowLayoutEvents (the shared window-model
-    /// provider) so the overview's reactivity matches the bar's exactly. The two owners are
-    /// intentionally separate (different lifecycles and update paths), so the set can't be
-    /// shared as a singleton. Keep in sync: if a new event is added to WorkspaceWindowModel,
-    /// add it here too — a missing event means the overview won't rebuild on that topology change.
-    // intentional var: JS Set for O(1) event-name lookup
-    readonly property var _windowLayoutEvents: new Set([
+    /// Topology changes invalidate frozen label assignments. A fullscreen event
+    /// is handled separately because it is the expected reveal transition.
+    readonly property var _topologyEvents: new Set([
         "openwindow", "closewindow",
         "movewindow", "movewindowv2",
         "togglegroup", "moveintogroup", "moveoutofgroup",
-        "activewindowv2", "changegroupactive",
-        "fullscreen"
+        "changegroupactive", "changefloatingmode", "minimize"
     ])
 
     function show(): void {
-        if (active)
+        if (sessionActive)
             return;
 
-        const mon = Hypr.focusedMonitor;
-        const wsId = Hypr.focusedWorkspace?.id ?? -1;
-        if (!mon || wsId === -1) {
-            console.warn("[WindowOverview] No focused monitor or workspace; refusing to show");
+        const monitor = Hypr.focusedMonitor;
+        const workspace = Hypr.focusedWorkspace;
+        // Use the raw Hyprland singleton. Hypr.activeToplevel intentionally has
+        // a Wayland activation guard that can be null during a valid IPC state.
+        const source = Hyprland.activeToplevel;
+        const ipc = source?.lastIpcObject;
+        const address = ipc?.address ?? "";
+
+        if (!monitor || !workspace || !address) {
+            console.warn("[WindowOverview] No focused window, monitor, or workspace; refusing to show");
             return;
         }
 
-        targetMonitor = mon;
-        targetWorkspaceId = wsId;
-        _rebuildTiles();
-        active = true;
+        const revealToken = ++_actionToken;
+        targetMonitorName = monitor.name;
+        targetWorkspaceId = workspace.id;
+        sourceAddress = address;
+        sourceFullscreen = ipc.fullscreen ?? 0;
+        sourceFullscreenClient = ipc.fullscreenClient ?? sourceFullscreen;
+        _revealRetries = 0;
+        revealing = true;
+
+        if (sourceFullscreen !== 0) {
+            // Clear both halves explicitly. The selected window receives the
+            // exact captured pair after focus changes, while Escape restores it
+            // to this source window.
+            Hypr.dispatch("fullscreenstate 0 0 set");
+            // The fullscreen event normally arrives first and restarts this
+            // timer. This run is the fallback if the event is lost.
+            revealSettleTimer.restart();
+        } else {
+            // Normal mode does not mutate geometry. Defer one tick so the
+            // keyboard layer maps before labels can accept input.
+            Qt.callLater(() => {
+                if (revealToken === root._actionToken)
+                    root._finishReveal();
+            });
+        }
     }
 
     function hide(): void {
-        if (!active)
-            return;
-
-        active = false;
-        targetMonitor = null;
-        targetWorkspaceId = -1;
-        tiles = [];
-        labelMap = new Map();
-        _cachedProcessedModel = [];
+        cancel();
     }
 
     function toggle(): void {
-        if (active)
-            hide();
+        if (sessionActive)
+            cancel();
         else
             show();
     }
 
-    /// Resolve a label letter to an address and focus that window.
-    /// Used by the overlay's key handler.
     function activate(letter: string): void {
         activateAddr(labelMap.get((letter ?? "").toUpperCase()) ?? "");
     }
 
-    /// Focus a window by raw address. Used by tile click-to-focus, which works
-    /// for overflow tiles past slot 16 that have no label.
-    ///
-    /// CRITICAL: hide() runs first, then Qt.callLater defers the dispatch one
-    /// event-loop tick. This avoids a layer-shell focus-restoration race —
-    /// wlroots atomically restores prior keyboard focus when our Exclusive
-    /// layer unmaps, which clobbers any synchronous focuswindow dispatch.
-    /// See docs/qml-pitfalls.md "Layer-shell focus restoration race".
-    function activateAddr(addr: string): void {
-        if (!active || !addr)
+    /// Select an address and transfer the invocation fullscreen state to it.
+    function activateAddr(address: string): void {
+        if (!active || !address)
             return;
 
-        hide();
-        Qt.callLater(() => Hypr.dispatch(`focuswindow address:${addr}`));
-    }
-
-    /// Build the tile model from the canonical bar order.
-    ///
-    /// Calls AppIconsProcessor.processClients() — the SAME function the bar
-    /// uses to order app icons — so labels match bar icon positions by
-    /// construction. Tab groups collapse to one tile (clients[0] as
-    /// representative; active-tab resolution is a known future improvement).
-    /// Swallowed windows are excluded by AppIconsProcessor itself.
-    ///
-    /// First 16 entries get labels from labelSequence; 17+ render unlabeled
-    /// (visible but only reachable via click, not keyboard).
-    function _rebuildTiles(): void {
-        const newTiles = [];
-        const newLabelMap = new Map();
-
-        if (targetWorkspaceId === -1) {
-            tiles = newTiles;
-            labelMap = newLabelMap;
-            _cachedProcessedModel = [];
+        if (!_addressExists(address)) {
+            cancel();
             return;
         }
 
-        const model = AppIconsProcessor.processClients(targetWorkspaceId, Hypr.toplevels.values);
+        _finish(address, sourceFullscreen, sourceFullscreenClient);
+    }
 
-        // Short-circuit no-op rebuilds — same guard pattern as WorkspaceAppIcons.
-        // Prevents Repeater churn (and thumbnail recapture flicker) on layout-irrelevant
-        // events like activewindowv2 firing without a topology change.
-        if (AppIconsProcessor.modelsEqual(model, _cachedProcessedModel))
+    /// Restore the exact focus and fullscreen pair captured at show() time.
+    function cancel(): void {
+        if (!sessionActive)
             return;
-        _cachedProcessedModel = model;
 
-        const seq = labelSequence;
+        const address = sourceAddress;
+        const fullscreen = sourceFullscreen;
+        const fullscreenClient = sourceFullscreenClient;
 
-        for (let i = 0; i < model.length; i++) {
-            const entry = model[i];
-            const repClient = entry.clients[0];
-            const addr = repClient?.lastIpcObject?.address ?? "";
-            const label = i < seq.length ? seq[i] : "";
+        if (!address || !_addressExists(address)) {
+            _actionToken++;
+            _resetSession();
+            return;
+        }
 
-            newTiles.push({
+        _finish(address, fullscreen, fullscreenClient);
+    }
+
+    /// Unmap before changing focus. The second callLater waits for the focus
+    /// dispatcher before applying fullscreenstate to its implicit active target.
+    function _finish(address: string, fullscreen: int, fullscreenClient: int): void {
+        const token = ++_actionToken;
+        _resetSession();
+
+        Qt.callLater(() => {
+            if (token !== root._actionToken || !root._addressExists(address))
+                return;
+
+            Hypr.dispatch(`focuswindow address:${address}`);
+
+            if (fullscreen !== 0) {
+                Qt.callLater(() => {
+                    if (token !== root._actionToken)
+                        return;
+                    Hypr.dispatch(`fullscreenstate ${fullscreen} ${fullscreenClient} set`);
+                });
+            }
+        });
+    }
+
+    function _finishReveal(): void {
+        if (!revealing)
+            return;
+
+        const monitorName = Hypr.focusedMonitor?.name ?? "";
+        const workspaceId = Hypr.focusedWorkspace?.id ?? -1;
+        if (monitorName !== targetMonitorName || workspaceId !== targetWorkspaceId) {
+            cancel();
+            return;
+        }
+
+        const source = _clientForAddress(sourceAddress);
+        if (sourceFullscreen !== 0 && (source?.lastIpcObject?.fullscreen ?? 0) !== 0) {
+            if (_revealRetries < 3) {
+                _revealRetries++;
+                Hyprland.refreshToplevels();
+                revealRefreshTimer.restart();
+                return;
+            }
+
+            console.warn("[WindowOverview] Dwindle reveal did not clear fullscreen; restoring source state");
+            cancel();
+            return;
+        }
+
+        _rebuildTiles();
+        if (tiles.length === 0) {
+            cancel();
+            return;
+        }
+
+        active = true;
+        revealing = false;
+    }
+
+    /// Build labels after Dwindle exposes the real window geometry. Labels stay
+    /// frozen for the session, while each delegate reads live client geometry.
+    function _rebuildTiles(): void {
+        const processed = AppIconsProcessor.processClients(targetWorkspaceId, Hypr.toplevels.values);
+        const nextTiles = [];
+        const nextLabelMap = new Map();
+
+        for (let index = 0; index < processed.length; index++) {
+            const entry = processed[index];
+            const representative = _representativeClient(entry.clients);
+            const address = representative?.lastIpcObject?.address ?? "";
+            if (!address)
+                continue;
+
+            const labelIndex = nextTiles.length;
+            const label = labelIndex < labelSequence.length ? labelSequence[labelIndex] : "";
+            nextTiles.push({
                 isGroup: entry.isGroup,
-                repClient: repClient,
-                addr: addr,
+                repClient: representative,
+                addr: address,
                 label: label
             });
 
-            if (label && addr)
-                newLabelMap.set(label, addr);
+            if (label)
+                nextLabelMap.set(label, address);
         }
 
-        tiles = newTiles;
-        labelMap = newLabelMap;
+        tiles = nextTiles;
+        labelMap = nextLabelMap;
     }
 
-    /// Auto-close on workspace or monitor focus change.
-    /// The overview is anchored to a single (monitor, workspace) pair captured
-    /// at show() time; auto-refreshing labels mid-keypress would break muscle
-    /// memory. Drift = dismiss.
+    /// A Hyprland group occupies one real rectangle. The most recently focused
+    /// non-hidden member is the best available proxy for its visible tab.
+    function _representativeClient(clients: var): var {
+        if (!clients || clients.length === 0)
+            return null;
+
+        const candidates = clients.filter(client => !client.lastIpcObject?.hidden);
+        if (candidates.length === 0)
+            return null;
+
+        return [...candidates].sort((left, right) => {
+            const leftHistory = left.lastIpcObject?.focusHistoryID ?? Number.MAX_SAFE_INTEGER;
+            const rightHistory = right.lastIpcObject?.focusHistoryID ?? Number.MAX_SAFE_INTEGER;
+            return leftHistory - rightHistory;
+        })[0];
+    }
+
+    function _addressExists(address: string): bool {
+        return _clientForAddress(address) !== null;
+    }
+
+    function _clientForAddress(address: string): var {
+        return Hypr.toplevels.values.find(client => client.lastIpcObject?.address === address) ?? null;
+    }
+
+    function _resetSession(): void {
+        active = false;
+        revealing = false;
+        revealSettleTimer.stop();
+        revealRefreshTimer.stop();
+        targetMonitorName = "";
+        targetWorkspaceId = -1;
+        sourceAddress = "";
+        sourceFullscreen = 0;
+        sourceFullscreenClient = 0;
+        _revealRetries = 0;
+        tiles = [];
+        labelMap = new Map();
+    }
+
+    /// Coalesce the fullscreen event and Dwindle geometry updates. Refresh the
+    /// IPC model before reading the final window rectangles.
+    Timer {
+        id: revealSettleTimer
+        interval: 120
+        repeat: false
+        onTriggered: {
+            Hyprland.refreshToplevels();
+            revealRefreshTimer.restart();
+        }
+    }
+
+    Timer {
+        id: revealRefreshTimer
+        interval: 40
+        repeat: false
+        onTriggered: root._finishReveal()
+    }
+
     Connections {
         target: Hypr
-        enabled: root.active
+        enabled: root.sessionActive
 
         function onActiveWsIdChanged(): void {
             if (Hypr.activeWsId !== root.targetWorkspaceId)
-                root.hide();
+                root.cancel();
         }
 
         function onFocusedMonitorChanged(): void {
-            if (Hypr.focusedMonitor !== root.targetMonitor)
-                root.hide();
+            if ((Hypr.focusedMonitor?.name ?? "") !== root.targetMonitorName)
+                root.cancel();
         }
-    }
-
-    /// Reactive tile rebuild on window layout events while overview is open.
-    /// Debounced 50ms to coalesce rapid event bursts (Hyprland emits multiple
-    /// events for a single window operation). _rebuildTiles short-circuits
-    /// via modelsEqual when the topology hasn't changed.
-    Timer {
-        id: rebuildDebounce
-        interval: 50
-        onTriggered: root._rebuildTiles()
     }
 
     Connections {
         target: Hyprland
-        enabled: root.active
+        enabled: root.sessionActive
 
         function onRawEvent(event: HyprlandEvent): void {
-            if (root._windowLayoutEvents.has(event.name))
-                rebuildDebounce.restart();
+            if (event.name === "fullscreen") {
+                if (root.revealing)
+                    revealSettleTimer.restart();
+                else
+                    root.cancel();
+                return;
+            }
+
+            if (event.name === "closewindow") {
+                const eventAddress = event.data ?? "";
+                const closedAddress = eventAddress.startsWith("0x") ? eventAddress : `0x${eventAddress}`;
+                if (closedAddress === root.sourceAddress) {
+                    root._actionToken++;
+                    root._resetSession();
+                    return;
+                }
+            }
+
+            if (root._topologyEvents.has(event.name))
+                root.cancel();
         }
     }
 }

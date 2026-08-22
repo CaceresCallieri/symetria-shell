@@ -4,7 +4,7 @@ import qs.services
 import Quickshell
 import Quickshell.Io
 
-/// IPC entry point for the Window Overview feature.
+/// IPC entry point for the Dwindle window navigator.
 ///
 /// Routes `symmetria shell overview {show,hide,toggle}` to WindowOverviewService.
 /// The actual overlay rendering lives in OverviewSurface.qml,
