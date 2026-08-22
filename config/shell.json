@@ -530,7 +530,8 @@
     "enabled": true,
     "sizes": {
       "innerHeight": 18
-    }
+    },
+    "mergeWorkspaces": false
   },
   "screenshot": {
     "ssh": {

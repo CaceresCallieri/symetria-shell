@@ -34,7 +34,20 @@ Item {
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches bar/Wrapper behavior — prevents content from being momentarily obscured)
     readonly property int exclusiveZone: shouldBeVisible ? contentHeight : 0
-    readonly property bool shouldBeVisible: (Config.agentbar.enabled && AgentService.agentCount > 0 && !AgentService.userHidden)
+    // Counts BOTH sources. The gate read `AgentService.agentCount` alone until
+    // Mesura Code became a second one, which would have left the bar hidden on
+    // a machine running Mesura and no Symmetria IDE — the arrangement this
+    // whole path exists to serve, and the one the IDE's retirement makes
+    // ordinary.
+    readonly property bool shouldBeVisible: (Config.agentbar.enabled
+            && (AgentService.agentCount > 0
+                // Counted only in the SEPARATE layout. `MergedBarContent` reads
+                // AgentService alone, so counting Mesura there would reserve
+                // the screen edge for a bar with nothing in it — and the merged
+                // mode is IPC-toggleable at runtime, so this is reachable
+                // without editing a config file.
+                || (!AgentService.mergeActive && SymmetriaThreads.projectGroups.length > 0))
+            && !AgentService.userHidden)
         || preview.previewActive
 
     clip: true
