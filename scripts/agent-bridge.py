@@ -413,6 +413,12 @@ class AgentBridge:
             # (agent-ownership inversion, Phase 4) The snapshot no longer carries
             # an "stt" field — STT recording state goes DIRECT shell→IDE now, not
             # via this relay.
+            # Each agent no longer carries "last_prompt"/"last_messages" either:
+            # the agent-overview overlay was their only consumer and it was
+            # deleted. Verified at removal time that no out-of-repo subscriber
+            # reads them (vigiliad's hubAgent struct omits both fields, so Go
+            # drops them on unmarshal; symmetria-ide's agent_hub only emits its
+            # own copy). Dropped deliberately — do not re-add without a consumer.
         }
         line = json.dumps(payload)
         log.debug("_snapshot: %d agents, %d projects, %d clients, %d subscriber(s) — %d bytes",

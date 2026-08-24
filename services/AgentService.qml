@@ -131,6 +131,11 @@ Singleton {
     property int _sttTargetIdePid: -1
 
     /// terminal_pid → {id: int, name: string}
+    // CONTRACT: despite the "_" prefix, modules/agentbar/MergedBarContent.qml
+    // reads this cross-module as a binding dependency. The public `workspaceMap`
+    // alias that used to front it went away with the agent overview, its only
+    // consumer. Grep _workspaceMap before changing its shape or how it is
+    // reassigned — see CLAUDE.md, "Property contract drift across containers".
     // intentional var: JS object used as hash map (pid → workspace info)
     property var _workspaceMap: ({})
 
