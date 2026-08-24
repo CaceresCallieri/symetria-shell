@@ -8,19 +8,38 @@ import Quickshell
 Searcher {
     id: root
 
+    // Wrapper script for launchArgs below. Chdir to the entry's Path, or to $HOME when
+    // that is empty or gone, then exec the real command. Arguments arrive as positional
+    // parameters, so no quoting is involved.
+    readonly property string chdirWrapper: 'if [ -z "$1" ] || ! cd "$1" 2>/dev/null; then cd "$HOME" 2>/dev/null || cd /; fi; shift; exec "$@"'
+
+    function launchArgs(entry: DesktopEntry): list<string> {
+        const command = entry.runInTerminal ? [...Config.general.apps.terminal, `${Quickshell.shellDir}/assets/wrap_term_launch.sh`, ...entry.command] : [...entry.command];
+
+        // WORKAROUND: launch through `sh -c` instead of the ProcessContext object form of
+        // execDetached. Two separate defects make the object form unusable here.
+        //
+        // 1. `Quickshell.execDetached({command, workingDirectory})` throws "Could not
+        //    convert argument 0 from [object Object] to qs::io::process::ProcessContext"
+        //    when the quickshell build and the installed Qt disagree on a patch release
+        //    (built against Qt 6.11.0, system runs Qt 6.11.1). The list form of
+        //    execDetached is unaffected, which is why every other call site in this shell
+        //    keeps working. Do NOT revert to the object form to "clean this up".
+        // 2. The list form cannot set a working directory, so the child inherits the cwd
+        //    of whatever started the shell. When that directory is later removed - a git
+        //    worktree, a build sandbox - app2unit falls back to `systemd-run --same-dir`,
+        //    which aborts with "Failed to get current working directory". No unit is
+        //    created and nothing reaches the journal, so every launch fails in complete
+        //    silence.
+        //
+        // Remove once quickshell is rebuilt against the running Qt AND the list form of
+        // execDetached accepts a working directory.
+        return ["sh", "-c", root.chdirWrapper, "symmetria-launch", entry.workingDirectory, "app2unit", "--", ...command];
+    }
+
     function launch(entry: DesktopEntry): void {
         appDb.incrementFrequency(entry.id);
-
-        if (entry.runInTerminal)
-            Quickshell.execDetached({
-                command: ["app2unit", "--", ...Config.general.apps.terminal, `${Quickshell.shellDir}/assets/wrap_term_launch.sh`, ...entry.command],
-                workingDirectory: entry.workingDirectory
-            });
-        else
-            Quickshell.execDetached({
-                command: ["app2unit", "--", ...entry.command],
-                workingDirectory: entry.workingDirectory
-            });
+        Quickshell.execDetached(root.launchArgs(entry));
     }
 
     function search(search: string): list<var> {
