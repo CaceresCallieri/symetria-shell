@@ -9,8 +9,8 @@ Searcher {
     id: root
 
     // Wrapper script for launchArgs below. Chdir to the entry's Path, or to $HOME when
-    // that is empty or gone, then exec the real command. Arguments arrive as positional
-    // parameters, so no quoting is involved.
+    // that is empty or gone, or to / as a last resort, then exec the real command.
+    // Arguments arrive as positional parameters, so no quoting is involved.
     readonly property string chdirWrapper: 'if [ -z "$1" ] || ! cd "$1" 2>/dev/null; then cd "$HOME" 2>/dev/null || cd /; fi; shift; exec "$@"'
 
     function launchArgs(entry: DesktopEntry): list<string> {
@@ -32,8 +32,16 @@ Searcher {
         //    created and nothing reaches the journal, so every launch fails in complete
         //    silence.
         //
-        // Remove once quickshell is rebuilt against the running Qt AND the list form of
-        // execDetached accepts a working directory.
+        // execDetached discards the child's stdout and stderr - a child that writes to
+        // stderr and exits non-zero produces no output anywhere. The wrapper therefore
+        // guarantees a usable directory rather than reporting a bad one, because a
+        // report would go nowhere.
+        //
+        // Removing this needs both halves covered, not only the Qt one. A rebuilt
+        // quickshell restores the object form, but that form reproduces defect 2 whenever
+        // workingDirectory is the empty string - the common case, since most entries carry
+        // no Path= - because the child then inherits the shell's cwd exactly as before.
+        // Any replacement must still substitute a valid directory for those entries.
         return ["sh", "-c", root.chdirWrapper, "symmetria-launch", entry.workingDirectory, "app2unit", "--", ...command];
     }
 
