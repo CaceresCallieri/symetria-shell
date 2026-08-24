@@ -34,7 +34,6 @@ Singleton {
     property alias packages: adapter.packages
     property alias keychords: adapter.keychords
     property alias agentbar: adapter.agentbar
-    property alias agentOverview: adapter.agentOverview
     property alias audioRecorder: adapter.audioRecorder
     property alias screenshot: adapter.screenshot
 
@@ -115,7 +114,6 @@ Singleton {
             packages: serializePackages(),
             keychords: serializeKeyChords(),
             agentbar: serializeAgentBar(),
-            agentOverview: serializeAgentOverview(),
             screenshot: serializeScreenshot()
         };
     }
@@ -583,15 +581,6 @@ Singleton {
         };
     }
 
-    function serializeAgentOverview(): var {
-        return {
-            enabled: agentOverview.enabled,
-            sizes: {
-                cardWidth: agentOverview.sizes.cardWidth
-            }
-        };
-    }
-
     function serializeScreenshot(): var {
         return {
             ssh: {
@@ -665,7 +654,6 @@ Singleton {
             property PackagesConfig packages: PackagesConfig {}
             property KeyChordsConfig keychords: KeyChordsConfig {}
             property AgentBarConfig agentbar: AgentBarConfig {}
-            property AgentOverviewConfig agentOverview: AgentOverviewConfig {}
             property AudioRecorderConfig audioRecorder: AudioRecorderConfig {}
             property ScreenshotConfig screenshot: ScreenshotConfig {}
         }

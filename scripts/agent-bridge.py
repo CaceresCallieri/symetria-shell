@@ -158,14 +158,6 @@ class AgentBridge:
         # idle), so the id must survive idle. Kept here, cleared only on full
         # teardown (_clear_agent_state).
         self._session_ids: dict[str, str] = {}
-        # Sticky conversation context for the agent-overview cards — SAME
-        # lifecycle as _session_ids (survives idle so a dormant agent still
-        # shows its last exchange; cleared only on full teardown). last_prompt is
-        # the user's most recent prompt; last_messages is up to the last 3
-        # assistant text turns. Both arrive on the "activity" message
-        # (last_prompt on UserPromptSubmit, last_messages on Stop).
-        self._last_prompts: dict[str, str] = {}
-        self._last_messages: dict[str, list] = {}
         # Per-agent ring buffer of recent state transitions for postmortem
         # diagnostics. Each entry: {ts, event_ts_ns, hook_event, state, tool,
         # ooo} where ooo is True if this update arrived out-of-order.
@@ -403,12 +395,6 @@ class AgentBridge:
                     # inject verb (Symmetria IDE terminal-agent panes, which
                     # have no nvim socket). "" → nvim RPC / legacy behavior.
                     "inject_via": inst.get("inject_via", ""),
-                    # Conversation context for the agent-overview cards, from the
-                    # sticky maps (survive idle like session_id). "" / [] until
-                    # the hook first reports them; absent for harnesses (opencode)
-                    # that don't yet forward conversation text.
-                    "last_prompt": self._last_prompts.get(agent_id, ""),
-                    "last_messages": self._last_messages.get(agent_id, []),
                     # Addressable tmux session name (<slug>-<hash>-<slot>),
                     # published by IDEs running the tmux substrate so external
                     # control planes (vigiliad → the phone) can attach ttyd and
@@ -541,19 +527,6 @@ class AgentBridge:
             # from an idle snapshot. Only overwrite when actually supplied.
             if session_id:
                 self._session_ids[agent_id] = session_id
-            # Sticky conversation context (same overwrite-only-when-present
-            # pattern as session_id): last_prompt arrives on UserPromptSubmit,
-            # last_messages on Stop. Absent on every other event → keep prior.
-            # Clamped on ingest rather than trusted: these come from any client
-            # on the socket and then ride along in EVERY snapshot for the rest of
-            # the agent's life, so an oversized payload would permanently inflate
-            # every broadcast. Bounds mirror the hook's own 3 x 280 contract.
-            last_prompt = msg.get("last_prompt", "")
-            if isinstance(last_prompt, str) and last_prompt:
-                self._last_prompts[agent_id] = last_prompt[:300]
-            last_messages = msg.get("last_messages")
-            if isinstance(last_messages, list) and last_messages:
-                self._last_messages[agent_id] = [str(m)[:300] for m in last_messages[-3:]]
 
             prev_entry = self._activities.get(agent_id)
             prev_state = prev_entry.get("state", "") if prev_entry else ""
@@ -1119,7 +1092,7 @@ class AgentBridge:
         """Remove all per-agent state for a given agent_id.
 
         Called from removed/goodbye/remove_client and reap_stale_activities
-        to ensure all four per-agent dicts stay consistent. Centralises the
+        to ensure every per-agent dict stays consistent. Centralises the
         teardown so new dicts only need to be added here.
         """
         # (agent-ownership inversion, Phase 4) The STT self-heal that dropped a
@@ -1128,8 +1101,6 @@ class AgentBridge:
         self._activities.pop(aid, None)
         self._agent_types.pop(aid, None)
         self._session_ids.pop(aid, None)
-        self._last_prompts.pop(aid, None)
-        self._last_messages.pop(aid, None)
         self._activity_history.pop(aid, None)
         self._subagent_depth.pop(aid, None)
         self._warned_stuck.discard(aid)
