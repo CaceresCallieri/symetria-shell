@@ -50,7 +50,7 @@ jobs:
 
       - name: Run shellcheck
         if: ${{ !cancelled() }}
-        run: nix develop --command bash .github/scripts/run-shellcheck.sh
+        run: nix develop .#lint --command bash .github/scripts/run-shellcheck.sh
 
       # Regenerates the qs.* module shadow tree so `import qs.config` resolves.
       # See scripts/gen-qmllint-tree.py and docs/qmllint-setup.md.
@@ -60,4 +60,4 @@ jobs:
 
       - name: Run qmllint
         if: ${{ !cancelled() }}
-        run: nix develop --command bash .github/scripts/run-qmllint.sh
+        run: nix develop .#lint --command bash .github/scripts/run-qmllint.sh

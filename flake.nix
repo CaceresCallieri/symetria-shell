@@ -44,55 +44,65 @@
       default = symmetria-shell;
     });
 
-    devShells = forAllSystems (pkgs: {
+    devShells = forAllSystems (pkgs: let
+      system = pkgs.stdenv.hostPlatform.system;
+
+      # Qt packages that install QML modules the shell imports.
+      #
+      # Do NOT add `qtquickcontrols2`. It is a Qt5-era package name that does
+      # not exist in pkgs.qt6 — Qt 6 merged Qt Quick Controls into
+      # qtdeclarative, which therefore already provides QtQuick,
+      # QtQuick.Controls, QtQuick.Templates, QtQuick.Layouts, QtQuick.Shapes
+      # and Qt.labs.*. Referencing it aborts flake evaluation with
+      # `undefined variable 'qtquickcontrols2'`.
+      qtQmlPackages = with pkgs.qt6; [
+        qtdeclarative
+        qtmultimedia
+        qt5compat
+        qtsvg
+      ];
+
+      qmlImportPathOf = packages:
+        pkgs.lib.concatStringsSep ":"
+        (map (p: "${p}/${pkgs.qt6.qtbase.qtQmlPrefix}") packages);
+    in {
       default = let
-        shell = self.packages.${pkgs.stdenv.hostPlatform.system}.symmetria-shell;
-
-        # Every package that installs QML modules the shell imports. qmllint
-        # resolves `import QtQuick`, `import Quickshell` and `import Symmetria`
-        # through QML_IMPORT_PATH built from this list.
-        #
-        # Do NOT add `qtquickcontrols2` here. It is a Qt5-era package name and
-        # does not exist in pkgs.qt6 — Qt 6 merged Qt Quick Controls into
-        # qtdeclarative, which therefore already provides QtQuick,
-        # QtQuick.Controls, QtQuick.Templates, QtQuick.Layouts, QtQuick.Shapes
-        # and Qt.labs.*. Referencing it aborts flake evaluation with
-        # `undefined variable 'qtquickcontrols2'`.
-        qmlModulePackages =
-          (with pkgs.qt6; [
-            qtdeclarative
-            qtmultimedia
-            qt5compat
-            qtsvg
-          ])
-          ++ [shell.quickshell shell.plugin];
-
-        qmlImportPath =
-          pkgs.lib.concatStringsSep ":"
-          (map (p: "${p}/${pkgs.qt6.qtbase.qtQmlPrefix}") qmlModulePackages);
+        shell = self.packages.${system}.symmetria-shell;
       in
         pkgs.mkShell.override {stdenv = shell.stdenv;} {
           inputsFrom = [shell shell.plugin shell.extras];
-          # qt6.qtdeclarative is already pulled in transitively by inputsFrom,
-          # but it is listed explicitly because the lint job depends on the
-          # `qmllint` binary being on PATH, and a transitive build input is not
-          # a contract. See .github/workflows/lint.yml.
-          # qt6.qtdeclarative (qmllint) and shellcheck are listed explicitly
-          # because the lint job depends on both binaries being on PATH, and a
-          # transitive build input is not a contract. Pinning shellcheck here
-          # also keeps developers and CI on one version — the runner's
-          # preinstalled 0.9.0 disagreed with a local 0.11.0 on this repo.
-          # See .github/workflows/lint.yml.
-          packages = with pkgs; [clazy material-symbols rubik nerd-fonts.caskaydia-cove qt6.qtdeclarative shellcheck];
+          packages = with pkgs; [clazy material-symbols rubik nerd-fonts.caskaydia-cove];
           SYMMETRIA_XKB_RULES_PATH = "${pkgs.xkeyboard-config}/share/xkeyboard-config-2/rules/base.lst";
-
-          # Set explicitly rather than left to the Qt setup hooks. nixpkgs
-          # splits qtdeclarative's binaries and its QML modules across store
-          # outputs, so qmllint's own default import directory — which it
-          # derives from the location of its binary — resolves nothing at all.
-          # Without this, even `import QtQuick` fails.
-          QML_IMPORT_PATH = qmlImportPath;
         };
+
+      # Lint-only shell, used by .github/workflows/lint.yml.
+      #
+      # It deliberately does NOT use `inputsFrom`. The main package lists
+      # `plugin` in its buildInputs, so `inputsFrom = [shell]` forces the
+      # symmetria-qml-plugin derivation to build — and that derivation has been
+      # failing since before 2026-05 on `pkg_check_modules(... libcava
+      # REQUIRED)`, which is also why every `update-flake-inputs` run is red.
+      # Depending on the default devShell would make the lint job hostage to an
+      # unrelated break.
+      #
+      # The cost of the separation is that `Symmetria`, `Symmetria.Internal`
+      # and `Symmetria.Services` do not resolve in CI, since those modules come
+      # from that same plugin. Three warning categories are parked at `info` in
+      # .qmllint.ini because of it — see the note there, which records the
+      # exact condition for restoring them.
+      lint = pkgs.mkShell {
+        packages = [pkgs.qt6.qtdeclarative pkgs.shellcheck];
+
+        # Set explicitly rather than left to the Qt setup hooks. nixpkgs splits
+        # qtdeclarative's binaries from its QML modules across store outputs,
+        # so qmllint's own default import directory — which it derives from the
+        # location of its binary — resolves nothing at all. Without this, even
+        # `import QtQuick` fails, which is exactly what the first CI run showed
+        # (6,268 import errors).
+        QML_IMPORT_PATH = qmlImportPathOf (
+          qtQmlPackages ++ [inputs.quickshell.packages.${system}.default]
+        );
+      };
     });
 
     homeManagerModules.default = import ./nix/hm-module.nix self;
