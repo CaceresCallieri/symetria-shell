@@ -61,3 +61,15 @@ jobs:
       - name: Run qmllint
         if: ${{ !cancelled() }}
         run: nix develop .#lint --command bash .github/scripts/run-qmllint.sh
+
+      - name: Run qmlformat
+        if: ${{ !cancelled() }}
+        run: nix develop .#lint --command bash .github/scripts/run-qmlformat.sh
+
+      - name: Run ruff
+        if: ${{ !cancelled() }}
+        run: nix develop .#lint --command bash -c 'ruff check . --output-format concise && ruff format --check .'
+
+      - name: Run pyrefly
+        if: ${{ !cancelled() }}
+        run: nix develop .#lint --command pyrefly check

@@ -17,16 +17,19 @@ STAGED_QML=()
 STAGED_SH=()
 STAGED_FRAG=()
 
+STAGED_PY=()
+
 while IFS= read -r -d '' file; do
     case "$file" in
         *.qml) STAGED_QML+=("$file") ;;
         *.sh)  STAGED_SH+=("$file") ;;
+        *.py)  STAGED_PY+=("$file") ;;
         assets/shaders/*.frag) STAGED_FRAG+=("$file") ;;
     esac
 done < <(git diff --cached --name-only --diff-filter=d -z)
 
 # Nothing to lint
-if [[ ${#STAGED_QML[@]} -eq 0 && ${#STAGED_SH[@]} -eq 0 && ${#STAGED_FRAG[@]} -eq 0 ]]; then
+if [[ ${#STAGED_QML[@]} -eq 0 && ${#STAGED_SH[@]} -eq 0 && ${#STAGED_PY[@]} -eq 0 && ${#STAGED_FRAG[@]} -eq 0 ]]; then
     exit 0
 fi
 
@@ -73,6 +76,45 @@ if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
     else
         echo "pre-commit: $QMLLINT not found, skipping QML lint" >&2
         echo "pre-commit: install it with 'paru -S qt6-declarative' — do NOT substitute /usr/bin/qmllint (Qt5)" >&2
+    fi
+fi
+
+# --- qmlformat ---
+# Delegates to the shared script rather than inlining `qmlformat | diff`,
+# because qmlformat fails on 10 files in this repo by exiting 1 with NO output,
+# and the inline form would report those crashes as formatting violations.
+# See the header of .github/scripts/run-qmlformat.sh.
+if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
+    QMLFORMAT_CHECK="$(git rev-parse --show-toplevel)/.github/scripts/run-qmlformat.sh"
+    if [[ -x "$QMLFORMAT_CHECK" ]]; then
+        if ! "$QMLFORMAT_CHECK" "${STAGED_QML[@]}" >&2; then
+            FAILED=1
+        fi
+    fi
+fi
+
+# --- ruff (Python lint + format) ---
+if [[ ${#STAGED_PY[@]} -gt 0 ]]; then
+    if command -v ruff >/dev/null 2>&1; then
+        if ! ruff check --output-format concise "${STAGED_PY[@]}" >&2; then
+            FAILED=1
+        fi
+        if ! ruff format --check "${STAGED_PY[@]}" >&2; then
+            FAILED=1
+        fi
+    else
+        echo "pre-commit: ruff not found, skipping Python lint (paru -S ruff)" >&2
+    fi
+
+    # pyrefly is whole-project by nature — a changed signature breaks callers
+    # the diff never touched — so it is never scoped to the staged files. The
+    # committed baseline is what keeps it reporting only NEW errors.
+    if command -v pyrefly >/dev/null 2>&1; then
+        if ! pyrefly check --baseline pyrefly-baseline.json >&2; then
+            FAILED=1
+        fi
+    else
+        echo "pre-commit: pyrefly not found, skipping type check (uv tool install pyrefly)" >&2
     fi
 fi
 

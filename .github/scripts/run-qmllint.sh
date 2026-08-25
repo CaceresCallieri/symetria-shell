@@ -18,9 +18,16 @@ SHADOW_TREE="build/qmllint"
 # --- Resolve the tool ------------------------------------------------------
 # Never guess and never continue without it. A missing tool is ONE tooling
 # error, not a finding per file.
-if ! QMLLINT="$(command -v qmllint 2>/dev/null)"; then
-    echo "::error::qmllint not found on PATH. The devShell should provide it via qt6.qtdeclarative (see flake.nix)."
-    exit 1
+# Prefer the absolute Arch path, fall back to PATH (which is what the Nix
+# devShell provides). Preferring the absolute path is what lets a developer run
+# this script directly on Arch, where a bare `qmllint` resolves to Qt 5.15's
+# tool and would trip the version guard below.
+QMLLINT=/usr/lib/qt6/bin/qmllint
+if ! command -v "$QMLLINT" >/dev/null 2>&1; then
+    if ! QMLLINT="$(command -v qmllint 2>/dev/null)"; then
+        echo "::error::qmllint not found. Expected /usr/lib/qt6/bin/qmllint (package qt6-declarative) or qmllint on PATH."
+        exit 1
+    fi
 fi
 
 # --- Assert it is the Qt6 tool ---------------------------------------------
