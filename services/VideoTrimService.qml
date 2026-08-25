@@ -75,10 +75,7 @@ Singleton {
         const shq = s => "'" + s.replace(/'/g, "'\\''") + "'";
         const dir = shq(thumbnailDir);
         const src = shq(source);
-        thumbProc.command = ["sh", "-c",
-            `rm -rf ${dir} && mkdir -p ${dir} && ` +
-            `ffmpeg -y -i ${src} -vf "fps=${rate},scale=-1:96" ` +
-            `-frames:v ${count} ${dir}/thumb_%03d.jpg >/dev/null 2>&1`];
+        thumbProc.command = ["sh", "-c", `rm -rf ${dir} && mkdir -p ${dir} && ` + `ffmpeg -y -i ${src} -vf "fps=${rate},scale=-1:96" ` + `-frames:v ${count} ${dir}/thumb_%03d.jpg >/dev/null 2>&1`];
         // Back to 0 BEFORE the rm -rf lands: the Content filmstrip treats
         // version 0 as "no batch on disk" and skips requesting frames. Without
         // this reset the counter only ever climbs, so from the second clip of a
@@ -137,15 +134,7 @@ Singleton {
         // Snapshot the source so the (async) exit handler only dismisses the
         // panel if the user hasn't opened a different clip in the meantime.
         trimProc.trimmedSource = source;
-        trimProc.command = [
-            "ffmpeg", "-y",
-            "-ss", inSec.toFixed(3),
-            "-i", source,
-            "-t", dur.toFixed(3),
-            "-c", "copy",
-            "-avoid_negative_ts", "make_zero",
-            out
-        ];
+        trimProc.command = ["ffmpeg", "-y", "-ss", inSec.toFixed(3), "-i", source, "-t", dur.toFixed(3), "-c", "copy", "-avoid_negative_ts", "make_zero", out];
         trimming = true;
         trimProc.running = true;
     }

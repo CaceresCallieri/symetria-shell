@@ -30,24 +30,26 @@ Singleton {
     property string _activeMode: ""
 
     readonly property var _modeNames: ({
-        "stt": qsTr("Speech-to-Text"),
-        "audio": qsTr("Audio Recorder")
-    })
+            "stt": qsTr("Speech-to-Text"),
+            "audio": qsTr("Audio Recorder")
+        })
 
     /// Shared icon names for STT delivery modes. Used by Content.qml and RecordingBarEmbed.qml.
     // intentional var: JS string→string map (no QML typed map)
     readonly property var deliveryModeIcons: ({
-        "clipboard": "content_copy",
-        "inject": "input",
-        "submit": "send"
-    })
+            "clipboard": "content_copy",
+            "inject": "input",
+            "submit": "send"
+        })
 
     /// The current recording job (from whichever service is active), or null.
     /// Centralizes mode→service→job resolution so consumers don't duplicate it.
     // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
     readonly property var currentJob: {
-        if (_activeMode === "stt") return SttService.job;
-        if (_activeMode === "audio") return AudioRecorderService.job;
+        if (_activeMode === "stt")
+            return SttService.job;
+        if (_activeMode === "audio")
+            return AudioRecorderService.job;
         return null;
     }
 
@@ -67,7 +69,8 @@ Singleton {
     /// re-seeds from Config.stt.deliveryMode.
     function cycleDeliveryMode(): void {
         const job = currentJob;
-        if (!job || _activeMode !== "stt") return;
+        if (!job || _activeMode !== "stt")
+            return;
         const idx = _deliveryModes.indexOf(job.activeDeliveryChoice ?? "clipboard");
         job.setDeliveryChoice(_deliveryModes[(idx + 1) % _deliveryModes.length]);
     }
@@ -85,12 +88,7 @@ Singleton {
         // Blocked — show user feedback
         const activeName = _modeNames[_activeMode] ?? _activeMode;
         const requestedName = _modeNames[mode] ?? mode;
-        Toaster.toast(
-            qsTr("%1 is active").arg(activeName),
-            qsTr("Cancel it before starting %1").arg(requestedName),
-            "block",
-            Toast.Warning
-        );
+        Toaster.toast(qsTr("%1 is active").arg(activeName), qsTr("Cancel it before starting %1").arg(requestedName), "block", Toast.Warning);
         return false;
     }
 
@@ -105,15 +103,27 @@ Singleton {
     function routeAction(action: string): void {
         if (_activeMode === "stt") {
             switch (action) {
-                case "pause": SttService.pause(); break;
-                case "cancel": SttService.cancel(); break;
-                case "stop": SttService.stop(); break;
+            case "pause":
+                SttService.pause();
+                break;
+            case "cancel":
+                SttService.cancel();
+                break;
+            case "stop":
+                SttService.stop();
+                break;
             }
         } else if (_activeMode === "audio") {
             switch (action) {
-                case "pause": AudioRecorderService.pause(); break;
-                case "cancel": AudioRecorderService.cancel(); break;
-                case "stop": AudioRecorderService.stop(); break;
+            case "pause":
+                AudioRecorderService.pause();
+                break;
+            case "cancel":
+                AudioRecorderService.cancel();
+                break;
+            case "stop":
+                AudioRecorderService.stop();
+                break;
             }
         }
     }

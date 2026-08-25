@@ -72,9 +72,7 @@ Item {
         implicitWidth: root.minWidth
         width: root.minWidth - Appearance.padding.large * 2
         horizontalAlignment: TextInput.AlignHCenter
-        placeholderText: SttService.sessionVocabHints.length === 0
-            ? "Type hint word"
-            : "Add another..."
+        placeholderText: SttService.sessionVocabHints.length === 0 ? "Type hint word" : "Add another..."
         font.pointSize: Appearance.font.size.small
 
         onAccepted: {

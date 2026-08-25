@@ -206,9 +206,18 @@ Item {
             visible: root.raisedFactor > 0.01
 
             gradient: Gradient {
-                GradientStop { position: 0.00; color: Qt.rgba(1, 1, 1, root.highlightAlphaMax * root.raisedFactor) }
-                GradientStop { position: 0.55; color: Qt.rgba(1, 1, 1, 0.00) }
-                GradientStop { position: 1.00; color: Qt.rgba(0, 0, 0, 0.00) }
+                GradientStop {
+                    position: 0.00
+                    color: Qt.rgba(1, 1, 1, root.highlightAlphaMax * root.raisedFactor)
+                }
+                GradientStop {
+                    position: 0.55
+                    color: Qt.rgba(1, 1, 1, 0.00)
+                }
+                GradientStop {
+                    position: 1.00
+                    color: Qt.rgba(0, 0, 0, 0.00)
+                }
             }
         }
 

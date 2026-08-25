@@ -116,15 +116,10 @@ Item {
         // retry once the decode finishes.
         fullDecoder.entryId = id;
         fullDecoder.outputPath = out;
-        fullDecoder.command = [
-            "bash", "-c",
+        fullDecoder.command = ["bash", "-c",
             // mkdir -p the cache; only re-decode when the file is missing so
             // re-previewing the same entry within a session is instant.
-            'mkdir -p "$(dirname "$2")" && { [ -f "$2" ] || cliphist decode "$1" > "$2"; }',
-            "cliphist-decode-full",
-            id,
-            out
-        ];
+            'mkdir -p "$(dirname "$2")" && { [ -f "$2" ] || cliphist decode "$1" > "$2"; }', "cliphist-decode-full", id, out];
         // Kill any in-flight decode before starting a new one. QuickShell's
         // Process silently ignores running=true while already running
         // (startProcessIfReady() returns early when this->process != nullptr),

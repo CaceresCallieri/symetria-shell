@@ -230,12 +230,7 @@ Singleton {
                 root.stopRetryCount++;
                 if (root.stopRetryCount >= root.maxStopRetries) {
                     console.error("[Recorder] stop verify FAILED after", root.maxStopRetries, "retries");
-                    Toaster.toast(
-                        qsTr("Stop failed"),
-                        qsTr("Recording may need manual termination"),
-                        "error",
-                        Toast.Error
-                    );
+                    Toaster.toast(qsTr("Stop failed"), qsTr("Recording may need manual termination"), "error", Toast.Error);
                     root.stopPending = false;
                     root.stopRetryCount = 0;
                 } else {

@@ -36,9 +36,7 @@ Item {
     // otherwise force every item onto its own row, ballooning childrenRect.height and the exclusive
     // zone and shoving application windows for a frame. Recomputes to the real budget once width
     // arrives.
-    readonly property int _maxContentWidth: root.width > 0
-        ? Math.max(1, root.width - _edgeMargin * 2 - Appearance.padding.large * 2)
-        : 100000
+    readonly property int _maxContentWidth: root.width > 0 ? Math.max(1, root.width - _edgeMargin * 2 - Appearance.padding.large * 2) : 100000
     // True once content occupies more than one row. This is the hinge for the whole stability
     // strategy: a single row can never re-wrap (so it animates freely and the pill hugs it),
     // whereas a wrapped layout must snap and use a fixed width (so a workspace switch can't make
@@ -49,9 +47,7 @@ Item {
     // as a reactivity anchor: QML doesn't reliably re-fire a binding on `layout.children` list
     // mutation, and a slot appended to a partial last row moves no existing sibling, so without
     // this the existing slots would keep a stale centre offset until the next unrelated relayout.
-    readonly property int _layoutChildCount: root.filteredWorkspaces.length
-        + (root.hasRemote ? 1 : 0)
-        + root.orphanAgents.length
+    readonly property int _layoutChildCount: root.filteredWorkspaces.length + (root.hasRemote ? 1 : 0) + root.orphanAgents.length
 
     /// Horizontal shift that centres the wrapped row containing itemY WITHIN THE FIXED CONTENT
     /// WIDTH (the Flow's budget). Because the wrapped pill is locked to that budget, centring each
@@ -86,9 +82,7 @@ Item {
     }
 
     // Per-monitor or global active workspace ID (same logic as Workspaces.qml)
-    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces
-        ? (monitor?.activeWorkspace?.id ?? 1)
-        : Hypr.activeWsId
+    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (monitor?.activeWorkspace?.id ?? 1) : Hypr.activeWsId
 
     // Special workspace overlay state — a special workspace can be active simultaneously
     // with a regular workspace (it overlays). We track the active special workspace ID
@@ -96,7 +90,8 @@ Item {
     readonly property string activeSpecialName: (Config.bar.workspaces.perMonitorWorkspaces ? monitor : Hypr.focusedMonitor)?.lastIpcObject.specialWorkspace.name ?? ""
     readonly property bool onSpecial: activeSpecialName !== ""
     readonly property int activeSpecialWsId: {
-        if (!onSpecial) return -1;
+        if (!onSpecial)
+            return -1;
         const ws = Hypr.workspaceByName(activeSpecialName);
         return ws?.id ?? -1;
     }
@@ -136,7 +131,8 @@ Item {
             return displayedWorkspaces;
 
         const mon = root.monitor;
-        if (!mon) return displayedWorkspaces;
+        if (!mon)
+            return displayedWorkspaces;
 
         const monWsIds = new Set();
         for (const ws of Hypr.workspaces.values) {
@@ -188,9 +184,7 @@ Item {
         // active slot's content width (the active slot shows app icons, so that width is volatile).
         // Height always hugs the wrapped rows (childrenRect spans every row), so the capsule grows
         // in height — not width — as entries wrap.
-        implicitWidth: root._wrapped
-            ? root._maxContentWidth + Appearance.padding.large * 2
-            : layout.childrenRect.width + Appearance.padding.large * 2
+        implicitWidth: root._wrapped ? root._maxContentWidth + Appearance.padding.large * 2 : layout.childrenRect.width + Appearance.padding.large * 2
         implicitHeight: layout.childrenRect.height
 
         // Wrapping content row. `width` is the wrap budget: when the content would exceed it, Flow

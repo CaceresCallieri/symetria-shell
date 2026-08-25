@@ -44,6 +44,7 @@ import subprocess
 import sys
 import time
 
+
 def _envf(name: str, default: float) -> float:
     try:
         return float(os.environ[name])
@@ -53,8 +54,12 @@ def _envf(name: str, default: float) -> float:
 
 # Overridable via env (e.g. SYMMETRIA_LOCK_WD_STALE_SECS) for tuning/testing.
 POLL_SECS = _envf("SYMMETRIA_LOCK_WD_POLL_SECS", 2.0)
-STALE_SECS = _envf("SYMMETRIA_LOCK_WD_STALE_SECS", 8.0)        # heartbeat mtime age == "qs stopped updating"
-UNHEALTHY_SECS = _envf("SYMMETRIA_LOCK_WD_UNHEALTHY_SECS", 12.0)  # sustained screencopy-blank before alarm
+STALE_SECS = _envf(
+    "SYMMETRIA_LOCK_WD_STALE_SECS", 8.0
+)  # heartbeat mtime age == "qs stopped updating"
+UNHEALTHY_SECS = _envf(
+    "SYMMETRIA_LOCK_WD_UNHEALTHY_SECS", 12.0
+)  # sustained screencopy-blank before alarm
 
 
 def state_dir() -> str:
@@ -83,7 +88,7 @@ def log_event(event_type: str, **fields) -> None:
         rec.update(fields)
         with open(LOG, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec) + "\n")
-    except Exception as exc:  # noqa: BLE001 - diagnostics must never crash
+    except Exception as exc:
         print(f"[lock-watchdog] log_event failed: {exc}", file=sys.stderr)
 
 
@@ -104,7 +109,7 @@ def notify(reason: str) -> None:
             check=False,
             timeout=5,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[lock-watchdog] notify failed: {exc}", file=sys.stderr)
 
 
@@ -112,11 +117,11 @@ def read_heartbeat():
     """Return (data: dict, mtime: float) or (None, None) if absent/unreadable."""
     try:
         mtime = os.path.getmtime(HEARTBEAT)
-        with open(HEARTBEAT, "r", encoding="utf-8") as fh:
+        with open(HEARTBEAT, encoding="utf-8") as fh:
             return json.load(fh), mtime
     except FileNotFoundError:
         return None, None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[lock-watchdog] read_heartbeat failed: {exc}", file=sys.stderr)
         return None, None
 
@@ -131,18 +136,23 @@ def pid_alive(pid) -> bool:
         return False
     except PermissionError:
         return True  # exists but not ours to signal
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
 def main() -> int:
-    log_event("watchdog_started", pid=os.getpid(), poll=POLL_SECS,
-              staleSecs=STALE_SECS, unhealthySecs=UNHEALTHY_SECS)
+    log_event(
+        "watchdog_started",
+        pid=os.getpid(),
+        poll=POLL_SECS,
+        staleSecs=STALE_SECS,
+        unhealthySecs=UNHEALTHY_SECS,
+    )
 
     # Per-episode state. Reset whenever the session is observed unlocked/clean.
-    observed_fresh = False     # have we seen a healthy live locked heartbeat?
-    unhealthy_since = None     # first tick screencopy was blank while locked
-    alarm_latched = False      # alarm fired this episode (avoid spamming)
+    observed_fresh = False  # have we seen a healthy live locked heartbeat?
+    unhealthy_since = None  # first tick screencopy was blank while locked
+    alarm_latched = False  # alarm fired this episode (avoid spamming)
 
     while True:
         time.sleep(POLL_SECS)
@@ -193,9 +203,11 @@ def main() -> int:
                 screencopyHealthy=healthy,
                 surfaces=data.get("surfaces"),
             )
-            print(f"[lock-watchdog] STUCK LOCK detected: {reason} "
-                  f"(pid={pid} alive={alive} age={age:.1f}s healthy={healthy})",
-                  file=sys.stderr)
+            print(
+                f"[lock-watchdog] STUCK LOCK detected: {reason} "
+                f"(pid={pid} alive={alive} age={age:.1f}s healthy={healthy})",
+                file=sys.stderr,
+            )
             notify(reason)
         elif not reason and alarm_latched:
             # Surface recovered on its own while still locked.

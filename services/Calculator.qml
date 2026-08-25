@@ -128,10 +128,10 @@ Singleton {
         onTriggered: {
             try {
                 storage.setText(JSON.stringify(root.history.map(entry => ({
-                    expression: entry.expression,
-                    result: entry.result,
-                    timestamp: entry.timestamp.getTime()
-                }))));
+                            expression: entry.expression,
+                            result: entry.result,
+                            timestamp: entry.timestamp.getTime()
+                        }))));
             } catch (e) {
                 console.error("[Calculator] Failed to serialize history:", e);
             }

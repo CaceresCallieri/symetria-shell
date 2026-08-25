@@ -67,17 +67,20 @@ CollapsibleSection {
 
         SliderInput {
             Layout.fillWidth: true
-            
+
             label: qsTr("Visualiser rounding")
             value: rootPane.visualiserRounding
             from: 0
             to: 10
             stepSize: 1
-            validator: IntValidator { bottom: 0; top: 10 }
-            formatValueFunction: (val) => Math.round(val).toString()
-            parseValueFunction: (text) => parseInt(text)
-            
-            onValueModified: (newValue) => {
+            validator: IntValidator {
+                bottom: 0
+                top: 10
+            }
+            formatValueFunction: val => Math.round(val).toString()
+            parseValueFunction: text => parseInt(text)
+
+            onValueModified: newValue => {
                 rootPane.visualiserRounding = Math.round(newValue);
                 rootPane.saveConfig();
             }
@@ -89,18 +92,20 @@ CollapsibleSection {
 
         SliderInput {
             Layout.fillWidth: true
-            
+
             label: qsTr("Visualiser spacing")
             value: rootPane.visualiserSpacing
             from: 0
             to: 2
-            validator: DoubleValidator { bottom: 0; top: 2 }
-            
-            onValueModified: (newValue) => {
+            validator: DoubleValidator {
+                bottom: 0
+                top: 2
+            }
+
+            onValueModified: newValue => {
                 rootPane.visualiserSpacing = newValue;
                 rootPane.saveConfig();
             }
         }
     }
 }
-

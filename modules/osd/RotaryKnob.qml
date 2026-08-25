@@ -34,9 +34,7 @@ RotaryControl {
                     anchors.top: parent.top
                     anchors.horizontalCenter: parent.horizontalCenter
                     radius: width / 2
-                    color: tick.index / 50 <= root.animatedValue
-                        ? Colours.palette.m3onSurface
-                        : Qt.alpha(Colours.palette.m3onSurfaceVariant, 0.22)
+                    color: tick.index / 50 <= root.animatedValue ? Colours.palette.m3onSurface : Qt.alpha(Colours.palette.m3onSurfaceVariant, 0.22)
                 }
             }
         }
@@ -71,11 +69,26 @@ RotaryControl {
 
             gradient: Gradient {
                 orientation: Gradient.Horizontal
-                GradientStop { position: 0.00; color: Qt.rgba(0.05, 0.06, 0.07, 0.34) }
-                GradientStop { position: 0.28; color: Qt.rgba(1, 1, 1, 0.34) }
-                GradientStop { position: 0.52; color: Qt.rgba(1, 1, 1, 0.06) }
-                GradientStop { position: 0.76; color: Qt.rgba(0.03, 0.04, 0.05, 0.30) }
-                GradientStop { position: 1.00; color: Qt.rgba(1, 1, 1, 0.16) }
+                GradientStop {
+                    position: 0.00
+                    color: Qt.rgba(0.05, 0.06, 0.07, 0.34)
+                }
+                GradientStop {
+                    position: 0.28
+                    color: Qt.rgba(1, 1, 1, 0.34)
+                }
+                GradientStop {
+                    position: 0.52
+                    color: Qt.rgba(1, 1, 1, 0.06)
+                }
+                GradientStop {
+                    position: 0.76
+                    color: Qt.rgba(0.03, 0.04, 0.05, 0.30)
+                }
+                GradientStop {
+                    position: 1.00
+                    color: Qt.rgba(1, 1, 1, 0.16)
+                }
             }
         }
 

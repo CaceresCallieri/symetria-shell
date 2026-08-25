@@ -425,13 +425,13 @@ Item {
                             hasError = true;
                             passwordContainer.passwordBuffer = "";
 
-                            // REGRESSION GUARD: do NOT call forgetNetwork() here.
-                            // This ran on every failure, including failures that
-                            // were not failures — a connection NetworkManager had
-                            // already activated got its profile deleted, tearing
-                            // down working wifi (verified 2026-07-27). Stale
-                            // profiles are cleared by connectWithSecret at the
-                            // start of the next attempt, where nothing is in flight.
+                        // REGRESSION GUARD: do NOT call forgetNetwork() here.
+                        // This ran on every failure, including failures that
+                        // were not failures — a connection NetworkManager had
+                        // already activated got its profile deleted, tearing
+                        // down working wifi (verified 2026-07-27). Stale
+                        // profiles are cleared by connectWithSecret at the
+                        // start of the next attempt, where nothing is in flight.
                         });
                     }
                 }

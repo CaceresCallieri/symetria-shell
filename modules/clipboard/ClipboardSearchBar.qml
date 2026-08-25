@@ -35,12 +35,12 @@ PillCard {
     /// contentWrapper on Images tab by the collapsed amount).
     readonly property real naturalHeight: Math.max(searchIcon.implicitHeight, search.implicitHeight, clearIcon.implicitHeight)
 
-    signal accepted()
-    signal navigateUp()
-    signal navigateDown()
-    signal requestClose()
-    signal requestTabCycle()
-    signal clearAllRequested()
+    signal accepted
+    signal navigateUp
+    signal navigateDown
+    signal requestClose
+    signal requestTabCycle
+    signal clearAllRequested
 
     function clear(): void {
         search.text = "";
@@ -153,15 +153,21 @@ PillCard {
         color: root._confirmClear ? Colours.palette.m3error : Colours.palette.m3onSurfaceVariant
 
         Behavior on width {
-            Anim { duration: Appearance.anim.durations.small }
+            Anim {
+                duration: Appearance.anim.durations.small
+            }
         }
 
         Behavior on opacity {
-            Anim { duration: Appearance.anim.durations.small }
+            Anim {
+                duration: Appearance.anim.durations.small
+            }
         }
 
         Behavior on color {
-            ColorAnimation { duration: Appearance.anim.durations.small }
+            ColorAnimation {
+                duration: Appearance.anim.durations.small
+            }
         }
 
         MouseArea {

@@ -37,8 +37,10 @@ Item {
 
     readonly property string displayState: {
         const s = job?.state ?? "idle";
-        if (mode === "audio" && s === "saving") return "processing";
-        if (mode === "stt" && (s === "transcribed" || s === "delivering")) return "processing";
+        if (mode === "audio" && s === "saving")
+            return "processing";
+        if (mode === "stt" && (s === "transcribed" || s === "delivering"))
+            return "processing";
         return s;
     }
 
@@ -74,37 +76,37 @@ Item {
     // ── State configuration map (mode-aware icon colors) ───────────
 
     readonly property var stateMap: ({
-        "recording": {
-            icon: "mic",
-            iconColor: root.mode === "audio" ? Colours.palette.m3error : Colours.palette.m3primary
-        },
-        "paused": {
-            icon: "pause",
-            iconColor: Colours.palette.m3tertiary
-        },
-        "processing": {
-            icon: "hourglass_top",
-            iconColor: Colours.palette.m3secondary
-        },
-        "error": {
-            icon: "error",
-            iconColor: Colours.palette.m3error
-        },
-        "success": {
-            icon: root.mode === "audio" ? "audio_file" : "check_circle",
-            // M3 "on surface" foreground for both modes — collapses the prior
-            // split (audio: m3confirm green / STT: m3primary accent) into a
-            // unified white success indicator that reads consistently against
-            // the claymorphism card. Status icons get the neutral on-surface
-            // role; only action-intent buttons (the hover-row submit ✓) keep
-            // their semantic color (m3confirm).
-            iconColor: Colours.palette.m3onSurface
-        },
-        "idle": {
-            icon: "mic",
-            iconColor: Colours.palette.m3onSurface
-        }
-    })
+            "recording": {
+                icon: "mic",
+                iconColor: root.mode === "audio" ? Colours.palette.m3error : Colours.palette.m3primary
+            },
+            "paused": {
+                icon: "pause",
+                iconColor: Colours.palette.m3tertiary
+            },
+            "processing": {
+                icon: "hourglass_top",
+                iconColor: Colours.palette.m3secondary
+            },
+            "error": {
+                icon: "error",
+                iconColor: Colours.palette.m3error
+            },
+            "success": {
+                icon: root.mode === "audio" ? "audio_file" : "check_circle",
+                // M3 "on surface" foreground for both modes — collapses the prior
+                // split (audio: m3confirm green / STT: m3primary accent) into a
+                // unified white success indicator that reads consistently against
+                // the claymorphism card. Status icons get the neutral on-surface
+                // role; only action-intent buttons (the hover-row submit ✓) keep
+                // their semantic color (m3confirm).
+                iconColor: Colours.palette.m3onSurface
+            },
+            "idle": {
+                icon: "mic",
+                iconColor: Colours.palette.m3onSurface
+            }
+        })
 
     readonly property var stateConfig: stateMap[root.displayState] ?? stateMap["idle"]
 
@@ -217,7 +219,9 @@ Item {
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
 
-                        Behavior on opacity { Anim {} }
+                        Behavior on opacity {
+                            Anim {}
+                        }
                     }
 
                     StyledText {
@@ -301,8 +305,7 @@ Item {
             // (wrapped block here; grow-with-cap + ElideLeft pill there).
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.mode === "stt" && root.partialTranscript !== ""
-                    && (root.displayState === "recording" || root.displayState === "processing")
+                show: root.mode === "stt" && root.partialTranscript !== "" && (root.displayState === "recording" || root.displayState === "processing")
 
                 StyledText {
                     width: 320
@@ -330,8 +333,7 @@ Item {
             // ── Hover-expanded action buttons ─────────────────────
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.hovered
-                    && (root.displayState === "recording" || root.displayState === "paused")
+                show: root.hovered && (root.displayState === "recording" || root.displayState === "paused")
 
                 RowLayout {
                     spacing: Appearance.spacing.normal
@@ -399,9 +401,7 @@ Item {
             // ── Vocabulary hint chips (STT only) ──────────────────
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.mode === "stt"
-                    && SttService.sessionVocabHints.length > 0
-                    && (root.displayState === "recording" || root.displayState === "paused")
+                show: root.mode === "stt" && SttService.sessionVocabHints.length > 0 && (root.displayState === "recording" || root.displayState === "paused")
 
                 VocabHintChips {}
             }
@@ -412,17 +412,17 @@ Item {
 
                 function onActionTriggered(action: string): void {
                     switch (action) {
-                        case "pause":
-                        case "resume":
-                            pauseBtn.triggerPress();
-                            break;
-                        case "cancel":
-                            if (root.displayState !== "error")
-                                cancelBtn.triggerPress();
-                            break;
-                        case "stop":
-                            submitBtn.triggerPress();
-                            break;
+                    case "pause":
+                    case "resume":
+                        pauseBtn.triggerPress();
+                        break;
+                    case "cancel":
+                        if (root.displayState !== "error")
+                            cancelBtn.triggerPress();
+                        break;
+                    case "stop":
+                        submitBtn.triggerPress();
+                        break;
                     }
                 }
             }
@@ -432,27 +432,28 @@ Item {
                 target: root.mode === "stt" ? SttService : null
 
                 function onActionTriggered(sessionId: string, action: string): void {
-                    if (sessionId !== "" && sessionId !== root.job?.sessionId) return;
+                    if (sessionId !== "" && sessionId !== root.job?.sessionId)
+                        return;
                     switch (action) {
-                        case "pause":
-                        case "resume":
-                            pauseBtn.triggerPress();
-                            break;
-                        case "restart":
-                            restartBtn.triggerPress();
-                            break;
-                        case "cancel":
-                            if (root.displayState !== "error")
-                                cancelBtn.triggerPress();
-                            break;
-                        case "stop":
-                            submitBtn.triggerPress();
-                            break;
-                        case "mode-clipboard":
-                        case "mode-inject":
-                        case "mode-submit":
-                            modeBtn.triggerPress();
-                            break;
+                    case "pause":
+                    case "resume":
+                        pauseBtn.triggerPress();
+                        break;
+                    case "restart":
+                        restartBtn.triggerPress();
+                        break;
+                    case "cancel":
+                        if (root.displayState !== "error")
+                            cancelBtn.triggerPress();
+                        break;
+                    case "stop":
+                        submitBtn.triggerPress();
+                        break;
+                    case "mode-clipboard":
+                    case "mode-inject":
+                    case "mode-submit":
+                        modeBtn.triggerPress();
+                        break;
                     }
                 }
             }

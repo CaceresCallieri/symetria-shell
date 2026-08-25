@@ -21,9 +21,7 @@ Item {
     readonly property string preview: entry?.preview ?? ""
 
     // Image items use 2x height for better thumbnail visibility (96px vs 48px)
-    implicitHeight: root.isImage
-        ? Config.clipboard.sizes.itemHeight * 2
-        : Config.clipboard.sizes.itemHeight
+    implicitHeight: root.isImage ? Config.clipboard.sizes.itemHeight * 2 : Config.clipboard.sizes.itemHeight
 
     anchors.left: parent?.left
     anchors.right: parent?.right
@@ -31,9 +29,7 @@ Item {
     // Accessibility for screen readers
     Accessible.role: Accessible.Button
     Accessible.name: root.isImage ? qsTr("Image clipboard entry") : root.preview
-    Accessible.description: (root.entry?._kind === "transcription")
-        ? qsTr("Click to copy transcription to clipboard")
-        : qsTr("Click to restore to clipboard")
+    Accessible.description: (root.entry?._kind === "transcription") ? qsTr("Click to copy transcription to clipboard") : qsTr("Click to restore to clipboard")
 
     StateLayer {
         radius: Appearance.rounding.normal
@@ -78,8 +74,16 @@ Item {
             SequentialAnimation on opacity {
                 running: loadingIcon.visible
                 loops: Animation.Infinite
-                NumberAnimation { to: 0.4; duration: 600; easing.type: Easing.InOutQuad }
-                NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
+                NumberAnimation {
+                    to: 0.4
+                    duration: 600
+                    easing.type: Easing.InOutQuad
+                }
+                NumberAnimation {
+                    to: 1.0
+                    duration: 600
+                    easing.type: Easing.InOutQuad
+                }
             }
         }
 

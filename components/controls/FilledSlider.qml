@@ -15,22 +15,13 @@ Slider {
     orientation: Qt.Vertical
 
     // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var trackStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
+    readonly property var trackStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var fillStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.medium
-    )
+    readonly property var fillStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium)
 
     // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var handleStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.veryStrong
-    )
+    readonly property var handleStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.veryStrong)
 
     background: StyledRect {
         color: root.trackStyle.background

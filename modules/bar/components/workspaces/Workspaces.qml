@@ -30,9 +30,11 @@ Item {
     // bar handles them via SpecialWorkspaces.qml overlay, not inline slots).
     readonly property list<int> displayedWorkspaces: {
         if (!Config.bar.workspaces.showOnlyOccupied) {
-            return Array.from({length: Config.bar.workspaces.shown}, (_, i) => groupOffset + i + 1)
+            return Array.from({
+                length: Config.bar.workspaces.shown
+            }, (_, i) => groupOffset + i + 1);
         }
-        return Hypr.displayedWorkspaceIds(false, root.activeWsId)
+        return Hypr.displayedWorkspaceIds(false, root.activeWsId);
     }
 
     property real blur: onSpecial ? 1 : 0

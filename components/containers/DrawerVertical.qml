@@ -34,7 +34,7 @@ Item {
     /// Emit from consumer when config changes that affect content size
     /// (e.g. Config.launcher.maxShownChanged, Config.calculator.maxHistoryChanged).
     /// Triggers the deferred reload timer.
-    signal configChanged()
+    signal configChanged
 
     // --- Internal state ---
     property int contentHeight
@@ -97,9 +97,7 @@ Item {
                 content.visible = false;
                 content.active = true;
             } else {
-                root.contentHeight = root.clampToMaxHeight
-                    ? Math.min(root.maxHeight, content.implicitHeight)
-                    : content.implicitHeight;
+                root.contentHeight = root.clampToMaxHeight ? Math.min(root.maxHeight, content.implicitHeight) : content.implicitHeight;
                 content.active = Qt.binding(() => root.shouldBeActive || root.visible);
                 content.visible = true;
                 if (showAnim.running) {
@@ -128,9 +126,7 @@ Item {
         // pattern — fires at the same lifecycle point (after item creation, before polish).
         onItemChanged: {
             if (item) {
-                root.contentHeight = root.clampToMaxHeight
-                    ? Math.min(root.maxHeight, content.implicitHeight)
-                    : content.implicitHeight;
+                root.contentHeight = root.clampToMaxHeight ? Math.min(root.maxHeight, content.implicitHeight) : content.implicitHeight;
             }
         }
     }

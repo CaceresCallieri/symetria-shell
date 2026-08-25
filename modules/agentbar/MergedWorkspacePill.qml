@@ -47,8 +47,7 @@ Item {
     // special-workspace window-visibility flag. Same gate the old WorkspaceAppIcons Loader used.
     // Drives whether agent chips interleave with window icons (true) or fall back to a trailing
     // cluster (false — e.g. inactive workspaces, which show no window icons).
-    readonly property bool windowsVisible: root.isActive && root.isOccupied
-        && (root.isSpecial ? Config.bar.workspaces.showWindowsOnSpecialWorkspaces : Config.bar.workspaces.showWindows)
+    readonly property bool windowsVisible: root.isActive && root.isOccupied && (root.isSpecial ? Config.bar.workspaces.showWindowsOnSpecialWorkspaces : Config.bar.workspaces.showWindows)
 
     // Special workspace detection.
     // Hypr.workspaceById() centralizes the .find() pattern shared with the
@@ -82,9 +81,7 @@ Item {
     // positions via Hypr.toplevels, so this works even when no icons are rendered here.
     // intentional var: JS array of agent-arrays, one per project
     readonly property var _clusterGroups: {
-        const clusterAgents = root.windowsVisible
-            ? (hostedRow.item?.unmatchedAgents ?? [])
-            : root.agents;
+        const clusterAgents = root.windowsVisible ? (hostedRow.item?.unmatchedAgents ?? []) : root.agents;
 
         const groups = {};
         const order = [];
@@ -235,7 +232,8 @@ Item {
                 } else if (!root.isActive) {
                     if (root.ws < 0) {
                         const wsObj = Hypr.workspaceById(root.ws);
-                        if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
+                        if (wsObj)
+                            Hypr.dispatch(`workspace name:${wsObj.name}`);
                     } else {
                         Hypr.dispatch(`workspace ${root.ws}`);
                     }

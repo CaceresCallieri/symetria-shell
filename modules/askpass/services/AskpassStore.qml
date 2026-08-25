@@ -72,8 +72,10 @@ Singleton {
         command: ["sh", "-c", "printf '%s' \"$1\" > \"$2\"", "--", password, fifoPath]
 
         onRunningChanged: {
-            if (running) writeTimeout.start();
-            else writeTimeout.stop();
+            if (running)
+                writeTimeout.start();
+            else
+                writeTimeout.stop();
         }
 
         onExited: (exitCode, exitStatus) => {
@@ -106,8 +108,10 @@ Singleton {
         command: ["sh", "-c", "printf '%s' '__CANCELLED__' > \"$1\"", "--", fifoPath]
 
         onRunningChanged: {
-            if (running) cancelTimeout.start();
-            else cancelTimeout.stop();
+            if (running)
+                cancelTimeout.start();
+            else
+                cancelTimeout.stop();
         }
 
         onExited: (exitCode, exitStatus) => {

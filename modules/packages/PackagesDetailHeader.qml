@@ -12,7 +12,7 @@ import QtQuick
 Item {
     id: root
 
-    signal backRequested()
+    signal backRequested
 
     implicitHeight: detailHeaderRow.implicitHeight
 
@@ -79,8 +79,10 @@ Item {
                     visible: (Packages.selectedDetail?.repo ?? "") !== ""
                     color: {
                         const d = Packages.selectedDetail;
-                        if (d?.installed) return Qt.alpha(Colours.palette.m3primary, 0.15);
-                        if (d?.isAur) return Qt.alpha(Colours.palette.m3tertiary, 0.15);
+                        if (d?.installed)
+                            return Qt.alpha(Colours.palette.m3primary, 0.15);
+                        if (d?.isAur)
+                            return Qt.alpha(Colours.palette.m3tertiary, 0.15);
                         return Colours.palette.m3surfaceContainerHighest;
                     }
                     radius: Appearance.rounding.full
@@ -95,8 +97,10 @@ Item {
                         font.weight: Font.Medium
                         color: {
                             const d = Packages.selectedDetail;
-                            if (d?.installed) return Colours.palette.m3primary;
-                            if (d?.isAur) return Colours.palette.m3tertiary;
+                            if (d?.installed)
+                                return Colours.palette.m3primary;
+                            if (d?.isAur)
+                                return Colours.palette.m3tertiary;
                             return Colours.palette.m3onSurfaceVariant;
                         }
                     }

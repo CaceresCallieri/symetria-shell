@@ -29,18 +29,14 @@ PillSurface {
     readonly property bool isCurrentProject: !isRemote && wsInfo !== null && wsInfo.id === Hypr.activeWsId
 
     // True when any agent in this group needs permission approval
-    readonly property bool hasPermissionNeeded:
-        root.agents.some(a => (a.activity_state ?? "") === "needs_permission")
+    readonly property bool hasPermissionNeeded: root.agents.some(a => (a.activity_state ?? "") === "needs_permission")
 
     // True when any agent in this group is the STT injection target
-    readonly property bool hasSttTarget:
-        AgentService.sttTargetTerminalPid > 0 && root.agents.some(a => AgentService.isAgentSttTarget(a))
+    readonly property bool hasSttTarget: AgentService.sttTargetTerminalPid > 0 && root.agents.some(a => AgentService.isAgentSttTarget(a))
 
     // --- Sweep animation state ---
     property real _sweepPhase: 0.0  // 0.0–1.0, one full revolution
-    readonly property color _sweepColor: hasPermissionNeeded
-        ? Colours.palette.m3tertiary
-        : Colours.palette.m3primary
+    readonly property color _sweepColor: hasPermissionNeeded ? Colours.palette.m3tertiary : Colours.palette.m3primary
 
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
@@ -55,8 +51,10 @@ PillSurface {
     radius: Appearance.rounding.full
     borderWidth: hasPermissionNeeded ? 2 : 1
     borderColor: {
-        if (hasPermissionNeeded) return Colours.palette.m3tertiary;
-        if (isCurrentProject) return focusedStyle.border;
+        if (hasPermissionNeeded)
+            return Colours.palette.m3tertiary;
+        if (isCurrentProject)
+            return focusedStyle.border;
         return unfocusedStyle.border;
     }
     // PillSurface's body is a StyledClippingRect, which already clips children to
@@ -117,7 +115,8 @@ PillSurface {
                 root._sweepPhase -= 1024.0;
             sweepCanvas.requestPaint();
         }
-        onRunningChanged: if (!running) root._sweepPhase = 0.0
+        onRunningChanged: if (!running)
+            root._sweepPhase = 0.0
     }
 
     // Rotating border glow overlay for STT injection target
@@ -139,7 +138,9 @@ PillSurface {
         onPaint: root._drawSweep(getContext("2d"), width, height)
 
         Connections {
-            function on_SweepColorChanged(): void { sweepCanvas.requestPaint(); }
+            function on_SweepColorChanged(): void {
+                sweepCanvas.requestPaint();
+            }
             target: root
         }
     }
@@ -162,8 +163,7 @@ PillSurface {
 
             active: root.hasWsBadge
             Layout.alignment: Qt.AlignVCenter
-            sourceComponent: root.isRemote ? wsRemoteIcon
-                : (root.parsedWsIcon?.useMaterial ? wsMatIcon : wsTextIcon)
+            sourceComponent: root.isRemote ? wsRemoteIcon : (root.parsedWsIcon?.useMaterial ? wsMatIcon : wsTextIcon)
 
             Component {
                 id: wsRemoteIcon
@@ -247,14 +247,16 @@ PillSurface {
     /// Two passes: wide low-opacity halo + narrow high-opacity core = glow effect.
     function _drawSweep(ctx: var, w: real, h: real): void {
         ctx.clearRect(0, 0, w, h);
-        if (w <= 0 || h <= 0) return;
+        if (w <= 0 || h <= 0)
+            return;
 
         const bw = root.borderWidth;
         const inset = bw / 2;
         const ew = w - bw;      // effective width inside border
         const eh = h - bw;      // effective height inside border
         const er = eh / 2;      // pill end-cap radius
-        if (ew < eh) return;
+        if (ew < eh)
+            return;
 
         const perimeter = 2 * (ew - eh) + Math.PI * eh;
         const segLen = perimeter * 0.18;

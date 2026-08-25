@@ -16,16 +16,18 @@ Singleton {
     // Returns { useMaterial: bool, iconText: string }
     function parseIcon(icon: string): var {
         const usesMaterial = icon.startsWith(materialIconPrefix);
-        const text = usesMaterial && icon.length > materialIconPrefix.length
-            ? icon.slice(materialIconPrefix.length)
-            : (usesMaterial ? "" : icon);
-        return { useMaterial: usesMaterial, iconText: text };
+        const text = usesMaterial && icon.length > materialIconPrefix.length ? icon.slice(materialIconPrefix.length) : (usesMaterial ? "" : icon);
+        return {
+            useMaterial: usesMaterial,
+            iconText: text
+        };
     }
 
     // Check if an icon exists in the current theme
     // Returns true if the icon can be loaded, false otherwise
     function iconExists(iconName: string): bool {
-        if (!iconName || iconName.length === 0) return false;
+        if (!iconName || iconName.length === 0)
+            return false;
         // Use Quickshell.iconPath with check=true which returns empty string if icon doesn't exist
         const path = Quickshell.iconPath(iconName, true);
         return path && path.length > 0;
@@ -38,72 +40,69 @@ Singleton {
         // Try primary icon first
         if (icon && icon.length > 0) {
             const path = Quickshell.iconPath(icon, true);
-            if (path && path.length > 0) return path;
+            if (path && path.length > 0)
+                return path;
         }
         // Try fallback icon
         if (fallback && fallback.length > 0) {
             const path = Quickshell.iconPath(fallback, true);
-            if (path && path.length > 0) return path;
+            if (path && path.length > 0)
+                return path;
         }
         // Return empty string to avoid warning - component should handle missing icons gracefully
         return "";
     }
 
     // Terminal emulator window classes for terminal app detection (all lowercase for efficient lookup)
-    readonly property var terminalClasses: new Set([
-        "com.mitchellh.ghostty", "ghostty", "kitty", "alacritty",
-        "foot", "wezterm", "org.wezfurlong.wezterm", "gnome-terminal",
-        "org.gnome.terminal", "konsole", "org.kde.konsole", "xterm",
-        "urxvt", "st-256color", "st", "termite", "tilix"
-    ])
+    readonly property var terminalClasses: new Set(["com.mitchellh.ghostty", "ghostty", "kitty", "alacritty", "foot", "wezterm", "org.wezfurlong.wezterm", "gnome-terminal", "org.gnome.terminal", "konsole", "org.kde.konsole", "xterm", "urxvt", "st-256color", "st", "termite", "tilix"])
 
     // Map of terminal app title keywords to their icon names
     // The first word of the terminal title is matched against these
     readonly property var terminalApps: ({
-        // Editors
-        "nvim": "nvim",
-        "vim": "vim",
-        "vi": "vim",
-        "v": "nvim",
-        "hx": "helix",
-        "helix": "helix",
-        "nano": "text-editor",
-        "emacs": "emacs",
-        // File managers
-        "yazi": "yazi",
-        "ranger": "ranger",
-        "lf": "lf",
-        "mc": "mc",
-        "nnn": "nnn",
-        "vifm": "vifm",
-        // System monitors
-        "htop": "htop",
-        "btop": "btop",
-        "top": "utilities-system-monitor",
-        "nvtop": "nvtop",
-        "gotop": "gotop",
-        // Git tools
-        "lazygit": "git",
-        "tig": "git",
-        "gitui": "git",
-        // Docker/containers
-        "lazydocker": "docker",
-        "docker": "docker",
-        "podman": "podman",
-        // Programming languages/REPLs
-        "python": "python",
-        "python3": "python",
-        "node": "nodejs",
-        "ruby": "ruby",
-        "irb": "ruby",
-        "lua": "lua",
-        "ghci": "haskell",
-        // Other tools
-        "man": "help-contents",
-        "less": "text-x-generic",
-        "ssh": "utilities-terminal",
-        "sudo": "system-lock-screen"
-    })
+            // Editors
+            "nvim": "nvim",
+            "vim": "vim",
+            "vi": "vim",
+            "v": "nvim",
+            "hx": "helix",
+            "helix": "helix",
+            "nano": "text-editor",
+            "emacs": "emacs",
+            // File managers
+            "yazi": "yazi",
+            "ranger": "ranger",
+            "lf": "lf",
+            "mc": "mc",
+            "nnn": "nnn",
+            "vifm": "vifm",
+            // System monitors
+            "htop": "htop",
+            "btop": "btop",
+            "top": "utilities-system-monitor",
+            "nvtop": "nvtop",
+            "gotop": "gotop",
+            // Git tools
+            "lazygit": "git",
+            "tig": "git",
+            "gitui": "git",
+            // Docker/containers
+            "lazydocker": "docker",
+            "docker": "docker",
+            "podman": "podman",
+            // Programming languages/REPLs
+            "python": "python",
+            "python3": "python",
+            "node": "nodejs",
+            "ruby": "ruby",
+            "irb": "ruby",
+            "lua": "lua",
+            "ghci": "haskell",
+            // Other tools
+            "man": "help-contents",
+            "less": "text-x-generic",
+            "ssh": "utilities-terminal",
+            "sudo": "system-lock-screen"
+        })
 
     readonly property var weatherIcons: ({
             "0": "clear_day",
@@ -196,7 +195,8 @@ Singleton {
 
     // Check if a window class represents a terminal emulator
     function isTerminal(windowClass: string): bool {
-        if (!windowClass) return false;
+        if (!windowClass)
+            return false;
         return terminalClasses.has(windowClass.toLowerCase());
     }
 
@@ -322,7 +322,8 @@ Singleton {
     // Private helper for icon lookup in config arrays
     function _lookupIconInList(name: string, iconList: list<var>): string {
         for (const iconConfig of iconList) {
-            if (iconConfig.name === name) return iconConfig.icon;
+            if (iconConfig.name === name)
+                return iconConfig.icon;
         }
         return "";
     }
@@ -331,7 +332,8 @@ Singleton {
         name = name.toLowerCase().slice("special:".length);
 
         const configIcon = _lookupIconInList(name, Config.bar.workspaces.specialWorkspaceIcons);
-        if (configIcon) return configIcon;
+        if (configIcon)
+            return configIcon;
 
         // Fallbacks for common special workspace names
         const fallbacks = {
@@ -350,31 +352,24 @@ Singleton {
 
     function romanize(num: int): string {
         // Validate input - only positive integers supported
-        if (typeof num !== 'number' || isNaN(num)) return "";
+        if (typeof num !== 'number' || isNaN(num))
+            return "";
         num = Math.floor(num);
-        if (num <= 0) return "";
+        if (num <= 0)
+            return "";
 
-        const key = [
-            "", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM",
-            "", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC",
-            "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"
-        ];
+        const key = ["", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM", "", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC", "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
         let digits = String(num).split("");
         let roman = "";
         let i = 3;
-        while (i--) roman = (key[+digits.pop() + i * 10] || "") + roman;
+        while (i--)
+            roman = (key[+digits.pop() + i * 10] || "") + roman;
         return Array(+digits.join("") + 1).join("M") + roman;
     }
 
     // Generic path segments that rarely identify an app. Used when scanning
     // pixmap file paths for candidate theme names (see guessThemeNameFromPath).
-    readonly property var pathNoiseSegments: new Set([
-        "tmp", "usr", "opt", "home", "var", "run", "etc",
-        "local", "share", "lib", "lib32", "lib64", "cache",
-        "data", "assets", "flutter_assets", "img", "images",
-        "icons", "icon", "pixmaps", "resources", "public",
-        "app", "bin", "linux", "x64"
-    ])
+    readonly property var pathNoiseSegments: new Set(["tmp", "usr", "opt", "home", "var", "run", "etc", "local", "share", "lib", "lib32", "lib64", "cache", "data", "assets", "flutter_assets", "img", "images", "icons", "icon", "pixmaps", "resources", "public", "app", "bin", "linux", "x64"])
 
     // Resolve a tray icon, preferring the Freedesktop icon theme over the
     // app-provided pixmap. This makes systray icons share the same visual

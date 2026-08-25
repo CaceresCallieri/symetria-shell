@@ -163,7 +163,10 @@ ColumnLayout {
                 hasError: connectButton.hasError
                 cancelOnEscape: true
                 placeholderText: ""
-                onSubmitted: { if (!connectButton.disabled) connectButton.clicked(); }
+                onSubmitted: {
+                    if (!connectButton.disabled)
+                        connectButton.clicked();
+                }
                 onErrorCleared: connectButton.hasError = false
                 onCancelled: root.closeDialog()
             }
@@ -228,13 +231,13 @@ ColumnLayout {
                             passwordField.password = "";
                             passwordField.passwordVisible = false;
 
-                            // REGRESSION GUARD: do NOT call forgetNetwork() here.
-                            // This ran on every failure, including failures that
-                            // were not failures — a connection NetworkManager had
-                            // already activated got its profile deleted, tearing
-                            // down working wifi (verified 2026-07-27). Stale
-                            // profiles are cleared by connectWithSecret at the
-                            // start of the next attempt, where nothing is in flight.
+                        // REGRESSION GUARD: do NOT call forgetNetwork() here.
+                        // This ran on every failure, including failures that
+                        // were not failures — a connection NetworkManager had
+                        // already activated got its profile deleted, tearing
+                        // down working wifi (verified 2026-07-27). Stale
+                        // profiles are cleared by connectWithSecret at the
+                        // start of the next attempt, where nothing is in flight.
                         });
                     }
                 }

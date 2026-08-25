@@ -22,7 +22,7 @@ ColumnLayout {
     property int decimals: 1 // Number of decimal places to show (default: 1)
     property var formatValueFunction: null // intentional var: nullable JS function reference
     property var parseValueFunction: null // intentional var: nullable JS function reference
-    
+
     function formatValue(val: real): string {
         if (formatValueFunction) {
             return formatValueFunction(val);
@@ -35,7 +35,7 @@ ColumnLayout {
         // For DoubleValidator or no validator, use the decimals property
         return val.toFixed(root.decimals);
     }
-    
+
     function parseValue(text: string): real {
         if (parseValueFunction) {
             return parseValueFunction(text);
@@ -46,13 +46,13 @@ ColumnLayout {
         }
         return parseFloat(text);
     }
-    
+
     signal valueModified(real newValue)
 
     property bool _initialized: false
 
     spacing: Appearance.spacing.small
-    
+
     Component.onCompleted: {
         // Set initialized flag after a brief delay to allow component to fully load
         Qt.callLater(() => {
@@ -78,13 +78,13 @@ ColumnLayout {
             id: inputField
             Layout.preferredWidth: 70
             validator: root.validator
-            
+
             Component.onCompleted: {
                 // Initialize text without triggering valueModified signal
                 text = root.formatValue(root.value);
             }
-            
-            onTextEdited: (editedText) => {
+
+            onTextEdited: editedText => {
                 if (hasFocus) {
                     const val = root.parseValue(editedText);
                     if (!isNaN(val)) {
@@ -98,14 +98,14 @@ ColumnLayout {
                                 isValid = false;
                             }
                         }
-                        
+
                         if (isValid) {
                             root.valueModified(val);
                         }
                     }
                 }
             }
-            
+
             onEditingFinished: {
                 const val = root.parseValue(text);
                 let isValid = true;
@@ -117,7 +117,7 @@ ColumnLayout {
                         isValid = false;
                     }
                 }
-                
+
                 if (isNaN(val) || !isValid) {
                     text = root.formatValue(root.value);
                 }
@@ -141,7 +141,7 @@ ColumnLayout {
         from: root.from
         to: root.to
         stepSize: root.stepSize
-        
+
         // Use Binding to allow slider to move freely during dragging
         Binding {
             target: slider
@@ -149,7 +149,7 @@ ColumnLayout {
             value: root.value
             when: !slider.pressed
         }
-        
+
         onValueChanged: {
             // Update input field text in real-time as slider moves during dragging
             // Always update when slider value changes (during dragging or external updates)
@@ -158,7 +158,7 @@ ColumnLayout {
                 inputField.text = root.formatValue(newValue);
             }
         }
-        
+
         onMoved: {
             const newValue = root.stepSize > 0 ? Math.round(value / root.stepSize) * root.stepSize : value;
             root.valueModified(newValue);
@@ -167,7 +167,7 @@ ColumnLayout {
             }
         }
     }
-    
+
     // Update input field when value changes externally (slider is already bound)
     onValueChanged: {
         // Only update if component is initialized to avoid issues during creation
@@ -176,4 +176,3 @@ ColumnLayout {
         }
     }
 }
-

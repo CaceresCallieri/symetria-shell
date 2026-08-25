@@ -91,10 +91,14 @@ ColumnLayout {
         target: SttService
 
         function onActionTriggered(sessionId: string, action: string): void {
-            if (sessionId !== "" && sessionId !== root.job?.sessionId) return;
-            if (root.displayState !== "error") return;
-            if (action === "retry") retryBtn.triggerPress();
-            else if (action === "cancel") cancelBtn.triggerPress();
+            if (sessionId !== "" && sessionId !== root.job?.sessionId)
+                return;
+            if (root.displayState !== "error")
+                return;
+            if (action === "retry")
+                retryBtn.triggerPress();
+            else if (action === "cancel")
+                cancelBtn.triggerPress();
         }
     }
 }

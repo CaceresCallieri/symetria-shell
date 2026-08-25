@@ -44,8 +44,10 @@ Item {
     readonly property string rawIcon: {
         if (root.currentWorkspace) {
             const customIcon = Icons.getNamedWsIcon(root.currentWorkspace.name);
-            if (customIcon && customIcon !== Icons.materialIconPrefix) return customIcon;
-            if (root.ws < 0 && root.currentWorkspace.name) return root.currentWorkspace.name[0].toUpperCase();
+            if (customIcon && customIcon !== Icons.materialIconPrefix)
+                return customIcon;
+            if (root.ws < 0 && root.currentWorkspace.name)
+                return root.currentWorkspace.name[0].toUpperCase();
         }
         return Icons.romanize(root.ws);
     }
@@ -80,7 +82,8 @@ Item {
                 // Named workspaces (negative IDs) need "workspace name:<name>" syntax
                 if (root.ws < 0) {
                     const wsObj = Hypr.workspaceById(root.ws);
-                    if (wsObj) Hypr.dispatch(`workspace name:${wsObj.name}`);
+                    if (wsObj)
+                        Hypr.dispatch(`workspace name:${wsObj.name}`);
                 } else {
                     Hypr.dispatch(`workspace ${root.ws}`);
                 }

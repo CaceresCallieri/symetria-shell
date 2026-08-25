@@ -292,10 +292,7 @@ Item {
                     Layout.fillWidth: true
                     implicitHeight: cancelLabel.implicitHeight + Appearance.padding.smaller * 2
 
-                    readonly property var style: Colours.pillStyle(
-                        Colours.palette.m3surfaceContainerHigh,
-                        cancelState.containsMouse ? Colours.glass.medium : Colours.glass.subtle
-                    )
+                    readonly property var style: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, cancelState.containsMouse ? Colours.glass.medium : Colours.glass.subtle)
 
                     StyledRect {
                         anchors.fill: parent
@@ -343,10 +340,7 @@ Item {
                     opacity: enabled ? 1.0 : 0.38 // M3 disabled state opacity
                     enabled: AskpassStore.passwordBuffer.length > 0
 
-                    readonly property var style: Colours.pillStyle(
-                        Colours.palette.m3surfaceContainerHigh,
-                        authState.containsMouse ? Colours.glass.medium : Colours.glass.subtle
-                    )
+                    readonly property var style: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, authState.containsMouse ? Colours.glass.medium : Colours.glass.subtle)
 
                     StyledRect {
                         anchors.fill: parent

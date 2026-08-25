@@ -75,12 +75,14 @@ Scope {
         target: "audio"
 
         function toggle(): void {
-            if (!RecordingSessionManager.acquire("audio")) return;
+            if (!RecordingSessionManager.acquire("audio"))
+                return;
             AudioRecorderService.toggle();
         }
 
         function start(): void {
-            if (!RecordingSessionManager.acquire("audio")) return;
+            if (!RecordingSessionManager.acquire("audio"))
+                return;
             AudioRecorderService.start();
         }
 
@@ -103,12 +105,14 @@ Scope {
         target: "stt"
 
         function toggle(): void {
-            if (!RecordingSessionManager.acquire("stt")) return;
+            if (!RecordingSessionManager.acquire("stt"))
+                return;
             SttService.toggle();
         }
 
         function start(): void {
-            if (!RecordingSessionManager.acquire("stt")) return;
+            if (!RecordingSessionManager.acquire("stt"))
+                return;
             SttService.start();
         }
 
@@ -135,8 +139,10 @@ Scope {
             // session-scoped Alt+R bind after a crash), acquire() would take
             // the "stt" lock and nothing would ever release it — release only
             // fires on SttService.active true→false.
-            if (!SttService.active) return;
-            if (!RecordingSessionManager.acquire("stt")) return;
+            if (!SttService.active)
+                return;
+            if (!RecordingSessionManager.acquire("stt"))
+                return;
             SttService.restart();
         }
 

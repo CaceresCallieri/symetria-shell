@@ -73,7 +73,9 @@ Searcher {
     Timer {
         id: focusModeSaveTimer
         interval: 250
-        onTriggered: focusStateFile.setText(JSON.stringify({ focusMode: root.focusMode }))
+        onTriggered: focusStateFile.setText(JSON.stringify({
+            focusMode: root.focusMode
+        }))
     }
 
     FileView {
@@ -98,7 +100,9 @@ Searcher {
         }
         onLoadFailed: err => {
             if (err === FileViewError.FileNotFound) {
-                setText(JSON.stringify({ focusMode: false }));
+                setText(JSON.stringify({
+                    focusMode: false
+                }));
                 root._focusModeLoadedFromDisk = true;
             } else {
                 // Non-FileNotFound errors (permission denied, IO error, etc.) must still
@@ -126,7 +130,8 @@ Searcher {
     // Note: FileSystemModel doesn't emit entriesChanged when directory is empty/missing
     // because its C++ applyChanges() returns early when oldPaths == newPaths (both empty).
     function _checkWorkspaceWallpapers(): void {
-        if (_workspaceCheckDone) return;
+        if (_workspaceCheckDone)
+            return;
         _workspaceCheckDone = true;
         workspaceCheckTimer.stop();
 
@@ -156,14 +161,14 @@ Searcher {
 
         // Fallback behavior
         switch (Config.background.perWorkspaceWallpapers.fallbackBehavior) {
-            case "global":
-                return actualCurrent;
-            case "first":
-                return workspaceWallpapers.entries[0]?.path ?? actualCurrent;
-            case "none":
-                return "";
-            default:
-                return actualCurrent;
+        case "global":
+            return actualCurrent;
+        case "first":
+            return workspaceWallpapers.entries[0]?.path ?? actualCurrent;
+        case "none":
+            return "";
+        default:
+            return actualCurrent;
         }
     }
 
@@ -294,5 +299,4 @@ Searcher {
         running: Config.background.perWorkspaceWallpapers.enabled && !root._workspaceCheckDone
         onTriggered: root._checkWorkspaceWallpapers()
     }
-
 }

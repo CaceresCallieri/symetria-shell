@@ -47,7 +47,8 @@ Singleton {
     readonly property string _tempDir: `${_runtimeDir}/symmetria-audio-recorder`
     readonly property string _outputDir: {
         const custom = Config.audioRecorder?.outputDir ?? "";
-        if (custom !== "") return custom;
+        if (custom !== "")
+            return custom;
         return Quickshell.env("HOME") + "/Audio";
     }
 
@@ -58,7 +59,8 @@ Singleton {
     /// Toggle: start if idle, stop if recording/paused, cancel if error.
     function toggle(): void {
         const now = Date.now();
-        if (now - _lastToggleTime < _toggleDebounceMs) return;
+        if (now - _lastToggleTime < _toggleDebounceMs)
+            return;
         _lastToggleTime = now;
 
         if (!_job) {
@@ -91,14 +93,16 @@ Singleton {
 
     /// Stop the active recording and encode.
     function stop(): void {
-        if (!_job) return;
+        if (!_job)
+            return;
         actionTriggered("stop");
         _job.stop();
     }
 
     /// Toggle pause on the active recording.
     function pause(): void {
-        if (!_job) return;
+        if (!_job)
+            return;
         if (_job._state === "recording") {
             actionTriggered("pause");
             _job.pause();
@@ -110,7 +114,8 @@ Singleton {
 
     /// Cancel: kill and discard.
     function cancel(): void {
-        if (!_job) return;
+        if (!_job)
+            return;
         actionTriggered("cancel");
         _job.cancel();
     }
@@ -119,7 +124,10 @@ Singleton {
     // Job lifecycle
     // ─────────────────────────────────────────────────────────────────────────
 
-    Component { id: jobComponent; AudioRecorderJob {} }
+    Component {
+        id: jobComponent
+        AudioRecorderJob {}
+    }
 
     function _createJob(): AudioRecorderJob {
         const job = jobComponent.createObject(root, {

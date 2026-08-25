@@ -199,17 +199,13 @@ PillCardSection {
                         NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
                     } else {
                         root.connectingToSsid = networkItem.modelData.ssid;
-                        NetworkConnection.handleConnect(
-                            networkItem.modelData,
-                            null,
-                            (network) => {
-                                root.passwordNetwork = network;
-                                root.showPasswordDialog = true;
-                                root.wrapper.currentName = "wirelesspassword";
-                            },
-                            // Every terminal result clears the row spinner.
-                            () => root.connectingToSsid = ""
-                        );
+                        NetworkConnection.handleConnect(networkItem.modelData, null, network => {
+                            root.passwordNetwork = network;
+                            root.showPasswordDialog = true;
+                            root.wrapper.currentName = "wirelesspassword";
+                        },
+                        // Every terminal result clears the row spinner.
+                        () => root.connectingToSsid = "");
                     }
                 }
 

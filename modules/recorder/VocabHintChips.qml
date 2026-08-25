@@ -29,10 +29,7 @@ Row {
             implicitHeight: chipText.implicitHeight + Appearance.padding.small * 2
 
             radius: Appearance.rounding.full
-            color: Colours.pillStyle(
-                Colours.palette.m3surfaceContainerHigh,
-                Colours.glass.subtle
-            ).background
+            color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
             MouseArea {
                 id: chipDeleteArea

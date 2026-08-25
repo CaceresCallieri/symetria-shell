@@ -53,7 +53,11 @@ Singleton {
             return "";
         }
         const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const entry = { id: id, text: text, addedAt: Date.now() };
+        const entry = {
+            id: id,
+            text: text,
+            addedAt: Date.now()
+        };
         const next = [entry, ...entries];
         if (next.length > maxEntries)
             next.length = maxEntries;
@@ -65,14 +69,16 @@ Singleton {
     /// Remove a single entry by id. No-op if id is unknown.
     function remove(id: string): void {
         const filtered = entries.filter(e => e.id !== id);
-        if (filtered.length === entries.length) return;
+        if (filtered.length === entries.length)
+            return;
         entries = filtered;
         _persist();
     }
 
     /// Drop all entries.
     function clear(): void {
-        if (entries.length === 0) return;
+        if (entries.length === 0)
+            return;
         entries = [];
         _persist();
     }
@@ -80,7 +86,8 @@ Singleton {
     /// Lookup by id. Returns null if no match.
     function getById(id: string): var {
         for (const e of entries)
-            if (e.id === id) return e;
+            if (e.id === id)
+                return e;
         return null;
     }
 
@@ -155,12 +162,7 @@ Singleton {
                 // the previous design only stored {text, addedAt} markers
                 // that pointed at cliphist; they have no meaning under the
                 // authoritative-store model.
-                root.entries = data.filter(e =>
-                    e
-                    && typeof e.id === "string"
-                    && typeof e.text === "string"
-                    && typeof e.addedAt === "number"
-                );
+                root.entries = data.filter(e => e && typeof e.id === "string" && typeof e.text === "string" && typeof e.addedAt === "number");
             }
             root.loaded = true;
         }

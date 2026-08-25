@@ -36,9 +36,7 @@ Column {
             spacing: Appearance.spacing.small
 
             StyledText {
-                text: Updates.hasData
-                    ? qsTr("Available Updates: %1").arg(Updates.pacmanUpdates + Updates.aurUpdates)
-                    : qsTr("Checking for updates...")
+                text: Updates.hasData ? qsTr("Available Updates: %1").arg(Updates.pacmanUpdates + Updates.aurUpdates) : qsTr("Checking for updates...")
                 font.weight: 500
             }
 
@@ -87,14 +85,22 @@ Column {
 
         readonly property string phaseLabel: {
             switch (UpdateRunner.phase) {
-            case "authenticating": return qsTr("Waiting for password…");
-            case "syncing": return qsTr("Synchronising databases…");
-            case "building": return qsTr("Building AUR packages…");
-            case "installing": return qsTr("Installing packages…");
-            case "done": return qsTr("Everything is up to date");
-            case "error": return qsTr("Update failed");
-            case "password": return ""; // never rendered — password section replaces this row
-            default: return qsTr("Preparing…");
+            case "authenticating":
+                return qsTr("Waiting for password…");
+            case "syncing":
+                return qsTr("Synchronising databases…");
+            case "building":
+                return qsTr("Building AUR packages…");
+            case "installing":
+                return qsTr("Installing packages…");
+            case "done":
+                return qsTr("Everything is up to date");
+            case "error":
+                return qsTr("Update failed");
+            case "password":
+                return ""; // never rendered — password section replaces this row
+            default:
+                return qsTr("Preparing…");
             }
         }
 
@@ -128,7 +134,8 @@ Column {
                         // button height for a compact single-row layout.
                         implicitHeight: updateButton.implicitHeight
                         isActive: root.awaitingPassword
-                        onSubmitted: if (password.length > 0) UpdateRunner.submitPassword(password)
+                        onSubmitted: if (password.length > 0)
+                            UpdateRunner.submitPassword(password)
                     }
 
                     RaisedTextButton {
@@ -218,9 +225,7 @@ Column {
                     anchors.bottom: parent.bottom
                     radius: parent.radius
                     color: Colours.palette.m3primary
-                    width: parent.width * (UpdateRunner.totalPackages > 0
-                        ? UpdateRunner.installedCount / UpdateRunner.totalPackages
-                        : 0)
+                    width: parent.width * (UpdateRunner.totalPackages > 0 ? UpdateRunner.installedCount / UpdateRunner.totalPackages : 0)
 
                     Behavior on width {
                         Anim {}

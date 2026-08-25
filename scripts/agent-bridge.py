@@ -12,6 +12,7 @@ Protocol: JSON lines (newline-delimited JSON) in both directions.
 
 import asyncio
 import atexit
+import contextlib
 import json
 import os
 import signal
@@ -22,10 +23,12 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-SOCKET_PATH = Path(os.environ.get(
-    "SYMMETRIA_AGENT_SOCKET",
-    f"/run/user/{os.getuid()}/symmetria-agents.sock",
-))
+SOCKET_PATH = Path(
+    os.environ.get(
+        "SYMMETRIA_AGENT_SOCKET",
+        f"/run/user/{os.getuid()}/symmetria-agents.sock",
+    )
+)
 
 # Seconds before an orphaned activity entry (no live orchestrator connection)
 # is reaped. Registered agents are NOT reaped by timeout — Claude Code can
@@ -67,9 +70,11 @@ ACTIVITY_HISTORY_DEPTH = 20
 
 # Diagnostic dump path written on SIGUSR1. Captures full bridge state +
 # per-agent history so a stuck-state symptom can be analyzed offline.
-DIAGNOSTIC_DUMP_PATH = Path(
-    os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state"
-) / "symmetria" / "agent-bridge-diagnostic.json"
+DIAGNOSTIC_DUMP_PATH = (
+    Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    / "symmetria"
+    / "agent-bridge-diagnostic.json"
+)
 
 # Inode of the socket we created — used to avoid deleting a newer process's socket
 _our_socket_inode: int | None = None
@@ -79,13 +84,19 @@ _our_socket_inode: int | None = None
 # format match plugin/src/Symmetria/logger.cpp so all sources interleave
 # in a single timeline.
 _LOG_LEVELS = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "WARN": 2, "ERROR": 3}
-_LOG_LEVEL = _LOG_LEVELS.get(os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "INFO").upper(), 1)
-_LOG_PATH = Path(os.environ["SYMMETRIA_DEBUG_LOG"]) if os.environ.get("SYMMETRIA_DEBUG_LOG") \
-    else Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "symmetria" / "debug.log"
-try:
+_LOG_LEVEL = _LOG_LEVELS.get(
+    os.environ.get("AGENT_BRIDGE_LOG_LEVEL", "INFO").upper(), 1
+)
+_LOG_PATH = (
+    Path(os.environ["SYMMETRIA_DEBUG_LOG"])
+    if os.environ.get("SYMMETRIA_DEBUG_LOG")
+    else Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    / "symmetria"
+    / "debug.log"
+)
+# Log directory creation failure must not crash the bridge.
+with contextlib.suppress(OSError):
     _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-except OSError:
-    pass  # Log directory creation failure must not crash the bridge
 
 
 def _emit_log(level: int, msg: str) -> None:
@@ -102,27 +113,89 @@ def _emit_log(level: int, msg: str) -> None:
 
 
 class _Log:
-    def debug(self, fmt, *args): _emit_log(0, fmt % args if args else fmt)
-    def info(self, fmt, *args): _emit_log(1, fmt % args if args else fmt)
-    def warning(self, fmt, *args): _emit_log(2, fmt % args if args else fmt)
-    def error(self, fmt, *args): _emit_log(3, fmt % args if args else fmt)
+    def debug(self, fmt, *args):
+        _emit_log(0, fmt % args if args else fmt)
+
+    def info(self, fmt, *args):
+        _emit_log(1, fmt % args if args else fmt)
+
+    def warning(self, fmt, *args):
+        _emit_log(2, fmt % args if args else fmt)
+
+    def error(self, fmt, *args):
+        _emit_log(3, fmt % args if args else fmt)
 
 
 log = _Log()
+
+
+# Strong references to every fire-and-forget task.
+#
+# asyncio holds only a WEAK reference to a running task, so a task whose
+# `create_task()` return value is discarded can be garbage-collected mid-flight
+# — silently, with no traceback. The failure mode is not theoretical here:
+# `activity_reaper` is the stuck-state watchdog, and losing it would present
+# exactly as the symptom docs/agent-state-diagnostics.md describes, with the
+# watchdog itself as the last place anyone would look.
+#
+# The done callback is what keeps this from becoming a leak: the set only ever
+# holds tasks that are still running.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _on_background_task_done(task: asyncio.Task) -> None:
+    """Drop the strong reference, and surface a crash through our own logger.
+
+    Retrieving the exception is not optional bookkeeping. A fire-and-forget task
+    that raises stores its exception and, if nobody reads it, asyncio complains
+    only at garbage-collection time, through the default logger — not through
+    _Log, which is what writes the unified debug.log everything else here is
+    correlated against. A dead solicit task would therefore vanish from the one
+    timeline anyone would think to read.
+    """
+    _background_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error("background task %s failed: %r", task.get_name(), exc)
+
+
+def _spawn_background_task(coro) -> asyncio.Task:
+    """Create a task, keep it alive until it finishes, and log any crash."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_on_background_task_done)
+    return task
 
 
 class AgentBridge:
     """Aggregates agent state from all connected orchestrator instances."""
 
     # Terminal emulator process names to match when walking /proc upward.
-    TERMINAL_NAMES = frozenset({
-        "ghostty", "kitty", "alacritty", "foot", "wezterm-gui",
-        "konsole", "gnome-terminal", "xfce4-terminal", "xterm",
-        "terminator", "tilix", "sakura", "st", "urxvt",
-    })
+    TERMINAL_NAMES = frozenset(
+        {
+            "ghostty",
+            "kitty",
+            "alacritty",
+            "foot",
+            "wezterm-gui",
+            "konsole",
+            "gnome-terminal",
+            "xfce4-terminal",
+            "xterm",
+            "terminator",
+            "tilix",
+            "sakura",
+            "st",
+            "urxvt",
+        }
+    )
     # Message types that carry per-client state mutations — used to detect
     # desync (message from unregistered pid) and trigger resolicit recovery.
-    _DESYNC_TYPES: frozenset[str] = frozenset({"updated", "removed", "focus", "liveness", "added"})
+    _DESYNC_TYPES: frozenset[str] = frozenset(
+        {"updated", "removed", "focus", "liveness", "added"}
+    )
 
     def __init__(self):
         # {nvim_pid: {buf: instance_data, ...}}
@@ -234,18 +307,24 @@ class AgentBridge:
                 # comm is in parens and may contain spaces: find the last ')'
                 lparen = stat.index("(")
                 rparen = stat.rindex(")")
-                comm = stat[lparen + 1:rparen]
+                comm = stat[lparen + 1 : rparen]
                 if comm in AgentBridge.TERMINAL_NAMES:
-                    log.debug("_resolve_terminal_pid: %d → %s (pid %d)", nvim_pid, comm, pid)
+                    log.debug(
+                        "_resolve_terminal_pid: %d → %s (pid %d)", nvim_pid, comm, pid
+                    )
                     return pid
                 # Field after closing paren: state ppid ...
-                fields_after = stat[rparen + 2:].split()
+                fields_after = stat[rparen + 2 :].split()
                 pid = int(fields_after[1])  # ppid is the 2nd field after ')'
             except (OSError, ValueError, IndexError):
                 break
         host_pid = AgentBridge._host_window_pid_from_environ(nvim_pid)
         if host_pid:
-            log.debug("_resolve_terminal_pid: %d → host window pid %d (environ)", nvim_pid, host_pid)
+            log.debug(
+                "_resolve_terminal_pid: %d → host window pid %d (environ)",
+                nvim_pid,
+                host_pid,
+            )
             return host_pid
         log.debug("_resolve_terminal_pid: %d → no terminal found", nvim_pid)
         return 0
@@ -334,75 +413,78 @@ class AgentBridge:
                 # transitional period before the global hook is removed). The
                 # check is `"<key>" in inst`, NOT truthiness, so a published idle
                 # ("") still wins over a stale computed value.
-                agents.append({
-                    "id": agent_id,
-                    "nvim_pid": nvim_pid,
-                    "buf": buf,
-                    "project": project,
-                    "title": inst.get("title", ""),
-                    "color_idx": inst.get("color_idx", 0),
-                    # Symmetria's own UI no longer renders this (the skip-perms
-                    # badge was dropped once dangerous mode became the norm), but
-                    # it stays in the snapshot for external consumers such as
-                    # vigiliad. Do not sweep it as dead code on the QML side alone.
-                    "dangerous": inst.get("dangerous", False),
-                    "active": inst.get("active", False),
-                    "spawn_type": inst.get("spawn_type", "fresh"),
-                    "spawned_at": inst.get("spawned_at", 0),
-                    "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
-                    # Real RPC socket from hello (v:servername); "" → consumer
-                    # falls back to the pid-derived default path.
-                    "nvim_socket": self._nvim_sockets.get(nvim_pid, ""),
-                    "remote": nvim_pid in self._remote_clients,
-                    # Backend identity drives the dashboard accent color. Read
-                    # from the sticky _agent_types map (NOT activity) so it
-                    # survives idle, when the activity entry is gone. "" →
-                    # treated as Claude downstream (backward-compatible).
-                    "agent_type": self._agent_types.get(agent_id, ""),
-                    "activity_state": (
-                        inst["activity_state"]
-                        if "activity_state" in inst
-                        else activity.get("state", "")
-                    ),
-                    "activity_tool": (
-                        inst["activity_tool"]
-                        if "activity_tool" in inst
-                        else activity.get("tool", "")
-                    ),
-                    # Resumable harness session id, from the STICKY _session_ids
-                    # map (NOT activity, which is popped on idle) so it survives
-                    # an idle agent — the IDE reads this to power `claude -r <id>`
-                    # session restore and typically saves while agents are idle.
-                    # "" until the hook first reports it / for harnesses that
-                    # don't (opencode).
-                    # Prefer the IDE-published id (non-empty), else the bridge's
-                    # sticky map. Both empty until first report / for opencode.
-                    # Uses `or` — NOT the present-key check the activity_* fields
-                    # use — deliberately: a published "" session_id means "not
-                    # known yet" and must fall through, whereas a published
-                    # activity_state "" is a meaningful "idle". Do NOT normalize
-                    # the two patterns.
-                    "session_id": (
-                        inst.get("session_id") or self._session_ids.get(agent_id, "")
-                    ),
-                    "in_plan_mode": (
-                        inst["in_plan_mode"]
-                        if "in_plan_mode" in inst
-                        else activity.get("in_plan_mode", False)
-                    ),
-                    # Delivery capability declared by the publisher.
-                    # "bridge" → text injection routes through the bridge's
-                    # inject verb (Symmetria IDE terminal-agent panes, which
-                    # have no nvim socket). "" → nvim RPC / legacy behavior.
-                    "inject_via": inst.get("inject_via", ""),
-                    # Addressable tmux session name (<slug>-<hash>-<slot>),
-                    # published by IDEs running the tmux substrate so external
-                    # control planes (vigiliad → the phone) can attach ttyd and
-                    # route send-keys to this exact agent. "" for agents with no
-                    # standalone tmux session (flag off, or publishers that don't
-                    # host their agents in tmux).
-                    "tmux_session": inst.get("tmux_session", ""),
-                })
+                agents.append(
+                    {
+                        "id": agent_id,
+                        "nvim_pid": nvim_pid,
+                        "buf": buf,
+                        "project": project,
+                        "title": inst.get("title", ""),
+                        "color_idx": inst.get("color_idx", 0),
+                        # Symmetria's own UI no longer renders this (the skip-perms
+                        # badge was dropped once dangerous mode became the norm), but
+                        # it stays in the snapshot for external consumers such as
+                        # vigiliad. Do not sweep it as dead code on the QML side alone.
+                        "dangerous": inst.get("dangerous", False),
+                        "active": inst.get("active", False),
+                        "spawn_type": inst.get("spawn_type", "fresh"),
+                        "spawned_at": inst.get("spawned_at", 0),
+                        "terminal_pid": self._terminal_pids.get(nvim_pid, 0),
+                        # Real RPC socket from hello (v:servername); "" → consumer
+                        # falls back to the pid-derived default path.
+                        "nvim_socket": self._nvim_sockets.get(nvim_pid, ""),
+                        "remote": nvim_pid in self._remote_clients,
+                        # Backend identity drives the dashboard accent color. Read
+                        # from the sticky _agent_types map (NOT activity) so it
+                        # survives idle, when the activity entry is gone. "" →
+                        # treated as Claude downstream (backward-compatible).
+                        "agent_type": self._agent_types.get(agent_id, ""),
+                        "activity_state": (
+                            inst["activity_state"]
+                            if "activity_state" in inst
+                            else activity.get("state", "")
+                        ),
+                        "activity_tool": (
+                            inst["activity_tool"]
+                            if "activity_tool" in inst
+                            else activity.get("tool", "")
+                        ),
+                        # Resumable harness session id, from the STICKY _session_ids
+                        # map (NOT activity, which is popped on idle) so it survives
+                        # an idle agent — the IDE reads this to power `claude -r <id>`
+                        # session restore and typically saves while agents are idle.
+                        # "" until the hook first reports it / for harnesses that
+                        # don't (opencode).
+                        # Prefer the IDE-published id (non-empty), else the bridge's
+                        # sticky map. Both empty until first report / for opencode.
+                        # Uses `or` — NOT the present-key check the activity_* fields
+                        # use — deliberately: a published "" session_id means "not
+                        # known yet" and must fall through, whereas a published
+                        # activity_state "" is a meaningful "idle". Do NOT normalize
+                        # the two patterns.
+                        "session_id": (
+                            inst.get("session_id")
+                            or self._session_ids.get(agent_id, "")
+                        ),
+                        "in_plan_mode": (
+                            inst["in_plan_mode"]
+                            if "in_plan_mode" in inst
+                            else activity.get("in_plan_mode", False)
+                        ),
+                        # Delivery capability declared by the publisher.
+                        # "bridge" → text injection routes through the bridge's
+                        # inject verb (Symmetria IDE terminal-agent panes, which
+                        # have no nvim socket). "" → nvim RPC / legacy behavior.
+                        "inject_via": inst.get("inject_via", ""),
+                        # Addressable tmux session name (<slug>-<hash>-<slot>),
+                        # published by IDEs running the tmux substrate so external
+                        # control planes (vigiliad → the phone) can attach ttyd and
+                        # route send-keys to this exact agent. "" for agents with no
+                        # standalone tmux session (flag off, or publishers that don't
+                        # host their agents in tmux).
+                        "tmux_session": inst.get("tmux_session", ""),
+                    }
+                )
 
         # Sort: by project, then by spawn time within project
         agents.sort(key=lambda a: (a["project"], a["spawned_at"]))
@@ -421,9 +503,14 @@ class AgentBridge:
             # own copy). Dropped deliberately — do not re-add without a consumer.
         }
         line = json.dumps(payload)
-        log.debug("_snapshot: %d agents, %d projects, %d clients, %d subscriber(s) — %d bytes",
-                   len(agents), len(projects), len(self._clients),
-                   len(self._subscribers), len(line))
+        log.debug(
+            "_snapshot: %d agents, %d projects, %d clients, %d subscriber(s) — %d bytes",
+            len(agents),
+            len(projects),
+            len(self._clients),
+            len(self._subscribers),
+            len(line),
+        )
         return line
 
     def _emit(self) -> None:
@@ -439,7 +526,7 @@ class AgentBridge:
                     continue
                 try:
                     w.write(data)
-                except Exception as e:  # noqa: BLE001 — any write failure means dead peer
+                except Exception as e:
                     log.warning("_emit: dropping dead subscriber (%s)", e)
                     self._subscribers.discard(w)
 
@@ -454,7 +541,7 @@ class AgentBridge:
         log.info("subscribe: %d subscriber(s) registered", len(self._subscribers))
         try:
             writer.write((self._snapshot_line() + "\n").encode())
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.warning("add_subscriber: initial snapshot failed (%s)", e)
             self._subscribers.discard(writer)
 
@@ -536,7 +623,9 @@ class AgentBridge:
 
             prev_entry = self._activities.get(agent_id)
             prev_state = prev_entry.get("state", "") if prev_entry else ""
-            prev_event_ts_ns = int(prev_entry.get("event_ts_ns", 0) or 0) if prev_entry else 0
+            prev_event_ts_ns = (
+                int(prev_entry.get("event_ts_ns", 0) or 0) if prev_entry else 0
+            )
 
             # Out-of-order detection: an async hook invocation can lose its
             # race over the Unix socket and arrive AFTER a logically later
@@ -545,12 +634,18 @@ class AgentBridge:
             # ignoring older events is always safe (e.g., a "Stop" arriving
             # late might still be the correct final state). The history
             # records the ooo flag so we can revisit this decision with data.
-            ooo = bool(event_ts_ns and prev_event_ts_ns and event_ts_ns < prev_event_ts_ns)
+            ooo = bool(
+                event_ts_ns and prev_event_ts_ns and event_ts_ns < prev_event_ts_ns
+            )
             if ooo:
                 lag_ms = (prev_event_ts_ns - event_ts_ns) / 1_000_000
                 log.warning(
                     "activity OUT-OF-ORDER | %s event=%s state=%s arrived %dms after newer event (prev_state=%s)",
-                    agent_id, hook_event or "?", state, int(lag_ms), prev_state or "-",
+                    agent_id,
+                    hook_event or "?",
+                    state,
+                    int(lag_ms),
+                    prev_state or "-",
                 )
 
             # SubagentStart/Stop pairing — Claude Code's recap is implemented
@@ -561,23 +656,40 @@ class AgentBridge:
             # it. SubagentStart paired with a real Task() call still works
             # exactly as before because the counter increments first.
             if hook_event == "SubagentStart":
-                self._subagent_depth[agent_id] = self._subagent_depth.get(agent_id, 0) + 1
-                log.debug("subagent | %s start (depth now %d)",
-                          agent_id, self._subagent_depth[agent_id])
+                self._subagent_depth[agent_id] = (
+                    self._subagent_depth.get(agent_id, 0) + 1
+                )
+                log.debug(
+                    "subagent | %s start (depth now %d)",
+                    agent_id,
+                    self._subagent_depth[agent_id],
+                )
             elif hook_event == "SubagentStop":
                 depth = self._subagent_depth.get(agent_id, 0)
                 if depth > 0:
                     self._subagent_depth[agent_id] = depth - 1
-                    log.debug("subagent | %s stop (depth now %d)",
-                              agent_id, self._subagent_depth[agent_id])
+                    log.debug(
+                        "subagent | %s stop (depth now %d)",
+                        agent_id,
+                        self._subagent_depth[agent_id],
+                    )
                 else:
                     # Unpaired SubagentStop — this is the recap signature.
                     # Record it in history for postmortem visibility but do
                     # NOT touch _activities; let the agent stay idle.
-                    log.info("RECAP DETECTED | %s SubagentStop without preceding SubagentStart — dropping (was state=%s)",
-                             agent_id, prev_state or "idle")
-                    self._append_to_history(agent_id, "SubagentStop", "(dropped: recap)",
-                                             tool, event_ts_ns, ooo)
+                    log.info(
+                        "RECAP DETECTED | %s SubagentStop without preceding SubagentStart — dropping (was state=%s)",
+                        agent_id,
+                        prev_state or "idle",
+                    )
+                    self._append_to_history(
+                        agent_id,
+                        "SubagentStop",
+                        "(dropped: recap)",
+                        tool,
+                        event_ts_ns,
+                        ooo,
+                    )
                     return  # Skip _activities update + emit entirely
 
             # SubagentStart/Stop depth tracking is complete. Both SubagentStart
@@ -609,8 +721,15 @@ class AgentBridge:
             # History is always recorded above (even no-ops). Log only state transitions
             # to avoid noise from repeated same-state events (e.g., multiple PreToolUse).
             if prev_state != state:
-                log.info("activity | %s %s→%s event=%s tool=%s plan=%s",
-                         agent_id, prev_state or "-", state, hook_event or "?", tool, plan)
+                log.info(
+                    "activity | %s %s→%s event=%s tool=%s plan=%s",
+                    agent_id,
+                    prev_state or "-",
+                    state,
+                    hook_event or "?",
+                    tool,
+                    plan,
+                )
             # (agent-ownership inversion, Phase 4) The STT self-heal that
             # cleared a stale recording broadcast when the target agent started
             # WORKING lived here; the bridge no longer carries STT state, so the
@@ -642,11 +761,20 @@ class AgentBridge:
             # that survives idle (it's what agent snapshots also report). Absent →
             # "" which the QML treats as Claude (backward-compatible).
             agent_type = self._agent_types.get(agent_id, "")
-            enriched = {**msg, "project": project, "terminal_pid": terminal_pid,
-                        "agent_type": agent_type}
+            enriched = {
+                **msg,
+                "project": project,
+                "terminal_pid": terminal_pid,
+                "agent_type": agent_type,
+            }
             line = json.dumps(enriched)
-            log.debug("handle_message: notification pass-through agent_id=%s project=%s terminal_pid=%d type=%s",
-                       agent_id, project, terminal_pid, agent_type or "claude")
+            log.debug(
+                "handle_message: notification pass-through agent_id=%s project=%s terminal_pid=%d type=%s",
+                agent_id,
+                project,
+                terminal_pid,
+                agent_type or "claude",
+            )
             sys.stdout.write(line + "\n")
             sys.stdout.flush()
             return
@@ -682,7 +810,11 @@ class AgentBridge:
             # IDE's own putenv (post-exec env changes don't reach
             # /proc/pid/environ). Overwrite on every hello, like the socket.
             declared_host = msg.get("host_window_pid")
-            if declared_host and isinstance(declared_host, (int, float)) and declared_host > 0:
+            if (
+                declared_host
+                and isinstance(declared_host, (int, float))
+                and declared_host > 0
+            ):
                 self._terminal_pids[nvim_pid] = int(declared_host)
             # Resolve terminal PID on first contact (stable for session lifetime)
             elif nvim_pid not in self._terminal_pids:
@@ -692,9 +824,14 @@ class AgentBridge:
             sock = msg.get("nvim_socket") or ""
             if sock:
                 self._nvim_sockets[nvim_pid] = sock
-            log.debug("  hello: registered client %s (terminal_pid=%d, socket=%s, remote=%s, total clients: %d)",
-                       nvim_pid, self._terminal_pids.get(nvim_pid, 0), sock,
-                       nvim_pid in self._remote_clients, len(self._clients))
+            log.debug(
+                "  hello: registered client %s (terminal_pid=%d, socket=%s, remote=%s, total clients: %d)",
+                nvim_pid,
+                self._terminal_pids.get(nvim_pid, 0),
+                sock,
+                nvim_pid in self._remote_clients,
+                len(self._clients),
+            )
             # Don't emit: hello registers the client slot but carries no agent data.
             # The subsequent "sync" message will emit with the full initial state.
 
@@ -711,8 +848,12 @@ class AgentBridge:
             # Re-resolve terminal PID on sync (covers reconnect after bridge restart)
             if nvim_pid not in self._terminal_pids:
                 self._terminal_pids[nvim_pid] = self._resolve_terminal_pid(nvim_pid)
-            log.debug("  sync: %d instances from pid %s (terminal_pid=%d)",
-                       len(instances), nvim_pid, self._terminal_pids.get(nvim_pid, 0))
+            log.debug(
+                "  sync: %d instances from pid %s (terminal_pid=%d)",
+                len(instances),
+                nvim_pid,
+                self._terminal_pids.get(nvim_pid, 0),
+            )
             self._schedule_emit()
 
         elif msg_type == "added":
@@ -721,7 +862,12 @@ class AgentBridge:
             if buf is not None:
                 self._clients.setdefault(nvim_pid, {})[buf] = inst
                 self._seed_agent_type(nvim_pid, buf, inst)
-                log.debug("  added: buf=%s active=%s from pid %s", buf, inst.get("active"), nvim_pid)
+                log.debug(
+                    "  added: buf=%s active=%s from pid %s",
+                    buf,
+                    inst.get("active"),
+                    nvim_pid,
+                )
                 self._schedule_emit()
             else:
                 log.warning("  added: missing buf from pid %s", nvim_pid)
@@ -735,8 +881,12 @@ class AgentBridge:
                 log.debug("  removed: buf=%s from pid %s", buf, nvim_pid)
                 self._schedule_emit()
             else:
-                log.warning("  removed: unknown buf=%s for pid=%s (known: %s)",
-                            buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
+                log.warning(
+                    "  removed: unknown buf=%s for pid=%s (known: %s)",
+                    buf,
+                    nvim_pid,
+                    list(self._clients.get(nvim_pid, {}).keys()),
+                )
 
         elif msg_type == "updated":
             buf = msg.get("buf")
@@ -760,8 +910,12 @@ class AgentBridge:
                 log.debug("  updated: buf=%s from pid %s", buf, nvim_pid)
                 self._schedule_emit()
             else:
-                log.warning("  updated: unknown buf=%s for pid=%s (known: %s)",
-                            buf, nvim_pid, list(self._clients.get(nvim_pid, {}).keys()))
+                log.warning(
+                    "  updated: unknown buf=%s for pid=%s (known: %s)",
+                    buf,
+                    nvim_pid,
+                    list(self._clients.get(nvim_pid, {}).keys()),
+                )
 
         elif msg_type == "liveness":
             dead_bufs = msg.get("dead_bufs", [])
@@ -770,15 +924,21 @@ class AgentBridge:
             for buf in dead_bufs:
                 agent_id = f"{nvim_pid}_{buf}"
                 if agent_id in self._activities:
-                    log.info("  liveness: clearing DEAD agent %s (was %s)",
-                             agent_id, self._activities[agent_id].get("state"))
+                    log.info(
+                        "  liveness: clearing DEAD agent %s (was %s)",
+                        agent_id,
+                        self._activities[agent_id].get("state"),
+                    )
                     self._clear_agent_state(agent_id)
                     cleared_any = True
             for buf in quiet_bufs:
                 agent_id = f"{nvim_pid}_{buf}"
                 if agent_id in self._activities:
-                    log.info("  liveness: clearing QUIET agent %s (was %s, terminal silent 60s+)",
-                             agent_id, self._activities[agent_id].get("state"))
+                    log.info(
+                        "  liveness: clearing QUIET agent %s (was %s, terminal silent 60s+)",
+                        agent_id,
+                        self._activities[agent_id].get("state"),
+                    )
                     self._clear_agent_state(agent_id)
                     cleared_any = True
             if cleared_any:
@@ -789,11 +949,15 @@ class AgentBridge:
             if nvim_pid in self._clients:
                 known_bufs = self._clients[nvim_pid]
                 if buf not in known_bufs:
-                    log.warning("  focus: buf=%s not in known instances for pid=%s (known: %s) — ignoring",
-                                buf, nvim_pid, list(known_bufs.keys()))
+                    log.warning(
+                        "  focus: buf=%s not in known instances for pid=%s (known: %s) — ignoring",
+                        buf,
+                        nvim_pid,
+                        list(known_bufs.keys()),
+                    )
                     return  # Don't unfocus all agents for an unknown buf
                 for b, inst in known_bufs.items():
-                    inst["active"] = (b == buf)
+                    inst["active"] = b == buf
                 log.debug("  focus: buf=%s from pid %s", buf, nvim_pid)
                 self._schedule_emit()
             else:
@@ -811,7 +975,11 @@ class AgentBridge:
                 # Clear per-pid counters so a reconnect from this pid starts fresh.
                 self._conn_count.pop(nvim_pid, None)
                 self._last_resolicit.pop(nvim_pid, None)
-                log.debug("  goodbye: removed client %s (remaining: %d)", nvim_pid, len(self._clients))
+                log.debug(
+                    "  goodbye: removed client %s (remaining: %d)",
+                    nvim_pid,
+                    len(self._clients),
+                )
                 self._schedule_emit()
         else:
             log.warning("  unknown message type: %s", msg_type)
@@ -820,8 +988,12 @@ class AgentBridge:
         """Remove all state for a disconnected client."""
         if nvim_pid in self._clients:
             count = len(self._clients[nvim_pid])
-            log.info("remove_client: dropping pid=%s (%d instances), remaining clients: %d",
-                     nvim_pid, count, len(self._clients) - 1)
+            log.info(
+                "remove_client: dropping pid=%s (%d instances), remaining clients: %d",
+                nvim_pid,
+                count,
+                len(self._clients) - 1,
+            )
             # Clean up activities for all agents belonging to this nvim instance
             for buf in self._clients[nvim_pid]:
                 self._clear_agent_state(f"{nvim_pid}_{buf}")
@@ -837,7 +1009,9 @@ class AgentBridge:
             self._last_resolicit.pop(nvim_pid, None)
             self._schedule_emit()
         else:
-            log.debug("remove_client: pid=%s not in clients (already removed?)", nvim_pid)
+            log.debug(
+                "remove_client: pid=%s not in clients (already removed?)", nvim_pid
+            )
 
     def reap_stale_activities(self) -> None:
         """Clear activity entries that haven't been updated within the staleness timeout.
@@ -872,8 +1046,11 @@ class AgentBridge:
 
         if stale_ids:
             for aid in stale_ids:
-                log.info("reap_stale_activities: %s orphaned+stale (was %s), clearing",
-                         aid, self._activities[aid].get("state"))
+                log.info(
+                    "reap_stale_activities: %s orphaned+stale (was %s), clearing",
+                    aid,
+                    self._activities[aid].get("state"),
+                )
                 self._clear_agent_state(aid)
             self._schedule_emit()
 
@@ -900,12 +1077,13 @@ class AgentBridge:
             history = list(self._activity_history.get(aid, []))
             tail = history[-5:] if history else []
             tail_str = " | ".join(
-                f"{h.get('state')}({h.get('hook_event','?')})"
-                for h in tail
+                f"{h.get('state')}({h.get('hook_event', '?')})" for h in tail
             )
             log.warning(
                 "STUCK WORKING | %s in 'working' for %ds (last 5: %s)",
-                aid, int(stuck_for), tail_str or "(no history)",
+                aid,
+                int(stuck_for),
+                tail_str or "(no history)",
             )
 
     async def reconcile_claude_sessions(self) -> None:
@@ -953,7 +1131,9 @@ class AgentBridge:
         proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
-                "claude", "agents", "--json",
+                "claude",
+                "agents",
+                "--json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -964,12 +1144,16 @@ class AgentBridge:
         except FileNotFoundError:
             if not self._claude_cli_warned:
                 self._claude_cli_warned = True
-                log.warning("reconcile | claude CLI not found on PATH — "
-                            "cancellation reconciliation disabled")
+                log.warning(
+                    "reconcile | claude CLI not found on PATH — "
+                    "cancellation reconciliation disabled"
+                )
             return
-        except asyncio.TimeoutError:
-            log.warning("reconcile | claude agents --json timed out after %ds",
-                        CLAUDE_CLI_TIMEOUT_SECONDS)
+        except TimeoutError:
+            log.warning(
+                "reconcile | claude agents --json timed out after %ds",
+                CLAUDE_CLI_TIMEOUT_SECONDS,
+            )
             return
         except (json.JSONDecodeError, OSError) as exc:
             log.warning("reconcile | claude agents --json failed: %s", exc)
@@ -981,14 +1165,13 @@ class AgentBridge:
             # Matches the kill()+wait() pattern in solicit_neovim_instance.
             if proc is not None and proc.returncode is None:
                 proc.kill()
-                try:
+                with contextlib.suppress(Exception):
                     await proc.wait()
-                except Exception:  # noqa: BLE001 — reaping is best-effort
-                    pass
 
         status_by_session = {
             s.get("sessionId", ""): s.get("status", "")
-            for s in sessions if isinstance(s, dict)
+            for s in sessions
+            if isinstance(s, dict)
         }
         changed = False
         for aid, sid in candidates.items():
@@ -996,8 +1179,13 @@ class AgentBridge:
             if status != "idle":
                 continue
             stale_state = self._activities.get(aid, {}).get("state", "?")
-            log.info("RECONCILE | %s session=%s CLI reports idle — clearing stuck '%s' "
-                     "(cancellation fired no hook)", aid, sid[:8], stale_state)
+            log.info(
+                "RECONCILE | %s session=%s CLI reports idle — clearing stuck '%s' "
+                "(cancellation fired no hook)",
+                aid,
+                sid[:8],
+                stale_state,
+            )
             self._append_to_history(aid, "(cli-reconcile)", "idle", "", 0, False)
             self._pop_activity(aid)
             changed = True
@@ -1048,16 +1236,25 @@ class AgentBridge:
             tmp = DIAGNOSTIC_DUMP_PATH.with_suffix(".tmp")
             tmp.write_text(json.dumps(dump, indent=2, default=str))
             tmp.replace(DIAGNOSTIC_DUMP_PATH)
-            log.info("DIAGNOSTIC DUMP written → %s (%d agents, %d activities, %d histories)",
-                     DIAGNOSTIC_DUMP_PATH,
-                     sum(len(c) for c in self._clients.values()),
-                     len(self._activities),
-                     len(self._activity_history))
-        except Exception as exc:  # noqa: BLE001
+            log.info(
+                "DIAGNOSTIC DUMP written → %s (%d agents, %d activities, %d histories)",
+                DIAGNOSTIC_DUMP_PATH,
+                sum(len(c) for c in self._clients.values()),
+                len(self._activities),
+                len(self._activity_history),
+            )
+        except Exception as exc:
             log.error("write_diagnostic_dump: failed: %s", exc)
 
-    def _append_to_history(self, agent_id: str, hook_event: str, state: str,
-                           tool: str, event_ts_ns: int, ooo: bool) -> None:
+    def _append_to_history(
+        self,
+        agent_id: str,
+        hook_event: str,
+        state: str,
+        tool: str,
+        event_ts_ns: int,
+        ooo: bool,
+    ) -> None:
         """Append a transition record to the per-agent activity history ring buffer.
 
         Called for every activity update (including drops) so postmortems have
@@ -1066,15 +1263,17 @@ class AgentBridge:
         history = self._activity_history.setdefault(
             agent_id, deque(maxlen=ACTIVITY_HISTORY_DEPTH)
         )
-        history.append({
-            "ts_iso": datetime.now().isoformat(timespec="milliseconds"),
-            "ts_mono": time.monotonic(),
-            "event_ts_ns": event_ts_ns,
-            "hook_event": hook_event,
-            "state": state,
-            "tool": tool,
-            "ooo": ooo,
-        })
+        history.append(
+            {
+                "ts_iso": datetime.now().isoformat(timespec="milliseconds"),
+                "ts_mono": time.monotonic(),
+                "event_ts_ns": event_ts_ns,
+                "hook_event": hook_event,
+                "state": state,
+                "tool": tool,
+                "ooo": ooo,
+            }
+        )
 
     def _pop_activity(self, aid: str) -> None:
         """Transition an agent to idle: drop its activity entry + per-turn state.
@@ -1136,7 +1335,7 @@ class AgentBridge:
             "DESYNC | pid=%s sent message without prior hello/sync — soliciting reconnect",
             nvim_pid,
         )
-        asyncio.create_task(solicit_neovim_instance(socket_path))
+        _spawn_background_task(solicit_neovim_instance(socket_path))
 
 
 bridge = AgentBridge()
@@ -1191,10 +1390,15 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             if nvim_pid is None:
                 nvim_pid = msg.get("nvim_pid")
                 if nvim_pid is not None:
-                    bridge._conn_count[nvim_pid] = bridge._conn_count.get(nvim_pid, 0) + 1
+                    bridge._conn_count[nvim_pid] = (
+                        bridge._conn_count.get(nvim_pid, 0) + 1
+                    )
                     counted = True
-                    log.info("CLIENT identified: nvim_pid=%s (open conns now %d)",
-                             nvim_pid, bridge._conn_count[nvim_pid])
+                    log.info(
+                        "CLIENT identified: nvim_pid=%s (open conns now %d)",
+                        nvim_pid,
+                        bridge._conn_count[nvim_pid],
+                    )
                 else:
                     log.info("CLIENT identified: nvim_pid=None (ephemeral hook conn)")
 
@@ -1216,12 +1420,17 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             remaining = bridge._conn_count.get(nvim_pid, 1) - 1
             if remaining <= 0:
                 bridge._conn_count.pop(nvim_pid, None)
-                log.info("CLIENT last-conn-closed | pid=%s, removing client state", nvim_pid)
+                log.info(
+                    "CLIENT last-conn-closed | pid=%s, removing client state", nvim_pid
+                )
                 bridge.remove_client(nvim_pid)
             else:
                 bridge._conn_count[nvim_pid] = remaining
-                log.debug("CLIENT conn-closed | pid=%s, %d sibling(s) still open — keeping state",
-                          nvim_pid, remaining)
+                log.debug(
+                    "CLIENT conn-closed | pid=%s, %d sibling(s) still open — keeping state",
+                    nvim_pid,
+                    remaining,
+                )
 
 
 async def solicit_neovim_instance(socket_path: str) -> bool:
@@ -1231,8 +1440,11 @@ async def solicit_neovim_instance(socket_path: str) -> bool:
     Returns True if the call succeeded, False otherwise.
     """
     cmd = [
-        "nvim", "--server", socket_path, "--remote-expr",
-        'luaeval("require(\'orchestrator.bridge\').reconnect()")',
+        "nvim",
+        "--server",
+        socket_path,
+        "--remote-expr",
+        "luaeval(\"require('orchestrator.bridge').reconnect()\")",
     ]
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -1246,10 +1458,14 @@ async def solicit_neovim_instance(socket_path: str) -> bool:
             log.info("solicit %s: ok (result=%s)", socket_path, result)
             return True
         else:
-            log.debug("solicit %s: failed (rc=%d, stderr=%s)",
-                      socket_path, proc.returncode, stderr.decode().strip()[:100] if stderr else "")
+            log.debug(
+                "solicit %s: failed (rc=%d, stderr=%s)",
+                socket_path,
+                proc.returncode,
+                stderr.decode().strip()[:100] if stderr else "",
+            )
             return False
-    except asyncio.TimeoutError:
+    except TimeoutError:
         log.debug("solicit %s: timed out (2s)", socket_path)
         try:
             proc.kill()  # type: ignore[possibly-undefined]  # only wait_for raises TimeoutError, after proc is assigned
@@ -1275,7 +1491,9 @@ async def solicit_neovim_instances() -> None:
         log.info("solicit: no Neovim sockets found in %s", socket_dir)
         return
 
-    log.info("solicit: found %d Neovim socket(s), triggering reconnect...", len(sockets))
+    log.info(
+        "solicit: found %d Neovim socket(s), triggering reconnect...", len(sockets)
+    )
     results = await asyncio.gather(
         *(solicit_neovim_instance(str(s)) for s in sockets),
         return_exceptions=True,
@@ -1292,7 +1510,10 @@ def cleanup_socket():
     when its atexit handler runs after the new process has already bound.
     """
     try:
-        if _our_socket_inode is not None and SOCKET_PATH.stat().st_ino == _our_socket_inode:
+        if (
+            _our_socket_inode is not None
+            and SOCKET_PATH.stat().st_ino == _our_socket_inode
+        ):
             SOCKET_PATH.unlink(missing_ok=True)
     except OSError:
         pass
@@ -1315,16 +1536,17 @@ def _signal_stale_bridges() -> None:
     try:
         result = subprocess.run(
             ["pgrep", "-u", str(os.getuid()), "-f", "agent-bridge\\.py"],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         for line in result.stdout.strip().splitlines():
             pid = int(line.strip())
             if pid != my_pid:
                 log.info("signaling stale bridge.py pid=%d (SIGTERM)", pid)
-                try:
+                # ProcessLookupError means the bridge already exited.
+                with contextlib.suppress(ProcessLookupError):
                     os.kill(pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass  # Already exited
     except Exception as e:
         log.debug("_signal_stale_bridges: %s", e)
 
@@ -1347,10 +1569,15 @@ async def main():
 
     # Record our socket's inode for ownership-safe cleanup
     _our_socket_inode = SOCKET_PATH.stat().st_ino
-    log.info("LISTENING on %s (pid=%d, inode=%d)", SOCKET_PATH, os.getpid(), _our_socket_inode)
+    log.info(
+        "LISTENING on %s (pid=%d, inode=%d)",
+        SOCKET_PATH,
+        os.getpid(),
+        _our_socket_inode,
+    )
 
     # Actively solicit running Neovim instances to reconnect
-    asyncio.create_task(solicit_neovim_instances())
+    _spawn_background_task(solicit_neovim_instances())
 
     # (agent-ownership inversion, Phase 4) The parent-control stdin channel was
     # removed — it carried ONLY the shell's stt_state pushes, and STT recording
@@ -1368,9 +1595,10 @@ async def main():
                 bridge.reap_stale_activities()
                 bridge.check_stuck_working()
                 await bridge.reconcile_claude_sessions()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.error("activity_reaper: unexpected error: %s", exc)
-    asyncio.create_task(activity_reaper())
+
+    _spawn_background_task(activity_reaper())
 
     # Handle signals for clean shutdown
     loop = asyncio.get_running_loop()

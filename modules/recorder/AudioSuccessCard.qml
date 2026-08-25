@@ -29,10 +29,7 @@ Item {
         height: implicitHeight
 
         radius: Appearance.rounding.full
-        color: Colours.pillStyle(
-            Colours.palette.m3surfaceContainerHigh,
-            Colours.glass.subtle
-        ).background
+        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
         opacity: 0
 

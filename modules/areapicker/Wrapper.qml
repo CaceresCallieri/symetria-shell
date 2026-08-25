@@ -59,23 +59,45 @@ Scope {
     IpcHandler {
         target: "picker"
 
-        function open(): void { root._openPicker(false, false, false) }
-        function openFreeze(): void { root._openPicker(true, false, false) }
-        function openClip(): void { root._openPicker(false, true, false) }
-        function openFreezeClip(): void { root._openPicker(true, true, false) }
+        function open(): void {
+            root._openPicker(false, false, false);
+        }
+        function openFreeze(): void {
+            root._openPicker(true, false, false);
+        }
+        function openClip(): void {
+            root._openPicker(false, true, false);
+        }
+        function openFreezeClip(): void {
+            root._openPicker(true, true, false);
+        }
     }
 
     IpcHandler {
         target: "screenshot"
 
-        function region(): void { root._openPicker(false, false, true) }
-        function regionFreeze(): void { root._openPicker(true, false, true) }
+        function region(): void {
+            root._openPicker(false, false, true);
+        }
+        function regionFreeze(): void {
+            root._openPicker(true, false, true);
+        }
 
-        function window(): void { ScreenshotTransfer.captureAndTransfer("window") }
-        function monitor(): void { ScreenshotTransfer.captureAndTransfer("monitor") }
-        function monitorSelect(): void { ScreenshotTransfer.captureAndTransfer("monitorSelect") }
-        function keyboard(): void { ScreenshotTransfer.captureAndTransfer("keyboard") }
-        function captureFirst(): void { ScreenshotTransfer.captureAndTransfer("captureFirst") }
+        function window(): void {
+            ScreenshotTransfer.captureAndTransfer("window");
+        }
+        function monitor(): void {
+            ScreenshotTransfer.captureAndTransfer("monitor");
+        }
+        function monitorSelect(): void {
+            ScreenshotTransfer.captureAndTransfer("monitorSelect");
+        }
+        function keyboard(): void {
+            ScreenshotTransfer.captureAndTransfer("keyboard");
+        }
+        function captureFirst(): void {
+            ScreenshotTransfer.captureAndTransfer("captureFirst");
+        }
     }
 
     CustomShortcut {

@@ -24,8 +24,7 @@ Scope {
 
             required property ShellScreen modelData
 
-            readonly property bool shouldShow: WindowOverviewService.sessionActive
-                && WindowOverviewService.targetMonitorName === (Hypr.monitorFor(modelData)?.name ?? "")
+            readonly property bool shouldShow: WindowOverviewService.sessionActive && WindowOverviewService.targetMonitorName === (Hypr.monitorFor(modelData)?.name ?? "")
 
             screen: modelData
             name: "windowoverview-surface"

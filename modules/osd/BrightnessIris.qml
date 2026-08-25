@@ -172,10 +172,22 @@ RotaryControl {
                 // Starts at zero alpha: a radial gradient fills everything inside
                 // its FIRST stop with that stop's colour, so a first stop partway
                 // out paints a flat opaque core instead of fading in.
-                GradientStop { position: 0.00; color: Qt.alpha(root.lightColour, 0) }
-                GradientStop { position: 0.76; color: Qt.alpha(root.lightColour, 0) }
-                GradientStop { position: 0.85; color: Qt.alpha(root.lightColour, 0.18) }
-                GradientStop { position: 1.00; color: Qt.alpha(root.lightColour, 0) }
+                GradientStop {
+                    position: 0.00
+                    color: Qt.alpha(root.lightColour, 0)
+                }
+                GradientStop {
+                    position: 0.76
+                    color: Qt.alpha(root.lightColour, 0)
+                }
+                GradientStop {
+                    position: 0.85
+                    color: Qt.alpha(root.lightColour, 0.18)
+                }
+                GradientStop {
+                    position: 1.00
+                    color: Qt.alpha(root.lightColour, 0)
+                }
             }
 
             PathAngleArc {
@@ -220,9 +232,18 @@ RotaryControl {
                 focalX: centerX
                 focalY: centerY
 
-                GradientStop { position: 0.00; color: Qt.rgba(1, 1, 1, 1) }
-                GradientStop { position: 0.62; color: Qt.alpha(root.lightColour, 0.94) }
-                GradientStop { position: 1.00; color: Qt.alpha(root.lightColour, 0.62) }
+                GradientStop {
+                    position: 0.00
+                    color: Qt.rgba(1, 1, 1, 1)
+                }
+                GradientStop {
+                    position: 0.62
+                    color: Qt.alpha(root.lightColour, 0.94)
+                }
+                GradientStop {
+                    position: 1.00
+                    color: Qt.alpha(root.lightColour, 0.62)
+                }
             }
 
             PathAngleArc {
@@ -344,9 +365,18 @@ RotaryControl {
                         x2: blade.tipX
                         y2: blade.tipY
 
-                        GradientStop { position: 0.00; color: root.metal(blade.facing * 0.62) }
-                        GradientStop { position: 0.55; color: root.metal(blade.facing * 0.86) }
-                        GradientStop { position: 1.00; color: root.metal(blade.facing * 1.05 + 0.06) }
+                        GradientStop {
+                            position: 0.00
+                            color: root.metal(blade.facing * 0.62)
+                        }
+                        GradientStop {
+                            position: 0.55
+                            color: root.metal(blade.facing * 0.86)
+                        }
+                        GradientStop {
+                            position: 1.00
+                            color: root.metal(blade.facing * 1.05 + 0.06)
+                        }
                     }
 
                     // The triangle is walked from the tip, and every corner it
@@ -410,10 +440,22 @@ RotaryControl {
                 focalX: centerX
                 focalY: centerY
 
-                GradientStop { position: 0.00; color: Qt.alpha(root.lightColour, 0.55) }
-                GradientStop { position: 0.36; color: Qt.alpha(root.lightColour, 0.34) }
-                GradientStop { position: 0.62; color: Qt.alpha(root.lightColour, 0.13) }
-                GradientStop { position: 1.00; color: Qt.alpha(root.lightColour, 0) }
+                GradientStop {
+                    position: 0.00
+                    color: Qt.alpha(root.lightColour, 0.55)
+                }
+                GradientStop {
+                    position: 0.36
+                    color: Qt.alpha(root.lightColour, 0.34)
+                }
+                GradientStop {
+                    position: 0.62
+                    color: Qt.alpha(root.lightColour, 0.13)
+                }
+                GradientStop {
+                    position: 1.00
+                    color: Qt.alpha(root.lightColour, 0)
+                }
             }
 
             PathAngleArc {

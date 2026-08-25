@@ -12,10 +12,10 @@ Output:
     /tmp/svg-icon-test.png  — screenshot of the preview page
 """
 
-import sys
 import os
 import re
 import subprocess
+import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -74,9 +74,9 @@ def build_html(svg_file, test_svg, ref_svgs):
         # Font reference ?
         cells.append(
             f'<span style="color:#d97757;font-size:{size}px;font-weight:bold;'
-            f'line-height:1;display:inline-flex;align-items:center;'
-            f'justify-content:center;width:{max(size+10,25)}px;'
-            f'height:{max(size+10,25)}px;">?</span>'
+            f"line-height:1;display:inline-flex;align-items:center;"
+            f"justify-content:center;width:{max(size + 10, 25)}px;"
+            f'height:{max(size + 10, 25)}px;">?</span>'
         )
         row_html = "\n            ".join(cells)
         rows.append(
@@ -158,7 +158,9 @@ def main():
     svg_file = sys.argv[1] if len(sys.argv) > 1 else "assets/ask-question-icon.svg"
 
     test_svg = make_orange(read_svg(svg_file))
-    ref_svgs = {name: make_orange(read_svg(path)) for name, path in REFERENCE_ICONS.items()}
+    ref_svgs = {
+        name: make_orange(read_svg(path)) for name, path in REFERENCE_ICONS.items()
+    }
 
     html = build_html(svg_file, test_svg, ref_svgs)
 
@@ -170,9 +172,12 @@ def main():
 
     result = subprocess.run(
         [
-            "npx", "playwright", "screenshot",
+            "npx",
+            "playwright",
+            "screenshot",
             "--full-page",
-            "-b", "chromium",
+            "-b",
+            "chromium",
             f"file://{html_path}",
             png_path,
         ],

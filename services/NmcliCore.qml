@@ -269,11 +269,7 @@ Singleton {
         }
 
         const notSuccess = !error.includes("Connection activated") && !error.includes("successfully");
-        const hasSecretKeyword = error.includes("Secrets were required")
-            || error.includes("No secrets provided")
-            || error.includes("802-11-wireless-security.psk")
-            || error.includes("password for")
-            || error.includes("No agents were available");
+        const hasSecretKeyword = error.includes("Secrets were required") || error.includes("No secrets provided") || error.includes("802-11-wireless-security.psk") || error.includes("password for") || error.includes("No agents were available");
         const hasPasswordWord = error.includes("password") && notSuccess;
         const hasSecretsWord = error.includes("Secrets") && notSuccess;
         const has80211Word = error.includes("802.11") && notSuccess;
@@ -337,10 +333,7 @@ Singleton {
             exitCode = code;
 
             Qt.callLater(() => {
-                proc.deliver(code === 0,
-                    (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "",
-                    (stderrCollector && stderrCollector.text) ? stderrCollector.text : "",
-                    code);
+                proc.deliver(code === 0, (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "", (stderrCollector && stderrCollector.text) ? stderrCollector.text : "", code);
                 processFinished();
             });
         }

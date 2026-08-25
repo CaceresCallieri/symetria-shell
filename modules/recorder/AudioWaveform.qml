@@ -76,11 +76,7 @@ Item {
         const colors = [];
         for (let i = 0; i < barCount; i++) {
             const t = i / barCount;
-            colors.push(Qt.tint(Colours.palette.m3primary,
-                Qt.rgba(Colours.palette.m3tertiary.r,
-                        Colours.palette.m3tertiary.g,
-                        Colours.palette.m3tertiary.b,
-                        t * 0.5)));
+            colors.push(Qt.tint(Colours.palette.m3primary, Qt.rgba(Colours.palette.m3tertiary.r, Colours.palette.m3tertiary.g, Colours.palette.m3tertiary.b, t * 0.5)));
         }
         barColors = colors;
     }
@@ -89,13 +85,18 @@ Item {
 
     Connections {
         target: Colours.palette
-        function onM3primaryChanged() { root.updateBarColors(); }
-        function onM3tertiaryChanged() { root.updateBarColors(); }
+        function onM3primaryChanged() {
+            root.updateBarColors();
+        }
+        function onM3tertiaryChanged() {
+            root.updateBarColors();
+        }
     }
 
     // ── Pre-calculated wave offsets (recording mode) ────────────
     readonly property var waveOffsets: {
-        if (root.displayState !== "recording" || !root.active) return [];
+        if (root.displayState !== "recording" || !root.active)
+            return [];
         const cfg = audioConfig;
         const offsets = [];
         for (let i = 0; i < barCount; i++) {
@@ -107,7 +108,11 @@ Item {
 
     // ── Processing wave data (offsets + opacities) ──────────────
     readonly property var processingWaveData: {
-        if (root.displayState !== "processing" || !root.active) return { offsets: [], opacities: [] };
+        if (root.displayState !== "processing" || !root.active)
+            return {
+                offsets: [],
+                opacities: []
+            };
         const cfg = processingConfig;
         const offsets = [];
         const opacities = [];
@@ -119,7 +124,10 @@ Item {
             offsets.push(Math.max(0, primaryWave + harmonic));
             opacities.push(cfg.opacityMin + cfg.opacityRange * primaryWave);
         }
-        return { offsets, opacities };
+        return {
+            offsets,
+            opacities
+        };
     }
 
     readonly property list<real> processingWaveOffsets: processingWaveData.offsets ?? []
@@ -172,7 +180,8 @@ Item {
                 readonly property real waveOpacity: {
                     if (root.displayState === "processing") {
                         const opacity = root.processingWaveOpacities[index];
-                        if (opacity !== undefined) return opacity;
+                        if (opacity !== undefined)
+                            return opacity;
                     }
                     if (root.displayState === "paused")
                         return root.pausedDimOpacity;

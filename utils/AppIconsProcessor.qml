@@ -41,10 +41,16 @@ Singleton {
                 if (groupedArr.length > 0) {
                     const groupKey = [...groupedArr].sort().join(',');
                     if (!groupMap.has(groupKey))
-                        groupMap.set(groupKey, { canonicalOrder: groupedArr, clients: [] });
+                        groupMap.set(groupKey, {
+                            canonicalOrder: groupedArr,
+                            clients: []
+                        });
                     groupMap.get(groupKey).clients.push(client);
                 } else {
-                    ungrouped.push({ isGroup: false, clients: [client] });
+                    ungrouped.push({
+                        isGroup: false,
+                        clients: [client]
+                    });
                     ungroupedKeys.push(client.lastIpcObject?.address ?? "");
                 }
             }
@@ -54,14 +60,21 @@ Singleton {
             const groups = [];
             const groupKeys = [];
             for (const [groupKey, group] of groupEntries) {
-                const { canonicalOrder, clients: groupClients } = group;
+                const {
+                    canonicalOrder,
+                    clients: groupClients
+                } = group;
                 groupClients.sort((a, b) => {
                     const aIdx = canonicalOrder.indexOf(a.lastIpcObject?.address);
                     const bIdx = canonicalOrder.indexOf(b.lastIpcObject?.address);
-                    if (aIdx === -1 || bIdx === -1) return 0;
+                    if (aIdx === -1 || bIdx === -1)
+                        return 0;
                     return aIdx - bIdx;
                 });
-                groups.push({ isGroup: true, clients: groupClients });
+                groups.push({
+                    isGroup: true,
+                    clients: groupClients
+                });
                 groupKeys.push(groupKey);
             }
 
@@ -76,9 +89,7 @@ Singleton {
             // making position-based sorting unstable. Mode 2 (real fullscreen) hides
             // the bar entirely. Mode 3+ (client-requested, e.g., games) does NOT
             // shift the viewport — other windows keep their tiled positions.
-            const hasMaximized = combined.some(entry =>
-                entry.clients.some(c => c.lastIpcObject?.fullscreen === 1)
-            );
+            const hasMaximized = combined.some(entry => entry.clients.some(c => c.lastIpcObject?.fullscreen === 1));
 
             if (hasMaximized && root._tiledOrderCache.has(workspaceId)) {
                 // Maximize mode: sort by cached tiled order; entries not in cache go to end.
@@ -107,7 +118,8 @@ Singleton {
                     const bClient = combined[b].clients[0];
                     const ax = aClient?.lastIpcObject?.at?.[0] ?? 0;
                     const bx = bClient?.lastIpcObject?.at?.[0] ?? 0;
-                    if (ax !== bx) return ax - bx;
+                    if (ax !== bx)
+                        return ax - bx;
                     const ay = aClient?.lastIpcObject?.at?.[1] ?? 0;
                     const by = bClient?.lastIpcObject?.at?.[1] ?? 0;
                     return ay - by;
@@ -128,13 +140,17 @@ Singleton {
     /// Shallow-compare two cached models to avoid unnecessary Repeater churn.
     /// Returns true if both models represent the same icon layout.
     function modelsEqual(a: var, b: var): bool {
-        if (a.length !== b.length) return false;
+        if (a.length !== b.length)
+            return false;
         for (let i = 0; i < a.length; i++) {
-            if (a[i].isGroup !== b[i].isGroup) return false;
+            if (a[i].isGroup !== b[i].isGroup)
+                return false;
             const ac = a[i].clients, bc = b[i].clients;
-            if (ac.length !== bc.length) return false;
+            if (ac.length !== bc.length)
+                return false;
             for (let j = 0; j < ac.length; j++) {
-                if (ac[j] !== bc[j]) return false;
+                if (ac[j] !== bc[j])
+                    return false;
             }
         }
         return true;

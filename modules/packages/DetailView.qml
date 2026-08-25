@@ -22,7 +22,8 @@ StyledFlickable {
     property bool copied: false
 
     function triggerCopy(): void {
-        if (!root.detail?.name) return;
+        if (!root.detail?.name)
+            return;
         Packages.copyInstallCommand(root.detail.name);
         copied = true;
         copiedResetTimer.restart();
@@ -460,8 +461,20 @@ StyledFlickable {
 
                 SequentialAnimation {
                     id: urlClickAnim
-                    NumberAnimation { target: urlButton; property: "scale"; to: 0.93; duration: 80; easing.type: Easing.InQuad }
-                    NumberAnimation { target: urlButton; property: "scale"; to: 1.0; duration: 200; easing.type: Easing.OutBack }
+                    NumberAnimation {
+                        target: urlButton
+                        property: "scale"
+                        to: 0.93
+                        duration: 80
+                        easing.type: Easing.InQuad
+                    }
+                    NumberAnimation {
+                        target: urlButton
+                        property: "scale"
+                        to: 1.0
+                        duration: 200
+                        easing.type: Easing.OutBack
+                    }
                 }
 
                 StateLayer {
@@ -506,12 +519,28 @@ StyledFlickable {
                 color: root.copied ? Colours.palette.m3tertiaryContainer : Colours.palette.m3primaryContainer
                 transformOrigin: Item.Center
 
-                Behavior on color { CAnim { duration: Appearance.anim.durations.small } }
+                Behavior on color {
+                    CAnim {
+                        duration: Appearance.anim.durations.small
+                    }
+                }
 
                 SequentialAnimation {
                     id: copyClickAnim
-                    NumberAnimation { target: copyButton; property: "scale"; to: 0.93; duration: 80; easing.type: Easing.InQuad }
-                    NumberAnimation { target: copyButton; property: "scale"; to: 1.0; duration: 200; easing.type: Easing.OutBack }
+                    NumberAnimation {
+                        target: copyButton
+                        property: "scale"
+                        to: 0.93
+                        duration: 80
+                        easing.type: Easing.InQuad
+                    }
+                    NumberAnimation {
+                        target: copyButton
+                        property: "scale"
+                        to: 1.0
+                        duration: 200
+                        easing.type: Easing.OutBack
+                    }
                 }
 
                 StateLayer {
@@ -534,7 +563,11 @@ StyledFlickable {
                         font.pointSize: Appearance.font.size.normal
                         anchors.verticalCenter: parent.verticalCenter
 
-                        Behavior on color { CAnim { duration: Appearance.anim.durations.small } }
+                        Behavior on color {
+                            CAnim {
+                                duration: Appearance.anim.durations.small
+                            }
+                        }
                     }
 
                     StyledText {
@@ -544,7 +577,11 @@ StyledFlickable {
                         font.weight: Font.Medium
                         anchors.verticalCenter: parent.verticalCenter
 
-                        Behavior on color { CAnim { duration: Appearance.anim.durations.small } }
+                        Behavior on color {
+                            CAnim {
+                                duration: Appearance.anim.durations.small
+                            }
+                        }
                     }
                 }
             }

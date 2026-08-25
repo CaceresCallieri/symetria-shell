@@ -24,20 +24,13 @@ Item {
     readonly property bool showingBrightness: activeMetric === "brightness"
     readonly property var dial: dialLoader.item
     readonly property bool interacting: dial?.interacting ?? false
-    readonly property real currentValue: showingBrightness
-        ? brightness
-        : activeMetric === "microphone" ? sourceVolume : volume
-    readonly property bool activeMuted: activeMetric === "microphone"
-        ? sourceMuted
-        : activeMetric === "volume" && muted
+    readonly property real currentValue: showingBrightness ? brightness : activeMetric === "microphone" ? sourceVolume : volume
+    readonly property bool activeMuted: activeMetric === "microphone" ? sourceMuted : activeMetric === "volume" && muted
     readonly property real maximumValue: showingBrightness ? 1 : Config.services.maxVolume
     readonly property real contentScale: 0.52
     readonly property real attachmentCurve: Math.min(Config.border.rounding, height / 2)
     readonly property real surroundWidth: Appearance.padding.large
-    readonly property color surroundColor: Qt.alpha(
-        Colours.palette.m3surfaceContainer,
-        Appearance.transparency.base
-    )
+    readonly property color surroundColor: Qt.alpha(Colours.palette.m3surfaceContainer, Appearance.transparency.base)
 
     /// Target width of the iris, in pixels. It runs bigger than the volume knob
     /// because it carries no printed scale — its whole reading comes from blade
@@ -59,8 +52,7 @@ Item {
     /// also cover dial swaps on a metric change; each OSD card now owns a fixed
     /// metric, so the Loader never swaps.) The fallback duplicates
     /// RotaryControl.normalizedValue — keep the two in step if either changes.
-    readonly property real displayValue: dial?.animatedValue
-        ?? Math.max(0, Math.min(1, currentValue / Math.max(maximumValue, 0.001)))
+    readonly property real displayValue: dial?.animatedValue ?? Math.max(0, Math.min(1, currentValue / Math.max(maximumValue, 0.001)))
 
     // ONE size for every metric. Each metric has a fixed spot on the right edge
     // that you aim at from muscle memory, and a card that changed shape between

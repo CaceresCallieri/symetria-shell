@@ -197,4 +197,3 @@ ColumnLayout {
         }
     }
 }
-

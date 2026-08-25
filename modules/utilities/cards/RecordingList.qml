@@ -156,8 +156,7 @@ ColumnLayout {
 
                     const [, year, month, day, hour, minute, second] = matches;
                     // Validate date component ranges
-                    if (+month < 1 || +month > 12 || +day < 1 || +day > 31 ||
-                        +hour > 23 || +minute > 59 || +second > 59) {
+                    if (+month < 1 || +month > 12 || +day < 1 || +day > 31 || +hour > 23 || +minute > 59 || +second > 59) {
                         console.warn("RecordingList: invalid date in filename:", time);
                         return time;
                     }

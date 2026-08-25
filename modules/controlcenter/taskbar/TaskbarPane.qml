@@ -182,12 +182,12 @@ Item {
 
                     ConnectedButtonGroup {
                         rootItem: root
-                        
+
                         options: [
                             {
                                 label: qsTr("Speakers"),
                                 propertyName: "showAudio",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showAudio = checked;
                                     root.saveConfig();
                                 }
@@ -195,7 +195,7 @@ Item {
                             {
                                 label: qsTr("Microphone"),
                                 propertyName: "showMicrophone",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showMicrophone = checked;
                                     root.saveConfig();
                                 }
@@ -203,7 +203,7 @@ Item {
                             {
                                 label: qsTr("Keyboard"),
                                 propertyName: "showKbLayout",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showKbLayout = checked;
                                     root.saveConfig();
                                 }
@@ -211,7 +211,7 @@ Item {
                             {
                                 label: qsTr("Network"),
                                 propertyName: "showNetwork",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showNetwork = checked;
                                     root.saveConfig();
                                 }
@@ -219,7 +219,7 @@ Item {
                             {
                                 label: qsTr("Bluetooth"),
                                 propertyName: "showBluetooth",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showBluetooth = checked;
                                     root.saveConfig();
                                 }
@@ -227,7 +227,7 @@ Item {
                             {
                                 label: qsTr("Battery"),
                                 propertyName: "showBattery",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showBattery = checked;
                                     root.saveConfig();
                                 }
@@ -235,7 +235,7 @@ Item {
                             {
                                 label: qsTr("Capslock"),
                                 propertyName: "showLockStatus",
-                                onToggled: function(checked) {
+                                onToggled: function (checked) {
                                     root.showLockStatus = checked;
                                     root.saveConfig();
                                 }
@@ -282,12 +282,12 @@ Item {
 
                             ConnectedButtonGroup {
                                 rootItem: root
-                                
+
                                 options: [
                                     {
                                         label: qsTr("Workspaces"),
                                         propertyName: "scrollWorkspaces",
-                                        onToggled: function(checked) {
+                                        onToggled: function (checked) {
                                             root.scrollWorkspaces = checked;
                                             root.saveConfig();
                                         }
@@ -295,7 +295,7 @@ Item {
                                     {
                                         label: qsTr("Volume"),
                                         propertyName: "scrollVolume",
-                                        onToggled: function(checked) {
+                                        onToggled: function (checked) {
                                             root.scrollVolume = checked;
                                             root.saveConfig();
                                         }
@@ -303,7 +303,7 @@ Item {
                                     {
                                         label: qsTr("Brightness"),
                                         propertyName: "scrollBrightness",
-                                        onToggled: function(checked) {
+                                        onToggled: function (checked) {
                                             root.scrollBrightness = checked;
                                             root.saveConfig();
                                         }
@@ -370,17 +370,20 @@ Item {
 
                                 SliderInput {
                                     Layout.fillWidth: true
-                                    
+
                                     label: qsTr("Drag threshold")
                                     value: root.dragThreshold
                                     from: 0
                                     to: 100
                                     suffix: "px"
-                                    validator: IntValidator { bottom: 0; top: 100 }
-                                    formatValueFunction: (val) => Math.round(val).toString()
-                                    parseValueFunction: (text) => parseInt(text)
-                                    
-                                    onValueModified: (newValue) => {
+                                    validator: IntValidator {
+                                        bottom: 0
+                                        top: 100
+                                    }
+                                    formatValueFunction: val => Math.round(val).toString()
+                                    parseValueFunction: text => parseInt(text)
+
+                                    onValueModified: newValue => {
                                         root.dragThreshold = Math.round(newValue);
                                         root.saveConfig();
                                     }
@@ -434,12 +437,12 @@ Item {
 
                             ConnectedButtonGroup {
                                 rootItem: root
-                                
+
                                 options: [
                                     {
                                         label: qsTr("Background"),
                                         propertyName: "trayBackground",
-                                        onToggled: function(checked) {
+                                        onToggled: function (checked) {
                                             root.trayBackground = checked;
                                             root.saveConfig();
                                         }
@@ -447,7 +450,7 @@ Item {
                                     {
                                         label: qsTr("Compact"),
                                         propertyName: "trayCompact",
-                                        onToggled: function(checked) {
+                                        onToggled: function (checked) {
                                             root.trayCompact = checked;
                                             root.saveConfig();
                                         }
@@ -455,7 +458,7 @@ Item {
                                     {
                                         label: qsTr("Recolour"),
                                         propertyName: "trayRecolour",
-                                        onToggled: function(checked) {
+                                        onToggled: function (checked) {
                                             root.trayRecolour = checked;
                                             root.saveConfig();
                                         }
@@ -465,7 +468,6 @@ Item {
                         }
                     }
                 }
-
             }
         }
     }

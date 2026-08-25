@@ -42,9 +42,12 @@ Singleton {
     Component.onDestruction: {
         searchTimeout.stop();
         detailTimeout.stop();
-        if (searchProcess.running) searchProcess.running = false;
-        if (detailSiProcess.running) detailSiProcess.running = false;
-        if (detailQiProcess.running) detailQiProcess.running = false;
+        if (searchProcess.running)
+            searchProcess.running = false;
+        if (detailSiProcess.running)
+            detailSiProcess.running = false;
+        if (detailQiProcess.running)
+            detailQiProcess.running = false;
     }
 
     // ===== Search functions =====
@@ -72,7 +75,8 @@ Singleton {
     function clearResults(): void {
         searchTimeout.stop();
         for (const entry of results) {
-            if (entry) entry.destroy();
+            if (entry)
+                entry.destroy();
         }
         results = [];
         currentQuery = "";
@@ -177,7 +181,8 @@ Singleton {
         const deps = [];
         for (const line of raw.split("\n")) {
             const trimmed = line.trim();
-            if (!trimmed) continue;
+            if (!trimmed)
+                continue;
 
             const isInstalled = trimmed.endsWith("[installed]");
             const clean = isInstalled ? trimmed.replace(/\s*\[installed\]\s*$/, "") : trimmed;
@@ -223,7 +228,8 @@ Singleton {
                     const desc = lines[i + 1]?.trim() ?? "";
 
                     const slash = header.indexOf("/");
-                    if (slash === -1) continue;
+                    if (slash === -1)
+                        continue;
 
                     const repo = header.substring(0, slash);
                     const rest = header.substring(slash + 1);
@@ -243,12 +249,19 @@ Singleton {
                     }
 
                     entries.push(entryComponent.createObject(root, {
-                        repo, name, version, description: desc, installed, isAur, votes
+                        repo,
+                        name,
+                        version,
+                        description: desc,
+                        installed,
+                        isAur,
+                        votes
                     }));
                 }
 
                 for (const old of root.results) {
-                    if (old) old.destroy();
+                    if (old)
+                        old.destroy();
                 }
                 root.results = entries;
                 root.hasSearched = true;
@@ -267,7 +280,8 @@ Singleton {
             // Exit code 1 means no results — clear and mark searched
             if (exitCode === 1) {
                 for (const old of root.results) {
-                    if (old) old.destroy();
+                    if (old)
+                        old.destroy();
                 }
                 root.results = [];
                 root.hasSearched = true;
@@ -293,7 +307,8 @@ Singleton {
         property string _packageName: ""
         property bool _isInstalled: false
 
-        Component.onDestruction: if (running) running = false
+        Component.onDestruction: if (running)
+            running = false
 
         stdout: StdioCollector {
             onStreamFinished: {
@@ -370,7 +385,8 @@ Singleton {
     Process {
         id: detailQiProcess
 
-        Component.onDestruction: if (running) running = false
+        Component.onDestruction: if (running)
+            running = false
 
         stdout: StdioCollector {
             onStreamFinished: {
@@ -408,8 +424,10 @@ Singleton {
         interval: 10000
         onTriggered: {
             console.warn("[Packages] Detail fetch timed out after 10s");
-            if (detailSiProcess.running) detailSiProcess.running = false;
-            if (detailQiProcess.running) detailQiProcess.running = false;
+            if (detailSiProcess.running)
+                detailSiProcess.running = false;
+            if (detailQiProcess.running)
+                detailQiProcess.running = false;
             root.detailError = qsTr("Request timed out");
             root.fetchingDetail = false;
         }

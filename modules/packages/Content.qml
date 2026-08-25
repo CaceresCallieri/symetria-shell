@@ -266,10 +266,7 @@ FocusScope {
             detail: Packages.selectedDetail
 
             width: parent.width
-            height: Math.min(
-                contentHeight,
-                root.maxHeight - detailHeader.implicitHeight - root.padding * 3
-            )
+            height: Math.min(contentHeight, root.maxHeight - detailHeader.implicitHeight - root.padding * 3)
         }
     }
 
@@ -331,11 +328,7 @@ FocusScope {
             orientation: Qt.Vertical
             reuseItems: true
 
-            height: Math.min(
-                contentHeight,
-                (Config.packages.sizes.itemHeight + spacing) * Config.packages.maxShown - spacing,
-                root.maxHeight - searchWrapper.implicitHeight - root.padding * 3
-            )
+            height: Math.min(contentHeight, (Config.packages.sizes.itemHeight + spacing) * Config.packages.maxShown - spacing, root.maxHeight - searchWrapper.implicitHeight - root.padding * 3)
 
             onModelChanged: {
                 currentIndex = 0;

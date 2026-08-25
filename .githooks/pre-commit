@@ -17,35 +17,54 @@ STAGED_QML=()
 STAGED_SH=()
 STAGED_FRAG=()
 
+STAGED_PY=()
+
 while IFS= read -r -d '' file; do
     case "$file" in
         *.qml) STAGED_QML+=("$file") ;;
         *.sh)  STAGED_SH+=("$file") ;;
+        *.py)  STAGED_PY+=("$file") ;;
         assets/shaders/*.frag) STAGED_FRAG+=("$file") ;;
     esac
 done < <(git diff --cached --name-only --diff-filter=d -z)
 
 # Nothing to lint
-if [[ ${#STAGED_QML[@]} -eq 0 && ${#STAGED_SH[@]} -eq 0 && ${#STAGED_FRAG[@]} -eq 0 ]]; then
+if [[ ${#STAGED_QML[@]} -eq 0 && ${#STAGED_SH[@]} -eq 0 && ${#STAGED_PY[@]} -eq 0 && ${#STAGED_FRAG[@]} -eq 0 ]]; then
     exit 0
 fi
 
 FAILED=0
 
 # --- qmllint ---
-# NOTE: qmllint v1.0 exits 255 silently for BOTH parse errors and unresolvable
-# QuickShell imports (Quickshell, Quickshell.Io, etc.). Without a build directory
-# and import resolution config, ~93% of files trigger exit 255 with no output.
-# We only block commits when qmllint produces actual diagnostic output — this
-# makes qmllint a no-op today but ready for when import resolution is configured.
+# Use the ABSOLUTE Qt6 path, never bare `qmllint`. On Arch, /usr/bin/qmllint
+# belongs to qt5-declarative — Qt 5.15's tool, which reports version "1.0",
+# predates Quickshell's pragmas, and exits 255 with NO output on ~93% of this
+# repo. That binary winning the PATH lookup is what made both this hook and the
+# CI job worthless for four months: the old guard below tested whether output
+# was non-empty, so the Qt5 tool's silence read as "clean" locally, while in CI
+# the shell's own "command not found" on stderr read as 408 code defects.
 #
-# IMPORTANT: capture output with "if ! output=$(cmd)" to prevent set -euo pipefail
-# from exiting on qmllint's non-zero exit code before the output check is reached.
+# Levels come from .qmllint.ini; findings parked at `info` there print without
+# blocking the commit. Branch on the EXIT CODE, never on output emptiness.
+#
+# IMPORTANT: keep the "if ! output=$(cmd)" capture form. It prevents
+# set -euo pipefail from aborting on qmllint's non-zero exit before the
+# diagnostic is printed.
+QMLLINT=/usr/lib/qt6/bin/qmllint
 if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
-    if command -v qmllint >/dev/null 2>&1; then
+    if [[ -x "$QMLLINT" ]]; then
+        # Regenerate the qs.* shadow tree so `import qs.config` resolves. Without
+        # it the findings inflate roughly twelvefold and drown the real ones.
+        # See scripts/gen-qmllint-tree.py.
+        SHADOW_TREE="$(git rev-parse --show-toplevel)/build/qmllint"
+        if ! "$(git rev-parse --show-toplevel)/scripts/gen-qmllint-tree.py" --quiet; then
+            echo "pre-commit: failed to generate the qmllint module tree" >&2
+            FAILED=1
+        fi
+
         QML_ERRORS=0
         for file in "${STAGED_QML[@]}"; do
-            if ! output=$(qmllint "$file" 2>&1) && [[ -n "$output" ]]; then
+            if ! output=$("$QMLLINT" -I "$SHADOW_TREE" "$file" 2>&1); then
                 echo "$output" >&2
                 QML_ERRORS=$((QML_ERRORS + 1))
             fi
@@ -55,7 +74,47 @@ if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
             FAILED=1
         fi
     else
-        echo "pre-commit: qmllint not found, skipping QML lint" >&2
+        echo "pre-commit: $QMLLINT not found, skipping QML lint" >&2
+        echo "pre-commit: install it with 'paru -S qt6-declarative' — do NOT substitute /usr/bin/qmllint (Qt5)" >&2
+    fi
+fi
+
+# --- qmlformat ---
+# Delegates to the shared script rather than inlining `qmlformat | diff`,
+# because qmlformat fails on 10 files in this repo by exiting 1 with NO output,
+# and the inline form would report those crashes as formatting violations.
+# See the header of .github/scripts/run-qmlformat.sh.
+if [[ ${#STAGED_QML[@]} -gt 0 ]]; then
+    QMLFORMAT_CHECK="$(git rev-parse --show-toplevel)/.github/scripts/run-qmlformat.sh"
+    if [[ -x "$QMLFORMAT_CHECK" ]]; then
+        if ! "$QMLFORMAT_CHECK" "${STAGED_QML[@]}" >&2; then
+            FAILED=1
+        fi
+    fi
+fi
+
+# --- ruff (Python lint + format) ---
+if [[ ${#STAGED_PY[@]} -gt 0 ]]; then
+    if command -v ruff >/dev/null 2>&1; then
+        if ! ruff check --output-format concise "${STAGED_PY[@]}" >&2; then
+            FAILED=1
+        fi
+        if ! ruff format --check "${STAGED_PY[@]}" >&2; then
+            FAILED=1
+        fi
+    else
+        echo "pre-commit: ruff not found, skipping Python lint (paru -S ruff)" >&2
+    fi
+
+    # pyrefly is whole-project by nature — a changed signature breaks callers
+    # the diff never touched — so it is never scoped to the staged files. The
+    # committed baseline is what keeps it reporting only NEW errors.
+    if command -v pyrefly >/dev/null 2>&1; then
+        if ! pyrefly check --baseline pyrefly-baseline.json >&2; then
+            FAILED=1
+        fi
+    else
+        echo "pre-commit: pyrefly not found, skipping type check (uv tool install pyrefly)" >&2
     fi
 fi
 

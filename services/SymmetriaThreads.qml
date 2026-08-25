@@ -72,7 +72,10 @@ Singleton {
                 byProject[name] = [];
             byProject[name].push(root._asAgent(thread, name));
         }
-        return Object.keys(byProject).map(name => ({ project: name, agents: byProject[name] }));
+        return Object.keys(byProject).map(name => ({
+                    project: name,
+                    agents: byProject[name]
+                }));
     }
 
     /// Shapes one thread as the bar's chip expects an agent.

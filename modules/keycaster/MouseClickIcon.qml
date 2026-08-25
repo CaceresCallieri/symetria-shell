@@ -44,8 +44,12 @@ Item {
         onPaint: root.drawMouse(getContext("2d"), width, height)
 
         Connections {
-            function onActiveButtonChanged(): void { canvas.requestPaint(); }
-            function onBaseColorChanged(): void { canvas.requestPaint(); }
+            function onActiveButtonChanged(): void {
+                canvas.requestPaint();
+            }
+            function onBaseColorChanged(): void {
+                canvas.requestPaint();
+            }
 
             target: root
         }

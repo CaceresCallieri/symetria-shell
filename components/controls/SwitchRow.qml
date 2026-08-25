@@ -16,7 +16,7 @@ StyledRect {
     // member, and the shadow does NOT propagate to children the way the real
     // Item.enabled does, so consumers' `enabled: false` silently left the
     // subtree interactive. Assigning the inherited one gets both.
-    property var onToggled: function(checked) {} // intentional var: function callback (no QML function-property type)
+    property var onToggled: function (checked) {} // intentional var: function callback (no QML function-property type)
 
     Layout.fillWidth: true
     implicitHeight: row.implicitHeight + Appearance.padding.large * 2
@@ -49,4 +49,3 @@ StyledRect {
         }
     }
 }
-

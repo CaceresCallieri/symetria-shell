@@ -74,10 +74,7 @@ Row {
 
                     // Pill styling (subtle intensity for background element)
                     // intentional var: heterogeneous JS { background, border }
-                    readonly property var glassStyle: Colours.pillStyle(
-                        Colours.palette.m3surfaceContainerHigh,
-                        Colours.glass.subtle
-                    )
+                    readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
                     implicitWidth: groupRow.implicitWidth + Appearance.padding.normal * 2
                     implicitHeight: Config.bar.sizes.indicatorHeight

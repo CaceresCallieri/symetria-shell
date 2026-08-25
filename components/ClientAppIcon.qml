@@ -35,7 +35,8 @@ Item {
 
     // Entry animation - scale in when added (only for ungrouped icons)
     scale: animateEntry ? 0 : 1
-    Component.onCompleted: if (animateEntry) scale = 1
+    Component.onCompleted: if (animateEntry)
+        scale = 1
 
     Behavior on scale {
         enabled: root.animateEntry
@@ -52,10 +53,7 @@ Item {
         anchors.centerIn: parent
         // Minimum 16px to prevent invalid icon requests during initialization
         implicitSize: Math.max(Config.bar.sizes.iconSize, 16)
-        source: Icons.resolveWindowIcon(
-            root.client?.lastIpcObject?.class ?? "",
-            Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : ""
-        )
+        source: Icons.resolveWindowIcon(root.client?.lastIpcObject?.class ?? "", Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : "")
     }
 
     // Fallback: Material category icon (when useActualAppIcons is false)
@@ -93,7 +91,8 @@ Item {
         cursorShape: Config.bar.workspaces.appIconsClickToFocus ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: {
             const addr = root.client?.lastIpcObject?.address;
-            if (addr) Hypr.dispatch(`focuswindow address:${addr}`)
+            if (addr)
+                Hypr.dispatch(`focuswindow address:${addr}`);
         }
     }
 

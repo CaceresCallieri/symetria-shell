@@ -19,7 +19,7 @@ Singleton {
             root.savedConnectionSsids = NmcliWifi.savedConnectionSsids;
         });
         // Get initial WiFi status
-        NmcliWifi.getWifiStatus((enabled) => {
+        NmcliWifi.getWifiStatus(enabled => {
             root.wifiEnabled = enabled;
         });
         // Sync networks from NmcliWifi on startup
@@ -44,7 +44,7 @@ Singleton {
     property var wirelessDeviceDetails: null
 
     function enableWifi(enabled: bool): void {
-        NmcliWifi.enableWifi(enabled, (result) => {
+        NmcliWifi.enableWifi(enabled, result => {
             if (result.success) {
                 root.getWifiStatus();
                 NmcliWifi.getNetworks(() => {
@@ -55,7 +55,7 @@ Singleton {
     }
 
     function toggleWifi(): void {
-        NmcliWifi.toggleWifi((result) => {
+        NmcliWifi.toggleWifi(result => {
             if (result.success) {
                 root.getWifiStatus();
                 NmcliWifi.getNetworks(() => {
@@ -77,24 +77,31 @@ Singleton {
         // Set up pending connection tracking if callback provided
         if (callback) {
             const hasBssid = bssid !== undefined && bssid !== null && bssid.length > 0;
-            root.pendingConnection = { ssid: ssid, bssid: hasBssid ? bssid : "", callback: callback };
+            root.pendingConnection = {
+                ssid: ssid,
+                bssid: hasBssid ? bssid : "",
+                callback: callback
+            };
         }
-        
-        NmcliWifi.connectToNetwork(ssid, password, bssid, (result) => {
+
+        NmcliWifi.connectToNetwork(ssid, password, bssid, result => {
             if (result && result.success) {
                 // Connection successful
-                if (callback) callback(result);
+                if (callback)
+                    callback(result);
                 root.pendingConnection = null;
             } else if (result && result.needsPassword) {
                 // Password needed - callback will handle showing dialog
-                if (callback) callback(result);
+                if (callback)
+                    callback(result);
                 root.pendingConnection = null;
             } else {
                 // Connection failed
                 if (result && result.error) {
                     root.connectionFailed(ssid);
                 }
-                if (callback) callback(result);
+                if (callback)
+                    callback(result);
                 root.pendingConnection = null;
             }
         });
@@ -103,23 +110,30 @@ Singleton {
     function connectToNetworkWithPasswordCheck(ssid: string, isSecure: bool, callback: var, bssid: string): void {
         // Set up pending connection tracking
         const hasBssid = bssid !== undefined && bssid !== null && bssid.length > 0;
-        root.pendingConnection = { ssid: ssid, bssid: hasBssid ? bssid : "", callback: callback };
-        
-        NmcliWifi.connectToNetworkWithPasswordCheck(ssid, isSecure, (result) => {
+        root.pendingConnection = {
+            ssid: ssid,
+            bssid: hasBssid ? bssid : "",
+            callback: callback
+        };
+
+        NmcliWifi.connectToNetworkWithPasswordCheck(ssid, isSecure, result => {
             if (result && result.success) {
                 // Connection successful
-                if (callback) callback(result);
+                if (callback)
+                    callback(result);
                 root.pendingConnection = null;
             } else if (result && result.needsPassword) {
                 // Password needed - callback will handle showing dialog
-                if (callback) callback(result);
+                if (callback)
+                    callback(result);
                 root.pendingConnection = null;
             } else {
                 // Connection failed
                 if (result && result.error) {
                     root.connectionFailed(ssid);
                 }
-                if (callback) callback(result);
+                if (callback)
+                    callback(result);
                 root.pendingConnection = null;
             }
         }, bssid);
@@ -139,7 +153,7 @@ Singleton {
     function forgetNetwork(ssid: string): void {
         // Delete the connection profile for this network
         // This will remove the saved password and connection settings
-        NmcliWifi.forgetNetwork(ssid, (result) => {
+        NmcliWifi.forgetNetwork(ssid, result => {
             if (result.success) {
                 // Refresh network list after deletion
                 Qt.callLater(() => {
@@ -150,7 +164,6 @@ Singleton {
             }
         });
     }
-
 
     property list<string> savedConnections: []
     property list<string> savedConnectionSsids: []
@@ -230,28 +243,29 @@ Singleton {
     }
 
     function getWifiStatus(): void {
-        NmcliWifi.getWifiStatus((enabled) => {
+        NmcliWifi.getWifiStatus(enabled => {
             root.wifiEnabled = enabled;
         });
     }
 
     function getEthernetDevices(): void {
         root.ethernetProcessRunning = true;
-        NmcliEthernet.getEthernetInterfaces((interfaces) => {
+        NmcliEthernet.getEthernetInterfaces(interfaces => {
             root.ethernetDevices = NmcliEthernet.ethernetDevices;
             root.ethernetDeviceCount = NmcliEthernet.ethernetDevices.length;
             root.ethernetProcessRunning = false;
         });
     }
 
-
     function connectEthernet(connectionName: string, interfaceName: string): void {
-        NmcliEthernet.connectEthernet(connectionName, interfaceName, (result) => {
+        NmcliEthernet.connectEthernet(connectionName, interfaceName, result => {
             if (result.success) {
                 getEthernetDevices();
                 // Refresh device details after connection
                 Qt.callLater(() => {
-                    const activeDevice = root.ethernetDevices.find(function(d) { return d.connected; });
+                    const activeDevice = root.ethernetDevices.find(function (d) {
+                        return d.connected;
+                    });
                     if (activeDevice && activeDevice.interface) {
                         updateEthernetDeviceDetails(activeDevice.interface);
                     }
@@ -261,7 +275,7 @@ Singleton {
     }
 
     function disconnectEthernet(connectionName: string): void {
-        NmcliEthernet.disconnectEthernet(connectionName, (result) => {
+        NmcliEthernet.disconnectEthernet(connectionName, result => {
             if (result.success) {
                 getEthernetDevices();
                 // Clear device details after disconnection
@@ -273,7 +287,7 @@ Singleton {
     }
 
     function updateEthernetDeviceDetails(interfaceName: string): void {
-        NmcliEthernet.getEthernetDeviceDetails(interfaceName, (details) => {
+        NmcliEthernet.getEthernetDeviceDetails(interfaceName, details => {
             root.ethernetDeviceDetails = details;
         });
     }
@@ -281,7 +295,7 @@ Singleton {
     function updateWirelessDeviceDetails(): void {
         // Find the wireless interface by looking for wifi devices
         // Pass empty string to let NmcliWifi find the active interface automatically
-        NmcliWifi.getWirelessDeviceDetails("", (details) => {
+        NmcliWifi.getWirelessDeviceDetails("", details => {
             root.wirelessDeviceDetails = details;
         });
     }
@@ -298,5 +312,4 @@ Singleton {
             }
         }
     }
-
 }

@@ -239,7 +239,9 @@ Item {
                     color: Colours.palette.m3onSurfaceVariant
                 }
 
-                Item { Layout.fillWidth: true }
+                Item {
+                    Layout.fillWidth: true
+                }
 
                 StyledText {
                     text: qsTr("in %1  ·  out %2").arg(root.fmt(root.inPoint)).arg(root.fmt(root.outPoint))
@@ -248,7 +250,9 @@ Item {
                     color: Colours.palette.m3primary
                 }
 
-                Item { Layout.fillWidth: true }
+                Item {
+                    Layout.fillWidth: true
+                }
 
                 StyledText {
                     text: root.fmt(root.durationSec)
@@ -423,7 +427,9 @@ Item {
                     color: Colours.palette.m3onSurfaceVariant
                 }
 
-                Item { Layout.fillWidth: true }
+                Item {
+                    Layout.fillWidth: true
+                }
 
                 RaisedTextButton {
                     text: qsTr("Cancel")

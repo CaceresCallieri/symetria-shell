@@ -86,7 +86,7 @@ StyledListView {
                 model.values: [0]
                 root.delegate: calcItem
             }
-        },
+        }
     ]
 
     transitions: Transition {
@@ -217,5 +217,4 @@ StyledListView {
             list: root
         }
     }
-
 }

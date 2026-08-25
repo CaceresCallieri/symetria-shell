@@ -34,4 +34,3 @@ StyledRect {
         spacing: root.contentSpacing
     }
 }
-

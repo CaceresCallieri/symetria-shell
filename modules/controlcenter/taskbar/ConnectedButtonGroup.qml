@@ -57,9 +57,9 @@ StyledRect {
 
                     Layout.fillWidth: true
                     text: modelData.label
-                    
+
                     property bool _checked: false
-                    
+
                     checked: _checked
                     toggle: false
                     type: TextButton.Tonal
@@ -69,7 +69,7 @@ StyledRect {
                         if (root.rootItem && modelData.propertyName) {
                             const propName = modelData.propertyName;
                             const rootItem = root.rootItem;
-                            _checked = Qt.binding(function() {
+                            _checked = Qt.binding(function () {
                                 return rootItem[propName] ?? false;
                             });
                         }
@@ -81,7 +81,7 @@ StyledRect {
 
                     // Match utilities Toggles inactive color
                     inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-                    
+
                     // Adjust width similar to utilities toggles
                     Layout.preferredWidth: implicitWidth + (stateLayer.pressed ? Appearance.padding.large : internalChecked ? Appearance.padding.smaller : 0)
 
@@ -110,4 +110,3 @@ StyledRect {
         }
     }
 }
-

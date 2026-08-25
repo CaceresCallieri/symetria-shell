@@ -27,9 +27,7 @@ Item {
     // floored at one row's innerWidth for the brief window before the content reports its size.
     // Separate mode uses the agentbar's compact innerHeight. This height flows into exclusiveZone,
     // the mask Region, Border, Backgrounds and Panels — so wrapped rows reserve real screen space.
-    readonly property int innerHeight: AgentService.mergeActive
-        ? Math.max(Config.bar.sizes.innerWidth, content.item?.implicitHeight ?? 0)
-        : Config.agentbar.sizes.innerHeight
+    readonly property int innerHeight: AgentService.mergeActive ? Math.max(Config.bar.sizes.innerWidth, content.item?.implicitHeight ?? 0) : Config.agentbar.sizes.innerHeight
     readonly property int contentHeight: innerHeight + padding * 2
     // Snaps immediately so application windows shift before the visual animation completes
     // (matches bar/Wrapper behavior — prevents content from being momentarily obscured)
@@ -39,16 +37,13 @@ Item {
     // a machine running Mesura and no Symmetria IDE — the arrangement this
     // whole path exists to serve, and the one the IDE's retirement makes
     // ordinary.
-    readonly property bool shouldBeVisible: (Config.agentbar.enabled
-            && (AgentService.agentCount > 0
-                // Counted only in the SEPARATE layout. `MergedBarContent` reads
-                // AgentService alone, so counting Mesura there would reserve
-                // the screen edge for a bar with nothing in it — and the merged
-                // mode is IPC-toggleable at runtime, so this is reachable
-                // without editing a config file.
-                || (!AgentService.mergeActive && SymmetriaThreads.projectGroups.length > 0))
-            && !AgentService.userHidden)
-        || preview.previewActive
+    readonly property bool shouldBeVisible: (Config.agentbar.enabled && (AgentService.agentCount > 0 ||
+            // Counted only in the SEPARATE layout. `MergedBarContent` reads
+            // AgentService alone, so counting Mesura there would reserve
+            // the screen edge for a bar with nothing in it — and the merged
+            // mode is IPC-toggleable at runtime, so this is reachable
+            // without editing a config file.
+            (!AgentService.mergeActive && SymmetriaThreads.projectGroups.length > 0)) && !AgentService.userHidden) || preview.previewActive
 
     clip: true
     visible: height > 0
@@ -118,8 +113,14 @@ Item {
         }
     }
 
-    Component.onCompleted: { Visibilities.agentBars.set(screen, this); Visibilities.agentBarsVersion++; }
-    Component.onDestruction: { Visibilities.agentBars.delete(screen); Visibilities.agentBarsVersion++; }
+    Component.onCompleted: {
+        Visibilities.agentBars.set(screen, this);
+        Visibilities.agentBarsVersion++;
+    }
+    Component.onDestruction: {
+        Visibilities.agentBars.delete(screen);
+        Visibilities.agentBarsVersion++;
+    }
 
     // Right-aligned sprite preview (controlled by /test-sprite skill)
     SpritePreview {

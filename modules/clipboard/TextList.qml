@@ -46,7 +46,8 @@ Item {
         onContentHeightChanged: _checkLoadMore()
 
         function _checkLoadMore(): void {
-            if (!root.hasMore) return;
+            if (!root.hasMore)
+                return;
             const threshold = 100;
             if (contentY + height >= contentHeight - threshold)
                 root.loadMore();

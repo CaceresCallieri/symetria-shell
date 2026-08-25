@@ -39,10 +39,7 @@ Singleton {
 
     /// Whether the merged workspace+agent bar mode is active.
     /// True when the config flag is on AND agents are visible.
-    readonly property bool mergeActive: Config.agentbar.mergeWorkspaces
-        && Config.agentbar.enabled
-        && _agents.length > 0
-        && !_userHidden
+    readonly property bool mergeActive: Config.agentbar.mergeWorkspaces && Config.agentbar.enabled && _agents.length > 0 && !_userHidden
 
     /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
     /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
@@ -73,7 +70,8 @@ Singleton {
     // but be aware of this coupling when refactoring either service.
     readonly property bool sttIsTranscribing: {
         const j = SttService.job;
-        if (!j) return false;
+        if (!j)
+            return false;
         const s = j.state;
         return s === "processing" || s === "transcribed" || s === "delivering";
     }
@@ -104,16 +102,7 @@ Singleton {
     readonly property string _sttRecordingScript: Qt.resolvedUrl("../scripts/stt-recording.py").toString().replace(/^file:\/\//, "")
 
     // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
-    readonly property list<color> palette: [
-        Colours.palette.m3primary,
-        Colours.palette.m3secondary,
-        Colours.palette.m3tertiary,
-        Colours.palette.m3error,
-        Colours.palette.m3primaryContainer,
-        Colours.palette.m3secondaryContainer,
-        Colours.palette.m3tertiaryContainer,
-        Colours.palette.m3errorContainer,
-    ]
+    readonly property list<color> palette: [Colours.palette.m3primary, Colours.palette.m3secondary, Colours.palette.m3tertiary, Colours.palette.m3error, Colours.palette.m3primaryContainer, Colours.palette.m3secondaryContainer, Colours.palette.m3tertiaryContainer, Colours.palette.m3errorContainer,]
 
     function colorForIndex(idx: int): color {
         return palette[idx % palette.length];
@@ -158,7 +147,10 @@ Singleton {
             if (ipc && pids.has(ipc.pid)) {
                 const ws = ipc.workspace;
                 if (ws)
-                    newMap[ipc.pid] = { id: ws.id, name: ws.name };
+                    newMap[ipc.pid] = {
+                        id: ws.id,
+                        name: ws.name
+                    };
             }
         }
         root._workspaceMap = newMap;
@@ -166,7 +158,8 @@ Singleton {
 
     /// Get workspace {id, name} for a single agent, or null.
     function workspaceForAgent(agent: var): var {
-        if (!agent || !agent.terminal_pid) return null;
+        if (!agent || !agent.terminal_pid)
+            return null;
         return root._workspaceMap[agent.terminal_pid] ?? null;
     }
 
@@ -174,7 +167,8 @@ Singleton {
     /// No-ops silently if the window is not found in Hypr.toplevels (e.g., within
     /// the ~100ms debounce window after a window open event).
     function focusTerminal(terminalPid: int): void {
-        if (terminalPid <= 0) return;
+        if (terminalPid <= 0)
+            return;
         for (const toplevel of Hypr.toplevels.values) {
             const ipc = toplevel.lastIpcObject;
             if (ipc && ipc.pid === terminalPid) {
@@ -186,7 +180,8 @@ Singleton {
 
     /// Returns the active agent in a group, or the first agent if none is active.
     function representativeAgent(agents: var): var {
-        if (!agents || agents.length === 0) return null;
+        if (!agents || agents.length === 0)
+            return null;
         return agents.find(a => a.active) ?? agents[0];
     }
 
@@ -211,14 +206,19 @@ Singleton {
                 const ws = root._workspaceMap[agent.terminal_pid];
                 if (ws) {
                     const id = ws.id;
-                    if (!byWs[id]) byWs[id] = [];
+                    if (!byWs[id])
+                        byWs[id] = [];
                     byWs[id].push(agent);
                 } else {
                     orphans.push(agent);
                 }
             }
         }
-        return { byWorkspace: byWs, orphans, remote };
+        return {
+            byWorkspace: byWs,
+            orphans,
+            remote
+        };
     }
 
     /// Resolve workspace to display icon, matching the workspace bar's chain:
@@ -250,16 +250,29 @@ Singleton {
     ///   2 = special workspace (negative ID, "special:" prefix) → rightmost
     ///   3 = no workspace detected → far right
     function _wsSortKey(wsInfo: var): var {
-        if (!wsInfo) return { category: 3, order: 0 };
+        if (!wsInfo)
+            return {
+                category: 3,
+                order: 0
+            };
 
         const id = wsInfo.id;
         const name = wsInfo.name ?? "";
 
         if (id < 0 && name.startsWith("special:"))
-            return { category: 2, order: id };
+            return {
+                category: 2,
+                order: id
+            };
         if (id < 0)
-            return { category: 0, order: id };
-        return { category: 1, order: id };
+            return {
+                category: 0,
+                order: id
+            };
+        return {
+            category: 1,
+            order: id
+        };
     }
 
     // wsMap: intentionally unused in the body — included so QML tracks _workspaceMap
@@ -333,11 +346,9 @@ Singleton {
     /// agentbar dot reads local _sttTarget* state (isAgentSttTarget) and is
     /// unaffected by this push; only the cross-process IDE mirror moves here.
     function _pushSttRecording(idePid: int, buf: int, transcribing: bool): void {
-        if (idePid <= 0) return;  // non-IDE / remote agent — no direct socket
-        Quickshell.execDetached([
-            "python3", _sttRecordingScript,
-            idePid.toString(), buf.toString(), transcribing ? "1" : "0"
-        ]);
+        if (idePid <= 0)
+            return;  // non-IDE / remote agent — no direct socket
+        Quickshell.execDetached(["python3", _sttRecordingScript, idePid.toString(), buf.toString(), transcribing ? "1" : "0"]);
     }
 
     // The recording→transcribing flip happens without a setSttTarget call
@@ -351,9 +362,12 @@ Singleton {
     /// Check if a single agent matches the current STT injection target.
     /// Used by ProjectGroup.hasSttTarget and AgentChip.isSttTarget to avoid duplication.
     function isAgentSttTarget(agent: var): bool {
-        if (sttTargetTerminalPid <= 0) return false;
-        if ((agent.terminal_pid ?? 0) !== sttTargetTerminalPid) return false;
-        if (sttTargetBufId === -1) return agent.active ?? false;
+        if (sttTargetTerminalPid <= 0)
+            return false;
+        if ((agent.terminal_pid ?? 0) !== sttTargetTerminalPid)
+            return false;
+        if (sttTargetBufId === -1)
+            return agent.active ?? false;
         return (agent.buf ?? -1) === sttTargetBufId;
     }
 
@@ -382,14 +396,13 @@ Singleton {
         // vs workspaceIconForWsId's O(N) linear search through Hypr.workspaces)
         let wsDisplay = "";
         if (ws) {
-            wsDisplay = ws.name.startsWith("special:")
-                ? `[${ws.name.slice(8)}]`
-                : `[WS ${ws.name}]`;
+            wsDisplay = ws.name.startsWith("special:") ? `[${ws.name.slice(8)}]` : `[WS ${ws.name}]`;
         }
 
         // Build title: "Agent [project] [WS III] - Ready"
         const titleParts = ["Agent", `[${project}]`];
-        if (wsDisplay) titleParts.push(wsDisplay);
+        if (wsDisplay)
+            titleParts.push(wsDisplay);
         titleParts.push("-", notif.title_suffix ?? notif.event);
         const title = titleParts.join(" ");
 
@@ -407,15 +420,7 @@ Singleton {
         // Claude popups in separate stacks, each showing its own glyph. Empty/
         // unknown agentType falls back to Claude — see _notifIconFor.
         const appName = agentType === "opencode" ? "OpenCode" : "Claude Code";
-        Quickshell.execDetached([
-            "notify-send",
-            `--app-name=${appName}`,
-            `--urgency=${urgency}`,
-            `--icon=${root._notifIconFor(agentType)}`,
-            "--expire-time=15000",
-            title,
-            message,
-        ]);
+        Quickshell.execDetached(["notify-send", `--app-name=${appName}`, `--urgency=${urgency}`, `--icon=${root._notifIconFor(agentType)}`, "--expire-time=15000", title, message,]);
     }
 
     // TODO: Add activityText(agent) for future tooltip in ProjectGroup / agent dashboard.
@@ -424,9 +429,11 @@ Singleton {
     /// Find the currently active agent for a terminal PID. Returns the agent that is
     /// currently active (via representativeAgent) among those matching the PID, or null.
     function activeAgentForTerminal(terminalPid: int): var {
-        if (terminalPid <= 0) return null;
+        if (terminalPid <= 0)
+            return null;
         const matching = _agents.filter(a => a.terminal_pid === terminalPid);
-        if (matching.length === 0) return null;
+        if (matching.length === 0)
+            return null;
         return representativeAgent(matching);
     }
 
@@ -439,8 +446,10 @@ Singleton {
     /// pattern (/run/user/$UID/nvim.<nvim_pid>.0) for agents registered
     /// before the bridge forwarded nvim_socket.
     function nvimSocketForAgent(agent: var): string {
-        if (!agent || !agent.nvim_pid) return "";
-        if (agent.nvim_socket) return agent.nvim_socket;
+        if (!agent || !agent.nvim_pid)
+            return "";
+        if (agent.nvim_socket)
+            return agent.nvim_socket;
         const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000";
         return `${runtimeDir}/nvim.${agent.nvim_pid}.0`;
     }
@@ -461,10 +470,7 @@ Singleton {
 
     // Events that affect window-to-workspace mapping (Set for O(1) lookup)
     // intentional var: JS Set — no QML equivalent for O(1) .has() lookups
-    readonly property var _wsLayoutEvents: new Set([
-        "movewindow", "movewindowv2", "openwindow", "closewindow", "activespecial",
-        "renameworkspace"
-    ])
+    readonly property var _wsLayoutEvents: new Set(["movewindow", "movewindowv2", "openwindow", "closewindow", "activespecial", "renameworkspace"])
 
     // Listen to Hyprland events that affect window-to-workspace mapping
     Connections {
@@ -515,7 +521,8 @@ Singleton {
         // Build prev-state lookup using a Set to track seen IDs — avoids
         // 'delete obj.prop' which de-optimizes V8 hidden class (project-standards P0).
         const prevStateById = {};
-        for (const a of prevAgents) prevStateById[a.id] = a.activity_state ?? "";
+        for (const a of prevAgents)
+            prevStateById[a.id] = a.activity_state ?? "";
 
         const seenIds = new Set();
         const now = Date.now();
@@ -524,8 +531,7 @@ Singleton {
             const prev = prevStateById[a.id] ?? "";
             const curr = a.activity_state ?? "";
             if (prev !== curr) {
-                Logger.log("qml", "agent",
-                    `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
+                Logger.log("qml", "agent", `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
                 root._stateEnteredAt[a.id] = now;
                 root._stuckWarned.delete(a.id);
             } else if (!(a.id in root._stateEnteredAt)) {
@@ -545,7 +551,8 @@ Singleton {
         for (const aid in prevStateById) {
             if (!seenIds.has(aid)) {
                 const prev = prevStateById[aid];
-                if (prev) Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
+                if (prev)
+                    Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
                 root._stuckWarned.delete(aid);
             }
         }
@@ -576,14 +583,16 @@ Singleton {
             const now = Date.now();
             for (const a of root._agents) {
                 const state = a.activity_state ?? "";
-                if (state !== "working") continue;
+                if (state !== "working")
+                    continue;
                 const entered = root._stateEnteredAt[a.id] ?? now;
                 const stuckFor = now - entered;
-                if (stuckFor < root._stuckWorkingWarnMs) continue;
-                if (root._stuckWarned.has(a.id)) continue;
+                if (stuckFor < root._stuckWorkingWarnMs)
+                    continue;
+                if (root._stuckWarned.has(a.id))
+                    continue;
                 root._stuckWarned.add(a.id);
-                Logger.log("qml", "agent",
-                    `STUCK WORKING | ${a.id} project=${a.project} tool=${a.activity_tool || "-"} stuck_for=${Math.round(stuckFor / 1000)}s`);
+                Logger.log("qml", "agent", `STUCK WORKING | ${a.id} project=${a.project} tool=${a.activity_tool || "-"} stuck_for=${Math.round(stuckFor / 1000)}s`);
             }
         }
     }
@@ -601,17 +610,17 @@ Singleton {
             userHidden: root.userHidden,
             bridgeRunning: root.bridgeRunning,
             agents: root._agents.map(a => ({
-                id: a.id,
-                project: a.project,
-                state: a.activity_state ?? "",
-                tool: a.activity_tool ?? "",
-                in_plan_mode: a.in_plan_mode === true,
-                active: a.active === true,
-                remote: a.remote === true,
-                terminal_pid: a.terminal_pid ?? 0,
-                state_age_ms: now - (root._stateEnteredAt[a.id] ?? now),
-                warned_stuck: root._stuckWarned.has(a.id),
-            })),
+                        id: a.id,
+                        project: a.project,
+                        state: a.activity_state ?? "",
+                        tool: a.activity_tool ?? "",
+                        in_plan_mode: a.in_plan_mode === true,
+                        active: a.active === true,
+                        remote: a.remote === true,
+                        terminal_pid: a.terminal_pid ?? 0,
+                        state_age_ms: now - (root._stateEnteredAt[a.id] ?? now),
+                        warned_stuck: root._stuckWarned.has(a.id)
+                    }))
         };
     }
 
@@ -635,7 +644,8 @@ Singleton {
         stdout: SplitParser {
             onRead: data => {
                 const text = data.trim();
-                if (!text) return;
+                if (!text)
+                    return;
                 try {
                     const parsed = JSON.parse(text);
 
@@ -732,7 +742,7 @@ Singleton {
                 projects: root.sortedProjects,
                 bridgeRunning: root.bridgeRunning,
                 userHidden: root.userHidden,
-                mergeActive: root.mergeActive,
+                mergeActive: root.mergeActive
             });
         }
 
@@ -763,7 +773,8 @@ Singleton {
         }
 
         function toggle(): void {
-            if (root.agentCount === 0) return;
+            if (root.agentCount === 0)
+                return;
             root._userHidden = !root._userHidden;
         }
 
