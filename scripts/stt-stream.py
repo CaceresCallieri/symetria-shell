@@ -32,12 +32,14 @@ table below is where they plug in.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ctypes
 import json
 import os
 import signal
 import subprocess
 import sys
+from typing import ClassVar
 
 # 16-bit mono PCM: 2 bytes per sample. One "tick" read from stdin is sized so
 # QML sees events at a steady cadence, mirroring the 100ms level-monitor chunk.
@@ -92,17 +94,22 @@ def _spawn_capture(source: str, sample_rate: int, channels: int) -> subprocess.P
     (including an uncatchable SIGKILL), so it can never be left holding the
     PipeWire source.
     """
-    args = ["pw-record", "--format=s16", f"--rate={sample_rate}", f"--channels={channels}"]
+    args = [
+        "pw-record",
+        "--format=s16",
+        f"--rate={sample_rate}",
+        f"--channels={channels}",
+    ]
     if source:
         args.append(f"--target={source}")
     args.append("-")
 
     def _set_pdeathsig() -> None:
-        try:
+        # Best-effort: without pdeathsig the child outlives us, which is worse
+        # than the exception but not worth crashing the parent over.
+        with contextlib.suppress(Exception):
             # PR_SET_PDEATHSIG = 1
             ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, signal.SIGTERM)
-        except Exception:
-            pass
 
     return subprocess.Popen(args, stdout=subprocess.PIPE, preexec_fn=_set_pdeathsig)
 
@@ -128,10 +135,32 @@ class MockBackend:
     stdin ingestion, partial cadence, and the final flush all work.
     """
 
-    _WORDS = (
-        "hola qué tal cómo andás esto es una prueba del pipeline de streaming "
-        "que muestra texto parcial mientras se graba el audio en vivo"
-    ).split()
+    _WORDS: ClassVar[list[str]] = [
+        "hola",
+        "qué",
+        "tal",
+        "cómo",
+        "andás",
+        "esto",
+        "es",
+        "una",
+        "prueba",
+        "del",
+        "pipeline",
+        "de",
+        "streaming",
+        "que",
+        "muestra",
+        "texto",
+        "parcial",
+        "mientras",
+        "se",
+        "graba",
+        "el",
+        "audio",
+        "en",
+        "vivo",
+    ]
 
     def __init__(self, sample_rate: int, **_: object) -> None:
         self._sample_rate = sample_rate
@@ -174,7 +203,10 @@ class FasterWhisperBackend:
         **_: object,
     ) -> None:
         try:
-            from faster_whisper import WhisperModel
+            # Optional runtime dependency, deliberately not declared anywhere:
+            # the mock backend must work on a machine with no model installed.
+            # The except below turns the absence into an actionable message.
+            from faster_whisper import WhisperModel  # type: ignore[missing-import]
         except ImportError as exc:
             raise RuntimeError(
                 "faster-whisper is not installed. Install it (e.g. "
@@ -258,9 +290,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="spawn pw-record internally instead of reading PCM from stdin",
     )
-    parser.add_argument("--source", default="", help="PipeWire source node (with --capture)")
     parser.add_argument(
-        "--channels", type=_positive_int, default=1, help="capture channels (with --capture)"
+        "--source", default="", help="PipeWire source node (with --capture)"
+    )
+    parser.add_argument(
+        "--channels",
+        type=_positive_int,
+        default=1,
+        help="capture channels (with --capture)",
     )
     parser.add_argument(
         "--sample-rate",
@@ -309,6 +346,12 @@ def run(args: argparse.Namespace) -> int:
         else None
     )
     stream = capture_proc.stdout if capture_proc is not None else sys.stdin.buffer
+    # Popen.stdout is typed Optional because it is None unless stdout=PIPE was
+    # passed. _spawn_capture always passes it, so this cannot fire — but the
+    # type system has no way to know, and a real None here would surface as an
+    # opaque AttributeError deep in the read loop instead.
+    if stream is None:
+        raise RuntimeError("capture process was started without a stdout pipe")
     try:
         while True:
             chunk = stream.read(tick_bytes)
@@ -331,7 +374,7 @@ def run(args: argparse.Namespace) -> int:
         # to report and flushing again would only re-raise.
         _silence_broken_stdout()
         return 0
-    except Exception as exc:  # noqa: BLE001 - any failure becomes an error event
+    except Exception as exc:
         _emit_error_safe(str(exc))
         return 1
     finally:
@@ -341,10 +384,8 @@ def run(args: argparse.Namespace) -> int:
                 capture_proc.terminate()
                 capture_proc.wait(timeout=1)
             except Exception:
-                try:
+                with contextlib.suppress(Exception):
                     capture_proc.kill()
-                except Exception:
-                    pass
     return 0
 
 
@@ -353,13 +394,13 @@ def main() -> int:
     # wire protocol carries Spanish text (qué, andás) via ensure_ascii=False,
     # and QML may launch us without a UTF-8 locale, which would otherwise raise
     # UnicodeEncodeError on the first accented partial.
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[missing-attribute]  # typeshed types sys.stdout as TextIO; the runtime object is a TextIOWrapper
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[missing-attribute]  # typeshed types sys.stdout as TextIO; the runtime object is a TextIOWrapper
 
     args = parse_args(sys.argv[1:])
     try:
         return run(args)
-    except Exception as exc:  # noqa: BLE001 - any setup failure -> structured error
+    except Exception as exc:
         # Setup-time failures (bad backend, missing engine, CUDA/CTranslate2
         # init on the Blackwell path) are reported as a structured error so QML
         # surfaces a hint instead of a bare traceback. Engine init runs before

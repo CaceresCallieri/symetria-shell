@@ -12,10 +12,9 @@ Output:
     /tmp/sprite-preview.png — screenshot showing all frames at 64px and 15px
 """
 
-import sys
 import os
-import re
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +22,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def parse_sprite(svg_path):
     """Extract individual frames from a vertical sprite sheet."""
-    full_path = os.path.join(BASE_DIR, svg_path) if not os.path.isabs(svg_path) else svg_path
+    full_path = (
+        os.path.join(BASE_DIR, svg_path) if not os.path.isabs(svg_path) else svg_path
+    )
     tree = ET.parse(full_path)
     root = tree.getroot()
     ns = {"svg": "http://www.w3.org/2000/svg"}
@@ -36,13 +37,9 @@ def parse_sprite(svg_path):
 
     frames = []
     paths = root.findall(".//svg:path", ns) or root.findall(".//path")
-    for i, path_el in enumerate(paths):
+    for path_el in paths:
         d = path_el.get("d", "")
-        fill = path_el.get("fill", "black")
         fill_rule = path_el.get("fill-rule", "")
-        comment = ""
-        # Try to get preceding comment
-        prev = path_el.getprevious() if hasattr(path_el, "getprevious") else None
 
         frame_svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {int(frame_h)} {int(frame_h)}">'
         fr = f' fill-rule="{fill_rule}"' if fill_rule else ""
@@ -137,7 +134,11 @@ h2 {{ color: #d97757; margin: 0 0 5px; font-size: 16px; }}
 
 
 def main():
-    svg_file = sys.argv[1] if len(sys.argv) > 1 else "assets/claude-sparkle-ask-morph-sprite.svg"
+    svg_file = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "assets/claude-sparkle-ask-morph-sprite.svg"
+    )
 
     frames, num_frames, filename = parse_sprite(svg_file)
 
@@ -150,9 +151,18 @@ def main():
         f.write(html)
 
     result = subprocess.run(
-        ["npx", "playwright", "screenshot", "--full-page", "-b", "chromium",
-         f"file://{html_path}", png_path],
-        capture_output=True, text=True,
+        [
+            "npx",
+            "playwright",
+            "screenshot",
+            "--full-page",
+            "-b",
+            "chromium",
+            f"file://{html_path}",
+            png_path,
+        ],
+        capture_output=True,
+        text=True,
     )
 
     if result.returncode != 0:

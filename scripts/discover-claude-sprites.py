@@ -22,6 +22,7 @@ use tools, etc. The script captures sprites as they appear in the DOM.
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -32,8 +33,8 @@ import time
 import urllib.request
 from pathlib import Path
 
-
 # ── WebSocket helpers (raw TCP, no Origin header) ───────────────────────
+
 
 def ws_connect(host: str, port: int, path: str) -> socket.socket:
     """Open a raw WebSocket connection without sending an Origin header."""
@@ -62,7 +63,9 @@ def ws_connect(host: str, port: int, path: str) -> socket.socket:
         response += chunk
 
     if b"101" not in response.split(b"\r\n")[0]:
-        raise ConnectionError(f"WebSocket handshake rejected:\n{response.decode(errors='replace')}")
+        raise ConnectionError(
+            f"WebSocket handshake rejected:\n{response.decode(errors='replace')}"
+        )
 
     sock.settimeout(2)  # Non-blocking reads for polling
     return sock
@@ -101,7 +104,7 @@ def ws_recv(sock: socket.socket) -> str | None:
         header = sock.recv(2)
         if len(header) < 2:
             return None
-    except socket.timeout:
+    except TimeoutError:
         return None
 
     opcode = header[0] & 0x0F
@@ -148,19 +151,24 @@ def ws_recv(sock: socket.socket) -> str | None:
 
 _msg_id = 0
 
+
 def cdp_send(sock: socket.socket, method: str, params: dict | None = None) -> int:
     """Send a CDP command. Returns the message ID."""
     global _msg_id
     _msg_id += 1
-    msg = {"id": _msg_id, "method": method}
+    # Annotated as dict[str, object]: without it the initializer infers
+    # dict[str, int | str] from the first two keys, and "params" (a dict) is
+    # then rejected as a value.
+    msg: dict[str, object] = {"id": _msg_id, "method": method}
     if params:
         msg["params"] = params
     ws_send(sock, json.dumps(msg))
     return _msg_id
 
 
-def cdp_recv_until(sock: socket.socket, msg_id: int, timeout: float = 10,
-                   max_frames: int = 500) -> dict:
+def cdp_recv_until(
+    sock: socket.socket, msg_id: int, timeout: float = 10, max_frames: int = 500
+) -> dict:
     """Read WebSocket frames until we get the response for msg_id.
 
     Drains up to max_frames of CDP event noise (console logs, exceptions, etc.)
@@ -179,16 +187,22 @@ def cdp_recv_until(sock: socket.socket, msg_id: int, timeout: float = 10,
             continue
         if msg.get("id") == msg_id:
             return msg
-    raise TimeoutError(f"No response for CDP message {msg_id} within {timeout}s ({frames_read} frames drained)")
+    raise TimeoutError(
+        f"No response for CDP message {msg_id} within {timeout}s ({frames_read} frames drained)"
+    )
 
 
 def cdp_evaluate(sock: socket.socket, expression: str, timeout: float = 15) -> dict:
     """Evaluate JS in the page and return the result."""
-    mid = cdp_send(sock, "Runtime.evaluate", {
-        "expression": expression,
-        "returnByValue": True,
-        "awaitPromise": False,
-    })
+    mid = cdp_send(
+        sock,
+        "Runtime.evaluate",
+        {
+            "expression": expression,
+            "returnByValue": True,
+            "awaitPromise": False,
+        },
+    )
     return cdp_recv_until(sock, mid, timeout, max_frames=200)
 
 
@@ -330,13 +344,24 @@ def save_sprite(entry: dict, output_dir: Path, index: int) -> Path:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Discover Claude.ai SVG sprite sheets via CDP")
-    parser.add_argument("--duration", type=int, default=120,
-                        help="How long to monitor (seconds). Default: 120")
-    parser.add_argument("--output-dir", type=str, default="/tmp/claude-sprites",
-                        help="Directory to save discovered sprites. Default: /tmp/claude-sprites")
-    parser.add_argument("--port", type=int, default=9222,
-                        help="Chrome debugging port. Default: 9222")
+    parser = argparse.ArgumentParser(
+        description="Discover Claude.ai SVG sprite sheets via CDP"
+    )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=120,
+        help="How long to monitor (seconds). Default: 120",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="/tmp/claude-sprites",
+        help="Directory to save discovered sprites. Default: /tmp/claude-sprites",
+    )
+    parser.add_argument(
+        "--port", type=int, default=9222, help="Chrome debugging port. Default: 9222"
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -348,7 +373,9 @@ def main():
         tabs_raw = urllib.request.urlopen(f"http://localhost:{args.port}/json").read()
         tabs = json.loads(tabs_raw)
     except Exception as e:
-        print(f"[!] Cannot connect to Chrome. Make sure it's running with --remote-debugging-port={args.port}")
+        print(
+            f"[!] Cannot connect to Chrome. Make sure it's running with --remote-debugging-port={args.port}"
+        )
         print(f"    Error: {e}")
         sys.exit(1)
 
@@ -386,19 +413,21 @@ def main():
     if "error" in result.get("result", {}):
         print(f"[!] Observer injection failed: {result}")
         sys.exit(1)
-    print(f"[+] {result.get('result', {}).get('result', {}).get('value', 'Observer installed')}")
+    print(
+        f"[+] {result.get('result', {}).get('result', {}).get('value', 'Observer installed')}"
+    )
 
     # ── Step 5: Monitor loop ────────────────────────────────────────────
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  MONITORING claude.ai for {args.duration}s")
-    print(f"  Interact with Claude to trigger different animation states:")
-    print(f"    - Send a simple prompt (streaming sparkle)")
-    print(f"    - Send a hard prompt (extended thinking sparkle)")
-    print(f"    - Use tools/computer use if available")
-    print(f"    - Upload a file")
-    print(f"    - Try different Claude models")
+    print("  Interact with Claude to trigger different animation states:")
+    print("    - Send a simple prompt (streaming sparkle)")
+    print("    - Send a hard prompt (extended thinking sparkle)")
+    print("    - Use tools/computer use if available")
+    print("    - Upload a file")
+    print("    - Try different Claude models")
     print(f"  Output: {output_dir}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     start_time = time.time()
     last_total = 0
@@ -430,21 +459,37 @@ def main():
 
             # Print new event notifications
             for event in data["newEvents"]:
-                tag = "NEW!" if event["isSpriteSheet"] and not event["isBlurCopy"] else "    "
+                tag = (
+                    "NEW!"
+                    if event["isSpriteSheet"] and not event["isBlurCopy"]
+                    else "    "
+                )
                 blur = " (blur copy)" if event["isBlurCopy"] else ""
-                frames = f"{event['frameCount']} frames" if event["frameCount"] > 1 else "static"
-                print(f"  [{elapsed:3d}s] {tag} viewBox={event['viewBox']}  ({frames}){blur}")
+                frames = (
+                    f"{event['frameCount']} frames"
+                    if event["frameCount"] > 1
+                    else "static"
+                )
+                print(
+                    f"  [{elapsed:3d}s] {tag} viewBox={event['viewBox']}  ({frames}){blur}"
+                )
 
             # Save any new sprites we haven't saved yet
             for hash_key, entry in data["sprites"].items():
-                short_hash = hashlib.md5(hash_key.encode()).hexdigest()[:8]
+                # usedforsecurity=False: this is a content fingerprint for
+                # de-duplicating sprites, not a security digest.
+                short_hash = hashlib.md5(
+                    hash_key.encode(), usedforsecurity=False
+                ).hexdigest()[:8]
                 if short_hash not in saved_sprites:
                     saved_sprites.add(short_hash)
                     idx = len(saved_sprites)
                     filepath = save_sprite(entry, output_dir, idx)
                     classification = classify_sprite(entry)
                     if "NEW SPRITE SHEET" in classification:
-                        print(f"  [{elapsed:3d}s] *** SAVED: {filepath.name} — {classification}")
+                        print(
+                            f"  [{elapsed:3d}s] *** SAVED: {filepath.name} — {classification}"
+                        )
                     # Save metadata
                     meta_path = filepath.with_suffix(".json")
                     meta = {k: v for k, v in entry.items() if k != "outerHTML"}
@@ -462,9 +507,9 @@ def main():
         print(f"\n[!] Connection lost: {e}")
 
     # ── Step 6: Final report ────────────────────────────────────────────
-    print(f"\n{'='*60}")
-    print(f"  DISCOVERY REPORT")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print("  DISCOVERY REPORT")
+    print(f"{'=' * 60}")
 
     # Collect final state
     try:
@@ -494,38 +539,43 @@ def main():
 
             # Highlight NEW discoveries
             new_sheets = [
-                e for entries in by_viewbox.values()
+                e
+                for entries in by_viewbox.values()
                 for e in entries
-                if e["isSpriteSheet"] and not e["isBlurCopy"]
+                if e["isSpriteSheet"]
+                and not e["isBlurCopy"]
                 and e["viewBox"] not in KNOWN_VIEWBOXES
             ]
 
             if new_sheets:
                 print(f"\n  *** {len(new_sheets)} NEW SPRITE SHEET(S) FOUND! ***")
                 for entry in new_sheets:
-                    print(f"    - viewBox={entry['viewBox']} ({entry['frameCount']} frames)")
+                    print(
+                        f"    - viewBox={entry['viewBox']} ({entry['frameCount']} frames)"
+                    )
                     print(f"      Path snippet: {entry['pathSnippet'][:100]}...")
             else:
-                print(f"\n  No new sprite sheets found (only known animations detected).")
-                print(f"  Try more interactions: extended thinking, tool use, file uploads.")
+                print(
+                    "\n  No new sprite sheets found (only known animations detected)."
+                )
+                print(
+                    "  Try more interactions: extended thinking, tool use, file uploads."
+                )
 
     except Exception as e:
         print(f"  Could not collect final report: {e}")
 
     print(f"\n  All sprites saved to: {output_dir}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Cleanup
-    try:
+    # Best-effort teardown: the page may already be gone.
+    with contextlib.suppress(Exception):
         # Stop the observer
         cdp_evaluate(sock, "clearInterval(window._spriteObserverInterval)", timeout=3)
-    except Exception:
-        pass
 
-    try:
+    with contextlib.suppress(Exception):
         sock.close()
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ it with project/workspace info; AgentService spawns notify-send.
 Exit code is always 0 — hook failures must never block Claude Code.
 """
 
+import contextlib
 import json
 import os
 import socket
@@ -29,7 +30,8 @@ SOCKET_PATH = os.environ.get(
 # interleave in a single timeline at ~/.local/state/symmetria/debug.log.
 _LOG_PATH = os.environ.get("SYMMETRIA_DEBUG_LOG") or os.path.join(
     os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"),
-    "symmetria", "debug.log",
+    "symmetria",
+    "debug.log",
 )
 
 # Optional raw-payload dump for diagnostic sessions. Enable by exporting
@@ -38,21 +40,19 @@ _LOG_PATH = os.environ.get("SYMMETRIA_DEBUG_LOG") or os.path.join(
 # so we can postmortem out-of-order events, recap behavior, and any new
 # hook event types Claude Code adds in the future.
 _RAW_DUMP_ENABLED = os.environ.get("SYMMETRIA_AGENT_DEBUG_HOOKS", "") == "1"
-_RAW_DUMP_PATH = os.path.join(
-    os.path.dirname(_LOG_PATH), "agent-hooks-raw.jsonl"
-)
+_RAW_DUMP_PATH = os.path.join(os.path.dirname(_LOG_PATH), "agent-hooks-raw.jsonl")
 
 
 def _hook_log(msg: str) -> None:
     """Append a line to the unified debug log. Never raises."""
-    try:
+    # Logging must never break the hook: a hook that raises takes the user's
+    # Claude Code session down with it.
+    with contextlib.suppress(Exception):
         os.makedirs(os.path.dirname(_LOG_PATH), exist_ok=True)
         now = datetime.now()
         ts = f"{now.strftime('%H:%M:%S')}.{now.microsecond // 1000:03d}"
         with open(_LOG_PATH, "a") as f:
             f.write(f"{ts} [py:hook] {msg}\n")
-    except Exception:
-        pass  # Logging must never break the hook
 
 
 def _raw_dump(agent_id: str, hook_name: str, event: dict) -> None:
@@ -65,7 +65,8 @@ def _raw_dump(agent_id: str, hook_name: str, event: dict) -> None:
     """
     if not _RAW_DUMP_ENABLED:
         return
-    try:
+    # Diagnostics must never break the hook, same reasoning as _log above.
+    with contextlib.suppress(Exception):
         record = {
             "ts": datetime.now().isoformat(timespec="milliseconds"),
             "ts_mono_ns": time.monotonic_ns(),
@@ -75,8 +76,7 @@ def _raw_dump(agent_id: str, hook_name: str, event: dict) -> None:
         }
         with open(_RAW_DUMP_PATH, "a") as f:
             f.write(json.dumps(record) + "\n")
-    except Exception:
-        pass  # Diagnostics must never break the hook
+
 
 # Hook event → activity state mapping.
 #
@@ -223,7 +223,9 @@ def main():
     # added that we haven't classified — worth investigating because they
     # may contain new lifecycle signals we should react to.
     if hook_name not in EVENT_STATE_MAP:
-        _hook_log(f"unmapped | agent={agent_id} event={hook_name or '(none)'} keys={sorted(event.keys())}")
+        _hook_log(
+            f"unmapped | agent={agent_id} event={hook_name or '(none)'} keys={sorted(event.keys())}"
+        )
         return
 
     state = EVENT_STATE_MAP[hook_name]
@@ -253,7 +255,9 @@ def main():
     #    ("thinking"), and we log loudly when it IS seen so we learn whether
     #    the signal is real. See memory/project_claude_cancel_detection.md.
     if hook_name == "PostToolUseFailure" and event.get("is_interrupt") is True:
-        _hook_log(f"interrupt | agent={agent_id} PostToolUseFailure carried is_interrupt=true — mapping to idle")
+        _hook_log(
+            f"interrupt | agent={agent_id} PostToolUseFailure carried is_interrupt=true — mapping to idle"
+        )
         state = "idle"
 
     # Observer-only events have an explicit empty-string mapping — log them
@@ -285,7 +289,9 @@ def main():
     event_ts_ns = time.time_ns()
 
     # Log every invocation — the canonical record of what this hook delivered.
-    _hook_log(f"hook | agent={agent_id} event={hook_name} state={state} tool={tool or '-'} plan={plan_mode} ts_ns={event_ts_ns}")
+    _hook_log(
+        f"hook | agent={agent_id} event={hook_name} state={state} tool={tool or '-'} plan={plan_mode} ts_ns={event_ts_ns}"
+    )
 
     # Build messages before opening socket
     activity_payload = {

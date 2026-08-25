@@ -26,7 +26,7 @@ CENTER = FRAME_SIZE / 2  # 50
 # Emergence parameters
 NUM_FRAMES = 9
 START_SCALE = (0.15, 0.10)  # Tiny seed
-END_SCALE = (1.0, 1.0)      # Full starburst
+END_SCALE = (1.0, 1.0)  # Full starburst
 
 
 def ease_in_out_cubic(t: float) -> float:
@@ -71,7 +71,7 @@ def generate_sprite(base_path_d: str) -> str:
     """Generate the starting sprite SVG.
 
     Uses <defs> + <use> with transform to avoid duplicating the path data.
-    Each frame scales the base starburst around the center of its 100×100 slot.
+    Each frame scales the base starburst around the center of its 100x100 slot.
 
     Transform chain (SVG reads right-to-left):
         translate(50, N*100+50) scale(sx, sy) translate(-50, -50)

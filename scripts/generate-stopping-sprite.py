@@ -24,9 +24,9 @@ CENTER = FRAME_SIZE / 2  # 50
 
 # Collapse parameters
 NUM_COLLAPSE_FRAMES = 10  # Eased collapse from full to dormant
-NUM_HOLD_FRAMES = 2       # Hold dormant dot at end
-START_SCALE = (1.0, 1.0)   # Full starburst
-END_SCALE = (0.25, 0.20)   # Dormant dot
+NUM_HOLD_FRAMES = 2  # Hold dormant dot at end
+START_SCALE = (1.0, 1.0)  # Full starburst
+END_SCALE = (0.25, 0.20)  # Dormant dot
 
 
 def ease_in_out_cubic(t: float) -> float:

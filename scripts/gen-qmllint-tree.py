@@ -35,7 +35,15 @@ from pathlib import Path
 # Directories that hold no shell QML, or hold generated copies of it. `build`
 # contains the compiled plugin's own qmldir files — mirroring those would
 # declare the `Symmetria` C++ module twice under two different names.
-SKIP_DIRS = {".git", "build", "node_modules", "__pycache__", ".direnv", ".cache", "result"}
+SKIP_DIRS = {
+    ".git",
+    "build",
+    "node_modules",
+    "__pycache__",
+    ".direnv",
+    ".cache",
+    "result",
+}
 
 # A `qmldir` entry needs a version. Quickshell's synthesised modules are
 # unversioned, so the number is arbitrary — it only has to parse and to match
@@ -130,8 +138,12 @@ def main() -> int:
     args = parser.parse_args()
 
     out_root = Path(args.out).resolve()
-    if out_root == repo_root or repo_root in out_root.parents and out_root.name == "qs":
-        print(f"error: refusing to write the shadow tree to {out_root}", file=sys.stderr)
+    if out_root == repo_root or (
+        repo_root in out_root.parents and out_root.name == "qs"
+    ):
+        print(
+            f"error: refusing to write the shadow tree to {out_root}", file=sys.stderr
+        )
         return 1
 
     # Rebuild from scratch: a renamed or deleted .qml would otherwise leave a
@@ -149,7 +161,9 @@ def main() -> int:
     total = sum(write_shadow_directory(repo_root, d, out_root) for d in directories)
 
     if not args.quiet:
-        print(f"qmllint tree: {total} file(s) in {len(directories)} module(s) -> {out_root}")
+        print(
+            f"qmllint tree: {total} file(s) in {len(directories)} module(s) -> {out_root}"
+        )
     return 0
 
 
