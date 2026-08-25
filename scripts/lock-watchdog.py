@@ -48,7 +48,7 @@ import time
 def _envf(name: str, default: float) -> float:
     try:
         return float(os.environ[name])
-    except KeyError, ValueError:
+    except (KeyError, ValueError):
         return default
 
 

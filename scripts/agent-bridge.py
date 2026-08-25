@@ -298,7 +298,7 @@ class AgentBridge:
                 # Field after closing paren: state ppid ...
                 fields_after = stat[rparen + 2 :].split()
                 pid = int(fields_after[1])  # ppid is the 2nd field after ')'
-            except OSError, ValueError, IndexError:
+            except (OSError, ValueError, IndexError):
                 break
         host_pid = AgentBridge._host_window_pid_from_environ(nvim_pid)
         if host_pid:
@@ -331,7 +331,7 @@ class AgentBridge:
                     if host_pid > 0 and Path(f"/proc/{host_pid}").exists():
                         return host_pid
                     return 0
-        except OSError, ValueError:
+        except (OSError, ValueError):
             pass
         return 0
 
@@ -1626,5 +1626,5 @@ async def shutdown(server):
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except KeyboardInterrupt, SystemExit:
+    except (KeyboardInterrupt, SystemExit):
         cleanup_socket()

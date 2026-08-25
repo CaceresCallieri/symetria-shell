@@ -14,7 +14,14 @@
 # gitignored but ruff walks the filesystem, not the index, so they are excluded
 # explicitly — otherwise a whole-project sweep lints vendored dependencies.
 exclude = ["build", "node_modules", ".venv", "result"]
-target-version = "py314"
+# Deliberately BELOW the interpreter this machine runs (3.14). target-version is
+# what ruff is allowed to *propose*, and pinning it to the local interpreter is
+# how these scripts ended up unrunnable anywhere else: four `except A, B:`
+# clauses used PEP 758 syntax, which is valid only on 3.14+ and a SyntaxError on
+# 3.12. The scripts declare `#!/usr/bin/env python3` and carry no version guard,
+# so nothing would have caught it before the crash. Raise this only when the
+# project decides to require a newer floor on purpose.
+target-version = "py311"
 
 [tool.ruff.lint]
 # Rule sets are ENUMERATED, never inherited. ruff 0.16 grew its defaults from
