@@ -92,7 +92,7 @@
       # exact condition for restoring them.
       lint = pkgs.mkShell {
         # qt6.qtdeclarative supplies both qmllint and qmlformat.
-        packages = [pkgs.qt6.qtdeclarative pkgs.shellcheck pkgs.ruff pkgs.pyrefly];
+        packages = [pkgs.qt6.qtdeclarative pkgs.shellcheck pkgs.ruff pkgs.uv];
 
         # Set explicitly rather than left to the Qt setup hooks. nixpkgs splits
         # qtdeclarative's binaries from its QML modules across store outputs,

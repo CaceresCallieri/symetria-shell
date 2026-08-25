@@ -74,10 +74,23 @@ jobs:
       # Re-check after Qt 6.14 regardless: QTBUG-144943 rewrites qmlformat from
       # the DOM onto the AST, which moves both the output and the failure set.
 
+      # Every check step prints its tool version before running. That is not
+      # decoration: the three CI failures on this branch were all one tool
+      # disagreeing with another version of itself, and the version line is the
+      # first thing worth reading when a finding reproduces in CI but not
+      # locally.
       - name: Run ruff
         if: ${{ !cancelled() }}
-        run: nix develop .#lint --command bash -c 'ruff check . --output-format concise && ruff format --check .'
+        run: nix develop .#lint --command bash -c 'ruff --version && ruff check . --output-format concise && ruff format --check .'
 
+      # pyrefly is pinned to an exact version through uvx rather than taken from
+      # nixpkgs. The flake pins nixpkgs at 2026-01-21, which carries pyrefly
+      # 0.49.0 — a PRE-1.0 release whose inference differs enough from the
+      # 1.2.0 developers run that it reported 3 errors on a locally clean tree.
+      # A type checker is only a gate when both sides run the same one.
+      #
+      # Keep this version in step with what the catalog records and with what
+      # `uv tool install pyrefly` puts on a developer machine.
       - name: Run pyrefly
         if: ${{ !cancelled() }}
-        run: nix develop .#lint --command pyrefly check
+        run: nix develop .#lint --command uvx pyrefly@1.2.0 check
