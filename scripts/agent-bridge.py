@@ -138,16 +138,34 @@ log = _Log()
 # exactly as the symptom docs/agent-state-diagnostics.md describes, with the
 # watchdog itself as the last place anyone would look.
 #
-# The discard callback is what keeps this from becoming a leak: the set only
-# ever holds tasks that are still running.
+# The done callback is what keeps this from becoming a leak: the set only ever
+# holds tasks that are still running.
 _background_tasks: set[asyncio.Task] = set()
 
 
+def _on_background_task_done(task: asyncio.Task) -> None:
+    """Drop the strong reference, and surface a crash through our own logger.
+
+    Retrieving the exception is not optional bookkeeping. A fire-and-forget task
+    that raises stores its exception and, if nobody reads it, asyncio complains
+    only at garbage-collection time, through the default logger — not through
+    _Log, which is what writes the unified debug.log everything else here is
+    correlated against. A dead solicit task would therefore vanish from the one
+    timeline anyone would think to read.
+    """
+    _background_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error("background task %s failed: %r", task.get_name(), exc)
+
+
 def _spawn_background_task(coro) -> asyncio.Task:
-    """Create a task and keep it alive until it finishes."""
+    """Create a task, keep it alive until it finishes, and log any crash."""
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    task.add_done_callback(_on_background_task_done)
     return task
 
 
