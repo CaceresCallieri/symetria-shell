@@ -6,42 +6,24 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Both checks run in ONE job, under `nix develop`, and both always run.
+#
+# Under Nix, because the runner's own toolchain drifts and neither check
+# survives that drift. Ubuntu 24.04 ships Qt 6.4.2 against a project targeting
+# 6.11, has neither Quickshell nor this project's C++ plugin, and shipped a
+# shellcheck old enough to use the pre-rename SC2317 identifier. The flake's
+# devShell pins all of it through flake.lock.
+#
+# In one job, because the store restore is the expensive part and two jobs
+# would contend over the same cache key.
+#
+# Both always run, because the previous layout is exactly how this workflow
+# stayed broken for four months: shellcheck was the last step of a job whose
+# qmllint step exited 1 first, so it never executed once, and three real
+# shellcheck failures sat hidden behind the qmllint failure. `if: !cancelled()`
+# on every check step is what keeps one broken check from masking another.
 jobs:
-  # shellcheck is preinstalled on ubuntu-latest and takes seconds. It runs as
-  # its own job so it never waits on the Nix store restore that qmllint needs.
-  shellcheck:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Report tool version
-        run: shellcheck --version
-
-      - name: Run shellcheck
-        run: |
-          ERRORS=0
-          while IFS= read -r -d '' file; do
-            if ! shellcheck -e SC2329 "$file"; then
-              ERRORS=$((ERRORS + 1))
-            fi
-          done < <(find . -name '*.sh' -not -path './.git/*' -print0)
-          if [[ $ERRORS -gt 0 ]]; then
-            echo "::error::shellcheck: $ERRORS file(s) failed"
-            exit 1
-          fi
-          echo "shellcheck: all files passed"
-
-  # qmllint runs under Nix, not apt, for two reasons that the apt path cannot
-  # satisfy:
-  #
-  #   1. Ubuntu 24.04 ships Qt 6.4.2. This project targets Qt 6.11, and the
-  #      warning categories in .qmllint.ini were calibrated against 6.11.
-  #   2. qmllint has to resolve `import Quickshell` and `import Symmetria`.
-  #      The flake's devShell already carries Quickshell and the project's own
-  #      C++ plugin, pinned by flake.lock — the same versions the shell runs
-  #      against. apt has neither.
-  qmllint:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -66,8 +48,16 @@ jobs:
           purge-last-accessed: 0
           purge-primary-key: never
 
+      - name: Run shellcheck
+        if: ${{ !cancelled() }}
+        run: nix develop --command bash .github/scripts/run-shellcheck.sh
+
+      # Regenerates the qs.* module shadow tree so `import qs.config` resolves.
+      # See scripts/gen-qmllint-tree.py and docs/qmllint-setup.md.
       - name: Generate the qs.* module shadow tree
+        if: ${{ !cancelled() }}
         run: ./scripts/gen-qmllint-tree.py
 
       - name: Run qmllint
+        if: ${{ !cancelled() }}
         run: nix develop --command bash .github/scripts/run-qmllint.sh

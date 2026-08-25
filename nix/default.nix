@@ -145,8 +145,12 @@ in
       chmod 755 $out/share/symmetria-shell/assets/wrap_term_launch.sh
     '';
 
+    # `quickshell` is re-exported so the devShell can build a QML_IMPORT_PATH
+    # from the SAME derivation the shell runs against, rather than
+    # re-evaluating the flake input and its overrides. The lint job depends on
+    # this. See flake.nix and docs/qmllint-setup.md.
     passthru = {
-      inherit plugin extras;
+      inherit plugin extras quickshell;
     };
 
     meta = {
