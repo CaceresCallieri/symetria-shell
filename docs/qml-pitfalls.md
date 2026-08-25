@@ -418,7 +418,15 @@ Found in: agent bar — idle Claude chips animated as "thinking" while an OpenCo
 
 This is a tempting "encapsulation" change to make during review — a singleton property that should only ever be set by one internal `FileView`/`Process`/`Timer` *looks* like it wants to be `readonly`. But if that internal writer assigns imperatively, `readonly` breaks it.
 
-**Symptom seen in `QuietMode.qml`:** `enabled` was changed to `readonly property bool enabled: false`, with a `FileView.onLoaded` handler doing `root.enabled = /^ENABLED=1\b/m.test(text())`. The handler's assignment threw and no-op'd, so `enabled` was pinned to `false` forever — the Silent power-mode pill never lit up and could not be toggled, even though the underlying `sudo quiet-mode on/off` was working fine. The bug is invisible to `qmllint` (it can't resolve Quickshell imports, exits 255 silently) and only surfaces at runtime.
+**Symptom seen in `QuietMode.qml`:** `enabled` was changed to `readonly property bool enabled: false`, with a `FileView.onLoaded` handler doing `root.enabled = /^ENABLED=1\b/m.test(text())`. The handler's assignment threw and no-op'd, so `enabled` was pinned to `false` forever — the Silent power-mode pill never lit up and could not be toggled, even though the underlying `sudo quiet-mode on/off` was working fine.
+
+**This is now caught by tooling.** The claim that it was "invisible to qmllint,
+which exits 255 silently" described Qt **5.15**'s `qmllint` at `/usr/bin/qmllint`
+— the wrong binary, picked up by a bare-name PATH lookup. Qt6's tool reports
+`Cannot assign to read-only property enabled` at both assignment sites, and
+`ReadOnlyProperty` is set to `error` in `.qmllint.ini`, so reintroducing this
+regression fails CI and blocks the commit. Verified by restoring the exact
+change. → `docs/qmllint-setup.md`
 
 **Why the reasoning behind the change is wrong:** the assumption is "`readonly` forbids *external* writes but allows the declaring component to mutate it internally." QML has no such distinction — there is no `private`/`internal` write scope. `readonly` is absolute.
 
@@ -624,10 +632,19 @@ done
 
 Found in: `services/Theme.qml`, where a code review added a startup guard
 validating that every material recipe exposes the same key set. The guard was
-correct; the missing import was not caught because `qmllint` cannot resolve
-Quickshell imports (it exits 255 and reports nothing), so nothing between writing
-the guard and launching the shell could have flagged it. **A change to a
-singleton is not verified until the shell has actually been restarted.**
+correct; the missing import went unnoticed because `qmllint` was being invoked as
+a bare name, which on Arch resolves to Qt **5.15**'s tool — that one exits 255
+and reports nothing.
+
+Run correctly (`/usr/lib/qt6/bin/qmllint -I build/qmllint`), Qt6's `qmllint`
+reports the missing import at the `Component.onCompleted` line, as both
+`unresolved-type` and `unqualified`. It does **not** fail the build yet: both
+categories still carry a backlog and sit at `info` in `.qmllint.ini`. Clearing
+`UnresolvedType` would make this class of bug a hard CI failure, which is why it
+is the highest-value promotion target. → `docs/qmllint-setup.md`
+
+Until then, **a change to a singleton is not verified until the shell has
+actually been restarted.**
 
 ## ShaderEffect binds uniforms BY NAME — a mismatch is silent
 

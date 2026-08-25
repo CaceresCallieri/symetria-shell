@@ -62,11 +62,19 @@ sudo cp -rT ~/.config/quickshell/symmetria-cli/src/symmetria /usr/lib/python3.14
 
 ## Pre-commit Hooks
 
-Pre-commit hooks run `qmllint` on `.qml` files and `shellcheck` on `.sh` files. Setup (once per clone):
+Pre-commit hooks run `qmllint` on `.qml` files, `shellcheck` on `.sh` files, and a shader-freshness check on `.frag` files. Setup (once per clone):
 ```bash
 git config core.hooksPath .githooks
 ```
-Requires: `qmllint` (ships with Qt) and `shellcheck` (`paru -S shellcheck`).
+Requires: `qt6-declarative` and `shellcheck` (`paru -S shellcheck`).
+
+**Never invoke `qmllint` by bare name.** `/usr/bin/qmllint` is Qt **5.15**'s tool
+(package `qt5-declarative`); it exits 255 with no output on ~93% of this repo and
+supports none of the warning categories the project relies on. The Qt6 tool is
+`/usr/lib/qt6/bin/qmllint`, same as `qsb`. A bare invocation also skips `-I
+build/qmllint`, without which `qs.*` imports do not resolve and the findings
+inflate roughly twelvefold. The hook and CI both assert against these; a manual
+run does not. → `docs/qmllint-setup.md`
 
 ## Branch Structure
 
@@ -199,7 +207,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **A Repeater delegate's `parent` is null in its first binding pass** — the delegate is instantiated before it is reparented, so a bare `parent.<prop>` in the **delegate root** throws a TypeError on every creation. No visual symptom (the binding re-evaluates on reparent), just a steady drip of log noise that buries real warnings. Use `parent?.<prop>` — but only on the delegate root; items nested inside it already have a parent. → `docs/qml-pitfalls.md`
 
-**`Component.onCompleted` in a singleton needs `import QtQuick`** — Quickshell's own modules do not bring `Component` into scope. A data-only singleton never needed `QtQuick`, so the import only becomes necessary the moment someone adds a lifecycle hook — and Quickshell resolves the whole singleton graph at startup, so the unresolvable attached object means **the shell does not start at all**. The error is ~35 lines of unrelated `Type X unavailable` with the real cause on the last line; read it bottom-up. `qmllint` cannot catch it (it exits 255 with no output on any file importing Quickshell types), so a singleton change is unverified until the shell has actually been restarted. → `docs/qml-pitfalls.md`
+**`Component.onCompleted` in a singleton needs `import QtQuick`** — Quickshell's own modules do not bring `Component` into scope. A data-only singleton never needed `QtQuick`, so the import only becomes necessary the moment someone adds a lifecycle hook — and Quickshell resolves the whole singleton graph at startup, so the unresolvable attached object means **the shell does not start at all**. The error is ~35 lines of unrelated `Type X unavailable` with the real cause on the last line; read it bottom-up. `qmllint` DOES report this (as `unresolved-type` on the `Component.onCompleted` line) once run correctly — but both categories involved still carry a backlog and sit at `info`, so it does not fail the build yet. A singleton change is still unverified until the shell has actually been restarted. → `docs/qml-pitfalls.md`, `docs/qmllint-setup.md`
 
 **A `ShapePath` that ends on a near-zero segment renders NOTHING** — when a closed path's final point is computed by two different pieces of code (e.g. `PathAngleArc` derives its own start while the closing `PathLine` respells that corner with `cos`/`sin`), the two agree only to a float epsilon and the path ends on a ~1e-15 segment. `Shape.CurveRenderer` does not skip it — it emits nothing for the **whole path**, so the shape vanishes. It looks like a random one-frame flicker but is deterministic per value. Rule: every corner comes from ONE expression, read by everything that needs it. Critically, the obvious test **misses it**: building N instances and grabbing each once exercises only the first tessellation. Step ONE instance and diff each frame against its neighbours. → `docs/qml-pitfalls.md`
 
@@ -207,7 +215,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **A derived property reads STALE inside a change handler that fires upstream of it** — inside `onXChanged`, any binding depending on `X` (`readonly` or not) may not have re-evaluated yet, so `onRunningChanged` observes `remainingSeconds` still holding its pre-change value. A handler must re-derive its verdict from raw state, never from another binding. And never write a binding's dependency from the change handler of the property that binding computes — here, writing `props.deadlineMs` from `onRunningChanged` when `running` derives from it: Qt aborts that as a binding loop (logged as `Binding loop detected for property "X"` — grep `qs log` for it whenever a property looks stuck) and leaves the property **frozen at its stale value**, a corrupted property rather than a mere warning. Defer the write with `Qt.callLater`. Symptom: `services/SuspendTimer.qml` suspended the machine the instant the toggle was armed, then read as "armed, 0:00" forever. → `docs/qml-pitfalls.md`
 
-**`readonly property` blocks ALL assignment** — `readonly` in QML means the property has ONE value source (its initializer) and forbids imperative assignment from *any* scope, including signal handlers in the same file — there is no "internal write" exception. Any property written imperatively by an internal `FileView`/`Process`/`Timer` handler must stay a plain writable `property`; marking it `readonly` makes the handler's assignment silently no-op, freezing the value. `qmllint` can't catch this by design (exits 255 on unresolved Quickshell imports). Symptom: `QuietMode.enabled` made `readonly` by a code review → `FileView.onLoaded` write failed → Silent toggle frozen false. → `docs/qml-pitfalls.md`
+**`readonly property` blocks ALL assignment** — `readonly` in QML means the property has ONE value source (its initializer) and forbids imperative assignment from *any* scope, including signal handlers in the same file — there is no "internal write" exception. Any property written imperatively by an internal `FileView`/`Process`/`Timer` handler must stay a plain writable `property`; marking it `readonly` makes the handler's assignment silently no-op, freezing the value. `qmllint` DOES catch this and now fails the build on it — `ReadOnlyProperty` is at `error` in `.qmllint.ini`, verified by reproducing the regression. Symptom: `QuietMode.enabled` made `readonly` by a code review → `FileView.onLoaded` write failed → Silent toggle frozen false. → `docs/qml-pitfalls.md`, `docs/qmllint-setup.md`
 
 **A `Component`-typed default property turns children into templates** — most containers default to `data` / `list<QObject>`, but some declare a `QQmlComponent` default property, and then EVERY child written inside is implicitly wrapped in a `Component`: it becomes a template the parent instantiates on its own terms, never a live sibling in this file, and its `id` is invisible to the enclosing file. The slot is also not a list, so a second child silently overwrites the first — with no error at all. `WlSessionLock`'s default property is `surface` (a `QQmlComponent`), so a `Timer` declared inside it never ran (`LockSurface` took the slot) and `onUnlock` threw `ReferenceError: <id> is not defined` on every unlock — the lock's unlock-failsafe had never once executed. Only the object the parent builds per template (per-surface here; per-item or per-window elsewhere) belongs inside; move everything else out to a container whose default property accepts arbitrary children — `Scope` does. Before nesting, check the type's `defaultProperty` and that property's declared `type` in `/usr/lib/qt6/qml/Quickshell/<Module>/*.qmltypes`. Symptom: a `ReferenceError` in `qs log` for an id plainly visible a few lines above — suspect a component-scope boundary, not a typo. → `docs/qml-pitfalls.md`
 
@@ -222,6 +230,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Pitfalls & Research:**
 - [`qml-pitfalls.md`](docs/qml-pitfalls.md) — All QML gotchas consolidated
+- [`qmllint-setup.md`](docs/qmllint-setup.md) — Read before running qmllint, editing `.qmllint.ini`, or touching the Lint workflow: the two silent traps (wrong binary, unresolved `qs.*`), the ratchet policy, and why some categories stay disabled
 - [`cursor-shape-layer-shell.md`](docs/cursor-shape-layer-shell.md) — Cursor shape behavior in Wayland layer-shell
 - [`tray-icon-theming.md`](docs/tray-icon-theming.md) — Icon resolution pipeline, Electron SNI limitation, Option C future path
 - [`module-setup.md`](docs/module-setup.md) — External prerequisites for Askpass, Clipboard, STT, Calculator, KeyChords

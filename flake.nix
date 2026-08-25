@@ -50,7 +50,11 @@
       in
         pkgs.mkShell.override {stdenv = shell.stdenv;} {
           inputsFrom = [shell shell.plugin shell.extras];
-          packages = with pkgs; [clazy material-symbols rubik nerd-fonts.caskaydia-cove];
+          # qt6.qtdeclarative is already pulled in transitively by inputsFrom,
+          # but it is listed explicitly because the lint job depends on the
+          # `qmllint` binary being on PATH, and a transitive build input is not
+          # a contract. See .github/workflows/lint.yml.
+          packages = with pkgs; [clazy material-symbols rubik nerd-fonts.caskaydia-cove qt6.qtdeclarative];
           SYMMETRIA_XKB_RULES_PATH = "${pkgs.xkeyboard-config}/share/xkeyboard-config-2/rules/base.lst";
         };
     });

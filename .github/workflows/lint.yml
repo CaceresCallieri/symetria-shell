@@ -4,40 +4,19 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  lint:
+  # shellcheck is preinstalled on ubuntu-latest and takes seconds. It runs as
+  # its own job so it never waits on the Nix store restore that qmllint needs.
+  shellcheck:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt tools
-        run: sudo apt-get update && sudo apt-get install -y qt6-declarative-dev-tools
-
-      # qmllint v1.0 exits 255 for both parse errors and unresolvable imports
-      # (QuickShell types). Without import resolution, ~93% of files trigger
-      # exit 255 with no output. We only fail on actual diagnostic output —
-      # same logic as .githooks/pre-commit.
-      - name: Report tool versions
-        run: |
-          qmllint --version || true
-          shellcheck --version
-
-      - name: Run qmllint
-        run: |
-          ERRORS=0
-          while IFS= read -r -d '' file; do
-            if ! output=$(qmllint "$file" 2>&1) && [[ -n "$output" ]]; then
-              echo "::error file=$file::$output"
-              ERRORS=$((ERRORS + 1))
-            fi
-          done < <(find . -name '*.qml' -not -path './.git/*' -print0)
-          if [[ $ERRORS -gt 0 ]]; then
-            echo "::error::qmllint: $ERRORS file(s) failed"
-            exit 1
-          fi
-          echo "qmllint: all files passed (note: QuickShell import errors are suppressed until import resolution is configured)"
+      - name: Report tool version
+        run: shellcheck --version
 
       - name: Run shellcheck
         run: |
@@ -52,3 +31,43 @@ jobs:
             exit 1
           fi
           echo "shellcheck: all files passed"
+
+  # qmllint runs under Nix, not apt, for two reasons that the apt path cannot
+  # satisfy:
+  #
+  #   1. Ubuntu 24.04 ships Qt 6.4.2. This project targets Qt 6.11, and the
+  #      warning categories in .qmllint.ini were calibrated against 6.11.
+  #   2. qmllint has to resolve `import Quickshell` and `import Symmetria`.
+  #      The flake's devShell already carries Quickshell and the project's own
+  #      C++ plugin, pinned by flake.lock — the same versions the shell runs
+  #      against. apt has neither.
+  qmllint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: nixbuild/nix-quick-install-action@v31
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-lint-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-lint-
+          gc-max-store-size-linux: 1G
+          purge: true
+          purge-prefixes: nix-lint-
+          purge-created: 0
+          purge-last-accessed: 0
+          purge-primary-key: never
+
+      - name: Generate the qs.* module shadow tree
+        run: ./scripts/gen-qmllint-tree.py
+
+      - name: Run qmllint
+        run: nix develop --command bash .github/scripts/run-qmllint.sh
