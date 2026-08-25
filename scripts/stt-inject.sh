@@ -342,12 +342,12 @@ fi
 # same shape the IDE path uses.
 #
 # ⚠ Deliberately NOT part of is_terminal_class, and deliberately below the
-# wl-copy that has already run. Mesura and the installed T3 Code report the
-# SAME window class (`t3code`), so there is no way to tell them apart before
-# trying the socket. Marking the class RPC-eligible would skip wl-copy, and a
-# dictation aimed at the installed app would then be lost with no clipboard to
-# fall back on. Here a missing socket simply falls through to the Ctrl+V paste
-# below, which is what the user already gets for any non-terminal window.
+# wl-copy that has already run. The window class (`mesura-code`) says which
+# application is on screen, not whether that build binds a dictation socket —
+# an older Mesura, or one already shutting down, has none. Marking the class
+# RPC-eligible would skip wl-copy, and those dictations would be lost outright.
+# Here a missing socket simply falls through to the Ctrl+V paste below, which
+# is what the user already gets for any non-terminal window.
 try_mesura_inject() {
     local submit_bool
     case "$SUBMIT" in

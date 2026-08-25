@@ -710,16 +710,25 @@ QtObject {
     /// Whether the window is Mesura Code, which takes dictation straight into
     /// its composer over its own per-process socket.
     ///
-    /// ⚠ Deliberately NOT folded into _isTerminalClass. Mesura and the
-    /// installed T3 Code report the SAME class (`t3code`), so this cannot tell
-    /// them apart — only the socket's existence can, and that is checked by
-    /// stt-inject.sh at delivery time. Marking the class RPC-eligible would
-    /// skip wl-copy, and a dictation aimed at the installed app would then be
-    /// lost with no clipboard to fall back on.
+    /// The class comes from Mesura's own `wmClass` (scripts/lib/brand-assets.ts):
+    /// `mesura-code` for a release build, `mesura-code-dev` for a dev one.
+    /// It used to be `t3code` — the fork's rebranding renamed it, this matcher
+    /// kept the old string, and dictation silently fell back to a Ctrl+V paste
+    /// for days. Read the class off a live window before editing this regex.
+    ///
+    /// `t3code` is deliberately NOT matched. That is the installed T3 Code,
+    /// which has no dictation socket at all, so naming it here would only buy
+    /// a socket probe that can never find a peer.
+    ///
+    /// ⚠ Deliberately NOT folded into _isTerminalClass. That would mark the
+    /// class RPC-eligible and skip wl-copy, so a Mesura build without the
+    /// socket — an older one, or one already shutting down — would lose the
+    /// dictation outright. Staying out of it keeps the Ctrl+V paste as the
+    /// fall-through.
     function _isMesuraClass(cls: string): bool {
         if (!cls)
             return false;
-        return /^t3code$/.test(cls.toLowerCase());
+        return /^mesura-code(?:-dev)?$/.test(cls.toLowerCase());
     }
 
     /// Spawn injectProcess with the right args + env. Three call sites converge
