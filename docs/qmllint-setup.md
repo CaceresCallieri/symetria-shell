@@ -128,23 +128,63 @@ trusting it, or the ratchet will eventually demand a wrong fix.
 
 ## CI
 
-`.github/workflows/lint.yml` runs two independent jobs.
+`.github/workflows/lint.yml` runs both checks in **one job**, under
+`nix develop .#lint`, with `if: !cancelled()` on every check step.
 
-`shellcheck` runs on plain `ubuntu-latest` — the tool is preinstalled and the
-job takes seconds, so it never waits on Nix.
+Three decisions, each with a reason that cost a red run to learn:
 
-`qmllint` runs under `nix develop`, not apt, because apt cannot supply what the
-check needs. Ubuntu 24.04 ships Qt 6.4.2 against a project targeting 6.11, and
-has neither Quickshell nor this project's own C++ plugin — without those,
-`import Quickshell` and `import Symmetria` fail and the baseline is measuring a
-different codebase. The flake's devShell carries both, pinned by `flake.lock`
-to the same versions the shell runs against. `qt6.qtdeclarative` is listed
-explicitly in the devShell's `packages` even though `inputsFrom` already pulls
-it in transitively, because the lint job depends on `qmllint` being on PATH and
-a transitive build input is not a contract.
+**Under Nix, not apt.** Ubuntu 24.04 ships Qt 6.4.2 against a project targeting
+6.11, and has neither Quickshell nor this project's C++ plugin — without those,
+`import Quickshell` fails and the baseline measures a different codebase. The
+runner's preinstalled shellcheck drifted too (see below). The flake pins both
+tools through `flake.lock`, so CI and developers run the same versions.
 
-The runner script is `.github/scripts/run-qmllint.sh`. Every guard in it traces
-to one half of the original failure:
+**One job, not two.** The Nix store restore is the expensive part, and two jobs
+contend over one cache key.
+
+**Every step guarded with `if: !cancelled()`.** This is the fix for how the
+outage hid for four months. `shellcheck` used to be the last step of a job
+whose `qmllint` step exited 1 first, so it **never executed once** — and when
+it finally ran it failed on three files that nobody knew about. One broken
+check must never mask the ones after it.
+
+### The `lint` devShell, and why it is separate
+
+The lint job uses a dedicated `devShells.lint`, not the default one, and the
+distinction is load-bearing.
+
+The default devShell uses `inputsFrom = [shell shell.plugin shell.extras]`. The
+main package lists `plugin` in its `buildInputs`, so entering it forces the
+`symmetria-qml-plugin` derivation to build — and **that build has been failing
+since before 2026-05** on `pkg_check_modules(Cava IMPORTED_TARGET libcava
+REQUIRED)`. It is the same break that makes every `update-flake-inputs` run
+red. `nix develop` on this project does not work today.
+
+Removing the plugin from `QML_IMPORT_PATH` does not avoid it, because
+`inputsFrom` drags the derivation in regardless. Hence a separate shell that
+declares exactly what the checks need and nothing else.
+
+**The cost, stated plainly:** CI cannot resolve `Symmetria`,
+`Symmetria.Internal` or `Symmetria.Services`, because those modules come from
+that same plugin. Three categories — `MissingType`, `RequiredProperty`,
+`UnresolvedAlias` — measure zero on a developer machine but fire on 13 files in
+CI with environmental findings (`Component is missing required property
+modelData from AgentChipFor`). They sit in a `BLOCKED` block in `.qmllint.ini`
+and go back to `error` the moment the plugin builds. **Fixing that derivation
+is the single highest-value follow-up here**: it repairs a second permanently
+red workflow and restores `RequiredProperty`, which guards the delegate
+property-shadowing trap.
+
+`QML_IMPORT_PATH` is set explicitly rather than left to Qt's setup hooks.
+nixpkgs splits `qtdeclarative`'s binaries from its QML modules across store
+outputs, so qmllint's default import directory — which it derives from the
+location of its own binary — resolves nothing at all. The first CI run reported
+6,268 import errors including `import QtQuick` before this was set.
+
+### The runner scripts
+
+`.github/scripts/run-qmllint.sh`. Every guard in it traces to one half of the
+original failure:
 
 - It resolves the tool once and aborts with a single named error if it is
   missing. The old inline loop captured stderr into the variable it tested for
@@ -158,3 +198,18 @@ to one half of the original failure:
 - It prints the version, the policy path, and the import paths on every run,
   green included. The outage lasted four months because the one step that would
   have exposed it ran `qmllint --version || true` and went green on failure.
+
+`.github/scripts/run-shellcheck.sh` exists for the same reason, one layer down.
+The runner shipped shellcheck 0.9.0 while developers ran 0.11.0, and the two
+disagreed on this repository in both directions: `SC2317` was renamed `SC2329`,
+so the repo's exclusion silently did not apply on the runner, and 0.9.0 raises
+`SC2015` on `A && B || true` where 0.11.0 does not. Both identifiers are now
+excluded, and the version is pinned and printed.
+
+### Verifying the check is not hollow
+
+A green run proves nothing on its own — the previous workflow was designed to
+be a no-op and would have gone green too. The check was falsified before this
+was merged: reintroducing the `QuietMode.enabled` `readonly` regression turned
+CI red at both assignment sites, and reverting it turned CI green again. Repeat
+that test after any change to `.qmllint.ini` that touches the `error` block.
