@@ -206,6 +206,64 @@ so the repo's exclusion silently did not apply on the runner, and 0.9.0 raises
 `SC2015` on `A && B || true` where 0.11.0 does not. Both identifiers are now
 excluded, and the version is pinned and printed.
 
+## qmlformat: local-only, and why
+
+`.github/scripts/run-qmlformat.sh` runs in the **pre-commit hook only**. CI does
+not run it. Two independent problems put it there.
+
+**It fails silently on 10 of 408 files.** qmlformat exits 1 with zero bytes of
+output and no diagnostic. The obvious gate — `qmlformat "$f" | diff -u "$f" -` —
+reads that empty output as a full-file deletion and reports a crashed tool as a
+formatting violation, which is the same defect that made the old workflow report
+a missing binary as 408 code findings. The script branches on the exit code
+instead and reports those files as tooling failures.
+
+One minimal trigger is isolated: declaring a property named `id`.
+
+```qml
+import QtQuick
+QtObject { readonly property string id: "x" }   // qmlformat: exit 1, no output
+```
+
+That is legal QML — qmllint accepts it and the shell runs it. It accounts for
+`services/Notifs.qml` and `modules/controlcenter/PaneRegistry.qml`. The other
+eight fail for reasons not yet isolated.
+
+**Its output is version-coupled.** nixpkgs pins Qt 6.10.1 while Arch ships
+6.11.1. On a tree formatted with 6.11.1, CI's 6.10.1 called **18 files
+unformatted and reported a different set as unprocessable**. Neither is a
+defect. Gating CI on that would mean permanent red, which is the exact failure
+this whole setup exists to remove.
+
+So the gate lives where exactly one Qt version is ever in play. Anything that
+reformats QML must run on the machine that commits it. Restore the CI step if
+both sides ever share a Qt version, and re-check after Qt 6.14 regardless —
+QTBUG-144943 rewrites qmlformat from the DOM onto the AST, moving both the
+output and the failure set.
+
+## Pin the tool, not just the config
+
+Four separate failures on this branch were one tool disagreeing with another
+version of itself, and none of them was a finding about the code:
+
+| Tool | Disagreement | Resolution |
+|---|---|---|
+| qmllint | Qt 5.15 vs Qt 6.11 | absolute path + a major-version assertion |
+| shellcheck | 0.9.0 (runner) vs 0.11.0 | pinned through the flake |
+| qmlformat | 6.10.1 (CI) vs 6.11.1 | gate moved to the hook |
+| pyrefly | 0.49.0 (nixpkgs) vs 1.2.0 | pinned via `uvx pyrefly@1.2.0` |
+
+Every check step therefore prints its tool version before running, on green runs
+too. When a finding reproduces in CI but not locally, that line is the first
+thing to read.
+
+The deeper cause is that `flake.lock` is stale and internally inconsistent: it
+still names `caelestia-cli` where `flake.nix` declares `symmetria-cli`, so nix
+rewrites it on every run, and its nixpkgs pin has not moved since 2026-01-21
+because every `update-flake-inputs` run fails on the unrelated libcava plugin
+break. **Fixing that derivation would let the lock advance and would likely
+retire both the pyrefly pin and the qmlformat exclusion.**
+
 ### Verifying the check is not hollow
 
 A green run proves nothing on its own — the previous workflow was designed to
