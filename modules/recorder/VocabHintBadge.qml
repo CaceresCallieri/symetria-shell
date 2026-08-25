@@ -36,10 +36,7 @@ Item {
     // visually tethered companion to the delivery pill rather than an
     // accent-colored notification dot.
     // intentional var: heterogeneous JS { background, border }
-    readonly property var _style: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
+    readonly property var _style: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
     // Shrink the whole badge to ~85% of the base pill size so it reads
     // as a secondary/supplementary indicator next to the delivery pill.
@@ -50,10 +47,7 @@ Item {
     readonly property real _hPad: Appearance.padding.small * _scale
     readonly property real _vPad: Appearance.padding.small * 0.5 * _scale
 
-    implicitWidth: Math.max(
-        countText.implicitWidth + _hPad * 2,
-        implicitHeight
-    )
+    implicitWidth: Math.max(countText.implicitWidth + _hPad * 2, implicitHeight)
     implicitHeight: countText.implicitHeight + _vPad * 2
 
     StyledRect {

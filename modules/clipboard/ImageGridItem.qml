@@ -52,8 +52,16 @@ Item {
             SequentialAnimation on opacity {
                 running: loadingIcon.visible
                 loops: Animation.Infinite
-                NumberAnimation { to: 0.4; duration: 600; easing.type: Easing.InOutQuad }
-                NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
+                NumberAnimation {
+                    to: 0.4
+                    duration: 600
+                    easing.type: Easing.InOutQuad
+                }
+                NumberAnimation {
+                    to: 1.0
+                    duration: 600
+                    easing.type: Easing.InOutQuad
+                }
             }
         }
 

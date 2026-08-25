@@ -39,11 +39,11 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     readonly property var _config: ({
-        historyLength: Config.keycaster?.historyLength ?? 5,
-        fadeoutDelay: Config.keycaster?.fadeoutDelay ?? 2000,
-        fadeoutDuration: Config.keycaster?.fadeoutDuration ?? 500,
-        showMouseClicks: Config.keycaster?.showMouseClicks ?? true
-    })
+            historyLength: Config.keycaster?.historyLength ?? 5,
+            fadeoutDelay: Config.keycaster?.fadeoutDelay ?? 2000,
+            fadeoutDuration: Config.keycaster?.fadeoutDuration ?? 500,
+            showMouseClicks: Config.keycaster?.showMouseClicks ?? true
+        })
 
     // ─────────────────────────────────────────────────────────────────────────
     // Internal state
@@ -73,10 +73,14 @@ Singleton {
 
     function _updateModifierText(): void {
         const parts = [];
-        if (_modSuper) parts.push(_modifierSymbols.super);
-        if (_modCtrl) parts.push(_modifierSymbols.ctrl);
-        if (_modAlt) parts.push(_modifierSymbols.alt);
-        if (_modShift) parts.push(_modifierSymbols.shift);
+        if (_modSuper)
+            parts.push(_modifierSymbols.super);
+        if (_modCtrl)
+            parts.push(_modifierSymbols.ctrl);
+        if (_modAlt)
+            parts.push(_modifierSymbols.alt);
+        if (_modShift)
+            parts.push(_modifierSymbols.shift);
         _cachedHeldModifiersText = parts.join("+");
     }
 
@@ -96,81 +100,165 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     readonly property var _keyNameMap: ({
-        // Letters - just show uppercase
-        "KEY_A": "A", "KEY_B": "B", "KEY_C": "C", "KEY_D": "D", "KEY_E": "E",
-        "KEY_F": "F", "KEY_G": "G", "KEY_H": "H", "KEY_I": "I", "KEY_J": "J",
-        "KEY_K": "K", "KEY_L": "L", "KEY_M": "M", "KEY_N": "N", "KEY_O": "O",
-        "KEY_P": "P", "KEY_Q": "Q", "KEY_R": "R", "KEY_S": "S", "KEY_T": "T",
-        "KEY_U": "U", "KEY_V": "V", "KEY_W": "W", "KEY_X": "X", "KEY_Y": "Y",
-        "KEY_Z": "Z",
+            // Letters - just show uppercase
+            "KEY_A": "A",
+            "KEY_B": "B",
+            "KEY_C": "C",
+            "KEY_D": "D",
+            "KEY_E": "E",
+            "KEY_F": "F",
+            "KEY_G": "G",
+            "KEY_H": "H",
+            "KEY_I": "I",
+            "KEY_J": "J",
+            "KEY_K": "K",
+            "KEY_L": "L",
+            "KEY_M": "M",
+            "KEY_N": "N",
+            "KEY_O": "O",
+            "KEY_P": "P",
+            "KEY_Q": "Q",
+            "KEY_R": "R",
+            "KEY_S": "S",
+            "KEY_T": "T",
+            "KEY_U": "U",
+            "KEY_V": "V",
+            "KEY_W": "W",
+            "KEY_X": "X",
+            "KEY_Y": "Y",
+            "KEY_Z": "Z",
 
-        // Numbers
-        "KEY_0": "0", "KEY_1": "1", "KEY_2": "2", "KEY_3": "3", "KEY_4": "4",
-        "KEY_5": "5", "KEY_6": "6", "KEY_7": "7", "KEY_8": "8", "KEY_9": "9",
+            // Numbers
+            "KEY_0": "0",
+            "KEY_1": "1",
+            "KEY_2": "2",
+            "KEY_3": "3",
+            "KEY_4": "4",
+            "KEY_5": "5",
+            "KEY_6": "6",
+            "KEY_7": "7",
+            "KEY_8": "8",
+            "KEY_9": "9",
 
-        // Function keys
-        "KEY_F1": "F1", "KEY_F2": "F2", "KEY_F3": "F3", "KEY_F4": "F4",
-        "KEY_F5": "F5", "KEY_F6": "F6", "KEY_F7": "F7", "KEY_F8": "F8",
-        "KEY_F9": "F9", "KEY_F10": "F10", "KEY_F11": "F11", "KEY_F12": "F12",
+            // Function keys
+            "KEY_F1": "F1",
+            "KEY_F2": "F2",
+            "KEY_F3": "F3",
+            "KEY_F4": "F4",
+            "KEY_F5": "F5",
+            "KEY_F6": "F6",
+            "KEY_F7": "F7",
+            "KEY_F8": "F8",
+            "KEY_F9": "F9",
+            "KEY_F10": "F10",
+            "KEY_F11": "F11",
+            "KEY_F12": "F12",
 
-        // Navigation
-        "KEY_UP": "↑", "KEY_DOWN": "↓", "KEY_LEFT": "←", "KEY_RIGHT": "→",
-        "KEY_HOME": "Home", "KEY_END": "End",
-        "KEY_PAGEUP": "PgUp", "KEY_PAGEDOWN": "PgDn",
+            // Navigation
+            "KEY_UP": "↑",
+            "KEY_DOWN": "↓",
+            "KEY_LEFT": "←",
+            "KEY_RIGHT": "→",
+            "KEY_HOME": "Home",
+            "KEY_END": "End",
+            "KEY_PAGEUP": "PgUp",
+            "KEY_PAGEDOWN": "PgDn",
 
-        // Common keys
-        "KEY_SPACE": "␣", "KEY_ENTER": "⏎", "KEY_RETURN": "⏎",
-        "KEY_TAB": "Tab", "KEY_BACKSPACE": "⌫", "KEY_DELETE": "Del",
-        "KEY_ESCAPE": "Esc", "KEY_INSERT": "Ins",
-        "KEY_CAPSLOCK": "CapsLock", "KEY_NUMLOCK": "NumLock",
-        "KEY_SCROLLLOCK": "ScrLock", "KEY_PRINT": "PrtSc", "KEY_PAUSE": "Pause",
+            // Common keys
+            "KEY_SPACE": "␣",
+            "KEY_ENTER": "⏎",
+            "KEY_RETURN": "⏎",
+            "KEY_TAB": "Tab",
+            "KEY_BACKSPACE": "⌫",
+            "KEY_DELETE": "Del",
+            "KEY_ESCAPE": "Esc",
+            "KEY_INSERT": "Ins",
+            "KEY_CAPSLOCK": "CapsLock",
+            "KEY_NUMLOCK": "NumLock",
+            "KEY_SCROLLLOCK": "ScrLock",
+            "KEY_PRINT": "PrtSc",
+            "KEY_PAUSE": "Pause",
 
-        // Punctuation
-        "KEY_MINUS": "-", "KEY_EQUAL": "=", "KEY_LEFTBRACE": "[", "KEY_RIGHTBRACE": "]",
-        "KEY_BACKSLASH": "\\", "KEY_SEMICOLON": ";", "KEY_APOSTROPHE": "'",
-        "KEY_GRAVE": "`", "KEY_COMMA": ",", "KEY_DOT": ".", "KEY_SLASH": "/",
+            // Punctuation
+            "KEY_MINUS": "-",
+            "KEY_EQUAL": "=",
+            "KEY_LEFTBRACE": "[",
+            "KEY_RIGHTBRACE": "]",
+            "KEY_BACKSLASH": "\\",
+            "KEY_SEMICOLON": ";",
+            "KEY_APOSTROPHE": "'",
+            "KEY_GRAVE": "`",
+            "KEY_COMMA": ",",
+            "KEY_DOT": ".",
+            "KEY_SLASH": "/",
 
-        // Modifiers (shown only as held previews, not added to history)
-        "KEY_LEFTCTRL": "Ctrl", "KEY_RIGHTCTRL": "Ctrl",
-        "KEY_LEFTALT": "Alt", "KEY_RIGHTALT": "Alt",
-        "KEY_LEFTSHIFT": "Shift", "KEY_RIGHTSHIFT": "Shift",
-        "KEY_LEFTMETA": "Super", "KEY_RIGHTMETA": "Super",
+            // Modifiers (shown only as held previews, not added to history)
+            "KEY_LEFTCTRL": "Ctrl",
+            "KEY_RIGHTCTRL": "Ctrl",
+            "KEY_LEFTALT": "Alt",
+            "KEY_RIGHTALT": "Alt",
+            "KEY_LEFTSHIFT": "Shift",
+            "KEY_RIGHTSHIFT": "Shift",
+            "KEY_LEFTMETA": "Super",
+            "KEY_RIGHTMETA": "Super",
 
-        // Numpad
-        "KEY_KP0": "Num0", "KEY_KP1": "Num1", "KEY_KP2": "Num2", "KEY_KP3": "Num3",
-        "KEY_KP4": "Num4", "KEY_KP5": "Num5", "KEY_KP6": "Num6", "KEY_KP7": "Num7",
-        "KEY_KP8": "Num8", "KEY_KP9": "Num9",
-        "KEY_KPPLUS": "Num+", "KEY_KPMINUS": "Num-", "KEY_KPASTERISK": "Num*",
-        "KEY_KPSLASH": "Num/", "KEY_KPDOT": "Num.", "KEY_KPENTER": "NumEnter",
+            // Numpad
+            "KEY_KP0": "Num0",
+            "KEY_KP1": "Num1",
+            "KEY_KP2": "Num2",
+            "KEY_KP3": "Num3",
+            "KEY_KP4": "Num4",
+            "KEY_KP5": "Num5",
+            "KEY_KP6": "Num6",
+            "KEY_KP7": "Num7",
+            "KEY_KP8": "Num8",
+            "KEY_KP9": "Num9",
+            "KEY_KPPLUS": "Num+",
+            "KEY_KPMINUS": "Num-",
+            "KEY_KPASTERISK": "Num*",
+            "KEY_KPSLASH": "Num/",
+            "KEY_KPDOT": "Num.",
+            "KEY_KPENTER": "NumEnter",
 
-        // Media keys
-        "KEY_MUTE": "Mute", "KEY_VOLUMEDOWN": "Vol-", "KEY_VOLUMEUP": "Vol+",
-        "KEY_PLAYPAUSE": "Play/Pause", "KEY_NEXTSONG": "Next", "KEY_PREVIOUSSONG": "Prev",
-        "KEY_STOPCD": "Stop"
-    })
+            // Media keys
+            "KEY_MUTE": "Mute",
+            "KEY_VOLUMEDOWN": "Vol-",
+            "KEY_VOLUMEUP": "Vol+",
+            "KEY_PLAYPAUSE": "Play/Pause",
+            "KEY_NEXTSONG": "Next",
+            "KEY_PREVIOUSSONG": "Prev",
+            "KEY_STOPCD": "Stop"
+        })
 
     // Modifier key codes for tracking held state
     readonly property var _modifierKeys: ({
-        "KEY_LEFTCTRL": "ctrl", "KEY_RIGHTCTRL": "ctrl",
-        "KEY_LEFTALT": "alt", "KEY_RIGHTALT": "alt",
-        "KEY_LEFTSHIFT": "shift", "KEY_RIGHTSHIFT": "shift",
-        "KEY_LEFTMETA": "super", "KEY_RIGHTMETA": "super"
-    })
+            "KEY_LEFTCTRL": "ctrl",
+            "KEY_RIGHTCTRL": "ctrl",
+            "KEY_LEFTALT": "alt",
+            "KEY_RIGHTALT": "alt",
+            "KEY_LEFTSHIFT": "shift",
+            "KEY_RIGHTSHIFT": "shift",
+            "KEY_LEFTMETA": "super",
+            "KEY_RIGHTMETA": "super"
+        })
 
     // Mac-style modifier symbols for compact display
     readonly property var _modifierSymbols: ({
-        "super": "⌘",   // U+2318 Command key
-        "ctrl": "⌃",    // U+2303 Control key
-        "alt": "⌥",     // U+2325 Option key
-        "shift": "⇧"    // U+21E7 Shift key
-    })
+            "super": "⌘"   // U+2318 Command key
+            ,
+            "ctrl": "⌃"    // U+2303 Control key
+            ,
+            "alt": "⌥"     // U+2325 Option key
+            ,
+            "shift": "⇧"    // U+21E7 Shift key
+        })
 
     // Mouse button codes → button identifiers for MouseClickIcon
     readonly property var _mouseButtonMap: ({
-        "BTN_LEFT": "left",
-        "BTN_RIGHT": "right",
-        "BTN_MIDDLE": "middle"
-    })
+            "BTN_LEFT": "left",
+            "BTN_RIGHT": "right",
+            "BTN_MIDDLE": "middle"
+        })
 
     // ─────────────────────────────────────────────────────────────────────────
     // Helper functions
@@ -222,10 +310,14 @@ Singleton {
     /// Build full key combination text with modifiers
     function buildKeyCombo(keyName: string): string {
         const parts = [];
-        if (_modSuper) parts.push(_modifierSymbols.super);
-        if (_modCtrl) parts.push(_modifierSymbols.ctrl);
-        if (_modAlt) parts.push(_modifierSymbols.alt);
-        if (_modShift) parts.push(_modifierSymbols.shift);
+        if (_modSuper)
+            parts.push(_modifierSymbols.super);
+        if (_modCtrl)
+            parts.push(_modifierSymbols.ctrl);
+        if (_modAlt)
+            parts.push(_modifierSymbols.alt);
+        if (_modShift)
+            parts.push(_modifierSymbols.shift);
         parts.push(keyName);
         return parts.join("+");
     }
@@ -233,10 +325,14 @@ Singleton {
     /// Build modifier prefix text for mouse click events (e.g. "⌘+⇧+" or "")
     function buildModifierPrefix(): string {
         const parts = [];
-        if (_modSuper) parts.push(_modifierSymbols.super);
-        if (_modCtrl) parts.push(_modifierSymbols.ctrl);
-        if (_modAlt) parts.push(_modifierSymbols.alt);
-        if (_modShift) parts.push(_modifierSymbols.shift);
+        if (_modSuper)
+            parts.push(_modifierSymbols.super);
+        if (_modCtrl)
+            parts.push(_modifierSymbols.ctrl);
+        if (_modAlt)
+            parts.push(_modifierSymbols.alt);
+        if (_modShift)
+            parts.push(_modifierSymbols.shift);
         return parts.length > 0 ? parts.join("+") + "+" : "";
     }
 
@@ -247,10 +343,14 @@ Singleton {
         // Handle modifier key state tracking
         if (keyCode in _modifierKeys) {
             const modName = _modifierKeys[keyCode];
-            if (modName === "super") _modSuper = isPress;
-            else if (modName === "ctrl") _modCtrl = isPress;
-            else if (modName === "alt") _modAlt = isPress;
-            else if (modName === "shift") _modShift = isPress;
+            if (modName === "super")
+                _modSuper = isPress;
+            else if (modName === "ctrl")
+                _modCtrl = isPress;
+            else if (modName === "alt")
+                _modAlt = isPress;
+            else if (modName === "shift")
+                _modShift = isPress;
             // Don't add modifiers to history on their own
             return;
         }
@@ -309,7 +409,8 @@ Singleton {
         stdout: SplitParser {
             onRead: data => {
                 const line = data.trim();
-                if (!line) return;
+                if (!line)
+                    return;
 
                 try {
                     // showmethekey-cli outputs JSON per key/button event

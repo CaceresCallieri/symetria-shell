@@ -48,7 +48,7 @@ QtObject {
     // ── Signals ────────────────────────────────────────────────────────
 
     /// Emitted when job is done and should be removed after success delay
-    signal finished()
+    signal finished
 
     // ── Config properties ──────────────────────────────────────────────
 
@@ -82,7 +82,8 @@ QtObject {
 
     // Current segment file path
     readonly property string _currentSegmentPath: {
-        if (sessionId === "") return "";
+        if (sessionId === "")
+            return "";
         return `${AudioRecorderService._tempDir}/session_${sessionId}_segment_${_segmentCounter}.wav`;
     }
 
@@ -90,7 +91,8 @@ QtObject {
 
     /// Stop recording and encode to OGG/Opus.
     function stop(): void {
-        if (_state !== "recording" && _state !== "paused") return;
+        if (_state !== "recording" && _state !== "paused")
+            return;
         console.log("[AudioRec] job.stop | id=" + sessionId + " segments=" + _segmentFiles.length);
 
         if (_state === "paused") {
@@ -105,7 +107,8 @@ QtObject {
 
     /// Pause if recording.
     function pause(): void {
-        if (_state !== "recording") return;
+        if (_state !== "recording")
+            return;
         _pendingRecordAction = "pause";
         levelMonitorProcess.running = false;
         recordProcess.running = false;
@@ -113,7 +116,8 @@ QtObject {
 
     /// Resume from pause.
     function resume(): void {
-        if (_state !== "paused") return;
+        if (_state !== "paused")
+            return;
         _segmentCounter++;
         _startRecording();
         _state = "recording";
@@ -124,9 +128,12 @@ QtObject {
         _pendingRecordAction = "cancel";
         _stopAllTimers();
 
-        if (recordProcess.running) recordProcess.signal(9);
-        if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (encodeProcess.running) encodeProcess.signal(9);
+        if (recordProcess.running)
+            recordProcess.signal(9);
+        if (levelMonitorProcess.running)
+            levelMonitorProcess.running = false;
+        if (encodeProcess.running)
+            encodeProcess.signal(9);
 
         _cleanupTempFiles();
         AudioRecorderService._removeJob(job);
@@ -140,13 +147,7 @@ QtObject {
         const channels = Config.audioRecorder?.channels ?? 2;
 
         recordProcess.capturedSegmentPath = segmentPath;
-        recordProcess.command = [
-            "pw-record",
-            "--format=s16",
-            `--rate=${sampleRate}`,
-            `--channels=${channels}`,
-            segmentPath
-        ];
+        recordProcess.command = ["pw-record", "--format=s16", `--rate=${sampleRate}`, `--channels=${channels}`, segmentPath];
         recordProcess.running = true;
         levelMonitorProcess.running = true;
     }
@@ -164,11 +165,7 @@ QtObject {
         const bitrate = (Config.audioRecorder?.bitrate ?? 192) + "k";
 
         if (_segmentFiles.length === 1) {
-            encodeProcess.command = [
-                "ffmpeg", "-i", _segmentFiles[0],
-                "-c:a", "libopus", "-b:a", bitrate,
-                "-y", _outputFilePath
-            ];
+            encodeProcess.command = ["ffmpeg", "-i", _segmentFiles[0], "-c:a", "libopus", "-b:a", bitrate, "-y", _outputFilePath];
         } else {
             const args = ["ffmpeg"];
             for (const f of _segmentFiles) {
@@ -177,11 +174,7 @@ QtObject {
             let filterInputs = "";
             for (let i = 0; i < _segmentFiles.length; i++)
                 filterInputs += `[${i}:a]`;
-            args.push("-filter_complex",
-                      `${filterInputs}concat=n=${_segmentFiles.length}:v=0:a=1[out]`,
-                      "-map", "[out]",
-                      "-c:a", "libopus", "-b:a", bitrate,
-                      "-y", _outputFilePath);
+            args.push("-filter_complex", `${filterInputs}concat=n=${_segmentFiles.length}:v=0:a=1[out]`, "-map", "[out]", "-c:a", "libopus", "-b:a", bitrate, "-y", _outputFilePath);
             encodeProcess.command = args;
         }
 
@@ -198,8 +191,7 @@ QtObject {
 
     function _cleanupTempFiles(): void {
         if (sessionId !== "") {
-            Quickshell.execDetached(["find", AudioRecorderService._tempDir, "-maxdepth", "1",
-                "-name", `session_${sessionId}_*`, "-delete"]);
+            Quickshell.execDetached(["find", AudioRecorderService._tempDir, "-maxdepth", "1", "-name", `session_${sessionId}_*`, "-delete"]);
         }
     }
 
@@ -217,11 +209,16 @@ QtObject {
     /// Cleanup for Component.onDestruction (called by service shutdown)
     function _destroyCleanup(): void {
         _stopAllTimers();
-        if (sessionId !== "") _cleanupTempFiles();
-        if (recordProcess.running) recordProcess.signal(9);
-        if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (encodeProcess.running) encodeProcess.signal(9);
-        if (clipboardProcess.running) clipboardProcess.running = false;
+        if (sessionId !== "")
+            _cleanupTempFiles();
+        if (recordProcess.running)
+            recordProcess.signal(9);
+        if (levelMonitorProcess.running)
+            levelMonitorProcess.running = false;
+        if (encodeProcess.running)
+            encodeProcess.signal(9);
+        if (clipboardProcess.running)
+            clipboardProcess.running = false;
     }
 
     // ── State change handlers ──────────────────────────────────────────
@@ -283,10 +280,10 @@ QtObject {
         onExited: (code, status) => {
             const action = job._pendingRecordAction;
             job._pendingRecordAction = "";
-            console.log("[AudioRec] recordProcess.onExited | id:", job.sessionId,
-                "| code:", code, "| action:", action || "(none)");
+            console.log("[AudioRec] recordProcess.onExited | id:", job.sessionId, "| code:", code, "| action:", action || "(none)");
 
-            if (action === "cancel") return;
+            if (action === "cancel")
+                return;
 
             // Register completed segment
             const segPath = capturedSegmentPath;
@@ -331,7 +328,8 @@ QtObject {
     readonly property Process encodeProcess: Process {
         onExited: (code, status) => {
             console.log("[AudioRec] encodeProcess.onExited | id:", job.sessionId, "| code:", code);
-            if (job._state !== "saving") return;
+            if (job._state !== "saving")
+                return;
 
             if (code === 0) {
                 clipboardProcess.command = ["wl-copy", job._outputFilePath];
@@ -346,12 +344,7 @@ QtObject {
         onExited: (code, status) => {
             job._state = "success";
             job._cleanupTempFiles();
-            Toaster.toast(
-                qsTr("Audio recorded"),
-                qsTr("Saved: %1").arg(job._outputFilePath.split("/").pop()),
-                "mic",
-                Toast.Success
-            );
+            Toaster.toast(qsTr("Audio recorded"), qsTr("Saved: %1").arg(job._outputFilePath.split("/").pop()), "mic", Toast.Success);
         }
     }
 }

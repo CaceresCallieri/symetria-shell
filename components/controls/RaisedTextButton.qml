@@ -18,7 +18,7 @@ PillToggleSurface {
     property real horizontalPadding: Appearance.padding.large
     property real verticalPadding: Appearance.padding.smaller
 
-    signal clicked()
+    signal clicked
 
     raised: true
     active: false

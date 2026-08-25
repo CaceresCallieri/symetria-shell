@@ -123,7 +123,10 @@ Scope {
             const anyShowing = v.launcher || v.utilities || (overlay?.showing ?? false);
             const show = !anyShowing;
             v.launcher = v.utilities = show;
-            if (show) overlay?.show(); else overlay?.hide();
+            if (show)
+                overlay?.show();
+            else
+                overlay?.hide();
         }
     }
 
@@ -188,8 +191,10 @@ Scope {
             // OSD is no longer a drawer — route to overlay
             if (drawer === "osd") {
                 const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
-                if (overlay) overlay.toggle();
-                else console.warn("[IPC] OSD overlay not available");
+                if (overlay)
+                    overlay.toggle();
+                else
+                    console.warn("[IPC] OSD overlay not available");
                 return;
             }
 

@@ -95,7 +95,9 @@ Item {
             }
 
             Behavior on opacity {
-                Anim { duration: Appearance.anim.durations.small }
+                Anim {
+                    duration: Appearance.anim.durations.small
+                }
             }
         }
     }

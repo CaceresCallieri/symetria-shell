@@ -51,11 +51,7 @@ Item {
 
             anchors.verticalCenter: parent.verticalCenter
 
-            color: root.installed
-                ? Qt.alpha(Colours.palette.m3primary, 0.15)
-                : root.isAur
-                    ? Qt.alpha(Colours.palette.m3tertiary, 0.15)
-                    : Colours.palette.m3surfaceContainerHighest
+            color: root.installed ? Qt.alpha(Colours.palette.m3primary, 0.15) : root.isAur ? Qt.alpha(Colours.palette.m3tertiary, 0.15) : Colours.palette.m3surfaceContainerHighest
             radius: Appearance.rounding.full
 
             implicitWidth: repoLabel.implicitWidth + Appearance.padding.normal * 2
@@ -69,11 +65,7 @@ Item {
                 text: root.repo
                 font.pointSize: Appearance.font.size.small
                 font.weight: Font.Medium
-                color: root.installed
-                    ? Colours.palette.m3primary
-                    : root.isAur
-                        ? Colours.palette.m3tertiary
-                        : Colours.palette.m3onSurfaceVariant
+                color: root.installed ? Colours.palette.m3primary : root.isAur ? Colours.palette.m3tertiary : Colours.palette.m3onSurfaceVariant
             }
         }
 

@@ -20,10 +20,10 @@ StyledRect {
     /// Focus target for FocusManager (the text field itself).
     readonly property alias focusTarget: search
 
-    signal accepted()
-    signal navigateUp()
-    signal navigateDown()
-    signal searchRequested()
+    signal accepted
+    signal navigateUp
+    signal navigateDown
+    signal searchRequested
     signal searchTextEdited(string text)
 
     // ── Layout ────────────────────────────────────────────────────

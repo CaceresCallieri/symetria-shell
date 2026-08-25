@@ -104,9 +104,7 @@ Row {
         // Compute pill style once per focus state — PillSurface needs both
         // .background and .border, so calling pillStyle() twice would run the
         // same pure computation twice for no benefit.
-        readonly property var _pillStyle: button.activeFocus
-            ? Colours.pillStyle(Colours.palette.m3secondaryContainer, Colours.glass.subtle)
-            : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
+        readonly property var _pillStyle: button.activeFocus ? Colours.pillStyle(Colours.palette.m3secondaryContainer, Colours.glass.subtle) : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
         Keys.onEnterPressed: root._runAndClose(button.command)
         Keys.onReturnPressed: root._runAndClose(button.command)

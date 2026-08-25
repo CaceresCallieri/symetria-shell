@@ -63,16 +63,10 @@ Scope {
             // to avoid HyprlandFocusGrab clearing the visibility flag.
             readonly property bool shouldShow: Config.keychords.enabled && KeyChordsService.active && KeyChordsService.targetMonitor === Hypr.monitorFor(modelData)
 
-            onShouldShowChanged: console.log("[KeyChords:Overlay]", modelData.name, "shouldShow:", shouldShow,
-                "| enabled:", Config.keychords.enabled,
-                "| service.active:", KeyChordsService.active,
-                "| targetMonitor:", KeyChordsService.targetMonitor?.name ?? "null",
-                "| myMonitor:", Hypr.monitorFor(modelData)?.name ?? "null")
-            onVisibleChanged: console.log("[KeyChords:Overlay]", modelData.name, "window visible:", visible,
-                "| dialogOpacity:", dialogOpacity, "| shouldShow:", shouldShow)
+            onShouldShowChanged: console.log("[KeyChords:Overlay]", modelData.name, "shouldShow:", shouldShow, "| enabled:", Config.keychords.enabled, "| service.active:", KeyChordsService.active, "| targetMonitor:", KeyChordsService.targetMonitor?.name ?? "null", "| myMonitor:", Hypr.monitorFor(modelData)?.name ?? "null")
+            onVisibleChanged: console.log("[KeyChords:Overlay]", modelData.name, "window visible:", visible, "| dialogOpacity:", dialogOpacity, "| shouldShow:", shouldShow)
 
-            Component.onCompleted: console.log("[KeyChords:Overlay]", modelData.name, "window created",
-                "| monitor:", Hypr.monitorFor(modelData)?.name ?? "null")
+            Component.onCompleted: console.log("[KeyChords:Overlay]", modelData.name, "window created", "| monitor:", Hypr.monitorFor(modelData)?.name ?? "null")
 
             // Agent bar reference for bottom offset positioning.
             // Reactive via agentBarsVersion — resolves correctly even when agent bars register
@@ -190,10 +184,7 @@ Scope {
                             Layout.alignment: Qt.AlignHCenter
 
                             readonly property real availableWidth: win.width > 0 ? win.width - Appearance.padding.large * 4 : 0
-                            columns: Math.max(1, Math.min(
-                                KeyChordsService.activeChords.length ?? 1,
-                                Math.floor(availableWidth / (Config.keychords.sizes.itemWidth + columnSpacing))
-                            ))
+                            columns: Math.max(1, Math.min(KeyChordsService.activeChords.length ?? 1, Math.floor(availableWidth / (Config.keychords.sizes.itemWidth + columnSpacing))))
 
                             columnSpacing: Appearance.spacing.small
                             rowSpacing: Appearance.spacing.small

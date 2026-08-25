@@ -35,10 +35,7 @@ Item {
         height: implicitHeight
 
         radius: Appearance.rounding.full
-        color: Colours.pillStyle(
-            Colours.palette.m3surfaceContainerHigh,
-            Colours.glass.subtle
-        ).background
+        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
 
         opacity: 0
 
@@ -47,17 +44,18 @@ Item {
 
             anchors.centerIn: parent
             text: {
-                if (root.injectionDowngraded) return "content_copy";
+                if (root.injectionDowngraded)
+                    return "content_copy";
                 switch (root.injectionPath) {
-                    case "rpc":
-                        return root.injectionSubmitted ? "send" : "input";
-                    case "paste": return "input";
-                    default: return "content_copy";
+                case "rpc":
+                    return root.injectionSubmitted ? "send" : "input";
+                case "paste":
+                    return "input";
+                default:
+                    return "content_copy";
                 }
             }
-            color: root.injectionDowngraded
-                ? Colours.palette.m3error
-                : root.iconColor
+            color: root.injectionDowngraded ? Colours.palette.m3error : root.iconColor
             font.pointSize: pill.targetIconSize
         }
 

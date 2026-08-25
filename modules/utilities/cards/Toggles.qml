@@ -96,7 +96,6 @@ PillCard {
                     root.popouts.detach("network");
                 }
             }
-
         }
     }
 

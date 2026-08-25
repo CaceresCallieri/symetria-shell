@@ -131,15 +131,18 @@ Item {
      * @returns true if popout was activated, false otherwise
      */
     function detectChildPopout(container: Item, x: real, nameResolver: var): bool {
-        if (!container) return false;
+        if (!container)
+            return false;
 
         const childX = mapToItem(container, x, 0).x;
         const child = container.childAt(childX, container.height / 2);
 
-        if (!child) return false;
+        if (!child)
+            return false;
 
         const popoutName = nameResolver(child);
-        if (!popoutName) return false;
+        if (!popoutName)
+            return false;
 
         activatePopoutAtChild(popoutName, child);
         return true;
@@ -152,14 +155,17 @@ Item {
      */
     function shouldShowTrayPopout(trayItem: Item, x: real): bool {
         // Non-compact mode: always show popouts
-        if (!Config.bar.tray.compact) return true;
+        if (!Config.bar.tray.compact)
+            return true;
 
         // Compact mode: only show if expanded
-        if (!trayItem?.expanded) return false;
+        if (!trayItem?.expanded)
+            return false;
 
         // Don't show popout if cursor is over the expand icon
         const expandIcon = trayItem.expandIcon;
-        if (!expandIcon) return true;
+        if (!expandIcon)
+            return true;
 
         const iconCoords = mapToItem(expandIcon, x, trayItem.implicitHeight / 2);
         return !expandIcon.contains(iconCoords);
@@ -170,10 +176,12 @@ Item {
      * Used to generate tray popout names like "traymenu0", "traymenu1", etc.
      */
     function findRepeaterIndex(repeater: Repeater, child: Item): int {
-        if (!repeater) return -1;
+        if (!repeater)
+            return -1;
 
         for (let i = 0; i < repeater.count; i++) {
-            if (repeater.itemAt(i) === child) return i;
+            if (repeater.itemAt(i) === child)
+                return i;
         }
         return -1;
     }
@@ -184,17 +192,29 @@ Item {
      */
     function findBarEntryAt(x: real): var {
         const sections = [
-            { section: leftSection, repeater: leftRepeater },
-            { section: rightSection, repeater: rightRepeater }
+            {
+                section: leftSection,
+                repeater: leftRepeater
+            },
+            {
+                section: rightSection,
+                repeater: rightRepeater
+            }
         ];
 
-        for (const { section, repeater } of sections) {
+        for (const {
+            section,
+            repeater
+        } of sections) {
             if (x >= section.x && x <= section.x + section.width) {
                 const relX = x - section.x;
                 for (let i = 0; i < repeater.count; i++) {
                     const entry = repeater.itemAt(i);
                     if (entry?.enabled && relX >= entry.x && relX <= entry.x + entry.width) {
-                        return { entry, section };
+                        return {
+                            entry,
+                            section
+                        };
                     }
                 }
             }
@@ -214,9 +234,7 @@ Item {
                 const localPos = mapToItem(recordingCenterContainer, x, recordingCenterContainer.height / 2);
                 if (localPos.x >= 0 && localPos.x <= recordingCenterContainer.width) {
                     popouts.currentName = "recording";
-                    popouts.currentCenter = Qt.binding(
-                        () => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x
-                    );
+                    popouts.currentCenter = Qt.binding(() => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x);
                     popouts.hasCurrent = true;
                     return;
                 }
@@ -225,14 +243,16 @@ Item {
             return;
         }
 
-        const { entry } = target;
+        const {
+            entry
+        } = target;
         const id = entry.entryId;
         const item = entry.item;
 
         // StatusIcons: use iconContainer with named children
         if (id === "statusIcons" && Config.bar.popouts.statusIcons) {
             const container = item?.iconContainer;
-            if (detectChildPopout(container, x, (icon) => icon?.name ?? null))
+            if (detectChildPopout(container, x, icon => icon?.name ?? null))
                 return;
         }
 
@@ -241,7 +261,7 @@ Item {
             if (shouldShowTrayPopout(item, x)) {
                 const container = item?.trayContainer;
                 const repeater = item?.trayItems;
-                if (detectChildPopout(container, x, (child) => {
+                if (detectChildPopout(container, x, child => {
                     const idx = findRepeaterIndex(repeater, child);
                     return idx >= 0 ? `traymenu${idx}` : null;
                 }))
@@ -249,7 +269,8 @@ Item {
             } else {
                 // Compact mode: expand tray instead of showing popout
                 popouts.hasCurrent = false;
-                if (item) item.expanded = true;
+                if (item)
+                    item.expanded = true;
                 return;
             }
         }
@@ -257,10 +278,12 @@ Item {
         // TimePill: weather, clock, and date popouts
         if (id === "timePill" && Config.bar.popouts.timePill) {
             const container = item?.iconContainer;
-            if (detectChildPopout(container, x, (child) => {
+            if (detectChildPopout(container, x, child => {
                 const name = child?.name;
-                if (name === "weather") return "weather";
-                if (name === "date" || name === "clock") return "calendar";
+                if (name === "weather")
+                    return "weather";
+                if (name === "date" || name === "clock")
+                    return "calendar";
                 return null;
             }))
                 return;
@@ -269,10 +292,12 @@ Item {
         // SystemPill: updates and ram popouts
         if (id === "systemPill" && Config.bar.popouts.systemPill) {
             const container = item?.iconContainer;
-            if (detectChildPopout(container, x, (child) => {
+            if (detectChildPopout(container, x, child => {
                 const name = child?.name;
-                if (name === "updates") return "updates";
-                if (name === "ram") return "ram";
+                if (name === "updates")
+                    return "updates";
+                if (name === "ram")
+                    return "ram";
                 return null;
             }))
                 return;
@@ -430,8 +455,7 @@ Item {
         // flip it" failure mode. The close/open animations still play
         // correctly because the Behavior on the embed's scale animates
         // whenever the bound value changes.
-        readonly property bool _showEmbed:
-            RecordingSessionManager.active && !(_activeJob?.closing ?? false)
+        readonly property bool _showEmbed: RecordingSessionManager.active && !(_activeJob?.closing ?? false)
 
         readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 
@@ -480,13 +504,12 @@ Item {
             target: SttService
 
             function onVocabHintsVisibleChanged(): void {
-                if (!recordingCenterContainer._shouldBeActive) return;
+                if (!recordingCenterContainer._shouldBeActive)
+                    return;
 
                 if (SttService.vocabHintsVisible) {
                     root.popouts.currentName = "recording";
-                    root.popouts.currentCenter = Qt.binding(
-                        () => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x
-                    );
+                    root.popouts.currentCenter = Qt.binding(() => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x);
                     root.popouts.hasCurrent = true;
                 } else if (root.popouts.currentName === "recording") {
                     root.popouts.hasCurrent = false;
@@ -533,10 +556,7 @@ Item {
 
         // Glassmorphism pill entries that need external margins for visual separation
         // Add new pill component IDs here when extending the bar
-        readonly property bool hasPillMargins: entryId === "tray"
-            || entryId === "statusIcons"
-            || entryId === "timePill"
-            || entryId === "systemPill"
+        readonly property bool hasPillMargins: entryId === "tray" || entryId === "statusIcons" || entryId === "timePill" || entryId === "systemPill"
 
         // Only entries that draw a PLATE carry the extra bleed height, so only
         // they may bottom-align. Anything else (logo, power, workspaces spacer)
@@ -595,7 +615,6 @@ Item {
         id: statusIconsComp
         StatusIcons {}
     }
-
 
     Component {
         id: powerComp

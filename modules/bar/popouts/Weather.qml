@@ -51,8 +51,14 @@ Column {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: Appearance.spacing.smaller
 
-                TempBound { icon: "arrow_drop_up"; value: Weather.tempMax }
-                TempBound { icon: "arrow_drop_down"; value: Weather.tempMin }
+                TempBound {
+                    icon: "arrow_drop_up"
+                    value: Weather.tempMax
+                }
+                TempBound {
+                    icon: "arrow_drop_down"
+                    value: Weather.tempMin
+                }
             }
         }
     }

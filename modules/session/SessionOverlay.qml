@@ -64,9 +64,7 @@ Scope {
 
             Behavior on dialogScale {
                 Anim {
-                    easing.bezierCurve: win.shouldShow
-                        ? Appearance.anim.curves.expressiveDefaultSpatial
-                        : Appearance.anim.curves.emphasized
+                    easing.bezierCurve: win.shouldShow ? Appearance.anim.curves.expressiveDefaultSpatial : Appearance.anim.curves.emphasized
                 }
             }
 

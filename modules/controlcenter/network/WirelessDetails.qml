@@ -19,7 +19,7 @@ DeviceDetails {
     required property Session session
     // intentional var: nullable — NmcliWifi network JS object from NetworkState.active
     readonly property var network: root.session.network.active
-    
+
     device: network
 
     Component.onCompleted: {
@@ -67,8 +67,7 @@ DeviceDetails {
                 const isActive = network.active || (NmcliWifi.active && NmcliWifi.active.ssid === network.ssid);
                 if (isActive) {
                     if (!NmcliWifi.wirelessDeviceDetails || NmcliWifi.wirelessDeviceDetails === null) {
-                        NmcliWifi.getWirelessDeviceDetails("", () => {
-                        });
+                        NmcliWifi.getWirelessDeviceDetails("", () => {});
                     } else {
                         connectionUpdateTimer.stop();
                     }

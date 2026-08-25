@@ -41,7 +41,7 @@ Item {
     property color selectedIconColor: Colours.palette.m3onSurface
 
     // Interaction
-    signal clicked()
+    signal clicked
 
     function triggerPress(): void {
         pressAnim.restart();
@@ -57,22 +57,15 @@ Item {
 
     // Unselected: standard matte pill (subtle → medium on hover)
     // Selected: pillColor at visible alpha over matte base, so it actually reads as colored
-    readonly property var baseStyle: Colours.pillStyle( // intentional var: heterogeneous JS { background, border }
-        Colours.palette.m3surfaceContainerHigh,
-        stateLayer.containsMouse ? Colours.glass.medium : Colours.glass.subtle
-    )
+    readonly property var baseStyle: Colours.pillStyle // intentional var: heterogeneous JS { background, border }
+    (Colours.palette.m3surfaceContainerHigh, stateLayer.containsMouse ? Colours.glass.medium : Colours.glass.subtle)
 
     readonly property color selectedBackground: {
         const base = baseStyle.background;
         const accent = pillColor;
         const alpha = stateLayer.containsMouse ? root.selectedHoverAlpha : root.selectedAlpha;
         // Blend accent over matte base: result = accent * alpha + base * (1 - alpha)
-        return Qt.rgba(
-            accent.r * alpha + base.r * (1 - alpha),
-            accent.g * alpha + base.g * (1 - alpha),
-            accent.b * alpha + base.b * (1 - alpha),
-            1.0
-        );
+        return Qt.rgba(accent.r * alpha + base.r * (1 - alpha), accent.g * alpha + base.g * (1 - alpha), accent.b * alpha + base.b * (1 - alpha), 1.0);
     }
 
     readonly property var currentStyle: { // intentional var: heterogeneous JS { background, border }

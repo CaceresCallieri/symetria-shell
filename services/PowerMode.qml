@@ -23,12 +23,27 @@ Singleton {
     // Ordered left-to-right, matching the popout row and the cycle direction.
     // `profile: -1` is a sentinel for modes with no PPD profile (Silent); it
     // never matches a real PowerProfile enum, so comparisons stay safe.
-    readonly property var modes: [
-        ({ silent: true, profile: -1, icon: "bedtime", label: qsTr("Silent") }),
-        ({ silent: false, profile: PowerProfile.PowerSaver, icon: "energy_savings_leaf", label: PowerProfile.toString(PowerProfile.PowerSaver) }),
-        ({ silent: false, profile: PowerProfile.Balanced, icon: "balance", label: PowerProfile.toString(PowerProfile.Balanced) }),
-        ({ silent: false, profile: PowerProfile.Performance, icon: "rocket_launch", label: PowerProfile.toString(PowerProfile.Performance) })
-    ]
+    readonly property var modes: [({
+                silent: true,
+                profile: -1,
+                icon: "bedtime",
+                label: qsTr("Silent")
+            }), ({
+                silent: false,
+                profile: PowerProfile.PowerSaver,
+                icon: "energy_savings_leaf",
+                label: PowerProfile.toString(PowerProfile.PowerSaver)
+            }), ({
+                silent: false,
+                profile: PowerProfile.Balanced,
+                icon: "balance",
+                label: PowerProfile.toString(PowerProfile.Balanced)
+            }), ({
+                silent: false,
+                profile: PowerProfile.Performance,
+                icon: "rocket_launch",
+                label: PowerProfile.toString(PowerProfile.Performance)
+            })]
 
     // Index of the active mode. Silent wins whenever its overlay is on: it pins
     // PPD to power-saver, so we must NOT report PowerSaver as active in its place.

@@ -103,11 +103,11 @@ Item {
 
                 Loader {
                     id: wallpaperLoader
-                    
+
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.bottomMargin: -Appearance.padding.large * 2
-                    
+
                     asynchronous: true
                     active: {
                         const isActive = root.session.activeIndex === 3;
@@ -116,13 +116,13 @@ Item {
                         const shouldActivate = loader && loader.item !== null && (isActive || isAdjacent);
                         return shouldActivate;
                     }
-                    
+
                     onStatusChanged: {
                         if (status === Loader.Error) {
                             console.error("[AppearancePane] Wallpaper loader error!");
                         }
                     }
-                    
+
                     sourceComponent: WallpaperGrid {
                         session: root.session
                     }
@@ -144,7 +144,6 @@ Item {
                 flickableDirection: Flickable.VerticalFlick
                 contentHeight: sidebarLayout.height
 
-
                 StyledScrollBar.vertical: StyledScrollBar {
                     flickable: sidebarFlickable
                 }
@@ -154,81 +153,72 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     spacing: Appearance.spacing.small
-                    
+
                     // intentional var: propagation of duck-typed AppearancePane reference
                     readonly property var rootPane: sidebarFlickable.rootPane
 
-                    readonly property bool allSectionsExpanded: 
-                        themeModeSection.expanded &&
-                        colorVariantSection.expanded &&
-                        colorSchemeSection.expanded &&
-                        animationsSection.expanded &&
-                        fontsSection.expanded &&
-                        scalesSection.expanded &&
-                        transparencySection.expanded &&
-                        borderSection.expanded &&
-                        backgroundSection.expanded
+                    readonly property bool allSectionsExpanded: themeModeSection.expanded && colorVariantSection.expanded && colorSchemeSection.expanded && animationsSection.expanded && fontsSection.expanded && scalesSection.expanded && transparencySection.expanded && borderSection.expanded && backgroundSection.expanded
 
-                RowLayout {
-                    spacing: Appearance.spacing.smaller
+                    RowLayout {
+                        spacing: Appearance.spacing.smaller
 
-                    StyledText {
-                        text: qsTr("Appearance")
-                        font.pointSize: Appearance.font.size.large
-                        font.weight: 500
-                    }
+                        StyledText {
+                            text: qsTr("Appearance")
+                            font.pointSize: Appearance.font.size.large
+                            font.weight: 500
+                        }
 
-                    Item {
-                        Layout.fillWidth: true
-                    }
+                        Item {
+                            Layout.fillWidth: true
+                        }
 
-                    IconButton {
-                        icon: sidebarLayout.allSectionsExpanded ? "unfold_less" : "unfold_more"
-                        type: IconButton.Text
-                        label.animate: true
-                        onClicked: {
-                            const shouldExpand = !sidebarLayout.allSectionsExpanded;
-                            animationsSection.expanded = shouldExpand;
-                            fontsSection.expanded = shouldExpand;
-                            scalesSection.expanded = shouldExpand;
-                            transparencySection.expanded = shouldExpand;
-                            borderSection.expanded = shouldExpand;
-                            backgroundSection.expanded = shouldExpand;
+                        IconButton {
+                            icon: sidebarLayout.allSectionsExpanded ? "unfold_less" : "unfold_more"
+                            type: IconButton.Text
+                            label.animate: true
+                            onClicked: {
+                                const shouldExpand = !sidebarLayout.allSectionsExpanded;
+                                animationsSection.expanded = shouldExpand;
+                                fontsSection.expanded = shouldExpand;
+                                scalesSection.expanded = shouldExpand;
+                                transparencySection.expanded = shouldExpand;
+                                borderSection.expanded = shouldExpand;
+                                backgroundSection.expanded = shouldExpand;
+                            }
                         }
                     }
-                }
 
-                AnimationsSection {
-                    id: animationsSection
-                    rootPane: sidebarFlickable.rootPane
-                }
+                    AnimationsSection {
+                        id: animationsSection
+                        rootPane: sidebarFlickable.rootPane
+                    }
 
-                FontsSection {
-                    id: fontsSection
-                    rootPane: sidebarFlickable.rootPane
-                }
+                    FontsSection {
+                        id: fontsSection
+                        rootPane: sidebarFlickable.rootPane
+                    }
 
-                ScalesSection {
-                    id: scalesSection
-                    rootPane: sidebarFlickable.rootPane
-                }
+                    ScalesSection {
+                        id: scalesSection
+                        rootPane: sidebarFlickable.rootPane
+                    }
 
-                TransparencySection {
-                    id: transparencySection
-                    rootPane: sidebarFlickable.rootPane
-                }
+                    TransparencySection {
+                        id: transparencySection
+                        rootPane: sidebarFlickable.rootPane
+                    }
 
-                BorderSection {
-                    id: borderSection
-                    rootPane: sidebarFlickable.rootPane
-                }
+                    BorderSection {
+                        id: borderSection
+                        rootPane: sidebarFlickable.rootPane
+                    }
 
-                BackgroundSection {
-                    id: backgroundSection
-                    rootPane: sidebarFlickable.rootPane
+                    BackgroundSection {
+                        id: backgroundSection
+                        rootPane: sidebarFlickable.rootPane
+                    }
                 }
             }
-        }
         }
 
         rightContent: appearanceRightContentComponent

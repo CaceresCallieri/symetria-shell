@@ -20,9 +20,7 @@ PillCard {
     // Detect custom icon paths: absolute paths, file:// URLs, or home-relative paths
     readonly property bool hasTransparentIcon: {
         const icon = modelData.appIcon;
-        return icon.startsWith("/") ||
-               icon.startsWith("file://") ||
-               icon.startsWith("~/");
+        return icon.startsWith("/") || icon.startsWith("file://") || icon.startsWith("~/");
     }
     // System-icon resolution check. When the sender passes an icon name
     // that no installed theme provides (e.g. Kanata sends "kanata" but no
@@ -34,9 +32,7 @@ PillCard {
     // Uses Icons.safeIconPath (which calls Quickshell.iconPath with check=true)
     // rather than raw Quickshell.iconPath so missing-icon attempts don't spam
     // warnings into the shell log on every notification with an unknown name.
-    readonly property url resolvedSystemIconPath: hasAppIcon && !hasTransparentIcon
-        ? Icons.safeIconPath(modelData.appIcon, "")
-        : ""
+    readonly property url resolvedSystemIconPath: hasAppIcon && !hasTransparentIcon ? Icons.safeIconPath(modelData.appIcon, "") : ""
     readonly property bool systemIconResolves: resolvedSystemIconPath.length > 0
     // Inner content height (no card margins). Grows to the LARGER of (text
     // content) and (icon reservation) so the card never collapses below the
@@ -45,10 +41,7 @@ PillCard {
     // as `nonAnimHeight` below (which Content.qml's stack-height summation
     // depends on — getting these two confused under-allocates the stack
     // and clips the bottom card's body).
-    readonly property int contentInnerHeight: Math.max(
-        summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height),
-        Config.notifs.sizes.image
-    )
+    readonly property int contentInnerHeight: Math.max(summary.implicitHeight + (root.expanded ? appName.height + body.height + actions.height + actions.anchors.topMargin : bodyPreview.height), Config.notifs.sizes.image)
     // Full external card height (animation target). MUST equal the height
     // that the card actually renders at — Content.qml sums this across
     // visible cards to size the notifications stack, and any divergence
@@ -204,8 +197,7 @@ PillCard {
                         // first paint. Grep `[notif-debug] image-failed`.
                         onStatusChanged: {
                             if (status === Image.Error || status === Image.Null) {
-                                console.warn(`[notif-debug] image-failed id=${root.modelData.id} appName='${root.modelData.appName}'`,
-                                    `source='${(source.toString() || "").slice(0, 120)}' status=${status}`);
+                                console.warn(`[notif-debug] image-failed id=${root.modelData.id} appName='${root.modelData.appName}'`, `source='${(source.toString() || "").slice(0, 120)}' status=${status}`);
                             }
                         }
                     }

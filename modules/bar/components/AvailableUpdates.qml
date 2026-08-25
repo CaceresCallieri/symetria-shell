@@ -16,12 +16,12 @@ MouseArea {
     // `finished` is included so the indicator holds at 0 ("done") instead of
     // flashing the stale pre-update poller count during the window between
     // process exit and the post-run Updates.refresh() recount completing.
-    readonly property int displayCount: UpdateRunner.running || UpdateRunner.finished
-        ? UpdateRunner.remaining : Updates.totalUpdates
+    readonly property int displayCount: UpdateRunner.running || UpdateRunner.finished ? UpdateRunner.remaining : Updates.totalUpdates
 
     // Tooltip text with breakdown by source (Pacman + AUR only)
     readonly property string tooltipText: {
-        if (!Updates.hasData) return "Loading...";
+        if (!Updates.hasData)
+            return "Loading...";
 
         // No Nerd Font glyphs here: Tooltip exposes no font-family control, so
         // this string renders in whatever face the tooltip uses — which is no
@@ -91,7 +91,8 @@ MouseArea {
                 to: 360
                 duration: 1200
                 loops: Animation.Infinite
-                onRunningChanged: if (!running) statusIcon.rotation = 0
+                onRunningChanged: if (!running)
+                    statusIcon.rotation = 0
             }
         }
 

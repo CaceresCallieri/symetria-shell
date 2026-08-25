@@ -92,8 +92,10 @@ Singleton {
         const regularAndNamed = [];
         const specialWs = [];
         for (const w of all) {
-            if (w.name.startsWith("special:")) specialWs.push(w);
-            else regularAndNamed.push(w);
+            if (w.name.startsWith("special:"))
+                specialWs.push(w);
+            else
+                regularAndNamed.push(w);
         }
 
         const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0);
@@ -118,14 +120,17 @@ Singleton {
         return ids.sort((a, b) => {
             const catA = _wsSortCategory(a, nameById[a] ?? "");
             const catB = _wsSortCategory(b, nameById[b] ?? "");
-            if (catA !== catB) return catA - catB;
+            if (catA !== catB)
+                return catA - catB;
             return a - b;
         });
     }
 
     function _wsSortCategory(wsId: int, wsName: string): int {
-        if (wsName.startsWith("special:")) return 2;
-        if (wsId < 0) return 0;
+        if (wsName.startsWith("special:"))
+            return 2;
+        if (wsId < 0)
+            return 0;
         return 1;
     }
 
@@ -187,16 +192,9 @@ Singleton {
         if (blocklist.includes(windowClass))
             return;
 
-        Toaster.toast(
-            windowClass,
-            windowTitle || qsTr("Window is requesting attention"),
-            "notification_important",
-            Toast.Warning,
-            7000,
-            "",
-            "",
-            function() { root.dispatch(`focuswindow address:${fullAddr}`); }
-        );
+        Toaster.toast(windowClass, windowTitle || qsTr("Window is requesting attention"), "notification_important", Toast.Warning, 7000, "", "", function () {
+            root.dispatch(`focuswindow address:${fullAddr}`);
+        });
     }
 
     Timer {

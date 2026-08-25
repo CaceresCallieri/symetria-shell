@@ -278,20 +278,18 @@ Singleton {
         const result = {};
 
         for (const [name, group] of Object.entries(parsed)) {
-            if (!group || typeof group !== "object") continue;
-            if (!Array.isArray(group.chords)) continue;
+            if (!group || typeof group !== "object")
+                continue;
+            if (!Array.isArray(group.chords))
+                continue;
 
-            const validChords = group.chords.filter(c =>
-                c && typeof c.key === "string" && c.key.length === 1 &&
-                typeof c.label === "string" && c.label.length > 0 &&
-                (
-                    (typeof c.command === "string" && c.command.length > 0) ||
-                    (typeof c.group === "string" && c.group.length > 0)
-                )
-            );
+            const validChords = group.chords.filter(c => c && typeof c.key === "string" && c.key.length === 1 && typeof c.label === "string" && c.label.length > 0 && ((typeof c.command === "string" && c.command.length > 0) || (typeof c.group === "string" && c.group.length > 0)));
 
             if (validChords.length > 0) {
-                validChords.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }));
+                validChords.sort((a, b) => a.label.localeCompare(b.label, undefined, {
+                        numeric: true,
+                        sensitivity: "base"
+                    }));
                 result[name] = {
                     title: typeof group.title === "string" ? group.title : name,
                     chords: validChords
@@ -356,12 +354,17 @@ Singleton {
                     continue;
                 // Function replacers avoid String.replace's $-pattern interpretation
                 // ($&, $1, $$, etc.) should a ws/special value ever contain "$".
-                const command = template
-                    .replace(/\{ws\}/g, () => ws.ws)
-                    .replace(/\{special\}/g, () => ws.special ?? "");
-                chords.push({ key: ws.key, label: ws.label, command });
+                const command = template.replace(/\{ws\}/g, () => ws.ws).replace(/\{special\}/g, () => ws.special ?? "");
+                chords.push({
+                    key: ws.key,
+                    label: ws.label,
+                    command
+                });
             }
-            out[name] = { title: group.title, chords };
+            out[name] = {
+                title: group.title,
+                chords
+            };
         }
         return out;
     }

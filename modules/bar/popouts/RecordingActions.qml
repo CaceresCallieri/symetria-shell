@@ -27,9 +27,7 @@ ColumnLayout {
     // ── Action buttons (hidden during Alt+W vocab mode for STT) ──
     FadeTransition {
         Layout.alignment: Qt.AlignHCenter
-        show: root.job !== null
-            && (root.job.state === "recording" || root.job.state === "paused")
-            && !(root.mode === "stt" && SttService.vocabHintsVisible)
+        show: root.job !== null && (root.job.state === "recording" || root.job.state === "paused") && !(root.mode === "stt" && SttService.vocabHintsVisible)
 
         // Mirror of the drawer's hover-row action buttons (Content.qml). Same
         // raised Tonal IconButton aesthetic so the same logical control reads
@@ -49,7 +47,8 @@ ColumnLayout {
                 raised: true
                 inactiveOnColour: root.job?.recording ? Colours.palette.m3onSurfaceVariant : Colours.palette.m3primary
                 onClicked: {
-                    if (!root.job) return;
+                    if (!root.job)
+                        return;
                     if (root.mode === "stt")
                         root.job.recording ? root.job.pause() : root.job.resume();
                     else
@@ -107,10 +106,7 @@ ColumnLayout {
     // ── Vocabulary hint chips (STT only) ──────────────────────────
     FadeTransition {
         Layout.alignment: Qt.AlignHCenter
-        show: root.mode === "stt"
-            && SttService.sessionVocabHints.length > 0
-            && root.job !== null
-            && (root.job.state === "recording" || root.job.state === "paused")
+        show: root.mode === "stt" && SttService.sessionVocabHints.length > 0 && root.job !== null && (root.job.state === "recording" || root.job.state === "paused")
 
         RecorderModule.VocabHintChips {}
     }
@@ -129,15 +125,17 @@ ColumnLayout {
 
         function onActionTriggered(action: string): void {
             switch (action) {
-                case "pause":
-                case "resume":
-                    pauseBtn.triggerPress(); break;
-                case "cancel":
-                    if (root.job?.state !== "error")
-                        cancelBtn.triggerPress();
-                    break;
-                case "stop":
-                    submitBtn.triggerPress(); break;
+            case "pause":
+            case "resume":
+                pauseBtn.triggerPress();
+                break;
+            case "cancel":
+                if (root.job?.state !== "error")
+                    cancelBtn.triggerPress();
+                break;
+            case "stop":
+                submitBtn.triggerPress();
+                break;
             }
         }
     }
@@ -147,19 +145,25 @@ ColumnLayout {
         target: root.mode === "stt" ? SttService : null
 
         function onActionTriggered(sessionId: string, action: string): void {
-            if (!root.job) return;
-            if (sessionId !== "" && sessionId !== root.job.sessionId) return;
+            if (!root.job)
+                return;
+            if (sessionId !== "" && sessionId !== root.job.sessionId)
+                return;
 
             switch (action) {
-                case "pause":
-                case "resume":
-                    pauseBtn.triggerPress(); break;
-                case "restart":
-                    restartBtn.triggerPress(); break;
-                case "cancel":
-                    cancelBtn.triggerPress(); break;
-                case "stop":
-                    submitBtn.triggerPress(); break;
+            case "pause":
+            case "resume":
+                pauseBtn.triggerPress();
+                break;
+            case "restart":
+                restartBtn.triggerPress();
+                break;
+            case "cancel":
+                cancelBtn.triggerPress();
+                break;
+            case "stop":
+                submitBtn.triggerPress();
+                break;
             }
         }
     }

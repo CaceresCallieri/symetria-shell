@@ -32,10 +32,10 @@ Row {
         onAnimationComplete: {
             if (root.chainMode && root._currentMode === root.previewMode) {
                 // Phase 1 complete → transition to chain mode
-                root._currentMode = root.chainMode
+                root._currentMode = root.chainMode;
             } else {
                 // Final phase complete → hold then restart
-                holdTimer.start()
+                holdTimer.start();
             }
         }
     }
@@ -52,8 +52,8 @@ Row {
         id: holdTimer
         interval: root.holdMs
         onTriggered: {
-            root._currentMode = root.previewMode
-            sparkle.restart()
+            root._currentMode = root.previewMode;
+            sparkle.restart();
         }
     }
 

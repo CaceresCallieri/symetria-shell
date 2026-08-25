@@ -213,7 +213,9 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
 
                 Behavior on color {
-                    ColorAnimation { duration: Appearance.anim.durations.small }
+                    ColorAnimation {
+                        duration: Appearance.anim.durations.small
+                    }
                 }
             }
 
@@ -228,7 +230,9 @@ Item {
                 wrapMode: Text.Wrap  // Keep wrap in case of very large numbers
 
                 Behavior on color {
-                    ColorAnimation { duration: Appearance.anim.durations.small }
+                    ColorAnimation {
+                        duration: Appearance.anim.durations.small
+                    }
                 }
             }
         }
@@ -329,11 +333,15 @@ Item {
             color: Colours.palette.m3onSurfaceVariant
 
             Behavior on width {
-                Anim { duration: Appearance.anim.durations.small }
+                Anim {
+                    duration: Appearance.anim.durations.small
+                }
             }
 
             Behavior on opacity {
-                Anim { duration: Appearance.anim.durations.small }
+                Anim {
+                    duration: Appearance.anim.durations.small
+                }
             }
 
             MouseArea {

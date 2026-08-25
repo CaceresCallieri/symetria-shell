@@ -31,7 +31,8 @@ Singleton {
     /// current volume is already at or below the target, it is left alone —
     /// ducking must never make audio louder. Idempotent.
     function duck(target: real): void {
-        if (_ducked) return;
+        if (_ducked)
+            return;
         _ducked = true;
 
         // Nothing audible to duck — and setVolume() would unmute the sink.
@@ -50,9 +51,11 @@ Singleton {
 
     /// Restore the pre-duck volume, unless the user changed it meanwhile. Idempotent.
     function restore(): void {
-        if (!_ducked) return;
+        if (!_ducked)
+            return;
         _ducked = false;
-        if (_savedVolume < 0) return;
+        if (_savedVolume < 0)
+            return;
 
         const saved = _savedVolume;
         const applied = _appliedVolume;

@@ -49,14 +49,7 @@ Variants {
             // onCleared the moment the popout takes focus — which cancels
             // vocabHintsVisible and makes the first Alt+W after Escape fail.
             // The popout wrapper owns its own HyprlandFocusGrab for this case.
-            readonly property bool _shouldGrabFocus:
-                (visibilities.launcher && Config.launcher.enabled)
-                || (visibilities.sidebar && Config.sidebar.enabled)
-                || (visibilities.clipboard && Config.clipboard.enabled)
-                || (visibilities.askpass && Config.askpass.enabled)
-                || (visibilities.calculator && Config.calculator.enabled)
-                || (visibilities.packages && Config.packages.enabled)
-                || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
+            readonly property bool _shouldGrabFocus: (visibilities.launcher && Config.launcher.enabled) || (visibilities.sidebar && Config.sidebar.enabled) || (visibilities.clipboard && Config.clipboard.enabled) || (visibilities.askpass && Config.askpass.enabled) || (visibilities.calculator && Config.calculator.enabled) || (visibilities.packages && Config.packages.enabled) || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
 
             readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
             readonly property int dragMaskPadding: {
@@ -226,7 +219,10 @@ Variants {
 
                     disabled: scope.barDisabled
 
-                    Component.onCompleted: { Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
+                    Component.onCompleted: {
+                        Visibilities.bars.set(scope.modelData, this);
+                        Visibilities.barsVersion++;
+                    }
                     Component.onDestruction: {
                         if (Visibilities.bars.get(scope.modelData) === bar) {
                             Visibilities.bars.delete(scope.modelData);
@@ -245,7 +241,6 @@ Variants {
                     screen: scope.modelData
                 }
             }
-
         }
     }
 }

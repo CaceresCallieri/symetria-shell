@@ -44,7 +44,6 @@ Singleton {
     /// docs/qml-pitfalls.md "readonly blocks ALL assignment").
     property bool streamingActive: Config.stt?.mode === "streaming"
 
-
     /// Emitted when an action is successfully dispatched.
     /// Used by Content.qml to animate the corresponding control button.
     /// sessionId identifies the job; empty means service-level action.
@@ -97,10 +96,10 @@ Singleton {
     // forget — a transient failure just defers cleanup to the next call.
     function _pruneHistory(): void {
         const hours = Config.stt?.cache?.retainSuccessHours ?? 24;
-        if (hours <= 0) return;
+        if (hours <= 0)
+            return;
         const mins = Math.round(hours * 60);
-        Quickshell.execDetached(["find", _historyDir, "-maxdepth", "1",
-            "-name", "session_*", "-mmin", `+${mins}`, "-delete"]);
+        Quickshell.execDetached(["find", _historyDir, "-maxdepth", "1", "-name", "session_*", "-mmin", `+${mins}`, "-delete"]);
     }
 
     // "Ducked = mic is hot": duck the master sink while audio is actively
@@ -126,7 +125,8 @@ Singleton {
     // per-job only (one-shot).
     readonly property string _deliveryMode: {
         const mode = Config.stt?.deliveryMode ?? "clipboard";
-        if (mode === "inject" || mode === "submit") return mode;
+        if (mode === "inject" || mode === "submit")
+            return mode;
         return "clipboard";
     }
 
@@ -155,12 +155,7 @@ Singleton {
                 actionTriggered(_job.sessionId, "retry");
             } else {
                 // Job is processing/delivering — inform the user
-                Toaster.toast(
-                    qsTr("STT is busy"),
-                    qsTr("Wait for the current job to finish"),
-                    "",
-                    Toast.Warning
-                );
+                Toaster.toast(qsTr("STT is busy"), qsTr("Wait for the current job to finish"), "", Toast.Warning);
             }
         }
     }
@@ -177,12 +172,7 @@ Singleton {
     /// Start a new recording job. Blocked if a job already exists.
     function start(): void {
         if (_job) {
-            Toaster.toast(
-                qsTr("STT is busy"),
-                qsTr("Wait for the current job to finish"),
-                "",
-                Toast.Warning
-            );
+            Toaster.toast(qsTr("STT is busy"), qsTr("Wait for the current job to finish"), "", Toast.Warning);
             return;
         }
         _startInternal();
@@ -201,8 +191,7 @@ Singleton {
         // both Config.stt.apiKey and OPENAI_API_KEY env var)
         const job = _createJob();
         if (job._resolvedApiKey === "") {
-            job._setErrorState("config", "API key not configured",
-                "Set OPENAI_API_KEY env var or stt.apiKey in shell.json", false);
+            job._setErrorState("config", "API key not configured", "Set OPENAI_API_KEY env var or stt.apiKey in shell.json", false);
             _job = job;
             return;
         }
@@ -242,7 +231,8 @@ Singleton {
 
     /// Stop the active recording and submit for transcription.
     function stop(): void {
-        if (!_activeRecording) return;
+        if (!_activeRecording)
+            return;
         actionTriggered(_activeRecording.sessionId, "stop");
         // Snapshot session hints onto the job before clearing service-level state.
         // The recording→stop path is async (recordProcess.onExited calls
@@ -257,7 +247,8 @@ Singleton {
 
     /// Toggle pause on the active recording.
     function pause(): void {
-        if (!_activeRecording) return;
+        if (!_activeRecording)
+            return;
         if (_activeRecording._state === "recording") {
             actionTriggered(_activeRecording.sessionId, "pause");
             _activeRecording.pause();
@@ -303,7 +294,8 @@ Singleton {
         //     there is race-free. Stuck processing is handled by
         //     processingTimeoutTimer → error instead.
         const target = _activeRecording ?? (_job?.state === "error" ? _job : null);
-        if (!target) return;
+        if (!target)
+            return;
         actionTriggered(target.sessionId, "cancel");
         // target === _activeRecording only when a live recording exists; on the
         // error-dismissal path target is _job and _activeRecording is already null.
@@ -332,7 +324,8 @@ Singleton {
     /// the animation window — SttService.active never flips false, so
     /// RecordingSessionManager doesn't auto-release the "stt" lock.
     function restart(): void {
-        if (!_activeRecording) return;
+        if (!_activeRecording)
+            return;
         actionTriggered(_activeRecording.sessionId, "restart");
         restartDelayTimer.stop();
         const job = _activeRecording;
@@ -363,7 +356,8 @@ Singleton {
 
     /// Retry the most recent errored job.
     function retry(): void {
-        if (!_job || _job.state !== "error" || _job.errorSource === "config") return;
+        if (!_job || _job.state !== "error" || _job.errorSource === "config")
+            return;
         actionTriggered(_job.sessionId, "retry");
         _job.retry();
     }
@@ -375,7 +369,8 @@ Singleton {
     /// This is the IPC entry point — emits actionTriggered for UI feedback.
     /// For direct UI interaction, use SttJob.setDeliveryChoice (no signal).
     function setDeliveryChoice(mode: string): void {
-        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
+        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit")
+            return;
         // No-job guard: the session-scoped Hyprland binds could be stale
         // after a shell crash (cleared on next startup), so ignore quietly.
         // Also ignore the parked closing job during the restart window —
@@ -384,7 +379,8 @@ Singleton {
             console.debug("[STT] setDeliveryChoice() ignored: no active job");
             return;
         }
-        if (_job._activeDeliveryChoice === mode) return;
+        if (_job._activeDeliveryChoice === mode)
+            return;
         _job._activeDeliveryChoice = mode;
         actionTriggered(_job.sessionId, "mode-" + mode);
     }
@@ -392,8 +388,10 @@ Singleton {
     /// Add a per-session vocabulary hint (shown as chip in the widget).
     function addSessionHint(word: string): void {
         const trimmed = word.trim();
-        if (trimmed === "") return;
-        if (_sessionVocabHints.some(h => h.toLowerCase() === trimmed.toLowerCase())) return;
+        if (trimmed === "")
+            return;
+        if (_sessionVocabHints.some(h => h.toLowerCase() === trimmed.toLowerCase()))
+            return;
         _sessionVocabHints = [..._sessionVocabHints, trimmed];
     }
 
@@ -404,7 +402,8 @@ Singleton {
 
     /// Toggle the vocabulary hints widget (only during active recording).
     function toggleVocabHints(): void {
-        if (!_activeRecording) return;
+        if (!_activeRecording)
+            return;
         vocabHintsVisible = !vocabHintsVisible;
     }
 
@@ -425,13 +424,8 @@ Singleton {
 
     // [key, stt IPC function] pairs. Kept in sync with the comment block in
     // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
-    readonly property var _sessionBinds: [
-        ["R", "restart"],
-        ["S", "mode clipboard"],   // S = Save to clipboard (not submit — that's Return)
-        ["I", "mode inject"],
-        ["Return", "mode submit"],
-        ["W", "hints"]
-    ]
+    readonly property var _sessionBinds: [["R", "restart"], ["S", "mode clipboard"]   // S = Save to clipboard (not submit — that's Return)
+        , ["I", "mode inject"], ["Return", "mode submit"], ["W", "hints"]]
 
     onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
 
@@ -443,8 +437,7 @@ Singleton {
         // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
         // binds on the same combo (which would double-fire the IPC command),
         // so a leftover bind from a crashed shell must be cleared first.
-        const cmds = _sessionBinds.map(b =>
-            `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
+        const cmds = _sessionBinds.map(b => `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
         Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
     }
 
@@ -456,7 +449,10 @@ Singleton {
     // Job lifecycle
     // ─────────────────────────────────────────────────────────────────────────
 
-    Component { id: jobComponent; SttJob {} }
+    Component {
+        id: jobComponent
+        SttJob {}
+    }
 
     function _createJob(): SttJob {
         const job = jobComponent.createObject(root, {
@@ -532,52 +528,36 @@ Singleton {
     Process {
         id: orphanSweepProcess
 
-        command: ["sh", "-c",
-            'mkdir -p "$RECOVERY_DIR"\n' +
-            'count=0\n' +
+        command: ["sh", "-c", 'mkdir -p "$RECOVERY_DIR"\n' + 'count=0\n' +
             // -mmin +1 age gate: a LIVE capture's WAV has an ever-fresh mtime
             // (pw-record flushes continuously), so a recording started inside
             // the startup window can never be swept out from under pw-record.
             // A crashed file's mtime froze at death and qualifies within a
             // minute. Filenames contain no whitespace (session_<digits>_...),
             // so the word-split loop over find output is safe.
-            'for f in $(find "$TEMP_DIR" -maxdepth 1 -name "session_*.wav" -mmin +1 2>/dev/null); do\n' +
-            '    base=$(basename "$f")\n' +
+            'for f in $(find "$TEMP_DIR" -maxdepth 1 -name "session_*.wav" -mmin +1 2>/dev/null); do\n' + '    base=$(basename "$f")\n' +
             // session id = digits between "session_" and the first "_" or "."
             // (working files: session_<id>_segment_<N>.wav and, when segments
             // were concatenated, session_<id>_combined.wav — all adopted)
-            '    sid=${base#session_}; sid=${sid%%[_.]*}\n' +
-            '    mv -n "$f" "$RECOVERY_DIR/$base"\n' +
+            '    sid=${base#session_}; sid=${sid%%[_.]*}\n' + '    mv -n "$f" "$RECOVERY_DIR/$base"\n' +
             // mv -n exits 0 even when it skips a name collision; only count
             // and sidecar-annotate files that actually left the temp dir.
-            '    [ -e "$f" ] && continue\n' +
-            '    sidecar="$RECOVERY_DIR/session_${sid}.json"\n' +
-            '    if [ ! -e "$sidecar" ]; then\n' +
-            '        printf \'{\\n  "sessionId": "%s",\\n  "recoveredAt": "%s",\\n  "reason": "orphaned recording adopted at shell startup",\\n  "audioFile": "%s"\\n}\\n\' "$sid" "$(date -Is)" "$base" > "$sidecar"\n' +
-            '    fi\n' +
-            '    count=$((count+1))\n' +
-            'done\n' +
-            'echo "$count"\n'
-        ]
+            '    [ -e "$f" ] && continue\n' + '    sidecar="$RECOVERY_DIR/session_${sid}.json"\n' + '    if [ ! -e "$sidecar" ]; then\n' + '        printf \'{\\n  "sessionId": "%s",\\n  "recoveredAt": "%s",\\n  "reason": "orphaned recording adopted at shell startup",\\n  "audioFile": "%s"\\n}\\n\' "$sid" "$(date -Is)" "$base" > "$sidecar"\n' + '    fi\n' + '    count=$((count+1))\n' + 'done\n' + 'echo "$count"\n']
         onExited: (code, status) => {
             if (code !== 0)
                 Logger.log("qml", "stt", "orphan-sweep-failed | code=" + code);
         }
         environment: ({
-            TEMP_DIR: root._tempDir,
-            RECOVERY_DIR: root._recoveryDir
-        })
+                TEMP_DIR: root._tempDir,
+                RECOVERY_DIR: root._recoveryDir
+            })
         stdout: StdioCollector {
             onStreamFinished: {
                 const count = parseInt(text.trim(), 10) || 0;
-                if (count === 0) return;
+                if (count === 0)
+                    return;
                 Logger.log("qml", "stt", "orphan-sweep | adopted=" + count);
-                Toaster.toast(
-                    qsTr("STT: Recovered interrupted audio"),
-                    qsTr("%1 file(s) from a previous session moved to %2").arg(count).arg(root._recoveryDir),
-                    "",
-                    Toast.Warning
-                );
+                Toaster.toast(qsTr("STT: Recovered interrupted audio"), qsTr("%1 file(s) from a previous session moved to %2").arg(count).arg(root._recoveryDir), "", Toast.Warning);
             }
         }
     }

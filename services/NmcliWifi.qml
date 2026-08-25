@@ -342,11 +342,7 @@ Singleton {
     // with no-secrets because Symmetria registers no NM secret agent.
     function connectWithSecret(ssid: string, password: string, callback: var): void {
         deleteProfilesForSsid(ssid, () => {
-            const cmd = [
-                "--wait", String(root.connectTimeoutSeconds),
-                NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid,
-                NmcliCore.connectionParamPassword, password
-            ];
+            const cmd = ["--wait", String(root.connectTimeoutSeconds), NmcliCore.nmcliCommandDevice, NmcliCore.nmcliCommandWifi, "connect", ssid, NmcliCore.connectionParamPassword, password];
             NmcliCore.executeCommand(cmd, result => {
                 if (!result.success && result.needsPassword) {
                     // The password was rejected, so the profile this very command

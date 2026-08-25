@@ -43,10 +43,7 @@ Item {
         IconImage {
             anchors.verticalCenter: parent.verticalCenter
             implicitSize: root.iconSize
-            source: Icons.resolveWindowIcon(
-                root.clientIpc?.class ?? "",
-                root.clientIpc?.title ?? ""
-            )
+            source: Icons.resolveWindowIcon(root.clientIpc?.class ?? "", root.clientIpc?.title ?? "")
         }
 
         PillSurface {

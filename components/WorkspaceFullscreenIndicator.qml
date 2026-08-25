@@ -21,7 +21,8 @@ MaterialIcon {
     // Uses Hypr.workspaceById() so the binding tracks workspace identity changes.
     readonly property bool hasMaximized: {
         const ws = Hypr.workspaceById(root.wsId);
-        if (!ws?.toplevels?.values) return false;
+        if (!ws?.toplevels?.values)
+            return false;
 
         for (const toplevel of ws.toplevels.values) {
             if (toplevel?.lastIpcObject?.fullscreen === 1)
@@ -45,7 +46,13 @@ MaterialIcon {
     color: Colours.palette.m3onSurface
     font.pointSize: Appearance.font.size.small
 
-    Behavior on opacity { Anim {} }
-    Behavior on scale { Anim {} }
-    Behavior on Layout.leftMargin { Anim {} }
+    Behavior on opacity {
+        Anim {}
+    }
+    Behavior on scale {
+        Anim {}
+    }
+    Behavior on Layout.leftMargin {
+        Anim {}
+    }
 }

@@ -17,7 +17,7 @@ DeviceDetails {
     required property Session session
     // intentional var: nullable — NmcliCore ethernet connection object from EthernetState.active
     readonly property var ethernetDevice: root.session.ethernet.active
-    
+
     device: ethernetDevice
 
     Component.onCompleted: {

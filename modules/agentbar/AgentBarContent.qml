@@ -49,7 +49,10 @@ Item {
             }
             merged[group.project] = merged[group.project].concat(group.agents);
         }
-        return order.map(name => ({ project: name, agents: merged[name] }));
+        return order.map(name => ({
+                    project: name,
+                    agents: merged[name]
+                }));
     }
 
     RowLayout {

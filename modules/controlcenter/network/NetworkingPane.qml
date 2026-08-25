@@ -153,7 +153,7 @@ Item {
         rightContent: Component {
             Item {
                 id: rightPaneItem
-                
+
                 property var ethernetPane: root.session.ethernet.active // intentional var: nullable — NmcliCore ethernet object
                 property var wirelessPane: root.session.network.active // intentional var: nullable — NmcliWifi network JS object
                 property var pane: ethernetPane || wirelessPane // intentional var: nullable polymorphic — either ethernet or wireless object
@@ -162,8 +162,10 @@ Item {
                 property Component nextComponent: settingsComponent
 
                 function getComponentForPane() {
-                    if (ethernetPane) return ethernetDetailsComponent;
-                    if (wirelessPane) return wirelessDetailsComponent;
+                    if (ethernetPane)
+                        return ethernetDetailsComponent;
+                    if (wirelessPane)
+                        return wirelessDetailsComponent;
                     return settingsComponent;
                 }
 

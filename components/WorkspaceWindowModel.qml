@@ -29,13 +29,7 @@ QtObject {
     // fullscreen included to trigger re-sort when entering/exiting fullscreen — ensures
     // the tiled order cache in AppIconsProcessor is populated and position sort resumes promptly.
     // intentional var: JS Set for O(1) event name lookup (no QML Set type)
-    readonly property var _windowLayoutEvents: new Set([
-        "openwindow", "closewindow",
-        "movewindow", "movewindowv2",
-        "togglegroup", "moveintogroup", "moveoutofgroup",
-        "activewindowv2", "changegroupactive",
-        "fullscreen"
-    ])
+    readonly property var _windowLayoutEvents: new Set(["openwindow", "closewindow", "movewindow", "movewindowv2", "togglegroup", "moveintogroup", "moveoutofgroup", "activewindowv2", "changegroupactive", "fullscreen"])
 
     function update(): void {
         const result = AppIconsProcessor.processClients(root.workspaceId, Hypr.toplevels.values);

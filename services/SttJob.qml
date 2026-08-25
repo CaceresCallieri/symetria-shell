@@ -74,10 +74,10 @@ QtObject {
     // ── Signals ───────────────────────────────────��────────────────────
 
     /// Emitted when job is done and should be removed after success delay
-    signal finished()
+    signal finished
 
     /// Emitted when transcription succeeds and job is ready for delivery
-    signal readyForDelivery()
+    signal readyForDelivery
 
     // ── Config properties (only used within the job) ───────────────────
 
@@ -91,7 +91,8 @@ QtObject {
     // API key: config value takes priority, then environment variable
     readonly property string _resolvedApiKey: {
         const configKey = Config.stt?.apiKey ?? "";
-        if (configKey !== "") return configKey;
+        if (configKey !== "")
+            return configKey;
         return Quickshell.env("OPENAI_API_KEY") || "";
     }
 
@@ -197,7 +198,8 @@ QtObject {
 
     // Current segment file path
     readonly property string _currentSegmentPath: {
-        if (sessionId === "") return "";
+        if (sessionId === "")
+            return "";
         return `${SttService._tempDir}/session_${sessionId}_segment_${_segmentCounter}.wav`;
     }
 
@@ -205,13 +207,11 @@ QtObject {
 
     /// Stop recording and submit for transcription.
     function stop(): void {
-        if (_state !== "recording" && _state !== "paused") return;
+        if (_state !== "recording" && _state !== "paused")
+            return;
         Logger.log("qml", "stt", "job.stop | id=" + sessionId + " segments=" + _segmentFiles.length);
 
-        console.log("[STT:D02] job.stop() | target:", _targetWindowAddress,
-            "| class:", _targetWindowClass,
-            "| nvimSocket:", _targetNvimSocket,
-            "| buf:", _targetNvimActiveBuf);
+        console.log("[STT:D02] job.stop() | target:", _targetWindowAddress, "| class:", _targetWindowClass, "| nvimSocket:", _targetNvimSocket, "| buf:", _targetNvimActiveBuf);
 
         if (_state === "paused") {
             console.log("[STT:D03] paused path → direct _submitForTranscription()");
@@ -229,7 +229,8 @@ QtObject {
 
     /// Pause if recording.
     function pause(): void {
-        if (_state !== "recording") return;
+        if (_state !== "recording")
+            return;
         _pendingRecordAction = "pause";
         levelMonitorProcess.running = false;
         recordProcess.running = false;
@@ -238,7 +239,8 @@ QtObject {
 
     /// Resume from pause.
     function resume(): void {
-        if (_state !== "paused") return;
+        if (_state !== "paused")
+            return;
         _segmentCounter++;
         _startRecording();
         // Assign _state last so on_StateChanged fires with _recordingStartTime
@@ -292,11 +294,16 @@ QtObject {
         _partialTranscript = "";
         _stopAllTimers();
 
-        if (recordProcess.running) recordProcess.signal(9);
-        if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (streamProcess.running) streamProcess.signal(9);
-        if (transcribeProcess.running) transcribeProcess.signal(9);
-        if (concatProcess.running) concatProcess.signal(9);
+        if (recordProcess.running)
+            recordProcess.signal(9);
+        if (levelMonitorProcess.running)
+            levelMonitorProcess.running = false;
+        if (streamProcess.running)
+            streamProcess.signal(9);
+        if (transcribeProcess.running)
+            transcribeProcess.signal(9);
+        if (concatProcess.running)
+            concatProcess.signal(9);
 
         _cleanupTempFiles();
         if (dropRecovery)
@@ -306,7 +313,8 @@ QtObject {
 
     /// Retry failed transcription with the same audio file.
     function retry(): void {
-        if (_state !== "error") return;
+        if (_state !== "error")
+            return;
         Logger.log("qml", "stt", "job.retry | id=" + sessionId);
 
         // A silent capture is not retryable — re-transcribing the SAME audio can
@@ -337,8 +345,10 @@ QtObject {
     /// next job). Direct-UI entry point — no actionTriggered signal emitted.
     /// For IPC with UI feedback, use SttService.setDeliveryChoice instead.
     function setDeliveryChoice(mode: string): void {
-        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
-        if (_activeDeliveryChoice === mode) return;
+        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit")
+            return;
+        if (_activeDeliveryChoice === mode)
+            return;
         _activeDeliveryChoice = mode;
     }
 
@@ -380,8 +390,7 @@ QtObject {
             _targetWindowAddress = `0x${toplevel.address}`;
             _targetWindowClass = toplevel.lastIpcObject?.class ?? "";
             _targetWindowPid = toplevel.lastIpcObject?.pid ?? -1;
-            console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress,
-                "| class:", _targetWindowClass, "| pid:", _targetWindowPid);
+            console.log("[STT:D04] _captureTargetWindow() captured | address:", _targetWindowAddress, "| class:", _targetWindowClass, "| pid:", _targetWindowPid);
         } else {
             console.warn("[STT:D04] _captureTargetWindow() — NO activeToplevel!");
         }
@@ -389,9 +398,7 @@ QtObject {
 
     /// Clear the AgentService STT target highlight if this job is the current owner.
     function _clearSttTargetIfOwned(): void {
-        if (_targetWindowPid > 0 &&
-            AgentService.sttTargetTerminalPid === _targetWindowPid &&
-            AgentService.sttTargetBufId === _targetNvimActiveBuf) {
+        if (_targetWindowPid > 0 && AgentService.sttTargetTerminalPid === _targetWindowPid && AgentService.sttTargetBufId === _targetNvimActiveBuf) {
             AgentService.clearSttTarget();
         }
     }
@@ -403,10 +410,12 @@ QtObject {
         _targetInjectVia = "";
         _targetIdePid = -1;
 
-        if (!AgentService.bridgeRunning) return;
+        if (!AgentService.bridgeRunning)
+            return;
 
         const agent = AgentService.activeAgentForTerminal(_targetWindowPid);
-        if (!agent) return;
+        if (!agent)
+            return;
 
         _targetInjectVia = agent.inject_via ?? "";
         if (_targetInjectVia === "bridge") {
@@ -419,8 +428,7 @@ QtObject {
             _targetNvimSocket = AgentService.nvimSocketForAgent(agent);
         }
         _targetNvimActiveBuf = agent.buf ?? -1;
-        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket
-                   + " injectVia=" + _targetInjectVia + " idePid=" + _targetIdePid);
+        Logger.log("qml", "stt", "agent-target | buf=" + agent.buf + " socket=" + _targetNvimSocket + " injectVia=" + _targetInjectVia + " idePid=" + _targetIdePid);
 
         if (_activeDeliveryChoice !== "clipboard") {
             AgentService.setSttTarget(_targetWindowPid, agent.buf ?? -1);
@@ -432,12 +440,36 @@ QtObject {
         _errorRaw = stderrText;
 
         const patterns = [
-            { re: /ERROR:401/,     detail: "Authentication failed",   hint: "Check your API key" },
-            { re: /ERROR:429/,     detail: "Quota exceeded",          hint: "Check your API plan limits" },
-            { re: /ERROR:5\d\d/,   detail: "API server error",        hint: "Try again later" },
-            { re: /Network error/, detail: "Network error",           hint: "Check your connection" },
-            { re: /timed out/i,    detail: "Connection timed out",    hint: "Check your network" },
-            { re: /Missing/,       detail: "Configuration error",     hint: "Check STT settings" },
+            {
+                re: /ERROR:401/,
+                detail: "Authentication failed",
+                hint: "Check your API key"
+            },
+            {
+                re: /ERROR:429/,
+                detail: "Quota exceeded",
+                hint: "Check your API plan limits"
+            },
+            {
+                re: /ERROR:5\d\d/,
+                detail: "API server error",
+                hint: "Try again later"
+            },
+            {
+                re: /Network error/,
+                detail: "Network error",
+                hint: "Check your connection"
+            },
+            {
+                re: /timed out/i,
+                detail: "Connection timed out",
+                hint: "Check your network"
+            },
+            {
+                re: /Missing/,
+                detail: "Configuration error",
+                hint: "Check STT settings"
+            },
         ];
 
         for (const p of patterns) {
@@ -454,13 +486,13 @@ QtObject {
 
     /// Whether the current error is transient and safe to auto-retry.
     function _isTransientError(): bool {
-        if (_errorSource === "timeout") return true;
-        if (_errorSource !== "api") return false;
+        if (_errorSource === "timeout")
+            return true;
+        if (_errorSource !== "api")
+            return false;
         // Network failures, server errors, and generic failures are transient.
         // Auth (401) and quota (429) are permanent — user must fix config/plan.
-        return _errorDetail !== "Authentication failed"
-            && _errorDetail !== "Quota exceeded"
-            && _errorDetail !== "Configuration error";
+        return _errorDetail !== "Authentication failed" && _errorDetail !== "Quota exceeded" && _errorDetail !== "Configuration error";
     }
 
     /// Attempt auto-retry if the error is transient and retries remain.
@@ -477,9 +509,7 @@ QtObject {
         }
 
         _autoRetryCount++;
-        Logger.log("qml", "stt", "auto-retry | id=" + sessionId
-            + " attempt=" + _autoRetryCount + "/" + _maxAutoRetries
-            + " detail=" + _errorDetail);
+        Logger.log("qml", "stt", "auto-retry | id=" + sessionId + " attempt=" + _autoRetryCount + "/" + _maxAutoRetries + " detail=" + _errorDetail);
 
         // Return to processing state immediately so the UI doesn't flash error
         _clearErrorState();
@@ -498,12 +528,7 @@ QtObject {
         const captureSource = Config.stt?.recording?.source ?? "";
 
         recordProcess.capturedSegmentPath = segmentPath;
-        const args = [
-            "pw-record",
-            "--format=s16",
-            `--rate=${sampleRate}`,
-            `--channels=${channels}`
-        ];
+        const args = ["pw-record", "--format=s16", `--rate=${sampleRate}`, `--channels=${channels}`];
         if (captureSource !== "")
             args.push(`--target=${captureSource}`);
         args.push(segmentPath);
@@ -528,24 +553,13 @@ QtObject {
             job._partialTranscript = "";
             const sb = Config.stt?.streaming?.backend ?? "local";
             const partialInterval = Config.stt?.streaming?.partialInterval ?? 1.5;
-            const common = [
-                "--capture", "--source", captureSource,
-                "--sample-rate", String(sampleRate),
-                "--channels", String(channels),
-                "--partial-interval", String(partialInterval)
-            ];
+            const common = ["--capture", "--source", captureSource, "--sample-rate", String(sampleRate), "--channels", String(channels), "--partial-interval", String(partialInterval)];
             if (sb === "local") {
                 // Local faster-whisper via the venv wrapper, which sets
                 // LD_LIBRARY_PATH (cuBLAS/cuDNN) before exec. Language is left
                 // to auto-detect (best for Spanglish — see stt-streaming-spec).
                 const lc = Config.stt?.streaming?.local;
-                streamProcess.command = [
-                    job._streamLocalScript,
-                    "--backend", lc?.engine ?? "faster-whisper",
-                    "--model", lc?.model ?? "large-v3",
-                    "--device", lc?.device ?? "cuda",
-                    "--compute-type", lc?.computeType ?? "float16"
-                ].concat(common);
+                streamProcess.command = [job._streamLocalScript, "--backend", lc?.engine ?? "faster-whisper", "--model", lc?.model ?? "large-v3", "--device", lc?.device ?? "cuda", "--compute-type", lc?.computeType ?? "float16"].concat(common);
             } else {
                 // mock (and future cloud backends) need no venv.
                 streamProcess.command = ["python3", job._streamScript, "--backend", sb].concat(common);
@@ -581,9 +595,9 @@ QtObject {
                 args.push(f);
             }
             let filterInputs = "";
-            for (let i = 0; i < n; i++) filterInputs += `[${i}:a]`;
-            args.push("-filter_complex", `${filterInputs}concat=n=${n}:v=0:a=1[out]`,
-                      "-map", "[out]", "-y", outputPath);
+            for (let i = 0; i < n; i++)
+                filterInputs += `[${i}:a]`;
+            args.push("-filter_complex", `${filterInputs}concat=n=${n}:v=0:a=1[out]`, "-map", "[out]", "-y", outputPath);
 
             concatProcess.command = args;
             concatProcess.running = true;
@@ -616,12 +630,10 @@ QtObject {
         const allHints = [...new Set([...persistentHints, ...sessionHints])];
 
         transcribeProcess.environment = ({
-            STT_API_KEY: _resolvedApiKey,
-            STT_VOCABULARY_HINTS: allHints.join(", ")
-        });
-        transcribeProcess.command = [
-            _transcribeScript, audioFile, model
-        ];
+                STT_API_KEY: _resolvedApiKey,
+                STT_VOCABULARY_HINTS: allHints.join(", ")
+            });
+        transcribeProcess.command = [_transcribeScript, audioFile, model];
         transcribeProcess.running = true;
     }
 
@@ -668,10 +680,7 @@ QtObject {
         // The pid guard matters: inject_via === "bridge" with an unresolved
         // pid would skip wl-copy AND fail the direct path, losing the text
         // with no clipboard fallback.
-        const rpcEligible = _targetWindowAddress !== ""
-            && (_targetNvimSocket !== ""
-                || (_targetInjectVia === "bridge" && _targetIdePid > 0))
-            && _isTerminalClass(_targetWindowClass);
+        const rpcEligible = _targetWindowAddress !== "" && (_targetNvimSocket !== "" || (_targetInjectVia === "bridge" && _targetIdePid > 0)) && _isTerminalClass(_targetWindowClass);
 
         if (rpcEligible) {
             console.log("[STT:D11] → delivering via RPC-only (skipping wl-copy) | id:", sessionId, "textLength:", _transcribedText.length);
@@ -692,7 +701,8 @@ QtObject {
     /// (otherwise we'd skip wl-copy assuming RPC will fire, but the script
     /// would fall through and fail on empty clipboard).
     function _isTerminalClass(cls: string): bool {
-        if (!cls) return false;
+        if (!cls)
+            return false;
         const lc = cls.toLowerCase();
         return /(?:ghostty|warp|wezterm|alacritty|kitty|foot|konsole|xterm|urxvt|termite|sakura|tilix|terminator|st-|symmetria-ide)/.test(lc);
     }
@@ -707,7 +717,8 @@ QtObject {
     /// skip wl-copy, and a dictation aimed at the installed app would then be
     /// lost with no clipboard to fall back on.
     function _isMesuraClass(cls: string): bool {
-        if (!cls) return false;
+        if (!cls)
+            return false;
         return /^t3code$/.test(cls.toLowerCase());
     }
 
@@ -748,34 +759,30 @@ QtObject {
         if (_targetWindowClass === "")
             console.warn("[STT:D14] Window class unknown; inject will use Ctrl+V");
         const cmd = [_injectScript, _targetWindowAddress, _targetWindowClass];
-        if (_activeDeliveryChoice === "submit") cmd.push("submit");
+        if (_activeDeliveryChoice === "submit")
+            cmd.push("submit");
         Logger.log("qml", "stt", "inject-start | id=" + sessionId + " target=" + _targetWindowAddress + " rpcOnly=" + rpcOnly + " forceSendshortcut=" + forceSendshortcut);
         // Effective socket/IDE-pid: blanked when forcing sendshortcut so
         // the script can't accidentally take a direct-injection path even
         // if a target was resolved earlier.
         const effectiveSocket = forceSendshortcut ? "" : _targetNvimSocket;
-        const effectiveIdePid = (forceSendshortcut || _targetInjectVia !== "bridge")
-            ? -1 : _targetIdePid;
+        const effectiveIdePid = (forceSendshortcut || _targetInjectVia !== "bridge") ? -1 : _targetIdePid;
         // Prepend voice tag for agent-backed terminals (e.g. Claude Code)
         // so the LLM knows the input is voice-transcribed. Suppressed when
         // we're forcing sendshortcut (clipboard mode = no agent awareness).
-        const voicePrefix = (Config.stt?.voiceTag && (effectiveSocket !== "" || effectiveIdePid > 0))
-            ? Config.stt?.voiceTag : "";
+        const voicePrefix = (Config.stt?.voiceTag && (effectiveSocket !== "" || effectiveIdePid > 0)) ? Config.stt?.voiceTag : "";
         injectProcess.environment = ({
-            STT_EXPECTED_TEXT: voicePrefix + _transcribedText,
-            STT_NVIM_SOCKET: effectiveSocket,
-            STT_NVIM_ACTIVE_BUF: forceSendshortcut ? "-1" : _targetNvimActiveBuf.toString(),
-            STT_IDE_PID: effectiveIdePid > 0 ? effectiveIdePid.toString() : "",
-            STT_IDE_BUF: effectiveIdePid > 0 ? _targetNvimActiveBuf.toString() : "",
-            // Mesura Code takes the window pid and nothing else — it has no
-            // agent panes, so there is no buf to address. Suppressed in
-            // clipboard mode, like every other smart-routing hint.
-            STT_MESURA_PID: (!forceSendshortcut
-                             && _isMesuraClass(_targetWindowClass)
-                             && _targetWindowPid > 0)
-                ? _targetWindowPid.toString() : "",
-            STT_RPC_ONLY: rpcOnly ? "1" : ""
-        });
+                STT_EXPECTED_TEXT: voicePrefix + _transcribedText,
+                STT_NVIM_SOCKET: effectiveSocket,
+                STT_NVIM_ACTIVE_BUF: forceSendshortcut ? "-1" : _targetNvimActiveBuf.toString(),
+                STT_IDE_PID: effectiveIdePid > 0 ? effectiveIdePid.toString() : "",
+                STT_IDE_BUF: effectiveIdePid > 0 ? _targetNvimActiveBuf.toString() : "",
+                // Mesura Code takes the window pid and nothing else — it has no
+                // agent panes, so there is no buf to address. Suppressed in
+                // clipboard mode, like every other smart-routing hint.
+                STT_MESURA_PID: (!forceSendshortcut && _isMesuraClass(_targetWindowClass) && _targetWindowPid > 0) ? _targetWindowPid.toString() : "",
+                STT_RPC_ONLY: rpcOnly ? "1" : ""
+            });
         injectProcess.command = cmd;
         injectProcess.running = true;
     }
@@ -783,8 +790,7 @@ QtObject {
     /// Delete temp files for this session.
     function _cleanupTempFiles(): void {
         if (sessionId !== "") {
-            Quickshell.execDetached(["find", SttService._tempDir, "-maxdepth", "1",
-                "-name", `session_${sessionId}_*`, "-delete"]);
+            Quickshell.execDetached(["find", SttService._tempDir, "-maxdepth", "1", "-name", `session_${sessionId}_*`, "-delete"]);
         }
     }
 
@@ -795,9 +801,12 @@ QtObject {
     /// deleting oldest pairs. Called once per job, only when a final error
     /// has been reached (auto-retries exhausted).
     function _persistRecovery(): void {
-        if (sessionId === "" || _currentAudioFile === "") return;
-        if (!(Config.stt?.cache?.enabled ?? true)) return;
-        if (recoveryPersistProcess.running) return;
+        if (sessionId === "" || _currentAudioFile === "")
+            return;
+        if (!(Config.stt?.cache?.enabled ?? true))
+            return;
+        if (recoveryPersistProcess.running)
+            return;
 
         const sidecar = {
             sessionId: sessionId,
@@ -836,9 +845,12 @@ QtObject {
     /// Prunes by age + count so disk stays bounded. The tmpfs working copy is
     /// removed afterwards in historyPersistProcess.onExited.
     function _persistHistory(): void {
-        if (sessionId === "" || _currentAudioFile === "") return;
-        if (!(Config.stt?.cache?.enabled ?? true)) return;
-        if (historyPersistProcess.running) return;
+        if (sessionId === "" || _currentAudioFile === "")
+            return;
+        if (!(Config.stt?.cache?.enabled ?? true))
+            return;
+        if (historyPersistProcess.running)
+            return;
 
         const sidecar = {
             sessionId: sessionId,
@@ -871,7 +883,8 @@ QtObject {
     /// up the `latest.*` symlinks if they pointed at this session, so they
     /// don't dangle after the target is deleted.
     function _cleanupRecovery(): void {
-        if (sessionId === "") return;
+        if (sessionId === "")
+            return;
         // Defer cleanup if persistence is mid-flight — otherwise rm -f may
         // fire before cp completes, leaving an orphan file. onExited calls
         // us back when the persist Process has finished.
@@ -883,16 +896,7 @@ QtObject {
         // Use `env KEY=val ... sh -c` to set shell variables cleanly —
         // avoids embedding sessionId / path in the script body with all
         // the quote-escaping risks that entails.
-        Quickshell.execDetached([
-            "env",
-            "RECOVERY_DIR=" + SttService._recoveryDir,
-            "SESSION_ID=" + sessionId,
-            "sh", "-c",
-            'latest_wav="$RECOVERY_DIR/latest.wav"\n' +
-            'latest_json="$RECOVERY_DIR/latest.json"\n' +
-            'if [ "$(readlink "$latest_wav" 2>/dev/null)" = "session_$SESSION_ID.wav" ]; then rm -f "$latest_wav" "$latest_json"; fi\n' +
-            'rm -f "$RECOVERY_DIR/session_$SESSION_ID.wav" "$RECOVERY_DIR/session_$SESSION_ID.json"\n'
-        ]);
+        Quickshell.execDetached(["env", "RECOVERY_DIR=" + SttService._recoveryDir, "SESSION_ID=" + sessionId, "sh", "-c", 'latest_wav="$RECOVERY_DIR/latest.wav"\n' + 'latest_json="$RECOVERY_DIR/latest.json"\n' + 'if [ "$(readlink "$latest_wav" 2>/dev/null)" = "session_$SESSION_ID.wav" ]; then rm -f "$latest_wav" "$latest_json"; fi\n' + 'rm -f "$RECOVERY_DIR/session_$SESSION_ID.wav" "$RECOVERY_DIR/session_$SESSION_ID.json"\n']);
     }
 
     function _stopAllTimers(): void {
@@ -921,17 +925,25 @@ QtObject {
         // recording when the shell is SIGTERM'd mid-dictation. SttService's
         // startup orphan sweep adopts preserved files into the recovery dir.
         const terminalState = _state === "success" || _state === "error" || _state === "idle";
-        if (sessionId !== "" && terminalState) _cleanupTempFiles();
+        if (sessionId !== "" && terminalState)
+            _cleanupTempFiles();
         // SIGTERM (not SIGKILL) so pw-record finalizes the WAV header before
         // exiting — matches the normal stop path; a SIGKILLed capture leaves
         // the RIFF sizes unset and some decoders reject the file.
-        if (recordProcess.running) recordProcess.signal(15);
-        if (levelMonitorProcess.running) levelMonitorProcess.running = false;
-        if (streamProcess.running) streamProcess.signal(9);
-        if (transcribeProcess.running) transcribeProcess.signal(9);
-        if (concatProcess.running) concatProcess.signal(9);
-        if (clipboardProcess.running) clipboardProcess.running = false;
-        if (injectProcess.running) injectProcess.running = false;
+        if (recordProcess.running)
+            recordProcess.signal(15);
+        if (levelMonitorProcess.running)
+            levelMonitorProcess.running = false;
+        if (streamProcess.running)
+            streamProcess.signal(9);
+        if (transcribeProcess.running)
+            transcribeProcess.signal(9);
+        if (concatProcess.running)
+            concatProcess.signal(9);
+        if (clipboardProcess.running)
+            clipboardProcess.running = false;
+        if (injectProcess.running)
+            injectProcess.running = false;
     }
 
     // ── State change handlers ──────────────────────────────���───────────
@@ -969,7 +981,8 @@ QtObject {
     // Does not fire at job creation: createObject initial-property values are
     // set during construction without emitting change signals.
     on_ActiveDeliveryChoiceChanged: {
-        if (_state === "idle") return;
+        if (_state === "idle")
+            return;
         if (_activeDeliveryChoice === "clipboard") {
             AgentService.clearSttTarget();
         } else if (_targetWindowPid > 0 && _targetNvimActiveBuf >= 0) {
@@ -1041,11 +1054,10 @@ QtObject {
         onExited: (code, status) => {
             const action = job._pendingRecordAction;
             job._pendingRecordAction = "";
-            console.log("[STT:D08] recordProcess.onExited | id:", job.sessionId,
-                "| code:", code, "| action:", action || "(none)",
-                "| segPath:", capturedSegmentPath);
+            console.log("[STT:D08] recordProcess.onExited | id:", job.sessionId, "| code:", code, "| action:", action || "(none)", "| segPath:", capturedSegmentPath);
 
-            if (action === "cancel") return;
+            if (action === "cancel")
+                return;
 
             // Register completed segment file
             const segPath = capturedSegmentPath;
@@ -1106,7 +1118,8 @@ QtObject {
         stdout: SplitParser {
             onRead: data => {
                 const line = data.trim();
-                if (line === "") return;
+                if (line === "")
+                    return;
                 let ev;
                 try {
                     ev = JSON.parse(line);
@@ -1125,7 +1138,8 @@ QtObject {
     readonly property Process concatProcess: Process {
         onExited: (code, status) => {
             console.log("[STT:D20] concatProcess.onExited | id:", job.sessionId, "| code:", code);
-            if (job._state !== "processing") return;
+            if (job._state !== "processing")
+                return;
 
             if (code !== 0) {
                 console.error("[STT:D20] ffmpeg concat FAILED (exit", code + ")");
@@ -1187,8 +1201,7 @@ QtObject {
                 // never triggered. The else-if branch provides the immediate delete
                 // in that case. _persistHistory() has a redundant internal guard as
                 // defence-in-depth only.
-                if ((Config.stt?.cache?.retainSuccessHours ?? 24) > 0
-                        && (Config.stt?.cache?.enabled ?? true))
+                if ((Config.stt?.cache?.retainSuccessHours ?? 24) > 0 && (Config.stt?.cache?.enabled ?? true))
                     job._persistHistory();
                 else if (Config.stt?.cache?.deleteOnSuccess ?? true)
                     job._cleanupTempFiles();
@@ -1214,8 +1227,7 @@ QtObject {
                     // manually retried 9× to no avail.) retry() guards source
                     // "silence" too, so the toggle/IPC paths can't restart it either.
                     Logger.log("qml", "stt", "silence | id=" + job.sessionId + " — empty transcript, not retrying");
-                    job._setErrorState("silence", "No speech detected",
-                        "Mic captured silence — check your input device", true);
+                    job._setErrorState("silence", "No speech detected", "Mic captured silence — check your input device", true);
                 } else {
                     // Real failure path: code != 0 (stderr already classified by
                     // _categorizeApiError) or an unexpected empty-on-error. Log here
@@ -1267,28 +1279,15 @@ QtObject {
     // without needing to chain multiple Processes.
     readonly property Process recoveryPersistProcess: Process {
         property string savedAudioPath: ""
-        command: [
-            "sh", "-c",
-            'set -e\n' +
-            'mkdir -p "$RECOVERY_DIR"\n' +
-            'cp -f "$SRC_AUDIO" "$RECOVERY_DIR/session_$SESSION_ID.wav"\n' +
-            'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$RECOVERY_DIR/session_$SESSION_ID.json"\n' +
-            'ln -sfn "session_$SESSION_ID.wav" "$RECOVERY_DIR/latest.wav"\n' +
-            'ln -sfn "session_$SESSION_ID.json" "$RECOVERY_DIR/latest.json"\n' +
+        command: ["sh", "-c", 'set -e\n' + 'mkdir -p "$RECOVERY_DIR"\n' + 'cp -f "$SRC_AUDIO" "$RECOVERY_DIR/session_$SESSION_ID.wav"\n' + 'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$RECOVERY_DIR/session_$SESSION_ID.json"\n' + 'ln -sfn "session_$SESSION_ID.wav" "$RECOVERY_DIR/latest.wav"\n' + 'ln -sfn "session_$SESSION_ID.json" "$RECOVERY_DIR/latest.json"\n' +
             // Evict oldest sidecar+audio pairs when over maxEntries. `ls -t`
             // lists newest-first; tailing from MAX+1 gives us just the
             // overflow, then we delete each .json with its matching .wav.
-            'ls -t "$RECOVERY_DIR"/session_*.json 2>/dev/null | tail -n +$((MAX_ENTRIES + 1)) | while read -r f; do rm -f "$f" "${f%.json}.wav"; done\n'
-        ]
+            'ls -t "$RECOVERY_DIR"/session_*.json 2>/dev/null | tail -n +$((MAX_ENTRIES + 1)) | while read -r f; do rm -f "$f" "${f%.json}.wav"; done\n']
         onExited: (code, status) => {
             if (code === 0) {
                 Logger.log("qml", "stt", "recovery-saved | id=" + job.sessionId + " path=" + savedAudioPath);
-                Toaster.toast(
-                    qsTr("STT: Recording saved for recovery"),
-                    savedAudioPath,
-                    "save",
-                    Toast.Warning
-                );
+                Toaster.toast(qsTr("STT: Recording saved for recovery"), savedAudioPath, "save", Toast.Warning);
             } else {
                 Logger.log("qml", "stt", "recovery-persist-failed | id=" + job.sessionId + " code=" + code);
                 console.error("[STT:D21] Recovery persist failed (exit", code + ")");
@@ -1303,22 +1302,16 @@ QtObject {
     // remove the tmpfs working copy. Single `sh -c` so steps stay ordered
     // (mkdir → cp → sidecar → age-prune → count-cap) without chaining Processes.
     readonly property Process historyPersistProcess: Process {
-        command: [
-            "sh", "-c",
-            'set -e\n' +
-            'mkdir -p "$HISTORY_DIR"\n' +
+        command: ["sh", "-c", 'set -e\n' + 'mkdir -p "$HISTORY_DIR"\n' +
             // Write to a temp name then atomically rename, so a job destroyed
             // mid-copy can't leave a truncated .wav that looks complete.
-            'cp -f "$SRC_AUDIO" "$HISTORY_DIR/session_$SESSION_ID.wav.tmp"\n' +
-            'mv -f "$HISTORY_DIR/session_$SESSION_ID.wav.tmp" "$HISTORY_DIR/session_$SESSION_ID.wav"\n' +
-            'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$HISTORY_DIR/session_$SESSION_ID.json.tmp" && mv -f "$HISTORY_DIR/session_$SESSION_ID.json.tmp" "$HISTORY_DIR/session_$SESSION_ID.json"\n' +
+            'cp -f "$SRC_AUDIO" "$HISTORY_DIR/session_$SESSION_ID.wav.tmp"\n' + 'mv -f "$HISTORY_DIR/session_$SESSION_ID.wav.tmp" "$HISTORY_DIR/session_$SESSION_ID.wav"\n' + 'printf \'%s\' "$SIDECAR_B64" | base64 -d > "$HISTORY_DIR/session_$SESSION_ID.json.tmp" && mv -f "$HISTORY_DIR/session_$SESSION_ID.json.tmp" "$HISTORY_DIR/session_$SESSION_ID.json"\n' +
             // Age sweep: drop anything older than the retention window. Done here
             // (not just at startup) so a long-running shell still prunes.
             'find "$HISTORY_DIR" -maxdepth 1 -name \'session_*\' -mmin +"$RETAIN_MIN" -delete 2>/dev/null || true\n' +
             // Count backstop: evict oldest pairs beyond MAX_ENTRIES so a busy
             // day can\'t fill disk before the age sweep catches up.
-            'ls -t "$HISTORY_DIR"/session_*.json 2>/dev/null | tail -n +$((MAX_ENTRIES + 1)) | while read -r f; do rm -f "$f" "${f%.json}.wav"; done\n'
-        ]
+            'ls -t "$HISTORY_DIR"/session_*.json 2>/dev/null | tail -n +$((MAX_ENTRIES + 1)) | while read -r f; do rm -f "$f" "${f%.json}.wav"; done\n']
         onExited: (code, status) => {
             if (code === 0)
                 Logger.log("qml", "stt", "history-saved | id=" + job.sessionId + " path=" + SttService._historyDir + "/session_" + job.sessionId + ".wav");
@@ -1338,7 +1331,8 @@ QtObject {
         stdout: SplitParser {
             onRead: data => {
                 const line = data.trim();
-                if (!line.startsWith("{")) return;
+                if (!line.startsWith("{"))
+                    return;
                 try {
                     const result = JSON.parse(line);
                     job._injectionPath = result.path ?? "";
@@ -1346,21 +1340,11 @@ QtObject {
                     job._injectionSubmitted = result.submitted ?? false;
 
                     if (result.downgraded) {
-                        Toaster.toast(
-                            qsTr("STT: Submit downgraded"),
-                            qsTr("Agent RPC unavailable — text pasted but not submitted"),
-                            "",
-                            Toast.Warning
-                        );
+                        Toaster.toast(qsTr("STT: Submit downgraded"), qsTr("Agent RPC unavailable — text pasted but not submitted"), "", Toast.Warning);
                     } else if ((result.path === "rpc" || result.path === "direct") && !result.submitted) {
                         const userRequestedSubmit = job._activeDeliveryChoice === "submit";
                         if (userRequestedSubmit) {
-                            Toaster.toast(
-                                qsTr("STT: Submit unconfirmed"),
-                                qsTr("Text injected but Enter delivery could not be confirmed"),
-                                "",
-                                Toast.Warning
-                            );
+                            Toaster.toast(qsTr("STT: Submit unconfirmed"), qsTr("Text injected but Enter delivery could not be confirmed"), "", Toast.Warning);
                         }
                     }
                     Logger.log("qml", "stt", "inject-result | id=" + job.sessionId + " " + JSON.stringify(result));
@@ -1375,8 +1359,7 @@ QtObject {
             }
         }
         onExited: (code, status) => {
-            console.log("[STT:D16] injectProcess.onExited | id:", job.sessionId,
-                "| code:", code, "| path:", job._injectionPath, "| ranWlCopy:", job._ranWlCopy);
+            console.log("[STT:D16] injectProcess.onExited | id:", job.sessionId, "| code:", code, "| path:", job._injectionPath, "| ranWlCopy:", job._ranWlCopy);
             if (code !== 0)
                 console.warn("[STT:D16] inject script FAILED (code", code + ") — non-fatal");
 
@@ -1408,7 +1391,8 @@ QtObject {
     readonly property Timer cliphistDeleteTimer: Timer {
         interval: 300
         onTriggered: {
-            if (job._pendingCliphistDelete === "") return;
+            if (job._pendingCliphistDelete === "")
+                return;
             Logger.log("qml", "stt", "cliphist-scrub | id=" + job.sessionId + " textLen=" + job._pendingCliphistDelete.length);
             Quickshell.execDetached(["cliphist", "delete-query", job._pendingCliphistDelete]);
             job._pendingCliphistDelete = "";

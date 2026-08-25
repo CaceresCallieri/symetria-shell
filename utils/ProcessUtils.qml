@@ -11,7 +11,8 @@ Singleton {
     /// @param exitCode - Process exit code
     /// @param stderr - Collected stderr text (can be empty string)
     function logExit(name: string, operation: string, exitCode: int, stderr: string): void {
-        if (exitCode === 0) return;
+        if (exitCode === 0)
+            return;
 
         const stderrTrimmed = stderr ? stderr.trim() : "";
         const prefix = `${name}: ${operation}`;

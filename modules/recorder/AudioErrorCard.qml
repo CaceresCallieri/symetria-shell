@@ -58,8 +58,10 @@ ColumnLayout {
         target: AudioRecorderService
 
         function onActionTriggered(action: string): void {
-            if (root.displayState !== "error") return;
-            if (action === "cancel") cancelBtn.triggerPress();
+            if (root.displayState !== "error")
+                return;
+            if (action === "cancel")
+                cancelBtn.triggerPress();
         }
     }
 }

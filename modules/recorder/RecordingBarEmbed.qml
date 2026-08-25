@@ -33,16 +33,17 @@ Item {
 
     // Coalesce internal states to user-visible states
     readonly property string displayState: {
-        if (!job) return "idle";
+        if (!job)
+            return "idle";
         const s = job.state;
-        if (mode === "audio" && s === "saving") return "processing";
-        if (mode === "stt" && (s === "transcribed" || s === "delivering")) return "processing";
+        if (mode === "audio" && s === "saving")
+            return "processing";
+        if (mode === "stt" && (s === "transcribed" || s === "delivering"))
+            return "processing";
         return s;
     }
 
-    readonly property bool isRecordingPhase: displayState === "recording"
-        || displayState === "paused"
-        || displayState === "processing"
+    readonly property bool isRecordingPhase: displayState === "recording" || displayState === "paused" || displayState === "processing"
 
     // Live streaming partial transcript (STT streaming mode). "" otherwise.
     //
@@ -54,10 +55,7 @@ Item {
     // bar-embed treatment is intentionally different (grow-with-cap + ElideLeft
     // inside the pill, no waveform) vs the drawer (wrapped text block).
     readonly property string partialTranscript: mode === "stt" ? (job?.partialTranscript ?? "") : ""
-    readonly property bool showStreamingText: mode === "stt"
-        && SttService.streamingActive
-        && partialTranscript !== ""
-        && isRecordingPhase
+    readonly property bool showStreamingText: mode === "stt" && SttService.streamingActive && partialTranscript !== "" && isRecordingPhase
     // Max pill text width before older words scroll off the left (ElideLeft).
     readonly property real partialMaxWidth: 414
 
@@ -72,15 +70,21 @@ Item {
     // to whichever child is active so the PillCard backdrop sits a comfortable
     // margin away from the content.
     implicitWidth: {
-        if (compactRow.visible) return compactRow.implicitWidth + cardPadX * 2;
-        if (successIcon.visible) return successIcon.implicitWidth + cardPadX * 2;
-        if (errorIcon.visible) return errorIcon.implicitWidth + cardPadX * 2;
+        if (compactRow.visible)
+            return compactRow.implicitWidth + cardPadX * 2;
+        if (successIcon.visible)
+            return successIcon.implicitWidth + cardPadX * 2;
+        if (errorIcon.visible)
+            return errorIcon.implicitWidth + cardPadX * 2;
         return 0;
     }
     implicitHeight: {
-        if (compactRow.visible) return compactRow.implicitHeight + cardPadY * 2;
-        if (successIcon.visible) return successIcon.implicitHeight + cardPadY * 2;
-        if (errorIcon.visible) return errorIcon.implicitHeight + cardPadY * 2;
+        if (compactRow.visible)
+            return compactRow.implicitHeight + cardPadY * 2;
+        if (successIcon.visible)
+            return successIcon.implicitHeight + cardPadY * 2;
+        if (errorIcon.visible)
+            return errorIcon.implicitHeight + cardPadY * 2;
         return 0;
     }
 
@@ -115,7 +119,9 @@ Item {
         anchors.centerIn: parent
         spacing: Appearance.spacing.small
 
-        Behavior on opacity { Anim {} }
+        Behavior on opacity {
+            Anim {}
+        }
 
         // Elapsed timer
         StyledText {
@@ -125,7 +131,9 @@ Item {
             font.family: Appearance.font.family.mono
             color: Colours.palette.m3outline
 
-            Behavior on opacity { Anim {} }
+            Behavior on opacity {
+                Anim {}
+            }
         }
 
         StyledText {

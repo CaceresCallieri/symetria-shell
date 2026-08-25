@@ -20,9 +20,7 @@ PillContainer {
     property alias iconContainer: content
 
     // Hide entirely when no items are visible
-    visible: Config.bar.systemPill.showCpu
-        || Config.bar.systemPill.showRam
-        || Config.bar.systemPill.showUpdates
+    visible: Config.bar.systemPill.showCpu || Config.bar.systemPill.showRam || Config.bar.systemPill.showUpdates
 
     RowLayout {
         id: content

@@ -5,18 +5,18 @@ import QtQuick
 
 /**
  * NetworkConnection
- * 
+ *
  * Centralized utility for network connection logic. Provides a single source of truth
  * for connecting to wireless networks, eliminating code duplication across
  * controlcenter components and bar popouts.
- * 
+ *
  * Usage:
  * ```qml
  * import qs.utils
- * 
+ *
  * // With Session object (controlcenter)
  * NetworkConnection.handleConnect(network, session);
- * 
+ *
  * // Without Session object (bar popouts) - provide password dialog callback
  * NetworkConnection.handleConnect(network, null, (network) => {
  *     // Show password dialog
@@ -80,7 +80,7 @@ QtObject {
      * Connect to a wireless network.
      * Handles both secured and open networks, checks for saved profiles,
      * and shows password dialog if needed.
-     * 
+     *
      * @param network The network object to connect to (must have ssid, isSecure, bssid properties)
      * @param session Optional Session object (for controlcenter - must have network property with showPasswordDialog and pendingNetwork)
      * @param onPasswordNeeded Optional callback function(network) called when password is needed (for bar popouts)
@@ -111,35 +111,30 @@ QtObject {
         // was SILENT — the user clicked Connect and nothing happened, the root cause
         // of "I can only connect to networks I've connected to before". The callback
         // below is the only thing that surfaces the password dialog on that failure.
-        NmcliWifi.connectToNetworkWithPasswordCheck(
-            network.ssid,
-            network.isSecure,
-            (result) => {
-                if (result.needsPassword) {
-                    // REGRESSION GUARD: reach into another component only through
-                    // declared properties. The removed code called Timer ids inside
-                    // the NmcliWifi singleton; QML ids are file-scoped, so they were
-                    // always undefined here.
+        NmcliWifi.connectToNetworkWithPasswordCheck(network.ssid, network.isSecure, result => {
+            if (result.needsPassword) {
+                // REGRESSION GUARD: reach into another component only through
+                // declared properties. The removed code called Timer ids inside
+                // the NmcliWifi singleton; QML ids are file-scoped, so they were
+                // always undefined here.
 
-                    // Handle password dialog - use session if available, otherwise use callback
-                    if (session && session.network) {
-                        session.network.showPasswordDialog = true;
-                        session.network.pendingNetwork = network;
-                    } else if (onPasswordNeeded) {
-                        onPasswordNeeded(network);
-                    }
+                // Handle password dialog - use session if available, otherwise use callback
+                if (session && session.network) {
+                    session.network.showPasswordDialog = true;
+                    session.network.pendingNetwork = network;
+                } else if (onPasswordNeeded) {
+                    onPasswordNeeded(network);
                 }
-                if (onResult)
-                    onResult(result);
-            },
-            network.bssid
-        );
+            }
+            if (onResult)
+                onResult(result);
+        }, network.bssid);
     }
 
     /**
      * Connect to a wireless network with a provided password.
      * Used by password dialogs when the user has already entered a password.
-     * 
+     *
      * @param network The network object to connect to (must have ssid, bssid properties)
      * @param password The password to use for connection
      * @param onResult Optional callback function(result) called with connection result
@@ -155,4 +150,3 @@ QtObject {
         NmcliWifi.connectToNetwork(network.ssid, password || "", network.bssid || "", onResult || null);
     }
 }
-

@@ -49,19 +49,11 @@ Singleton {
     property int _focusRestoreClient: 0
 
     /// Home row first, then top row. Return occupies the easy right-pinky slot.
-    readonly property var labelSequence: [
-        "A", "S", "D", "F", "J", "K", "L", "Return",
-        "Q", "W", "E", "R", "U", "I", "O", "P"
-    ]
+    readonly property var labelSequence: ["A", "S", "D", "F", "J", "K", "L", "Return", "Q", "W", "E", "R", "U", "I", "O", "P"]
 
     /// Topology changes invalidate frozen label assignments. A fullscreen event
     /// is handled separately because it is the expected reveal transition.
-    readonly property var _topologyEvents: new Set([
-        "openwindow", "closewindow",
-        "movewindow", "movewindowv2",
-        "togglegroup", "moveintogroup", "moveoutofgroup",
-        "activewindowv2", "changegroupactive", "changefloatingmode", "minimize"
-    ])
+    readonly property var _topologyEvents: new Set(["openwindow", "closewindow", "movewindow", "movewindowv2", "togglegroup", "moveintogroup", "moveoutofgroup", "activewindowv2", "changegroupactive", "changefloatingmode", "minimize"])
 
     function show(): void {
         if (sessionActive)
@@ -191,8 +183,7 @@ Singleton {
         const source = _clientForAddress(sourceAddress);
         const currentInternal = source?.lastIpcObject?.fullscreen ?? 0;
         const currentClient = source?.lastIpcObject?.fullscreenClient ?? 0;
-        if (_hasFullscreenState(sourceFullscreen, sourceFullscreenClient)
-                && _hasFullscreenState(currentInternal, currentClient)) {
+        if (_hasFullscreenState(sourceFullscreen, sourceFullscreenClient) && _hasFullscreenState(currentInternal, currentClient)) {
             if (_revealRetries < 3) {
                 _revealRetries++;
                 Hyprland.refreshToplevels();

@@ -17,7 +17,7 @@ ColumnLayout {
     // intentional var: polymorphic model (ListModel, JS array, or C++ model — varies per consumer)
     property var model: null
     property Component delegate: null
-    
+
     property string title: ""
     property string description: ""
     // intentional var: nullable polymorphic active item (bluetooth device, network interface, etc.)
@@ -25,14 +25,14 @@ ColumnLayout {
     property Component headerComponent: null
     property Component titleSuffix: null
     property bool showHeader: true
-    
+
     signal itemSelected(var item)
 
     spacing: Appearance.spacing.small
 
     Loader {
         id: headerLoader
-        
+
         Layout.fillWidth: true
         sourceComponent: root.headerComponent
         visible: root.headerComponent !== null && root.showHeader
@@ -59,7 +59,7 @@ ColumnLayout {
             Layout.fillWidth: true
         }
     }
-    
+
     property alias view: view
 
     StyledText {
@@ -83,4 +83,3 @@ ColumnLayout {
         clip: false
     }
 }
-

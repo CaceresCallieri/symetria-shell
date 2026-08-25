@@ -59,10 +59,7 @@ Item {
 
             // Pill styling (subtle intensity for background pill)
             // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-            readonly property var glassStyle: Colours.pillStyle(
-                Colours.palette.m3surfaceContainerHigh,
-                Colours.glass.subtle
-            )
+            readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
 
             function getWsIdx(ws: int): int {
                 let i = ws - 1;

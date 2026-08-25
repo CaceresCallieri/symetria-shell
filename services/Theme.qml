@@ -121,131 +121,239 @@ Singleton {
 
     // intentional var: heterogeneous JS data table, indexed by theme name
     readonly property var _recipes: ({
-        clay: {
-            pill: {
-                darkShadowOffsetX: 2, darkShadowOffsetY: 3, darkShadowBlur: 12, darkShadowAlpha: 0.40,
-                lightShadowOffsetX: -2, lightShadowOffsetY: -2, lightShadowBlur: 8, lightShadowAlpha: 0.10,
-                highlightAlpha: 0.08, innerShadowAlpha: 0.0, borderWidth: 1,
-                sheenTop: 0.0, sweepAlpha: 0.0, sweepCentre: 0.5, sweepWidth: 0.3,
-                brushedAlpha: 0.0, rimAlpha: 0.0, rimStop: 0.05, rimBottomAlpha: 0.0, rimBottomStop: 0.05
-            },
-            toggle: {
-                darkShadowOffsetX: 2, darkShadowOffsetY: 4, darkShadowBlur: 10, darkShadowAlpha: 0.55,
-                lightShadowOffsetX: -2, lightShadowOffsetY: -2, lightShadowBlur: 8, lightShadowAlpha: 0.12,
-                highlightAlpha: 0.04, innerShadowAlpha: 0.0, borderWidth: 0,
-                darkInsetAlpha: 0.55, lightInsetAlpha: 0.12, horizontalInsetWeight: 0.50,
-                sheenTop: 0.0, sweepAlpha: 0.0, sweepCentre: 0.5, sweepWidth: 0.3,
-                brushedAlpha: 0.0, rimAlpha: 0.0, rimStop: 0.05, rimBottomAlpha: 0.0, rimBottomStop: 0.05
-            },
-            card: {
-                darkShadowOffsetX: 3, darkShadowOffsetY: 4, darkShadowBlur: 14, darkShadowAlpha: 0.28,
-                lightShadowOffsetX: -3, lightShadowOffsetY: -3, lightShadowBlur: 11, lightShadowAlpha: 0.07,
-                highlightAlpha: 0.08, innerShadowAlpha: 0.03, borderWidth: 1,
-                sheenTop: 0.0, sweepAlpha: 0.0, sweepCentre: 0.5, sweepWidth: 0.3,
-                brushedAlpha: 0.0, rimAlpha: 0.0, rimStop: 0.03, rimBottomAlpha: 0.0, rimBottomStop: 0.03
-            },
-            // Clay's whole identity is that SurfaceFinish paints NOTHING, so its
-            // polished variant is zeroed like the rest. Clay signals an engaged
-            // control through depth direction, not through reflection.
-            engaged: {
-                sheenTop: 0.0, sweepAlpha: 0.0, sweepCentre: 0.5, sweepWidth: 0.3,
-                brushedAlpha: 0.0, rimAlpha: 0.0, rimStop: 0.05, rimBottomAlpha: 0.0, rimBottomStop: 0.05
-            }
-        },
-
-        // Metal: a FLAT machined plate.
-        //
-        // The defining difference from clay is not colour or texture — it is
-        // FORM. Clay (and glass) describe a rounded, extruded object: two
-        // opposing outer shadows lift it off the backdrop, a broad top rim and a
-        // vertical sheen imply a curved top face, a bottom inner shadow seats it
-        // in a well. Every one of those cues says "this bulges toward you".
-        //
-        // Metal is a plate cut from stock. It has no bulge, so it gets NO outer
-        // shadows, NO sheen, NO inner shadow, and no bottom bevel rim. What is
-        // left is what a flat plate actually shows: a broad soft reflection of
-        // the light source travelling across the face, and the machining grain.
-        //
-        // borderWidth is 1, but the colour is NOT a white outline — metalPill()
-        // derives it from the body colour lifted slightly in lightness, so it
-        // reads as the plate's own machined edge rather than a line drawn on
-        // top of it. See metalConstants.borderLightnessLift in
-        // services/Colours.qml for why that distinction matters more than the
-        // thickness does.
-        //
-        // The light band still carries most of the silhouette — `sweepAlpha` was
-        // raised when the white outline came off and stays raised; the edge
-        // defines where the plate ENDS, the sweep is what makes it read as lit.
-        //
-        // `rimAlpha` still applies to cards, but is effectively invisible on BAR
-        // plates under the panel form — the rim lives in the top few percent of
-        // the plate, and those pixels are the ones bleeding off-screen.
-        //
-        // The toggle keeps its INSET gradient, because that encodes STATE (is
-        // this on?) rather than decoration — but it drops the light/horizontal
-        // components, so a pressed metal toggle darkens flatly instead of
-        // dishing into a neumorphic well.
-        metal: {
-            pill: {
-                darkShadowOffsetX: 0, darkShadowOffsetY: 0, darkShadowBlur: 0, darkShadowAlpha: 0.0,
-                lightShadowOffsetX: 0, lightShadowOffsetY: 0, lightShadowBlur: 0, lightShadowAlpha: 0.0,
-                highlightAlpha: 0.0, innerShadowAlpha: 0.0, borderWidth: 1,
-                sheenTop: 0.0, sweepAlpha: 0.070, sweepCentre: 0.30, sweepWidth: 0.46,
-                brushedAlpha: 0.040, rimAlpha: 0.20, rimStop: 0.020, rimBottomAlpha: 0.0, rimBottomStop: 0.03
-            },
-            toggle: {
-                darkShadowOffsetX: 0, darkShadowOffsetY: 0, darkShadowBlur: 0, darkShadowAlpha: 0.0,
-                lightShadowOffsetX: 0, lightShadowOffsetY: 0, lightShadowBlur: 0, lightShadowAlpha: 0.0,
-                highlightAlpha: 0.0, innerShadowAlpha: 0.0, borderWidth: 1,
-                darkInsetAlpha: 0.42, lightInsetAlpha: 0.0, horizontalInsetWeight: 0.0,
-                sheenTop: 0.0, sweepAlpha: 0.070, sweepCentre: 0.30, sweepWidth: 0.46,
-                brushedAlpha: 0.040, rimAlpha: 0.20, rimStop: 0.020, rimBottomAlpha: 0.0, rimBottomStop: 0.03
-            },
-            card: {
-                darkShadowOffsetX: 0, darkShadowOffsetY: 0, darkShadowBlur: 0, darkShadowAlpha: 0.0,
-                lightShadowOffsetX: 0, lightShadowOffsetY: 0, lightShadowBlur: 0, lightShadowAlpha: 0.0,
-                highlightAlpha: 0.0, innerShadowAlpha: 0.0, borderWidth: 1,
-                sheenTop: 0.0, sweepAlpha: 0.055, sweepCentre: 0.26, sweepWidth: 0.52,
-                brushedAlpha: 0.032, rimAlpha: 0.15, rimStop: 0.008, rimBottomAlpha: 0.0, rimBottomStop: 0.01
+            clay: {
+                pill: {
+                    darkShadowOffsetX: 2,
+                    darkShadowOffsetY: 3,
+                    darkShadowBlur: 12,
+                    darkShadowAlpha: 0.40,
+                    lightShadowOffsetX: -2,
+                    lightShadowOffsetY: -2,
+                    lightShadowBlur: 8,
+                    lightShadowAlpha: 0.10,
+                    highlightAlpha: 0.08,
+                    innerShadowAlpha: 0.0,
+                    borderWidth: 1,
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.0,
+                    sweepCentre: 0.5,
+                    sweepWidth: 0.3,
+                    brushedAlpha: 0.0,
+                    rimAlpha: 0.0,
+                    rimStop: 0.05,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.05
+                },
+                toggle: {
+                    darkShadowOffsetX: 2,
+                    darkShadowOffsetY: 4,
+                    darkShadowBlur: 10,
+                    darkShadowAlpha: 0.55,
+                    lightShadowOffsetX: -2,
+                    lightShadowOffsetY: -2,
+                    lightShadowBlur: 8,
+                    lightShadowAlpha: 0.12,
+                    highlightAlpha: 0.04,
+                    innerShadowAlpha: 0.0,
+                    borderWidth: 0,
+                    darkInsetAlpha: 0.55,
+                    lightInsetAlpha: 0.12,
+                    horizontalInsetWeight: 0.50,
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.0,
+                    sweepCentre: 0.5,
+                    sweepWidth: 0.3,
+                    brushedAlpha: 0.0,
+                    rimAlpha: 0.0,
+                    rimStop: 0.05,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.05
+                },
+                card: {
+                    darkShadowOffsetX: 3,
+                    darkShadowOffsetY: 4,
+                    darkShadowBlur: 14,
+                    darkShadowAlpha: 0.28,
+                    lightShadowOffsetX: -3,
+                    lightShadowOffsetY: -3,
+                    lightShadowBlur: 11,
+                    lightShadowAlpha: 0.07,
+                    highlightAlpha: 0.08,
+                    innerShadowAlpha: 0.03,
+                    borderWidth: 1,
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.0,
+                    sweepCentre: 0.5,
+                    sweepWidth: 0.3,
+                    brushedAlpha: 0.0,
+                    rimAlpha: 0.0,
+                    rimStop: 0.03,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.03
+                },
+                // Clay's whole identity is that SurfaceFinish paints NOTHING, so its
+                // polished variant is zeroed like the rest. Clay signals an engaged
+                // control through depth direction, not through reflection.
+                engaged: {
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.0,
+                    sweepCentre: 0.5,
+                    sweepWidth: 0.3,
+                    brushedAlpha: 0.0,
+                    rimAlpha: 0.0,
+                    rimStop: 0.05,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.05
+                }
             },
 
-            // POLISHED. Not a surface role — a FINISH-ONLY block, which is why
-            // it carries no shadow or border keys. Consumers pass it to a
-            // primitive's `finishRecipe` to say "this particular part is worn
-            // bright", while the part keeps whatever structure its role gives
-            // it. Today: the ON knob of a switch, and a connected socket.
+            // Metal: a FLAT machined plate.
             //
-            // The point of this block is that "brighter" and "whiter" are not
-            // the same instruction. Lifting the BODY toward white flattens a
-            // plate into a pale swatch — that is what the raw `m3primary` fill
-            // this whole rework replaced was doing. A polished part instead
-            // returns far more light in ONE place and stays dark elsewhere, so
-            // every number here is a reflection, not a fill:
+            // The defining difference from clay is not colour or texture — it is
+            // FORM. Clay (and glass) describe a rounded, extruded object: two
+            // opposing outer shadows lift it off the backdrop, a broad top rim and a
+            // vertical sheen imply a curved top face, a bottom inner shadow seats it
+            // in a well. Every one of those cues says "this bulges toward you".
             //
-            //   sweep      3x the alpha of a stock plate and NARROWER (0.34 vs
-            //              0.46). Wide and dim is a matte face catching ambient
-            //              light; tight and bright is a mirror returning the
-            //              source. Narrowing it is what stops the extra alpha
-            //              from just reading as "lighter grey".
-            //   rimStop    0.10, not the stock 0.020. This is the fix for a
-            //              measured bug rather than a taste call: rimStop is a
-            //              fraction of surface HEIGHT, so on a ~27px knob the
-            //              stock value renders a HALF-PIXEL band that lands
-            //              inside the border and contributes nothing. At 0.10
-            //              the lip is ~3px and actually reads.
-            //   rimBottom  present here and absent everywhere else in metal. A
-            //              top rim alone reads as a lit sheet; adding the dim
-            //              bottom bevel is what makes it read as a solid piece
-            //              with thickness — worth paying for on the one part
-            //              the eye lands on.
-            //   brushed    slightly LOWER than stock (0.030 vs 0.040). Polished
-            //              means the machining grain has been worn down.
-            engaged: {
-                sheenTop: 0.10, sweepAlpha: 0.22, sweepCentre: 0.32, sweepWidth: 0.34,
-                brushedAlpha: 0.030, rimAlpha: 0.45, rimStop: 0.10, rimBottomAlpha: 0.12, rimBottomStop: 0.08
+            // Metal is a plate cut from stock. It has no bulge, so it gets NO outer
+            // shadows, NO sheen, NO inner shadow, and no bottom bevel rim. What is
+            // left is what a flat plate actually shows: a broad soft reflection of
+            // the light source travelling across the face, and the machining grain.
+            //
+            // borderWidth is 1, but the colour is NOT a white outline — metalPill()
+            // derives it from the body colour lifted slightly in lightness, so it
+            // reads as the plate's own machined edge rather than a line drawn on
+            // top of it. See metalConstants.borderLightnessLift in
+            // services/Colours.qml for why that distinction matters more than the
+            // thickness does.
+            //
+            // The light band still carries most of the silhouette — `sweepAlpha` was
+            // raised when the white outline came off and stays raised; the edge
+            // defines where the plate ENDS, the sweep is what makes it read as lit.
+            //
+            // `rimAlpha` still applies to cards, but is effectively invisible on BAR
+            // plates under the panel form — the rim lives in the top few percent of
+            // the plate, and those pixels are the ones bleeding off-screen.
+            //
+            // The toggle keeps its INSET gradient, because that encodes STATE (is
+            // this on?) rather than decoration — but it drops the light/horizontal
+            // components, so a pressed metal toggle darkens flatly instead of
+            // dishing into a neumorphic well.
+            metal: {
+                pill: {
+                    darkShadowOffsetX: 0,
+                    darkShadowOffsetY: 0,
+                    darkShadowBlur: 0,
+                    darkShadowAlpha: 0.0,
+                    lightShadowOffsetX: 0,
+                    lightShadowOffsetY: 0,
+                    lightShadowBlur: 0,
+                    lightShadowAlpha: 0.0,
+                    highlightAlpha: 0.0,
+                    innerShadowAlpha: 0.0,
+                    borderWidth: 1,
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.070,
+                    sweepCentre: 0.30,
+                    sweepWidth: 0.46,
+                    brushedAlpha: 0.040,
+                    rimAlpha: 0.20,
+                    rimStop: 0.020,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.03
+                },
+                toggle: {
+                    darkShadowOffsetX: 0,
+                    darkShadowOffsetY: 0,
+                    darkShadowBlur: 0,
+                    darkShadowAlpha: 0.0,
+                    lightShadowOffsetX: 0,
+                    lightShadowOffsetY: 0,
+                    lightShadowBlur: 0,
+                    lightShadowAlpha: 0.0,
+                    highlightAlpha: 0.0,
+                    innerShadowAlpha: 0.0,
+                    borderWidth: 1,
+                    darkInsetAlpha: 0.42,
+                    lightInsetAlpha: 0.0,
+                    horizontalInsetWeight: 0.0,
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.070,
+                    sweepCentre: 0.30,
+                    sweepWidth: 0.46,
+                    brushedAlpha: 0.040,
+                    rimAlpha: 0.20,
+                    rimStop: 0.020,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.03
+                },
+                card: {
+                    darkShadowOffsetX: 0,
+                    darkShadowOffsetY: 0,
+                    darkShadowBlur: 0,
+                    darkShadowAlpha: 0.0,
+                    lightShadowOffsetX: 0,
+                    lightShadowOffsetY: 0,
+                    lightShadowBlur: 0,
+                    lightShadowAlpha: 0.0,
+                    highlightAlpha: 0.0,
+                    innerShadowAlpha: 0.0,
+                    borderWidth: 1,
+                    sheenTop: 0.0,
+                    sweepAlpha: 0.055,
+                    sweepCentre: 0.26,
+                    sweepWidth: 0.52,
+                    brushedAlpha: 0.032,
+                    rimAlpha: 0.15,
+                    rimStop: 0.008,
+                    rimBottomAlpha: 0.0,
+                    rimBottomStop: 0.01
+                },
+
+                // POLISHED. Not a surface role — a FINISH-ONLY block, which is why
+                // it carries no shadow or border keys. Consumers pass it to a
+                // primitive's `finishRecipe` to say "this particular part is worn
+                // bright", while the part keeps whatever structure its role gives
+                // it. Today: the ON knob of a switch, and a connected socket.
+                //
+                // The point of this block is that "brighter" and "whiter" are not
+                // the same instruction. Lifting the BODY toward white flattens a
+                // plate into a pale swatch — that is what the raw `m3primary` fill
+                // this whole rework replaced was doing. A polished part instead
+                // returns far more light in ONE place and stays dark elsewhere, so
+                // every number here is a reflection, not a fill:
+                //
+                //   sweep      3x the alpha of a stock plate and NARROWER (0.34 vs
+                //              0.46). Wide and dim is a matte face catching ambient
+                //              light; tight and bright is a mirror returning the
+                //              source. Narrowing it is what stops the extra alpha
+                //              from just reading as "lighter grey".
+                //   rimStop    0.10, not the stock 0.020. This is the fix for a
+                //              measured bug rather than a taste call: rimStop is a
+                //              fraction of surface HEIGHT, so on a ~27px knob the
+                //              stock value renders a HALF-PIXEL band that lands
+                //              inside the border and contributes nothing. At 0.10
+                //              the lip is ~3px and actually reads.
+                //   rimBottom  present here and absent everywhere else in metal. A
+                //              top rim alone reads as a lit sheet; adding the dim
+                //              bottom bevel is what makes it read as a solid piece
+                //              with thickness — worth paying for on the one part
+                //              the eye lands on.
+                //   brushed    slightly LOWER than stock (0.030 vs 0.040). Polished
+                //              means the machining grain has been worn down.
+                engaged: {
+                    sheenTop: 0.10,
+                    sweepAlpha: 0.22,
+                    sweepCentre: 0.32,
+                    sweepWidth: 0.34,
+                    brushedAlpha: 0.030,
+                    rimAlpha: 0.45,
+                    rimStop: 0.10,
+                    rimBottomAlpha: 0.12,
+                    rimBottomStop: 0.08
+                }
             }
-        }
-    })
+        })
 
     // Falls back to clay for any unknown name so a bad IPC argument degrades to
     // the default look instead of rendering undefined everywhere.
@@ -307,19 +415,19 @@ Singleton {
     //
     // intentional var: heterogeneous JS data table, indexed by form name
     readonly property var _forms: ({
-        // Detached rounded chips floating below the screen edge.
-        islands: {
-            surfaceRounding: 1,
-            barPaddingMode: "border",
-            barTopBleed: 0
-        },
-        // Square slabs running off the top of the screen.
-        panel: {
-            surfaceRounding: 0,
-            barPaddingMode: "flush",
-            barTopBleed: 10
-        }
-    })
+            // Detached rounded chips floating below the screen edge.
+            islands: {
+                surfaceRounding: 1,
+                barPaddingMode: "border",
+                barTopBleed: 0
+            },
+            // Square slabs running off the top of the screen.
+            panel: {
+                surfaceRounding: 0,
+                barPaddingMode: "flush",
+                barTopBleed: 10
+            }
+        })
 
     // intentional var: JS recipe object from the table above
     readonly property var layout: _forms[form] ?? _forms.islands

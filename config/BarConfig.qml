@@ -83,23 +83,68 @@ JsonObject {
         property bool terminalAppDetection: true   // Detect apps running in terminals (nvim, yazi, etc.)
         property bool appIconsClickToFocus: true   // Click on icon to focus that window
         property list<var> specialWorkspaceIcons: [
-            { name: "special", icon: "mat:lightbulb" },
-            { name: "communications", icon: "mat:phone" },
-            { name: "note-taking", icon: "mat:auto_stories" }
+            {
+                name: "special",
+                icon: "mat:lightbulb"
+            },
+            {
+                name: "communications",
+                icon: "mat:phone"
+            },
+            {
+                name: "note-taking",
+                icon: "mat:auto_stories"
+            }
         ]
         property list<var> namedWorkspaceIcons: [
-            { name: "gaming", icon: "mat:sports_esports" },
-            { name: "music", icon: "mat:library_music" },
-            { name: "theater", icon: "mat:theater_comedy" },
-            { name: "symmetria", icon: "mat:balance" },
-            { name: "symmetria-whatsapp", icon: "mat:chat" },
-            { name: "netcolor", icon: "mat:palette" },
-            { name: "bambin", icon: "mat:format_paint" },
-            { name: "fps-game", icon: "mat:target" },
-            { name: ".dotfiles", icon: "mat:settings" },
-            { name: ".hyprdots", icon: "mat:tune" },
-            { name: "kosmos", icon: "mat:rocket_launch" },
-            { name: "nvim", icon: "mat:edit" }
+            {
+                name: "gaming",
+                icon: "mat:sports_esports"
+            },
+            {
+                name: "music",
+                icon: "mat:library_music"
+            },
+            {
+                name: "theater",
+                icon: "mat:theater_comedy"
+            },
+            {
+                name: "symmetria",
+                icon: "mat:balance"
+            },
+            {
+                name: "symmetria-whatsapp",
+                icon: "mat:chat"
+            },
+            {
+                name: "netcolor",
+                icon: "mat:palette"
+            },
+            {
+                name: "bambin",
+                icon: "mat:format_paint"
+            },
+            {
+                name: "fps-game",
+                icon: "mat:target"
+            },
+            {
+                name: ".dotfiles",
+                icon: "mat:settings"
+            },
+            {
+                name: ".hyprdots",
+                icon: "mat:tune"
+            },
+            {
+                name: "kosmos",
+                icon: "mat:rocket_launch"
+            },
+            {
+                name: "nvim",
+                icon: "mat:edit"
+            }
         ]
     }
     component Tray: JsonObject {

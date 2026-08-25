@@ -9,4 +9,3 @@ QtObject {
     // intentional var: nullable JS object from network scan data ({ ssid, bssid, security, ... })
     property var pendingNetwork: null
 }
-

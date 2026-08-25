@@ -245,9 +245,7 @@ Item {
         drag.target: view.contentItem
         drag.axis: Drag.XAxis
         drag.maximumX: 0
-        drag.minimumX: view.contentWidth > view.width
-            ? view.width - view.contentWidth - Appearance.padding.small
-            : 0
+        drag.minimumX: view.contentWidth > view.width ? view.width - view.contentWidth - Appearance.padding.small : 0
 
         onPressed: event => startX = event.x
 

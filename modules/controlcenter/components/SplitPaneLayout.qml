@@ -18,12 +18,12 @@ RowLayout {
 
     property Component leftContent: null
     property Component rightContent: null
-    
+
     property real leftWidthRatio: 0.4
     property int leftMinimumWidth: 420
     property var leftLoaderProperties: ({}) // intentional var: JS hash map for dynamic Loader properties
     property var rightLoaderProperties: ({}) // intentional var: JS hash map for dynamic Loader properties
-    
+
     property alias leftLoader: leftLoader
     property alias rightLoader: rightLoader
 
@@ -115,4 +115,3 @@ RowLayout {
         }
     }
 }
-

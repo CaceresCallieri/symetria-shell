@@ -239,15 +239,22 @@ Scope {
 
         function _focusedOverlay(): var {
             const overlay = Visibilities.osdOverlays.get(Hypr.focusedMonitor);
-            if (!overlay) console.warn("[OSD] No overlay for focused monitor");
+            if (!overlay)
+                console.warn("[OSD] No overlay for focused monitor");
             return overlay ?? null;
         }
 
         // These act on the PAIR — an explicit request to see the OSD means both
         // cards, unlike the metric-specific triggers.
-        function toggle(): void { _focusedOverlay()?.toggle(); }
-        function show(): void { _focusedOverlay()?.show(); }
-        function hide(): void { _focusedOverlay()?.hide(); }
+        function toggle(): void {
+            _focusedOverlay()?.toggle();
+        }
+        function show(): void {
+            _focusedOverlay()?.show();
+        }
+        function hide(): void {
+            _focusedOverlay()?.hide();
+        }
 
         function isVisible(): bool {
             return Visibilities.osdOverlays.get(Hypr.focusedMonitor)?.showing ?? false;

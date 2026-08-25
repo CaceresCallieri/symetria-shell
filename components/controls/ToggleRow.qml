@@ -24,4 +24,3 @@ RowLayout {
         id: toggle
     }
 }
-
