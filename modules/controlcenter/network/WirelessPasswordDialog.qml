@@ -30,6 +30,14 @@ Item {
     }
 
     property bool isClosing: false
+
+    // Fences stale connect callbacks. An attempt can outlive the dialog state it
+    // was started from: cancel mid-connect, reopen for another network, and the
+    // first attempt's callback still arrives. Without this it would wipe the newly
+    // typed password, show an error for the wrong SSID, or close a dialog the user
+    // just reopened. Bumped on every close and every reopen; a callback whose
+    // captured token no longer matches is discarded.
+    property int attemptToken: 0
     visible: session.network.showPasswordDialog || isClosing
     enabled: session.network.showPasswordDialog && !isClosing
     focus: enabled
@@ -189,10 +197,21 @@ Item {
                     target: root.session.network
                     function onShowPasswordDialogChanged(): void {
                         if (root.session.network.showPasswordDialog) {
+                            // Cancel any close animation still in flight. Without
+                            // this, reopening while isClosing is true lets the
+                            // running ParallelAnimation's onFinished set
+                            // showPasswordDialog = false, slamming shut the dialog
+                            // the user just reopened.
+                            root.isClosing = false;
+                            root.attemptToken++;
                             Qt.callLater(() => {
                                 passwordContainer.forceActiveFocus();
                                 passwordContainer.passwordBuffer = "";
                                 connectButton.hasError = false;
+                                // Reset stale state from a previous attempt that
+                                // didn't go through closeDialog (e.g. dismissed
+                                // externally while connecting).
+                                connectButton.connecting = false;
                             });
                         }
                     }
@@ -368,7 +387,12 @@ Item {
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
                     inactiveColour: Colours.palette.m3primary
                     inactiveOnColour: Colours.palette.m3onPrimary
-                    text: qsTr("Connect")
+                    // Both stay declarative. REGRESSION GUARD: do NOT assign
+                    // `enabled` or `text` imperatively — an imperative write severs
+                    // the binding permanently, which is what previously left Connect
+                    // clickable with an empty password after a failed attempt.
+                    // `connecting` alone drives both.
+                    text: connecting ? qsTr("Connecting...") : qsTr("Connect")
                     enabled: passwordContainer.passwordBuffer.length > 0 && !connecting
 
                     onClicked: {
@@ -383,122 +407,46 @@ Item {
 
                         hasError = false;
                         connecting = true;
-                        enabled = false;
-                        text = qsTr("Connecting...");
+                        const token = root.attemptToken;
 
+                        // The callback is authoritative and always fires exactly
+                        // once — NmcliWifi derives it from nmcli's exit code, not
+                        // from polling. Every terminal state is handled right here.
                         NetworkConnection.connectWithPassword(root.network, password, result => {
-                            if (result && result.success) {
-                            } else if (result && result.needsPassword) {
-                                connectionMonitor.stop();
-                                connecting = false;
-                                hasError = true;
-                                enabled = true;
-                                text = qsTr("Connect");
-                                passwordContainer.passwordBuffer = "";
-                                if (root.network && root.network.ssid) {
-                                    NmcliWifi.forgetNetwork(root.network.ssid);
-                                }
-                            } else {
-                                connectionMonitor.stop();
-                                connecting = false;
-                                hasError = true;
-                                enabled = true;
-                                text = qsTr("Connect");
-                                passwordContainer.passwordBuffer = "";
-                                if (root.network && root.network.ssid) {
-                                    NmcliWifi.forgetNetwork(root.network.ssid);
-                                }
-                            }
-                        });
+                            if (token !== root.attemptToken)
+                                return;
 
-                        connectionMonitor.start();
+                            if (result && result.success) {
+                                root.closeDialog();
+                                return;
+                            }
+
+                            connecting = false;
+                            hasError = true;
+                            passwordContainer.passwordBuffer = "";
+
+                            // REGRESSION GUARD: do NOT call forgetNetwork() here.
+                            // This ran on every failure, including failures that
+                            // were not failures — a connection NetworkManager had
+                            // already activated got its profile deleted, tearing
+                            // down working wifi (verified 2026-07-27). Stale
+                            // profiles are cleared by connectWithSecret at the
+                            // start of the next attempt, where nothing is in flight.
+                        });
                     }
                 }
             }
         }
     }
 
-    function checkConnectionStatus(): void {
-        if (!root.visible || !connectButton.connecting) {
-            return;
-        }
-
-        const isConnected = root.network && NmcliWifi.active && NmcliWifi.active.ssid && NmcliWifi.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
-
-        if (isConnected) {
-            connectionSuccessTimer.start();
-            return;
-        }
-
-        if (NmcliWifi.pendingConnection === null && connectButton.connecting) {
-            if (connectionMonitor.repeatCount > 10) {
-                connectionMonitor.stop();
-                connectButton.connecting = false;
-                connectButton.hasError = true;
-                connectButton.enabled = true;
-                connectButton.text = qsTr("Connect");
-                passwordContainer.passwordBuffer = "";
-                if (root.network && root.network.ssid) {
-                    NmcliWifi.forgetNetwork(root.network.ssid);
-                }
-            }
-        }
-    }
-
-    Timer {
-        id: connectionMonitor
-        interval: 1000
-        repeat: true
-        triggeredOnStart: false
-        property int repeatCount: 0
-
-        onTriggered: {
-            repeatCount++;
-            checkConnectionStatus();
-        }
-
-        onRunningChanged: {
-            if (!running) {
-                repeatCount = 0;
-            }
-        }
-    }
-
-    Timer {
-        id: connectionSuccessTimer
-        interval: 500
-        onTriggered: {
-            if (root.visible && NmcliWifi.active && NmcliWifi.active.ssid) {
-                const stillConnected = NmcliWifi.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
-                if (stillConnected) {
-                    connectionMonitor.stop();
-                    connectButton.connecting = false;
-                    connectButton.text = qsTr("Connect");
-                    closeDialog();
-                }
-            }
-        }
-    }
-
-    Connections {
-        target: NmcliWifi
-        function onActiveChanged() {
-            if (root.visible) {
-                checkConnectionStatus();
-            }
-        }
-        function onConnectionFailed(ssid: string) {
-            if (root.visible && root.network && root.network.ssid === ssid && connectButton.connecting) {
-                connectionMonitor.stop();
-                connectButton.connecting = false;
-                connectButton.hasError = true;
-                connectButton.enabled = true;
-                connectButton.text = qsTr("Connect");
-                passwordContainer.passwordBuffer = "";
-                NmcliWifi.forgetNetwork(ssid);
-            }
-        }
-    }
+    // NOTE: this dialog deliberately has NO polling monitor.
+    //
+    // REGRESSION GUARD: it used to run a 1s repeating timer that compared
+    // NmcliWifi.active.ssid against the target and, past 15 ticks, declared
+    // failure and deleted the profile. Every part of that was unsound: `active`
+    // is the first active AP across ALL radios (not necessarily this one), and a
+    // connection slower than the threshold was reported as a failure and then
+    // destroyed. The connect callback now reports the real outcome exactly once.
 
     function closeDialog(): void {
         if (isClosing) {
@@ -506,10 +454,9 @@ Item {
         }
 
         isClosing = true;
+        root.attemptToken++;
         passwordContainer.passwordBuffer = "";
         connectButton.connecting = false;
         connectButton.hasError = false;
-        connectButton.text = qsTr("Connect");
-        connectionMonitor.stop();
     }
 }

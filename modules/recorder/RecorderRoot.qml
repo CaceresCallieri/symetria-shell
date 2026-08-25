@@ -131,6 +131,11 @@ Scope {
         }
 
         function restart(): void {
+            // Guard before acquire: with no active session (e.g. a stale
+            // session-scoped Alt+R bind after a crash), acquire() would take
+            // the "stt" lock and nothing would ever release it — release only
+            // fires on SttService.active true→false.
+            if (!SttService.active) return;
             if (!RecordingSessionManager.acquire("stt")) return;
             SttService.restart();
         }
@@ -145,6 +150,23 @@ Scope {
 
         function hints(): void {
             SttService.toggleVocabHints();
+        }
+
+        // Copy the most recent transcription to the clipboard so the user
+        // can paste it instantly with Ctrl+V (cliphist scrub keeps the entry
+        // out of the Text tab). Wired to Alt+V in the Hyprland keybinds —
+        // fast-path "grab latest dictation" without opening the clipboard
+        // manager. For a specific older entry, the user opens the manager
+        // and presses Enter on the highlighted row.
+        function pasteTranscription(): void {
+            TranscriptionStore.paste("");
+        }
+
+        // Toggle streaming dictation mode (Super+Alt+D). Switches subsequent
+        // recordings between streaming (live partials) and batch, and drives
+        // the bar's dictation-status icon while active.
+        function streamingToggle(): void {
+            SttService.toggleStreaming();
         }
     }
 

@@ -1,6 +1,5 @@
 import qs.services
 import qs.config
-import qs.modules.session as Session
 import qs.modules.launcher as Launcher
 import qs.modules.bar.popouts as BarPopouts
 import qs.modules.utilities as Utilities
@@ -10,6 +9,7 @@ import qs.modules.askpass as Askpass
 import qs.modules.recorder as RecorderModule
 import qs.modules.calculator as CalculatorModule
 import qs.modules.packages as PackagesModule
+import qs.modules.videotrim as VideoTrimModule
 import QtQuick
 import QtQuick.Shapes
 
@@ -24,7 +24,8 @@ Item {
     required property Item agentBar
 
     anchors.fill: parent
-    anchors.margins: Config.border.thickness
+    anchors.leftMargin: Config.border.sideThickness
+    anchors.rightMargin: Config.border.sideThickness
     anchors.topMargin: bar.implicitHeight
     anchors.bottomMargin: agentBar.implicitHeight
 
@@ -39,13 +40,6 @@ Item {
 
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-
-        Session.Background {
-            wrapper: root.panels.session
-
-            startX: shape.width - root.panels.sidebar.width
-            startY: (shape.height - wrapper.height) / 2 - rounding
-        }
 
         Launcher.Background {
             wrapper: root.panels.launcher
@@ -94,6 +88,13 @@ Item {
 
             startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
             startY: 0  // Start at top-left (clockwise path like bar popouts)
+        }
+
+        VideoTrimModule.VideoTrimBackground {
+            wrapper: root.panels.videoTrim
+
+            startX: (shape.width - wrapper.width) / 2 - rounding  // Centered horizontally
+            startY: 0  // Top-hanging, like recorder/packages
         }
 
         BarPopouts.Background {

@@ -7,7 +7,7 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+PillCard {
     id: root
 
     required property var props
@@ -16,8 +16,8 @@ StyledRect {
     Layout.fillWidth: true
     implicitHeight: layout.implicitHeight + layout.anchors.margins * 2
 
-    radius: Appearance.rounding.normal
-    color: Colours.tPalette.m3surfaceContainer
+    // Default fill / radius come from PillCard. clipContent stays false so
+    // the SplitButton's dropdown menu can render past the card bottom.
 
     ColumnLayout {
         id: layout
@@ -30,14 +30,16 @@ StyledRect {
             spacing: Appearance.spacing.normal
             z: 1
 
-            StyledRect {
+            PillSurface {
                 implicitWidth: implicitHeight
                 implicitHeight: {
                     const h = icon.implicitHeight + Appearance.padding.smaller * 2;
                     return h - (h % 2);
                 }
 
-                radius: Appearance.rounding.full
+                // Match the Keep Awake icon circle: claymorphism in both states,
+                // body brightens while recording. Keeps the popup visually unified
+                // with the Quick Toggles row.
                 color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Recorder.running ? Colours.glass.veryStrong : Colours.glass.subtle).background
 
                 MaterialIcon {
@@ -101,7 +103,7 @@ StyledRect {
                         icon: "volume_up"
                         text: qsTr("Record region with sound")
                         activeText: qsTr("Region")
-                        onClicked: Recorder.start(["-sr"])
+                        onClicked: Recorder.start(["-r", "-s"])
                     }
                 ]
             }

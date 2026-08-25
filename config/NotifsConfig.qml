@@ -13,7 +13,16 @@ JsonObject {
 
     component Sizes: JsonObject {
         property int width: 400
-        property int image: 41
-        property int badge: 20
+        // Image is the icon-area RESERVATION (a square layout box at the
+        // card's left). The colored disc inside is 75% of this. The previous
+        // default (41) was tuned for the upstream caelestia padding scale
+        // (1.0). Symmetria's compact default appearance (padding scale 0.6)
+        // made the disc dominate the card vertically. 32 lands a 24px disc
+        // that reads as an icon without overwhelming the surrounding text.
+        property int image: 32
+        // Badge size only applies when the notification also has a main
+        // image (the disc collapses to a bottom-right corner overlay).
+        // Scaled proportionally to the new image size.
+        property int badge: 16
     }
 }

@@ -43,16 +43,20 @@ Variants {
         StyledWindow {
             id: win
 
+            // NOTE: SttService.vocabHintsVisible is intentionally NOT listed here.
+            // The vocab-hints TextField lives in the bar popout window, not the
+            // drawer. If the drawer grab activates for vocab hints, it fires
+            // onCleared the moment the popout takes focus — which cancels
+            // vocabHintsVisible and makes the first Alt+W after Escape fail.
+            // The popout wrapper owns its own HyprlandFocusGrab for this case.
             readonly property bool _shouldGrabFocus:
                 (visibilities.launcher && Config.launcher.enabled)
-                || (visibilities.session && Config.session.enabled)
                 || (visibilities.sidebar && Config.sidebar.enabled)
                 || (visibilities.clipboard && Config.clipboard.enabled)
                 || (visibilities.askpass && Config.askpass.enabled)
                 || (visibilities.calculator && Config.calculator.enabled)
                 || (visibilities.packages && Config.packages.enabled)
                 || (panels.popouts.currentName.startsWith("traymenu") && panels.popouts.current?.depth > 1)
-                || SttService.vocabHintsVisible
 
             readonly property bool hasFullscreen: Hypr.monitorFor(screen)?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen === 2) ?? false
             readonly property int dragMaskPadding: {
@@ -64,7 +68,7 @@ Variants {
                     return 0;
 
                 const thresholds = [];
-                for (const panel of ["launcher", "session", "sidebar"])
+                for (const panel of ["launcher", "sidebar"])
                     if (Config[panel].enabled)
                         thresholds.push(Config[panel].dragThreshold);
                 return Math.max(...thresholds);
@@ -72,21 +76,26 @@ Variants {
 
             onHasFullscreenChanged: {
                 visibilities.launcher = false;
-                visibilities.session = false;
                 visibilities.clipboard = false;
                 visibilities.calculator = false;
                 visibilities.packages = false;
+                // session intentionally NOT cleared — its overlay lives on
+                // WlrLayer.Overlay (SessionOverlay.qml) and remains usable
+                // above fullscreen clients.
             }
 
             screen: scope.modelData
             name: "drawers"
             WlrLayershell.exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.session || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages || SttService.vocabHintsVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+            // NOTE: SttService.vocabHintsVisible intentionally omitted — keyboard
+            // focus for vocab hints is granted on the bar popout window (which
+            // hosts the TextField), not the drawer. See _shouldGrabFocus above.
+            WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
-                x: Config.border.thickness + win.dragMaskPadding
+                x: Config.border.sideThickness + win.dragMaskPadding
                 y: bar.implicitHeight + win.dragMaskPadding
-                width: win.width - Config.border.thickness * 2 - win.dragMaskPadding * 2
+                width: win.width - Config.border.sideThickness * 2 - win.dragMaskPadding * 2
                 height: win.height - bar.implicitHeight - agentBar.implicitHeight - win.dragMaskPadding * 2
                 intersection: Intersection.Xor
 
@@ -106,7 +115,7 @@ Variants {
                 Region {
                     required property Item modelData
 
-                    x: modelData.x + Config.border.thickness
+                    x: modelData.x + Config.border.sideThickness
                     y: modelData.y + bar.implicitHeight
                     width: modelData.width
                     height: modelData.height
@@ -121,11 +130,13 @@ Variants {
                 windows: [win]
                 onCleared: {
                     visibilities.launcher = false;
-                    visibilities.session = false;
                     visibilities.sidebar = false;
                     visibilities.clipboard = false;
                     visibilities.calculator = false;
                     visibilities.packages = false;
+                    // session intentionally NOT cleared — it has its own
+                    // overlay window with exclusive focus, so this focus
+                    // grab no longer applies to it.
                     // Note: keychords is NOT managed by Drawers — it has its own WlrLayer.Overlay window
                     // Note: askpass is NOT cleared by focus grab - user must explicitly cancel
                     // This prevents accidental dismissal of security-critical dialog
@@ -136,25 +147,24 @@ Variants {
                 }
             }
 
-            StyledRect {
-                anchors.fill: parent
-                opacity: visibilities.session && Config.session.enabled ? 0.5 : 0
-                color: Colours.palette.m3scrim
-
-                Behavior on opacity {
-                    Anim {}
-                }
-            }
+            // The session scrim used to live here. It now renders inside
+            // SessionOverlay (WlrLayer.Overlay) so it covers fullscreen
+            // clients too. Do NOT re-add a scrim here — it would draw below
+            // fullscreen surfaces and never be visible when the menu is open
+            // over one.
 
             Item {
                 anchors.fill: parent
                 opacity: Colours.transparency.enabled ? Colours.transparency.base : 1
                 layer.enabled: true
-                layer.effect: MultiEffect {
-                    shadowEnabled: true
-                    blurMax: 15
-                    shadowColor: Qt.alpha(Colours.palette.m3shadow, 0.7)
-                }
+                // Bar/agentbar drop-shadow halo disabled: the previous
+                // MultiEffect { shadowEnabled: true; blurMax: 15;
+                // shadowColor: Qt.alpha(Colours.palette.m3shadow, 0.7) }
+                // cast a soft dark band into the wallpaper just below the top
+                // bar and above the bottom bar, reading as the bars "bleeding"
+                // into adjacent screen content. layer.enabled is intentionally
+                // kept so opacity compositing of Border + Backgrounds remains
+                // unchanged; only the visual shadow is removed.
 
                 Border {
                     bar: bar
@@ -217,6 +227,12 @@ Variants {
                     disabled: scope.barDisabled
 
                     Component.onCompleted: { Visibilities.bars.set(scope.modelData, this); Visibilities.barsVersion++; }
+                    Component.onDestruction: {
+                        if (Visibilities.bars.get(scope.modelData) === bar) {
+                            Visibilities.bars.delete(scope.modelData);
+                            Visibilities.barsVersion++;
+                        }
+                    }
                 }
 
                 AgentBarModule.Wrapper {

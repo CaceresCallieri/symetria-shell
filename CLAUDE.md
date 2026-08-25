@@ -8,20 +8,27 @@ Symmetria Shell is a Quickshell-based desktop shell for Hyprland — a fork of [
 
 **Do NOT use Chrome DevTools MCP tools** — this is a native Wayland desktop shell, not a web application. Use `grim` for screenshots.
 
-**Do NOT start, restart, or kill the shell process.** The user runs Symmetria as their active desktop shell. **NEVER run `qs -c symmetria`, `symmetria shell`, or any launch command** — not even for diagnostics. After QML/asset changes, clear the cache and inform the user that a restart is needed:
+**Do NOT start, restart, or kill the shell process.** The user runs Symmetria as their active desktop shell. **NEVER run `qs -c symmetria`, `symmetria shell -d`, `qs kill`, `pkill qs`, or any other launch/kill command** — not even for diagnostics. After QML/asset changes, clear the cache and inform the user that a restart is needed:
 ```bash
 rm -rf ~/.cache/quickshell/qmlcache
 # Let the user restart manually
 ```
 
-**Process management:** The QuickShell binary is `qs`, NOT `quickshell`. To kill: `pkill qs`. To check: `pgrep -fa qs | grep -v grep | grep -v zsh | grep -v python | grep -v claude`. Using `pkill quickshell` or `pgrep quickshell` does NOTHING — the process name is `qs`.
+This prohibits **launching and killing**. It does NOT prohibit **IPC against the already-running shell** — `symmetria shell <target> <function>` (e.g. `symmetria shell lock lock`) is normal usage and is how you exercise a running feature. The two are different commands that happen to share a prefix.
+
+**Process management:** The QuickShell binary is `qs`, NOT `quickshell`. To check: `pgrep -fa qs | grep -v grep | grep -v zsh | grep -v python | grep -v claude`. `pkill quickshell` / `pgrep quickshell` match NOTHING — the process name is `qs`, which is the only reason the `pkill qs` form is mentioned here at all; killing is prohibited (see above).
 
 ## Build & Run
 
-**QML / SVG / Asset changes** — no compilation needed:
+**QML / SVG / image changes** — no compilation needed. Clear the cache, then ask the user to restart (see the never-launch rule above):
 ```bash
 rm -rf ~/.cache/quickshell/qmlcache
-symmetria shell -d
+```
+
+**Shader changes** (`assets/shaders/*.frag`) — compilation IS needed. The shell loads the compiled `.qsb`, never the `.frag`, so editing the `.frag` alone changes nothing and reports no error:
+```bash
+/usr/lib/qt6/bin/qsb --glsl "100es,120,150" --hlsl 50 --msl 12 \
+  -o assets/shaders/NAME.frag.qsb assets/shaders/NAME.frag
 ```
 
 **C++ plugin changes** (`plugin/src/`):
@@ -45,8 +52,13 @@ If missing, Symmetria will fail to load components that browse the filesystem. S
 - Entry point: `/usr/bin/symmetria` (Python 3.14 shim)
 - After editing CLI source, re-deploy:
 ```bash
-sudo cp -r ~/.config/quickshell/symmetria-cli/src/symmetria /usr/lib/python3.14/site-packages/symmetria
+sudo cp -rT ~/.config/quickshell/symmetria-cli/src/symmetria /usr/lib/python3.14/site-packages/symmetria
 ```
+  The `-T` is required, NOT optional: the destination `symmetria/` already
+  exists, so plain `cp -r src dest` copies *into* it (creating a nested, dead
+  `symmetria/symmetria/`) and silently leaves the real top-level package — the
+  one Python imports — untouched. `-T` treats the destination as the target so
+  the package contents are overwritten in place.
 
 ## Pre-commit Hooks
 
@@ -90,7 +102,13 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **Module entry points** — Each major module exposes `Wrapper.qml` as its entry point, imported via qualified alias: `import "modules/x" as XModule` → `XModule.Wrapper {}`. This avoids the last-import-wins collision pitfall. Modules without collision risk (e.g., `Stt`, `Keycaster`) keep their own name.
 - **Drawer system** — `modules/drawers/` manages slide-out panels with unified visibility and gestures
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
-- **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords)
+- **Theme** — `services/Theme.qml` selects the surface design language along TWO orthogonal axes:
+  `material` (clay | metal — how one surface looks, consumed by the surface primitives) and
+  `form` (islands | panel — how surfaces are arranged, consumed by the bar geometry). Recipes are
+  plain data tables, so a new material is a data block rather than a parallel implementation of
+  every primitive. Switching is live (`symmetria shell surface material|form <name>`), but is
+  **runtime-only — not persisted**; the shipped default lives in the property initialisers.
+- **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar, surface)
 
 
 ## Remote Agents (SSH Tunnel)
@@ -117,7 +135,15 @@ Symmetria can display agents from remote machines that tunnel their orchestrator
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | QML defaults | `config/*.qml` | Structure, schemas, defaults (version-controlled) |
-| JSON overrides | `~/.config/symmetria/shell.json` | User preferences (NOT version-controlled) |
+| JSON overrides | `~/.config/symmetria/shell.json` | User preferences — **symlinked to the tracked `config/shell.json`** |
+
+**The override file IS version-controlled.** `~/.config/symmetria/shell.json` is a
+symlink to `config/shell.json` in this repo, so every settings change made in the
+UI — and every live edit for debugging — dirties the working tree. Two consequences:
+edits you make to "just the user config" WILL show up in `git status`, and
+`config/shell.json` diffs routinely contain unrelated serializer churn (the shell's
+JSON writer re-encodes unicode escapes on save). Review that file selectively before
+staging rather than assuming its whole diff belongs to your change.
 
 **JSON overrides always win.** If you edit a QML default but the value exists in shell.json, your change won't take effect. Check shell.json first when debugging config issues.
 
@@ -128,6 +154,14 @@ Symmetria can display agents from remote machines that tunnel their orchestrator
 - Hyprland user config: `~/.config/symmetria/hypr-user.conf`
 
 **Color scheme:** QML reads from `~/.local/state/symmetria/scheme.json` (the same file the CLI writes to). On first launch, `Colours.qml` copies the bundled default from `config/color-scheme.json` to the state path. The version-controlled file serves only as the initial seed template.
+
+**Editing the seed does NOT change a running install.** `_initScheme` copies `config/color-scheme.json` only when the state file is *absent*, so a palette commit is invisible on every machine that has already launched the shell once. To apply one, write the state file too:
+```bash
+cp config/color-scheme.json ~/.local/state/symmetria/scheme.json
+```
+`Colours.qml`'s `FileView` has `watchChanges: true`, so this takes effect live — no restart. Two caveats: the state file also carries `name`/`flavour`/`mode`/`variant` keys the repo seed lacks (harmless — `load()` reads only `.colours` — but a blind copy drops them), and editing in place preserves the inode, which matters because an atomic replace can drop the watch.
+
+**Palette saturation is load-bearing.** `metalPill()` splits "neutral surface" from "state colour" purely on `hslSaturation > metalConstants.accentSaturationThreshold` (0.05), so desaturating an accent role past that line silently strips its hue *and* its `accentLift`. JSON holds no comments; `Colours._warnOnUnderSaturatedAccents()` enforces the accent side at runtime. The container side has a hard floor — see the comment on `accentSaturationThreshold` for why the darkest containers must be achromatic.
 
 ## Critical Pitfalls
 
@@ -151,7 +185,31 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Qt HTTP/2 protocol errors** — Qt 6's `QNetworkAccessManager` enables HTTP/2 by default. Some servers (notably `ipinfo.io`) cause silent protocol errors that break the entire weather init chain. Disable per-request with `Http2AllowedAttribute = false`. → `docs/qt-http2-pitfall.md`
 
+**STT `gpt-4o-transcribe` silently truncates long audio** — The model emits the transcript as output tokens and caps around ~2000 tokens (~10 min of speech), returning HTTP 200 with a truncated result — the pipeline cannot tell it's incomplete. Long recordings are auto-routed to `whisper-1` (chunks internally, no truncation) above the configured duration threshold. Source audio is retained on disk as a recovery net (the WAV was previously deleted on success). → `docs/stt-design-decisions.md`
+
 **Hypr.activeToplevel null on fresh start** — The Wayland activation guard in `Hypr.qml` may filter out the active toplevel at shell startup before the `activated` protocol event arrives. Fall back to raw `Hyprland.activeToplevel` when you only need Hyprland window identity (address, class, PID) rather than confirmed Wayland activation. → `docs/qml-pitfalls.md`
+
+**Layer-shell focus restoration race** — A layer-shell window with `WlrKeyboardFocus.Exclusive` triggers focus restoration on unmap (wlroots restores whoever held focus before the layer mapped). Synchronous `focuswindow` dispatches lose to the restoration. Always `hide()` first, then `Qt.callLater(() => Hypr.dispatch(...))`. Dispatchers that don't require an active focus target (e.g. `killwindow`) are unaffected. → `docs/qml-pitfalls.md`
+
+**Electron tray icons are unthemeable from QML** — Discord, Heroic, Altus, and other Electron apps all register with SNI id `chrome_status_icon_1` and ship embedded pixmap bytes (no file path). They are indistinguishable from each other at the QML layer because `SystemTrayItem` exposes neither bus name nor PID. Do NOT attempt to auto-theme them via id heuristics — it cannot work. Users must override via `iconSubs` or live with the raw pixmap. → `docs/tray-icon-theming.md`
+
+**Property contract drift across containers** — If a child exposes a property whose value a parent reads in layout calculations (e.g. `Notification.nonAnimHeight` read by `Content.qml` to size the popup stack), that property has an external contract. Refactoring its semantics inside the child (e.g. "moving margins out for cleaner math") silently under-allocates the parent — visible as last-in-stack body clipping. Grep the whole codebase for that property name to find all consumers before changing its semantics; add a comment on or immediately above the property declaration stating the contract, e.g. `// CONTRACT: nonAnimHeight = full card height including margins (read by Content.qml stack)`. → `docs/qml-pitfalls.md`
+
+**Repeater over a rebuilt JS array resets all delegates** — A `Repeater` whose `model:` is a plain JS array cannot diff updates: every reassignment is a full reset (all delegates destroyed + recreated). When the array is re-parsed each update (e.g. bridge snapshots) and the delegate animates, frequent updates flash transient/wrong state onto unchanged siblings. Symptom: idle agent chips animated "busy" whenever an OpenCode sibling churned. Fix: wrap in `ScriptModel { values: <array>; objectProp: "id" }` (`"id"` is the agent-chip key; use whatever property is the stable unique key in your model) to key delegates on a stable id so they update in place. Use this for any animated Repeater bound to a rebuilt array. → `docs/qml-pitfalls.md`
+
+**A Repeater delegate's `parent` is null in its first binding pass** — the delegate is instantiated before it is reparented, so a bare `parent.<prop>` in the **delegate root** throws a TypeError on every creation. No visual symptom (the binding re-evaluates on reparent), just a steady drip of log noise that buries real warnings. Use `parent?.<prop>` — but only on the delegate root; items nested inside it already have a parent. → `docs/qml-pitfalls.md`
+
+**`Component.onCompleted` in a singleton needs `import QtQuick`** — Quickshell's own modules do not bring `Component` into scope. A data-only singleton never needed `QtQuick`, so the import only becomes necessary the moment someone adds a lifecycle hook — and Quickshell resolves the whole singleton graph at startup, so the unresolvable attached object means **the shell does not start at all**. The error is ~35 lines of unrelated `Type X unavailable` with the real cause on the last line; read it bottom-up. `qmllint` cannot catch it (it exits 255 with no output on any file importing Quickshell types), so a singleton change is unverified until the shell has actually been restarted. → `docs/qml-pitfalls.md`
+
+**A `ShapePath` that ends on a near-zero segment renders NOTHING** — when a closed path's final point is computed by two different pieces of code (e.g. `PathAngleArc` derives its own start while the closing `PathLine` respells that corner with `cos`/`sin`), the two agree only to a float epsilon and the path ends on a ~1e-15 segment. `Shape.CurveRenderer` does not skip it — it emits nothing for the **whole path**, so the shape vanishes. It looks like a random one-frame flicker but is deterministic per value. Rule: every corner comes from ONE expression, read by everything that needs it. Critically, the obvious test **misses it**: building N instances and grabbing each once exercises only the first tessellation. Step ONE instance and diff each frame against its neighbours. → `docs/qml-pitfalls.md`
+
+**`ShaderEffect` binds uniforms BY NAME** — renaming a QML property without renaming it in the shader's `buf` block silently leaves the uniform zero-initialised; no error, and `status == Compiled`. Same silent-render class: a missing or stale `.qsb` draws nothing at all, and headless rendering without `QT_QUICK_BACKEND=rhi` falls back to the software renderer, which also draws `ShaderEffect` as nothing. → `docs/qml-pitfalls.md`
+
+**A derived property reads STALE inside a change handler that fires upstream of it** — inside `onXChanged`, any binding depending on `X` (`readonly` or not) may not have re-evaluated yet, so `onRunningChanged` observes `remainingSeconds` still holding its pre-change value. A handler must re-derive its verdict from raw state, never from another binding. And never write a binding's dependency from the change handler of the property that binding computes — here, writing `props.deadlineMs` from `onRunningChanged` when `running` derives from it: Qt aborts that as a binding loop (logged as `Binding loop detected for property "X"` — grep `qs log` for it whenever a property looks stuck) and leaves the property **frozen at its stale value**, a corrupted property rather than a mere warning. Defer the write with `Qt.callLater`. Symptom: `services/SuspendTimer.qml` suspended the machine the instant the toggle was armed, then read as "armed, 0:00" forever. → `docs/qml-pitfalls.md`
+
+**`readonly property` blocks ALL assignment** — `readonly` in QML means the property has ONE value source (its initializer) and forbids imperative assignment from *any* scope, including signal handlers in the same file — there is no "internal write" exception. Any property written imperatively by an internal `FileView`/`Process`/`Timer` handler must stay a plain writable `property`; marking it `readonly` makes the handler's assignment silently no-op, freezing the value. `qmllint` can't catch this by design (exits 255 on unresolved Quickshell imports). Symptom: `QuietMode.enabled` made `readonly` by a code review → `FileView.onLoaded` write failed → Silent toggle frozen false. → `docs/qml-pitfalls.md`
+
+**A `Component`-typed default property turns children into templates** — most containers default to `data` / `list<QObject>`, but some declare a `QQmlComponent` default property, and then EVERY child written inside is implicitly wrapped in a `Component`: it becomes a template the parent instantiates on its own terms, never a live sibling in this file, and its `id` is invisible to the enclosing file. The slot is also not a list, so a second child silently overwrites the first — with no error at all. `WlSessionLock`'s default property is `surface` (a `QQmlComponent`), so a `Timer` declared inside it never ran (`LockSurface` took the slot) and `onUnlock` threw `ReferenceError: <id> is not defined` on every unlock — the lock's unlock-failsafe had never once executed. Only the object the parent builds per template (per-surface here; per-item or per-window elsewhere) belongs inside; move everything else out to a container whose default property accepts arbitrary children — `Scope` does. Before nesting, check the type's `defaultProperty` and that property's declared `type` in `/usr/lib/qt6/qml/Quickshell/<Module>/*.qmltypes`. Symptom: a `ReferenceError` in `qs log` for an id plainly visible a few lines above — suspect a component-scope boundary, not a typo. → `docs/qml-pitfalls.md`
 
 ## Deep Dives
 
@@ -160,10 +218,12 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 **Architecture & Extension:**
 - [`drawer-extension-guide.md`](docs/drawer-extension-guide.md) — Panel backgrounds, bar pill pattern, FocusManager usage
 - [`ags-porting-reference.md`](docs/ags-porting-reference.md) — AGS bar features to port (workspace icons, updates, Kanata, submap)
+- [`beams-background.md`](docs/beams-background.md) — Read before touching the lock screen background, `Config.lock.beams`, or any `ShaderEffect`: shader calibration, the reveal-timing normalisation, `.qsb` recompilation, and headless iteration
 
 **Pitfalls & Research:**
 - [`qml-pitfalls.md`](docs/qml-pitfalls.md) — All QML gotchas consolidated
 - [`cursor-shape-layer-shell.md`](docs/cursor-shape-layer-shell.md) — Cursor shape behavior in Wayland layer-shell
+- [`tray-icon-theming.md`](docs/tray-icon-theming.md) — Icon resolution pipeline, Electron SNI limitation, Option C future path
 - [`module-setup.md`](docs/module-setup.md) — External prerequisites for Askpass, Clipboard, STT, Calculator, KeyChords
 
 **STT:**
@@ -174,6 +234,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Investigations:**
 - `*.investigation.md` files — Debug session logs for past issues
+- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Hook → bridge → QML pipeline, stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC
 
 ## Updating from Upstream
 

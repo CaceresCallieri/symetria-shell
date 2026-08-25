@@ -10,7 +10,7 @@ import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
-ColumnLayout {
+PillCardSection {
     id: root
 
     required property Item wrapper
@@ -22,279 +22,356 @@ ColumnLayout {
     // intentional var: nullable JS object from network scan data ({ ssid, bssid, security, ... })
     property var passwordNetwork: null
     property bool showPasswordDialog: false
+    property string selectedNetworkKey: ""
 
-    spacing: Appearance.spacing.small
-    width: Config.bar.sizes.networkWidth
+    implicitWidth: Config.bar.sizes.networkWidth
+    focus: wrapper.keyboardNavigationActive && wrapper.hasCurrent && wrapper.currentName === "network"
 
-    // Wireless section
-    StyledText {
-        visible: root.view === "wireless"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Appearance.padding.normal : 0
-        Layout.rightMargin: Appearance.padding.small
-        text: qsTr("Wireless")
-        font.weight: 500
+    function networkKey(network: var): string {
+        return network?.ssid || network?.bssid || "";
     }
 
-    Toggle {
-        visible: root.view === "wireless"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        label: qsTr("Enabled")
-        checked: NmcliWifi.wifiEnabled
-        toggle.onToggled: NmcliWifi.enableWifi(checked)
+    function networkAt(index: int): var {
+        return networkList.model.values[index] ?? null;
     }
 
-    StyledText {
-        visible: root.view === "wireless"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Appearance.spacing.small : 0
-        Layout.rightMargin: Appearance.padding.small
-        text: qsTr("%1 networks available").arg(NmcliWifi.networks.length)
-        color: Colours.palette.m3onSurfaceVariant
-        font.pointSize: Appearance.font.size.small
-    }
-
-    StyledListView {
-        id: networkList
-
-        visible: root.view === "wireless"
-        Layout.preferredHeight: root.view === "wireless" ? Math.min(contentHeight, root.maxNetworkListHeight) : 0
-        Layout.fillWidth: true
-
-        model: ScriptModel {
-            values: [...NmcliWifi.networks].sort((a, b) => {
-                if (a.active !== b.active)
-                    return b.active - a.active;
-                return b.strength - a.strength;
-            })
+    function restoreNetworkSelection(): void {
+        if (networkList.count === 0) {
+            networkList.currentIndex = -1;
+            return;
         }
-        clip: true
+
+        let fallbackIndex = 0;
+        for (let i = 0; i < networkList.count; i++) {
+            const network = networkAt(i);
+            if (network?.active)
+                fallbackIndex = i;
+            if (selectedNetworkKey.length > 0 && networkKey(network) === selectedNetworkKey) {
+                networkList.currentIndex = i;
+                networkList.positionViewAtIndex(i, ListView.Contain);
+                return;
+            }
+        }
+
+        networkList.currentIndex = fallbackIndex;
+        selectedNetworkKey = networkKey(networkAt(fallbackIndex));
+        networkList.positionViewAtIndex(fallbackIndex, ListView.Contain);
+    }
+
+    function moveNetworkSelection(offset: int): void {
+        if (networkList.count === 0)
+            return;
+
+        const currentIndex = networkList.currentIndex < 0 ? 0 : networkList.currentIndex;
+        const nextIndex = Math.max(0, Math.min(networkList.count - 1, currentIndex + offset));
+        networkList.currentIndex = nextIndex;
+        selectedNetworkKey = networkKey(networkAt(nextIndex));
+        networkList.positionViewAtIndex(nextIndex, ListView.Contain);
+    }
+
+    function activateSelectedNetwork(): void {
+        networkList.currentItem?.toggleConnection();
+    }
+
+    function focusForKeyboardNavigation(): void {
+        if (!focus)
+            return;
+        restoreNetworkSelection();
+        Qt.callLater(() => root.forceActiveFocus());
+    }
+
+    onFocusChanged: focusForKeyboardNavigation()
+    Component.onCompleted: focusForKeyboardNavigation()
+
+    Keys.onUpPressed: event => {
+        moveNetworkSelection(-1);
+        event.accepted = true;
+    }
+    Keys.onDownPressed: event => {
+        moveNetworkSelection(1);
+        event.accepted = true;
+    }
+    Keys.onReturnPressed: event => {
+        activateSelectedNetwork();
+        event.accepted = true;
+    }
+    Keys.onEnterPressed: event => {
+        activateSelectedNetwork();
+        event.accepted = true;
+    }
+    Keys.onSpacePressed: event => {
+        NmcliWifi.enableWifi(!NmcliWifi.wifiEnabled);
+        event.accepted = true;
+    }
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_R && event.modifiers === Qt.NoModifier) {
+            NmcliWifi.rescanWifi();
+            event.accepted = true;
+        }
+    }
+
+    ColumnLayout {
+        id: layout
+
+        anchors.left: parent.left
+        anchors.right: parent.right
         spacing: Appearance.spacing.small
-        rightMargin: Appearance.padding.small
 
-        delegate: RowLayout {
-            id: networkItem
+        // Wireless section
+        StyledText {
+            visible: root.view === "wireless"
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            text: qsTr("Wireless")
+            font.weight: 500
+        }
 
-            required property NmcliWifi.AccessPoint modelData
-            readonly property bool isConnecting: root.connectingToSsid === modelData.ssid
-            readonly property bool loading: networkItem.isConnecting
+        Toggle {
+            visible: root.view === "wireless"
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            label: qsTr("Enabled")
+            checked: NmcliWifi.wifiEnabled
+            toggle.onToggled: NmcliWifi.enableWifi(checked)
+        }
 
-            width: networkList.width - networkList.rightMargin
+        StyledText {
+            visible: root.view === "wireless"
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            Layout.topMargin: visible ? Appearance.spacing.small : 0
+            text: qsTr("%1 networks available").arg(NmcliWifi.networks.length)
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Appearance.font.size.small
+        }
+
+        StyledListView {
+            id: networkList
+
+            visible: root.view === "wireless"
+            Layout.preferredHeight: root.view === "wireless" ? Math.min(contentHeight, root.maxNetworkListHeight) : 0
+            Layout.fillWidth: true
+
+            model: ScriptModel {
+                values: [...NmcliWifi.networks].sort((a, b) => {
+                    if (a.active !== b.active)
+                        return b.active - a.active;
+                    return b.strength - a.strength;
+                })
+
+                onValuesChanged: Qt.callLater(() => root.restoreNetworkSelection())
+            }
+            clip: true
             spacing: Appearance.spacing.small
 
-            MaterialIcon {
-                text: Icons.getNetworkIcon(networkItem.modelData.strength)
-                color: networkItem.modelData.active ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-            }
+            preferredHighlightBegin: 0
+            preferredHighlightEnd: height
+            highlightRangeMode: ListView.ApplyRange
+            highlightFollowsCurrentItem: false
+            highlight: StyledRect {
+                visible: root.wrapper.keyboardNavigationActive
+                radius: Appearance.rounding.normal
+                color: Colours.palette.m3onSurface
+                opacity: 0.1
+                y: networkList.currentItem?.y ?? 0
+                implicitWidth: networkList.width
+                implicitHeight: networkList.currentItem?.implicitHeight ?? 0
 
-            MaterialIcon {
-                visible: networkItem.modelData.isSecure
-                text: "lock"
-                font.pointSize: Appearance.font.size.small
-            }
-
-            StyledText {
-                Layout.leftMargin: Appearance.spacing.small / 2
-                Layout.rightMargin: Appearance.spacing.small / 2
-                Layout.fillWidth: true
-                text: networkItem.modelData.ssid
-                elide: Text.ElideRight
-                font.weight: networkItem.modelData.active ? 500 : 400
-                color: networkItem.modelData.active ? Colours.palette.m3primary : Colours.palette.m3onSurface
-            }
-
-            StyledRect {
-                implicitWidth: implicitHeight
-                implicitHeight: wirelessConnectIcon.implicitHeight + Appearance.padding.small
-
-                radius: Appearance.rounding.full
-                color: Qt.alpha(Colours.palette.m3primary, networkItem.modelData.active ? 1 : 0)
-
-                CircularIndicator {
-                    anchors.fill: parent
-                    running: networkItem.loading
+                Behavior on y {
+                    Anim {
+                        duration: Appearance.anim.durations.small
+                    }
                 }
+            }
 
-                StateLayer {
-                    color: networkItem.modelData.active ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                    disabled: networkItem.loading || !NmcliWifi.wifiEnabled
+            delegate: RowLayout {
+                id: networkItem
 
-                    function onClicked(): void {
-                        if (networkItem.modelData.active) {
-                            NmcliWifi.disconnectFromNetwork();
-                        } else {
-                            root.connectingToSsid = networkItem.modelData.ssid;
-                            NetworkConnection.handleConnect(
-                                networkItem.modelData,
-                                null,
-                                (network) => {
-                                    root.passwordNetwork = network;
-                                    root.showPasswordDialog = true;
-                                    root.wrapper.currentName = "wirelesspassword";
-                                }
-                            );
-                        }
+                required property NmcliWifi.AccessPoint modelData
+                readonly property bool isConnecting: root.connectingToSsid === modelData.ssid
+                readonly property bool loading: networkItem.isConnecting
+
+                width: networkList.width
+                spacing: Appearance.spacing.small
+
+                function toggleConnection(): void {
+                    if (!NmcliWifi.wifiEnabled || networkItem.loading)
+                        return;
+
+                    if (networkItem.modelData.active) {
+                        NmcliWifi.disconnectFromNetwork(networkItem.modelData.ssid);
+                    } else {
+                        root.connectingToSsid = networkItem.modelData.ssid;
+                        NetworkConnection.handleConnect(
+                            networkItem.modelData,
+                            null,
+                            (network) => {
+                                root.passwordNetwork = network;
+                                root.showPasswordDialog = true;
+                                root.wrapper.currentName = "wirelesspassword";
+                            },
+                            // Every terminal result clears the row spinner.
+                            () => root.connectingToSsid = ""
+                        );
                     }
                 }
 
                 MaterialIcon {
-                    id: wirelessConnectIcon
+                    text: Icons.getNetworkIcon(networkItem.modelData.strength)
+                    color: networkItem.modelData.active ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+                }
 
-                    anchors.centerIn: parent
+                MaterialIcon {
+                    visible: networkItem.modelData.isSecure
+                    text: "lock"
+                    font.pointSize: Appearance.font.size.small
+                }
+
+                StyledText {
+                    Layout.leftMargin: Appearance.spacing.small / 2
+                    Layout.rightMargin: Appearance.spacing.small / 2
+                    Layout.fillWidth: true
+                    text: networkItem.modelData.ssid
+                    elide: Text.ElideRight
+                    font.weight: networkItem.modelData.active ? 500 : 400
+                    color: networkItem.modelData.active ? Colours.palette.m3primary : Colours.palette.m3onSurface
+                }
+
+                ConnectToggleButton {
+                    connected: networkItem.modelData.active
+                    loading: networkItem.loading
+                    disabled: !NmcliWifi.wifiEnabled
+
+                    onClicked: networkItem.toggleConnection()
+                }
+            }
+
+            StyledScrollBar.vertical: StyledScrollBar {
+                flickable: networkList
+            }
+        }
+
+        // Always-raised rescan action pill. CircularIndicator overlays
+        // the row when scanning so the spinner replaces the icon+label
+        // in-place — same visual behavior as the prior StyledRect, just
+        // wrapped in the shell's neumorphic depth recipe.
+        PillToggleSurface {
+            id: rescanPill
+
+            visible: root.view === "wireless"
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            Layout.topMargin: visible ? Appearance.spacing.small : 0
+            Layout.fillWidth: true
+            implicitHeight: rescanBtn.implicitHeight + Appearance.padding.small * 2
+            active: false
+
+            StateLayer {
+                color: Colours.palette.m3onSurface
+                disabled: NmcliWifi.scanning || !NmcliWifi.wifiEnabled
+
+                function onClicked(): void {
+                    NmcliWifi.rescanWifi();
+                }
+            }
+
+            RowLayout {
+                id: rescanBtn
+
+                anchors.centerIn: parent
+                spacing: Appearance.spacing.small
+                opacity: NmcliWifi.scanning ? 0 : 1
+
+                MaterialIcon {
+                    id: scanIcon
+
+                    Layout.topMargin: Math.round(fontInfo.pointSize * 0.0575)
                     animate: true
-                    text: networkItem.modelData.active ? "link_off" : "link"
-                    color: networkItem.modelData.active ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                    opacity: networkItem.loading ? 0 : 1
-
-                    Behavior on opacity {
-                        Anim {}
-                    }
-                }
-            }
-        }
-
-        StyledScrollBar.vertical: StyledScrollBar {
-            flickable: networkList
-        }
-    }
-
-    StyledRect {
-        visible: root.view === "wireless"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Appearance.spacing.small : 0
-        Layout.fillWidth: true
-        implicitHeight: rescanBtn.implicitHeight + Appearance.padding.small * 2
-
-        radius: Appearance.rounding.full
-        color: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-
-        StateLayer {
-            color: Colours.palette.m3onSurface
-            disabled: NmcliWifi.scanning || !NmcliWifi.wifiEnabled
-
-            function onClicked(): void {
-                NmcliWifi.rescanWifi();
-            }
-        }
-
-        RowLayout {
-            id: rescanBtn
-
-            anchors.centerIn: parent
-            spacing: Appearance.spacing.small
-            opacity: NmcliWifi.scanning ? 0 : 1
-
-            MaterialIcon {
-                id: scanIcon
-
-                Layout.topMargin: Math.round(fontInfo.pointSize * 0.0575)
-                animate: true
-                text: "wifi_find"
-                color: Colours.palette.m3onSurface
-            }
-
-            StyledText {
-                Layout.topMargin: -Math.round(scanIcon.fontInfo.pointSize * 0.0575)
-                text: qsTr("Rescan networks")
-                color: Colours.palette.m3onSurface
-            }
-
-            Behavior on opacity {
-                Anim {}
-            }
-        }
-
-        CircularIndicator {
-            anchors.centerIn: parent
-            strokeWidth: Appearance.padding.small / 2
-            bgColour: "transparent"
-            implicitHeight: parent.implicitHeight - Appearance.padding.smaller * 2
-            running: NmcliWifi.scanning
-        }
-    }
-
-    // Ethernet section
-    StyledText {
-        visible: root.view === "ethernet"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Appearance.padding.normal : 0
-        Layout.rightMargin: Appearance.padding.small
-        text: qsTr("Ethernet")
-        font.weight: 500
-    }
-
-    StyledText {
-        visible: root.view === "ethernet"
-        Layout.preferredHeight: visible ? implicitHeight : 0
-        Layout.topMargin: visible ? Appearance.spacing.small : 0
-        Layout.rightMargin: Appearance.padding.small
-        text: qsTr("%1 devices available").arg(NmcliEthernet.ethernetDevices.length)
-        color: Colours.palette.m3onSurfaceVariant
-        font.pointSize: Appearance.font.size.small
-    }
-
-    StyledListView {
-        id: ethernetList
-
-        visible: root.view === "ethernet"
-        Layout.preferredHeight: root.view === "ethernet" ? Math.min(contentHeight, root.maxNetworkListHeight) : 0
-        Layout.fillWidth: true
-
-        model: ScriptModel {
-            values: [...NmcliEthernet.ethernetDevices].sort((a, b) => {
-                if (a.connected !== b.connected)
-                    return b.connected - a.connected;
-                return (a.interface || "").localeCompare(b.interface || "");
-            })
-        }
-        clip: true
-        spacing: Appearance.spacing.small
-        rightMargin: Appearance.padding.small
-
-        delegate: RowLayout {
-            id: ethernetItem
-
-            // intentional var: heterogeneous JS object from NmcliEthernet device data
-            required property var modelData
-            // Ethernet connect is instantaneous — no async loading state
-            readonly property bool loading: false
-
-            width: ethernetList.width - ethernetList.rightMargin
-            spacing: Appearance.spacing.small
-
-            MaterialIcon {
-                text: "cable"
-                color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
-            }
-
-            StyledText {
-                Layout.leftMargin: Appearance.spacing.small / 2
-                Layout.rightMargin: Appearance.spacing.small / 2
-                Layout.fillWidth: true
-                text: ethernetItem.modelData.interface || qsTr("Unknown")
-                elide: Text.ElideRight
-                font.weight: ethernetItem.modelData.connected ? 500 : 400
-                color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurface
-            }
-
-            StyledRect {
-                implicitWidth: implicitHeight
-                implicitHeight: connectIcon.implicitHeight + Appearance.padding.small
-
-                radius: Appearance.rounding.full
-                color: Qt.alpha(Colours.palette.m3primary, ethernetItem.modelData.connected ? 1 : 0)
-
-                CircularIndicator {
-                    anchors.fill: parent
-                    running: ethernetItem.loading
+                    text: "wifi_find"
+                    color: Colours.palette.m3onSurface
                 }
 
-                StateLayer {
-                    color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                    disabled: ethernetItem.loading
+                StyledText {
+                    Layout.topMargin: -Math.round(scanIcon.fontInfo.pointSize * 0.0575)
+                    text: qsTr("Rescan networks")
+                    color: Colours.palette.m3onSurface
+                }
 
-                    function onClicked(): void {
+                Behavior on opacity {
+                    Anim {}
+                }
+            }
+
+            CircularIndicator {
+                anchors.centerIn: parent
+                strokeWidth: Appearance.padding.small / 2
+                bgColour: "transparent"
+                implicitHeight: rescanPill.implicitHeight - Appearance.padding.smaller * 2
+                running: NmcliWifi.scanning
+            }
+        }
+
+        // Ethernet section
+        StyledText {
+            visible: root.view === "ethernet"
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            text: qsTr("Ethernet")
+            font.weight: 500
+        }
+
+        StyledText {
+            visible: root.view === "ethernet"
+            Layout.preferredHeight: visible ? implicitHeight : 0
+            Layout.topMargin: visible ? Appearance.spacing.small : 0
+            text: qsTr("%1 devices available").arg(NmcliEthernet.ethernetDevices.length)
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Appearance.font.size.small
+        }
+
+        StyledListView {
+            id: ethernetList
+
+            visible: root.view === "ethernet"
+            Layout.preferredHeight: root.view === "ethernet" ? Math.min(contentHeight, root.maxNetworkListHeight) : 0
+            Layout.fillWidth: true
+
+            model: ScriptModel {
+                values: [...NmcliEthernet.ethernetDevices].sort((a, b) => {
+                    if (a.connected !== b.connected)
+                        return b.connected - a.connected;
+                    return (a.interface || "").localeCompare(b.interface || "");
+                })
+            }
+            clip: true
+            spacing: Appearance.spacing.small
+
+            delegate: RowLayout {
+                id: ethernetItem
+
+                // intentional var: heterogeneous JS object from NmcliEthernet device data
+                required property var modelData
+                // Ethernet connect is instantaneous — no async loading state
+                readonly property bool loading: false
+
+                width: ethernetList.width
+                spacing: Appearance.spacing.small
+
+                MaterialIcon {
+                    text: "cable"
+                    color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+                }
+
+                StyledText {
+                    Layout.leftMargin: Appearance.spacing.small / 2
+                    Layout.rightMargin: Appearance.spacing.small / 2
+                    Layout.fillWidth: true
+                    text: ethernetItem.modelData.interface || qsTr("Unknown")
+                    elide: Text.ElideRight
+                    font.weight: ethernetItem.modelData.connected ? 500 : 400
+                    color: ethernetItem.modelData.connected ? Colours.palette.m3primary : Colours.palette.m3onSurface
+                }
+
+                ConnectToggleButton {
+                    connected: ethernetItem.modelData.connected
+                    loading: ethernetItem.loading
+
+                    onClicked: {
                         if (ethernetItem.modelData.connected && ethernetItem.modelData.connection) {
                             NmcliEthernet.disconnectEthernet(ethernetItem.modelData.connection, () => {});
                         } else {
@@ -302,43 +379,30 @@ ColumnLayout {
                         }
                     }
                 }
-
-                MaterialIcon {
-                    id: connectIcon
-
-                    anchors.centerIn: parent
-                    animate: true
-                    text: ethernetItem.modelData.connected ? "link_off" : "link"
-                    color: ethernetItem.modelData.connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                    opacity: ethernetItem.loading ? 0 : 1
-
-                    Behavior on opacity {
-                        Anim {}
-                    }
-                }
             }
-        }
 
-        StyledScrollBar.vertical: StyledScrollBar {
-            flickable: ethernetList
+            StyledScrollBar.vertical: StyledScrollBar {
+                flickable: ethernetList
+            }
         }
     }
 
     Connections {
         target: NmcliWifi
 
-        function onActiveChanged(): void {
-            if (NmcliWifi.active && root.connectingToSsid === NmcliWifi.active.ssid) {
+        // REGRESSION GUARD: do NOT add an onActiveChanged handler that clears the
+        // spinner or closes the password dialog by comparing NmcliWifi.active.ssid
+        // against the target. `active` is the first active AP across ALL wireless
+        // devices, so it can match an unrelated radio's network, and it raced the
+        // callback-driven close in WirelessPassword.closeDialog(). The connect
+        // result callback passed to handleConnect above is the authoritative
+        // signal. See docs/wifi-connect-flow.md.
+
+        // Belt-and-braces clear for connections started somewhere other than this
+        // popout's own click handler (which clears via its onResult callback).
+        function onConnectionFailed(ssid: string): void {
+            if (root.connectingToSsid === ssid) {
                 root.connectingToSsid = "";
-                // Close password dialog if we successfully connected
-                if (root.showPasswordDialog && root.passwordNetwork && NmcliWifi.active.ssid === root.passwordNetwork.ssid) {
-                    root.showPasswordDialog = false;
-                    root.passwordNetwork = null;
-                    if (root.wrapper.currentName === "wirelesspassword") {
-                        root.wrapper.currentName = "network";
-                    }
-                }
             }
         }
 
@@ -365,7 +429,6 @@ ColumnLayout {
         property alias toggle: toggle
 
         Layout.fillWidth: true
-        Layout.rightMargin: Appearance.padding.small
         spacing: Appearance.spacing.normal
 
         StyledText {

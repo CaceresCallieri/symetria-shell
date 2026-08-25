@@ -12,132 +12,130 @@ Column {
     spacing: Appearance.spacing.normal
     width: Config.bar.sizes.weatherWidth
 
-    // Header: Icon + Temp + Location
-    RowLayout {
+    PillCardSection {
         width: parent.width
-        spacing: Appearance.spacing.normal
+        contentMargins: Appearance.padding.normal
 
-        MaterialIcon {
-            text: Weather.icon
-            color: Colours.palette.m3primary
-            font.pointSize: Appearance.font.size.extraLarge
-        }
+        RowLayout {
+            id: headerRow
 
-        Column {
-            Layout.fillWidth: true
-            spacing: 0
-
-            StyledText {
-                text: Weather.temp
-                font.pointSize: Appearance.font.size.large
-                font.weight: 500
-            }
-
-            StyledText {
-                text: Weather.city ? `${Weather.description} in ${Weather.city}` : Weather.description
-                font.pointSize: Appearance.font.size.small
-                opacity: 0.8
-            }
-        }
-
-        // Today's min/max range (right-aligned, subdued)
-        Column {
-            visible: Weather.forecast.length > 0
-            Layout.alignment: Qt.AlignVCenter
-            spacing: Appearance.spacing.smaller
-
-            TempBound { icon: "arrow_drop_up"; value: Weather.tempMax }
-            TempBound { icon: "arrow_drop_down"; value: Weather.tempMin }
-        }
-    }
-
-    // Separator
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Colours.palette.m3outline
-        opacity: 0.3
-    }
-
-    // Weather details
-    Column {
-        width: parent.width
-        spacing: Appearance.spacing.small
-
-        DetailRow {
-            icon: "device_thermostat"
-            label: qsTr("Feels like")
-            value: Weather.feelsLike
-        }
-
-        DetailRow {
-            icon: "humidity_percentage"
-            label: qsTr("Humidity")
-            value: `${Weather.humidity}%`
-        }
-
-        DetailRow {
-            icon: "air"
-            label: qsTr("Wind")
-            value: `${Weather.windSpeed} km/h`
-        }
-    }
-
-    // Separator
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Colours.palette.m3outline
-        opacity: 0.3
-    }
-
-    // Sunrise/Sunset row
-    RowLayout {
-        width: parent.width
-
-        // Sunrise (left-aligned)
-        Row {
-            spacing: Appearance.spacing.small
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Appearance.spacing.normal
 
             MaterialIcon {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "wb_sunny"
-                color: Colours.palette.m3tertiary
-                font.pointSize: Appearance.font.size.normal
+                text: Weather.icon
+                color: Colours.palette.m3primary
+                font.pointSize: Appearance.font.size.extraLarge
             }
 
-            StyledText {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Weather.sunrise
-                font.family: Appearance.font.family.mono
-            }
-        }
+            Column {
+                Layout.fillWidth: true
+                spacing: 0
 
-        // Spacer to push sunset to the right
-        Item {
-            Layout.fillWidth: true
-        }
+                StyledText {
+                    text: Weather.temp
+                    font.pointSize: Appearance.font.size.large
+                    font.weight: 500
+                }
 
-        // Sunset (right-aligned)
-        Row {
-            spacing: Appearance.spacing.small
-
-            MaterialIcon {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "nights_stay"
-                color: Colours.palette.m3tertiary
-                font.pointSize: Appearance.font.size.normal
+                StyledText {
+                    text: Weather.city ? `${Weather.description} in ${Weather.city}` : Weather.description
+                    font.pointSize: Appearance.font.size.small
+                    opacity: 0.8
+                }
             }
 
-            StyledText {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Weather.sunset
-                font.family: Appearance.font.family.mono
+            Column {
+                visible: Weather.forecast.length > 0
+                Layout.alignment: Qt.AlignVCenter
+                spacing: Appearance.spacing.smaller
+
+                TempBound { icon: "arrow_drop_up"; value: Weather.tempMax }
+                TempBound { icon: "arrow_drop_down"; value: Weather.tempMin }
             }
         }
     }
 
-    // Reusable detail row component
+    // Section 2 — Secondary metrics: single card so sunrise/sunset
+    // stays grouped with the other numerics rather than getting its
+    // own card and re-introducing the divider hierarchy.
+    PillCardSection {
+        width: parent.width
+        contentMargins: Appearance.padding.normal
+
+        Column {
+            id: detailsColumn
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Appearance.spacing.small
+
+            DetailRow {
+                icon: "device_thermostat"
+                label: qsTr("Feels like")
+                value: Weather.feelsLike
+            }
+
+            DetailRow {
+                icon: "humidity_percentage"
+                label: qsTr("Humidity")
+                value: `${Weather.humidity}%`
+            }
+
+            DetailRow {
+                icon: "air"
+                label: qsTr("Wind")
+                value: `${Weather.windSpeed} km/h`
+            }
+
+            // Sunrise / sunset — sibling row inside the same card, no
+            // divider; the icon-glyph contrast (wb_sunny / nights_stay)
+            // already separates it visually from the metric rows above.
+            RowLayout {
+                width: parent.width
+
+                Row {
+                    spacing: Appearance.spacing.small
+
+                    MaterialIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "wb_sunny"
+                        color: Colours.palette.m3tertiary
+                        font.pointSize: Appearance.font.size.normal
+                    }
+
+                    StyledText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Weather.sunrise
+                        font.family: Appearance.font.family.mono
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                }
+
+                Row {
+                    spacing: Appearance.spacing.small
+
+                    MaterialIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "nights_stay"
+                        color: Colours.palette.m3tertiary
+                        font.pointSize: Appearance.font.size.normal
+                    }
+
+                    StyledText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Weather.sunset
+                        font.family: Appearance.font.family.mono
+                    }
+                }
+            }
+        }
+    }
+
     component DetailRow: RowLayout {
         required property string icon
         required property string label

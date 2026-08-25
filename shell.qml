@@ -9,12 +9,15 @@ import "modules/background" as BackgroundModule
 import "modules/areapicker" as AreaPickerModule
 import "modules/osd" as OsdModule
 import "modules/notifications" as NotifsModule
+import "modules/session" as SessionModule
+import "modules/toasts" as ToastsModule
 import "modules/lock"
 import "modules/askpass"
 import "modules/recorder"
 import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
 import "modules/killconfirm" as KillConfirmModule
+import "modules/windowoverview" as WindowOverviewModule
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -41,6 +44,8 @@ ShellRoot {
     AreaPickerModule.Wrapper {}
     OsdModule.OsdOverlay {}
     NotifsModule.NotificationsOverlay {}
+    SessionModule.SessionOverlay {}
+    ToastsModule.ToastsOverlay {}
     Askpass {}
     RecorderRoot {}
     Keycaster {}
@@ -52,6 +57,8 @@ ShellRoot {
     KillConfirmModule.KillConfirmOverlay {
         handler: killConfirm
     }
+    WindowOverviewModule.Wrapper {}
+    WindowOverviewModule.OverviewSurface {}
     Lock {
         id: lock
     }

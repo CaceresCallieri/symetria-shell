@@ -16,7 +16,10 @@ Item {
     required property PersistentProperties state
     readonly property alias count: bar.count
 
-    implicitHeight: bar.implicitHeight + indicator.implicitHeight + indicator.anchors.topMargin + separator.implicitHeight
+    // Tabs now lives inside a PillCard in Content.qml; the previous bottom
+    // separator hairline is gone because the card frame already provides
+    // visual containment. Height drops the separator term.
+    implicitHeight: bar.implicitHeight + indicator.implicitHeight + indicator.anchors.topMargin
 
     TabBar {
         id: bar
@@ -38,6 +41,11 @@ Item {
         Tab {
             iconName: "image"
             text: qsTr("Images")
+        }
+
+        Tab {
+            iconName: "graphic_eq"
+            text: qsTr("Transcriptions")
         }
     }
 
@@ -75,17 +83,6 @@ Item {
         Behavior on implicitWidth {
             Anim {}
         }
-    }
-
-    StyledRect {
-        id: separator
-
-        anchors.top: indicator.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-
-        implicitHeight: 1
-        color: Colours.palette.m3outlineVariant
     }
 
     component Tab: TabButton {

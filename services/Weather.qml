@@ -4,16 +4,36 @@ import qs.config
 import qs.utils
 import Symmetria
 import Quickshell
+import Quickshell.Io
 import QtQuick
+import QtPositioning
 
 Singleton {
     id: root
 
     property string city
     property string loc
-    property var cc
+    // Initialize to null (not the implicit `undefined`) so consumers' `cc !== null`
+    // guards work: `undefined !== null` is true, which would falsely treat "no data yet"
+    // as "data available" and render a bait 0° before any fetch succeeds.
+    property var cc: null
     property list<var> forecast
     property list<var> hourlyForecast
+
+    // Whether the geoclue daemon is installed (detected via its D-Bus service file).
+    // Surfaced in the control-center Services pane to prompt installation when GPS
+    // mode is enabled but unavailable. `geoclueChecked` gates UI on the async probe
+    // so the "not installed" hint doesn't flash before the check completes.
+    property bool geoclueAvailable: false
+    property bool geoclueChecked: false
+    // Gates the Connections block against JsonAdapter deserialization at startup.
+    // Without this, Config.services property changes during initial JSON load trigger
+    // a second reload() while an in-flight IP request from Component.onCompleted is
+    // still pending — the late IP response can then overwrite the correct location.
+    property bool ready: false
+    // Prevents concurrent ipinfo.io requests when the GPS timeout and sourceError
+    // both fire (geoclue plugin may emit sourceError on forced deactivation).
+    property bool ipFetchInFlight: false
 
     readonly property string icon: cc ? Icons.getWeatherIcon(cc.weatherCode) : "cloud_alert"
     readonly property string description: cc?.weatherDesc ?? qsTr("No weather")
@@ -29,6 +49,12 @@ Singleton {
     readonly property var cachedCities: new Map()
 
     function reload(): void {
+        // Explicit "current location" mode: resolve via geoclue GPS, falling back to IP.
+        if (Config.services.weatherUseCurrentLocation) {
+            requestGpsLocation();
+            return;
+        }
+
         const configLocation = Config.services.weatherLocation;
 
         if (configLocation) {
@@ -38,16 +64,42 @@ Singleton {
             } else {
                 fetchCoordsFromCity(configLocation);
             }
-        } else if (!loc || timer.elapsed() > 900000) {
-            Requests.get("https://ipinfo.io/json", text => {
-                const response = JSON.parse(text);
-                if (response.loc) {
-                    loc = response.loc;
-                    city = response.city ?? "";
-                    timer.restart();
-                }
-            });
+        } else {
+            // No manual location configured: auto-detect via IP geolocation.
+            fetchLocationFromIp();
         }
+    }
+
+    // IP-based geolocation via ipinfo.io. Shared fallback used both when no manual
+    // location is configured and when a geoclue GPS fix is unavailable. Cached for
+    // 15 min (tracked by `timer`) so repeated reloads don't hammer the endpoint.
+    function fetchLocationFromIp(): void {
+        if (root.ipFetchInFlight)
+            return; // deduplicate concurrent calls (GPS timeout + sourceError race)
+        if (loc && timer.elapsed() <= 900000)
+            return;
+
+        root.ipFetchInFlight = true;
+        Requests.get("https://ipinfo.io/json", text => {
+            root.ipFetchInFlight = false;
+            const response = JSON.parse(text);
+            if (response.loc) {
+                loc = response.loc;
+                city = response.city ?? "";
+                timer.restart();
+            }
+        });
+    }
+
+    // One-shot geoclue request. Activates the PositionSource; resolution happens in
+    // gpsSource.onPositionChanged (success), onSourceErrorChanged (failure), or
+    // gpsTimeout (no response) — each converging on a valid `loc` or the IP fallback.
+    function requestGpsLocation(): void {
+        if (loc && timer.elapsed() <= 900000)
+            return; // reuse a still-fresh fix instead of re-querying geoclue
+
+        gpsTimeout.restart();
+        gpsSource.active = true;
     }
 
     function fetchCityFromCoords(coords: string): void {
@@ -200,7 +252,10 @@ Singleton {
         return conditions[code] || "Unknown";
     }
 
-    Component.onCompleted: reload()
+    Component.onCompleted: {
+        reload();
+        ready = true; // allow Connections to react to live config changes from here on
+    }
     onLocChanged: fetchWeatherData()
 
     // Refresh weather data hourly; also re-check location in case it has changed
@@ -216,5 +271,85 @@ Singleton {
 
     ElapsedTimer {
         id: timer
+    }
+
+    // Probe for the geoclue daemon once at startup. The D-Bus system-service file is
+    // present iff the `geoclue` package is installed; exit 0 → available.
+    Process {
+        id: geoclueProbe
+
+        running: true
+        command: ["test", "-e", "/usr/share/dbus-1/system-services/org.freedesktop.GeoClue2.service"]
+        onExited: (code, status) => {
+            root.geoclueAvailable = code === 0;
+            root.geoclueChecked = true;
+        }
+    }
+
+    // GPS via geoclue. Activated on demand by requestGpsLocation(); resolves to a
+    // single fix then deactivates (one-shot). Requires the `geoclue` daemon installed
+    // and Symmetria's desktopId whitelisted in /etc/geoclue/geoclue.conf — otherwise
+    // sourceError fires (or the request times out) and we fall back to IP geolocation.
+    PositionSource {
+        id: gpsSource
+
+        name: "geoclue2"
+
+        PluginParameter {
+            name: "desktopId"
+            value: "symmetria"
+        }
+
+        onPositionChanged: {
+            const coord = position.coordinate;
+            if (coord.isValid) {
+                gpsTimeout.stop();
+                active = false; // one-shot: a single fix is enough
+                loc = `${coord.latitude},${coord.longitude}`;
+                fetchCityFromCoords(loc); // reuse reverse-geocode + cache
+                timer.restart();
+            }
+        }
+
+        onSourceErrorChanged: {
+            if (sourceError !== PositionSource.NoError) {
+                active = false;
+                gpsTimeout.stop();
+                root.fetchLocationFromIp(); // geoclue unavailable/denied → graceful fallback
+            }
+        }
+    }
+
+    Timer {
+        id: gpsTimeout
+
+        interval: 10000 // no geoclue response within 10s → fall back to IP
+        onTriggered: {
+            gpsSource.active = false;
+            if (!root.loc)
+                root.fetchLocationFromIp();
+        }
+    }
+
+    // React to live config edits (e.g. the control-center Services pane) so weather
+    // refreshes immediately instead of waiting for the hourly timer.
+    Connections {
+        target: Config.services
+
+        function onWeatherUseCurrentLocationChanged(): void {
+            if (!root.ready)
+                return;
+            root.loc = "";
+            root.city = "";
+            root.reload();
+        }
+
+        function onWeatherLocationChanged(): void {
+            if (!root.ready)
+                return;
+            root.loc = "";
+            root.city = "";
+            root.reload();
+        }
     }
 }

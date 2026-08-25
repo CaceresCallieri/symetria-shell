@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.components.controls
-import qs.components.containers
 import qs.services
 import qs.config
 import Quickshell
@@ -46,9 +45,11 @@ Item {
     readonly property real audioLevel: job?.audioLevel ?? 0
     readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
 
+    // Live partial transcript (STT streaming mode). "" for non-STT jobs.
+    readonly property string partialTranscript: mode === "stt" ? (job?.partialTranscript ?? "") : ""
+
     // ── STT-specific property aliases ──────────────────────────────
 
-    readonly property bool serviceIsAskMode: mode === "stt" && SttService.isAskMode
     readonly property string serviceDeliveryChoice: job?.activeDeliveryChoice ?? "clipboard"
     readonly property string serviceInjectionPath: job?.injectionPath ?? ""
     readonly property bool serviceInjectionDowngraded: job?.injectionDowngraded ?? false
@@ -91,7 +92,13 @@ Item {
         },
         "success": {
             icon: root.mode === "audio" ? "audio_file" : "check_circle",
-            iconColor: root.mode === "audio" ? Colours.palette.m3confirm : Colours.palette.m3primary
+            // M3 "on surface" foreground for both modes — collapses the prior
+            // split (audio: m3confirm green / STT: m3primary accent) into a
+            // unified white success indicator that reads consistently against
+            // the claymorphism card. Status icons get the neutral on-surface
+            // role; only action-intent buttons (the hover-row submit ✓) keep
+            // their semantic color (m3confirm).
+            iconColor: Colours.palette.m3onSurface
         },
         "idle": {
             icon: "mic",
@@ -121,7 +128,6 @@ Item {
             injectionDowngraded: root.serviceInjectionDowngraded
             injectionPath: root.serviceInjectionPath
             injectionSubmitted: root.serviceInjectionSubmitted
-            isAskMode: root.serviceIsAskMode
             modeBtnX: modeBtn.x
             modeBtnWidth: modeBtn.width
         }
@@ -154,7 +160,7 @@ Item {
     implicitWidth: container.implicitWidth
     implicitHeight: container.implicitHeight + Appearance.padding.large
 
-    StyledRect {
+    Item {
         id: container
 
         anchors.top: parent.top
@@ -164,8 +170,15 @@ Item {
         implicitWidth: content.implicitWidth + Appearance.padding.large * 2
         implicitHeight: content.implicitHeight + Appearance.padding.large * 2
 
-        radius: Appearance.rounding.normal
-        color: "transparent"
+        // Claymorphism frame matching the clipboard popout's stacked cards
+        // and the calendar popout's panelMode sections. The recorder drawer
+        // previously sat on a transparent rect (only the drawer's outer pane
+        // provided visual containment); the card gives the timer/waveform/
+        // action-row cluster its own held surface so it reads as a coherent
+        // pill rather than text floating in the void.
+        PillCard {
+            anchors.fill: parent
+        }
 
         HoverHandler {
             id: cardHover
@@ -227,7 +240,7 @@ Item {
 
                     // Separator before trailing icon
                     StyledText {
-                        visible: audioModeIcon.visible || modeBtn.visible
+                        visible: audioModeIcon.visible || modeBtn.visible || vocabBadge.visible
                         text: "·"
                         font.pointSize: Appearance.font.size.small
                         color: Colours.palette.m3outlineVariant
@@ -244,13 +257,60 @@ Item {
                     }
 
                     // ── STT mode: delivery mode button ────────────
-                    PillButton {
+                    // Raised Tonal IconButton matches the calendar popout's
+                    // chevrons and the utilities popup's pill aesthetic now
+                    // that the recorder content sits inside its own PillCard.
+                    // Plain PillButton would read as a flat pill-on-pill.
+                    IconButton {
                         id: modeBtn
 
-                        visible: root.mode === "stt" && root.serviceIsAskMode
+                        visible: root.mode === "stt"
                         icon: RecordingSessionManager.deliveryModeIcons[root.serviceDeliveryChoice] ?? "content_copy"
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
                     }
+
+                    // Inline vocab-hint count sibling — placed after the
+                    // delivery pill. Previously tried as an anchored child
+                    // floating above-right of the pill; that works in the
+                    // drawer but gets clipped in the bar embed because
+                    // recordingCenterContainer in Bar.qml uses clip: true
+                    // (needed for the horizontal reveal animation) and the
+                    // bar's layer-shell surface caps the vertical extent.
+                    // Keeping the two surfaces consistent is more valuable
+                    // than optimizing the drawer placement separately.
+                    VocabHintBadge {
+                        id: vocabBadge
+                        Layout.alignment: Qt.AlignTop
+                    }
+                }
+            }
+
+            // ── Streaming live partial preview (STT streaming mode) ───
+            // Shows what the streaming backend is hearing in real time so the
+            // user can re-dictate mishearings on the fly. Preview only — the
+            // delivered text still comes from the batch path.
+            //
+            // CONTRACT — this is ONE of TWO partial-preview surfaces; the other
+            // is the bar embed (RecordingBarEmbed.qml), which is the primary one
+            // in daily use (merge mode). Keep both in sync: a streaming-partial
+            // change here must be mirrored there, or the preview disappears for
+            // whichever surface the user is in. The treatments differ on purpose
+            // (wrapped block here; grow-with-cap + ElideLeft pill there).
+            FadeTransition {
+                Layout.alignment: Qt.AlignHCenter
+                show: root.mode === "stt" && root.partialTranscript !== ""
+                    && (root.displayState === "recording" || root.displayState === "processing")
+
+                StyledText {
+                    width: 320
+                    text: root.partialTranscript
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pointSize: Appearance.font.size.small
+                    color: Colours.palette.m3onSurfaceVariant
                 }
             }
 
@@ -276,10 +336,20 @@ Item {
                 RowLayout {
                     spacing: Appearance.spacing.normal
 
-                    PillButton {
+                    // Hover-row actions: raised Tonal IconButtons. Override
+                    // inactiveOnColour to map the prior PillButton.iconColor
+                    // semantics (pause→primary when paused, cancel→error,
+                    // submit→confirm) onto IconButton's coloring API.
+                    // triggerPress() was ported into IconButton specifically
+                    // for these consumers — IPC-driven pause/cancel/stop
+                    // events still squeeze the matching button.
+                    IconButton {
                         id: pauseBtn
                         icon: root.displayState === "paused" ? "play_arrow" : "pause"
-                        iconColor: root.displayState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: root.displayState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
                         onClicked: {
                             if (root.mode === "stt")
                                 root.job?.recording ? root.job.pause() : root.job.resume();
@@ -289,24 +359,33 @@ Item {
                     }
 
                     // Restart (STT only)
-                    PillButton {
+                    IconButton {
                         id: restartBtn
                         visible: root.mode === "stt"
                         icon: "restart_alt"
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
                         onClicked: SttService.restart()
                     }
 
-                    PillButton {
+                    IconButton {
                         id: cancelBtn
                         icon: "close"
-                        iconColor: Colours.palette.m3error
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: Colours.palette.m3error
                         onClicked: root.job?.cancel()
                     }
 
-                    PillButton {
+                    IconButton {
                         id: submitBtn
                         icon: "check"
-                        iconColor: Colours.palette.m3confirm
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: Colours.palette.m3confirm
                         onClicked: {
                             if (root.mode === "stt")
                                 root.job?.stop();

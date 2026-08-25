@@ -19,22 +19,65 @@ CustomMouseArea {
     property bool utilitiesShortcutActive
     property real _pendingPopoutX
 
-    function withinPanelHeight(panel: Item, x: real, y: real): bool {
-        const panelY = Config.border.thickness + panel.y;
+    function withinPanelHeight(panel: Item, y: real): bool {
+        // `panel` lives inside `panels`, which is inset from this MouseArea by the
+        // bar, while `y` arrives in THIS item's coordinates. Map the panel across
+        // before comparing. Wrapper.qml's Region template already does exactly
+        // this (`y: modelData.y + bar.implicitHeight`) when it carves the panel
+        // out of the input mask; reading panel.y raw here put the hit test one
+        // bar-height above the strip that actually receives the pointer.
+        const panelY = panels.y + panel.y;
         return y >= panelY - Config.border.rounding && y <= panelY + panel.height + Config.border.rounding;
     }
 
+    // Same mapping on the x axis, through the live container rather than through
+    // Config.border.sideThickness. The two agree only because Panels' leftMargin
+    // happens to BE that constant — which is exactly the coincidence that let the
+    // y axis drift out of step with the input mask and go unnoticed for so long.
     function withinPanelWidth(panel: Item, x: real, y: real): bool {
-        const panelX = Config.border.thickness + panel.x;
+        const panelX = panels.x + panel.x;
         return x >= panelX - Config.border.rounding && x <= panelX + panel.width + Config.border.rounding;
     }
 
-    function inLeftPanel(panel: Item, x: real, y: real): bool {
-        return x < Config.border.thickness + panel.x + panel.width && withinPanelHeight(panel, x, y);
+    /// x-only edge test, for gestures where the pointer's height is irrelevant.
+    /// Inclusive of the panel's left column: the input Region carved out of the
+    /// mask spans [panel.x, panel.x + width], so a strict `>` rejected the first
+    /// pixel of an already narrow strip after the pointer had been delivered to it.
+    function pastRightEdgeOf(panel: Item, x: real): bool {
+        return x >= panels.x + panel.x;
     }
 
     function inRightPanel(panel: Item, x: real, y: real): bool {
-        return x > Config.border.thickness + panel.x && withinPanelHeight(panel, x, y);
+        return pastRightEdgeOf(panel, x) && withinPanelHeight(panel, y);
+    }
+
+    /// The right edge carries two OSD destinations stacked around the screen's
+    /// vertical centre: volume above, brightness below. Whichever half the
+    /// pointer is in picks the metric, so the card appears under the hand rather
+    /// than wherever the last keypress left it.
+    ///
+    /// The two halves answer two different questions, and mixing them is a trap:
+    /// membership uses the padded panel test (withinPanelHeight adds
+    /// Config.border.rounding on each side, which is what makes the strip
+    /// forgiving), but the metric is chosen by an UNPADDED comparison against the
+    /// seam. Asking inRightPanel twice instead would hand the whole overlap — two
+    /// roundings wide, straddling the centre — to whichever half ran first, and
+    /// the split would sit off-centre by a band you cannot see.
+    ///
+    /// The cheap geometry test runs BEFORE resolving the overlay: this is called
+    /// from onPositionChanged for every pointer sample across the whole window,
+    /// and monitorFor plus a Map lookup on each one is real work for a question
+    /// that is almost always "no".
+    function showOsdForZone(x: real, y: real): void {
+        if (!inRightPanel(panels.osdVolume, x, y) && !inRightPanel(panels.osdBrightness, x, y))
+            return;
+
+        const overlay = Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen));
+        if (!overlay)
+            return;
+
+        const seam = panels.y + panels.osdBrightness.y;
+        overlay.showMetric(y < seam ? "volume" : "brightness");
     }
 
     function inTopPanel(panel: Item, x: real, y: real): bool {
@@ -58,7 +101,7 @@ CustomMouseArea {
 
     function withinPanelWidthExpanded(panel: Item, x: real, y: real): bool {
         const margin = Config.border.rounding + Config.border.keepAliveMargin;
-        const panelX = Config.border.thickness + panel.x;
+        const panelX = Config.border.sideThickness + panel.x;
         return x >= panelX - margin && x <= panelX + panel.width + margin;
     }
 
@@ -82,7 +125,7 @@ CustomMouseArea {
     // activates on hover, so the user must move to the very bottom-right corner to trigger it.
     function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
         const triggerWidth = panel.width / 4;
-        const panelRight = Config.border.thickness + panel.x + panel.width + Config.border.rounding;
+        const panelRight = Config.border.sideThickness + panel.x + panel.width + Config.border.rounding;
         const triggerLeft = panelRight - triggerWidth;
         const inTriggerX = x >= triggerLeft && x <= panelRight;
 
@@ -102,14 +145,22 @@ CustomMouseArea {
     anchors.fill: parent
     hoverEnabled: true
 
-    onPressed: event => dragStart = Qt.point(event.x, event.y)
+    onPressed: event => {
+        dragStart = Qt.point(event.x, event.y);
+        if (popouts.keyboardNavigationActive
+                && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
+            popouts.close();
+        }
+    }
     onContainsMouseChanged: {
         if (!containsMouse) {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
+            if (!popouts.keyboardNavigationActive
+                    && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
+                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
+                    && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
                 _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -122,6 +173,12 @@ CustomMouseArea {
 
     onPositionChanged: event => {
         if (popouts.isDetached)
+            return;
+
+        // A keyboard-opened popout remains stable until Escape, the keybind, or
+        // a click outside closes its focus grab. Pointer motion must not switch
+        // its content or close it while the user navigates the list.
+        if (popouts.keyboardNavigationActive)
             return;
 
         const x = event.x;
@@ -142,43 +199,25 @@ CustomMouseArea {
         }
 
         if (panels.sidebar.width === 0) {
-            // Show OSD overlay on right-edge hover
-            if (inRightPanel(panels.osd, x, y))
-                Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
+            // Right-edge hover: upper zone summons volume, lower zone brightness
+            showOsdForZone(x, y);
 
-            const showSidebar = pressed && dragStart.x > Config.border.thickness + panels.sidebar.x;
+            const showSidebar = pressed && dragStart.x > 2 + panels.sidebar.x;
 
-            // Show/hide session on drag
-            if (pressed && inRightPanel(panels.session, dragStart.x, dragStart.y) && withinPanelHeight(panels.session, x, y)) {
-                if (dragX < -Config.session.dragThreshold)
-                    visibilities.session = true;
-                else if (dragX > Config.session.dragThreshold)
-                    visibilities.session = false;
-
-                // Show sidebar on drag if in session area and session is nearly fully visible
-                if (showSidebar && panels.session.width >= panels.session.nonAnimWidth && dragX < -Config.sidebar.dragThreshold)
-                    visibilities.sidebar = true;
-            } else if (showSidebar && dragX < -Config.sidebar.dragThreshold) {
-                // Show sidebar on drag if not in session area
+            if (showSidebar && dragX < -Config.sidebar.dragThreshold)
                 visibilities.sidebar = true;
-            }
         } else {
             const outOfSidebar = x < width - panels.sidebar.width;
 
-            // Show OSD overlay on right-edge hover (outside sidebar)
-            if (outOfSidebar && inRightPanel(panels.osd, x, y))
-                Visibilities.osdOverlays.get(Hypr.monitorFor(root.screen))?.show();
+            // Right-edge hover, outside the sidebar
+            if (outOfSidebar)
+                showOsdForZone(x, y);
 
-            // Show/hide session on drag
-            if (pressed && outOfSidebar && inRightPanel(panels.session, dragStart.x, dragStart.y) && withinPanelHeight(panels.session, x, y)) {
-                if (dragX < -Config.session.dragThreshold)
-                    visibilities.session = true;
-                else if (dragX > Config.session.dragThreshold)
-                    visibilities.session = false;
-            }
-
-            // Hide sidebar on drag
-            if (pressed && inRightPanel(panels.sidebar, dragStart.x, 0) && dragX > Config.sidebar.dragThreshold)
+            // Hide sidebar on drag. Only the drag's starting x matters, which is
+            // why this used to pass a literal y of 0 to neuter the height test —
+            // now that withinPanelHeight maps coordinates properly, that trick
+            // would reject every drag, so ask the x-only question directly.
+            if (pressed && pastRightEdgeOf(panels.sidebar, dragStart.x) && dragX > Config.sidebar.dragThreshold)
                 visibilities.sidebar = false;
         }
 
@@ -192,26 +231,6 @@ CustomMouseArea {
             else if (dragY > Config.launcher.dragThreshold)
                 visibilities.launcher = false;
         }
-
-        // DISABLED: Dashboard panel (bottom-left hover zone)
-        // The dashboard module is disabled and slated for removal.
-        // Some sub-features (weather/forecast) may be extracted and reimplemented elsewhere.
-        // To re-enable: set Config.dashboard.enabled to true in shell.json and uncomment below.
-        //
-        // const showDashboard = Config.dashboard.showOnHover && (inBottomLeftPanel(panels.dashboard, x, y) || inAgentBarForPanel(panels.dashboard, x, y));
-        //
-        // if (!dashboardShortcutActive) {
-        //     visibilities.dashboard = showDashboard;
-        // } else if (showDashboard) {
-        //     dashboardShortcutActive = false;
-        // }
-        //
-        // if (pressed && inBottomLeftPanel(panels.dashboard, dragStart.x, dragStart.y) && withinPanelWidth(panels.dashboard, x, y)) {
-        //     if (dragY < -Config.dashboard.dragThreshold)
-        //         visibilities.dashboard = true;
-        //     else if (dragY > Config.dashboard.dragThreshold)
-        //         visibilities.dashboard = false;
-        // }
 
         // Show utilities on hover (corner-only trigger to open, full panel to keep alive)
         const showUtilities = inUtilitiesTriggerZone(panels.utilities, x, y);
@@ -240,7 +259,8 @@ CustomMouseArea {
                 _popoutThrottleTimer.start();
         } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
                    && !inTopPanelExpanded(panels.popouts, x, y)
-                   && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)) {
+                   && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
+                   && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();
@@ -252,7 +272,10 @@ CustomMouseArea {
     Timer {
         id: _popoutThrottleTimer
         interval: 16
-        onTriggered: root.bar.checkPopout(root._pendingPopoutX)
+        onTriggered: {
+            if (!root.popouts.keyboardNavigationActive)
+                root.bar.checkPopout(root._pendingPopoutX);
+        }
     }
 
     // Monitor individual visibility changes

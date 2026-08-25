@@ -23,7 +23,7 @@ Column {
     readonly property int workspaceIconWidth: 24
 
     spacing: Appearance.spacing.normal
-    width: Config.bar.sizes.updatesWidth
+    width: Config.bar.sizes.ramWidth
 
     // PID→workspace cache: rebuilt every 3s (same cadence as ProcessMemory updates).
     // Inverts the O(n×m) lookup (50 processes × all toplevels per call) to O(m) build + O(1) lookups.
@@ -88,100 +88,189 @@ Column {
         return Utils.Icons.romanize(workspace.id);
     }
 
-    // Header: RAM summary
-    RowLayout {
+    // Section 1 — RAM summary.
+    PillCardSection {
         width: parent.width
-        spacing: Appearance.spacing.normal
+        contentMargins: Appearance.padding.normal
 
-        MaterialIcon {
-            text: "memory_alt"
-            color: Colours.palette.m3primary
-            font.pointSize: Appearance.font.size.large
+        RowLayout {
+            id: summaryRow
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Appearance.spacing.normal
+
+            MaterialIcon {
+                text: "memory_alt"
+                color: Colours.palette.m3primary
+                font.pointSize: Appearance.font.size.large
+            }
+
+            Column {
+                Layout.fillWidth: true
+                spacing: Appearance.spacing.smaller
+
+                StyledText {
+                    // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
+                    readonly property var memUsed: SystemUsage.formatKib(SystemUsage.memUsed)
+                    // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
+                    readonly property var memTotal: SystemUsage.formatKib(SystemUsage.memTotal)
+
+                    text: `${memUsed.value.toFixed(1)} ${memUsed.unit} / ${memTotal.value.toFixed(1)} ${memTotal.unit}`
+                    font.pointSize: Appearance.font.size.normal
+                    font.weight: 500
+                }
+
+                StyledText {
+                    text: qsTr("Memory Usage: %1%").arg(Math.round(SystemUsage.memPerc * 100))
+                    font.pointSize: Appearance.font.size.small
+                    opacity: 0.8
+                }
+            }
         }
+    }
+
+    // Section 2 — Gaming Readiness.
+    PillCardSection {
+        width: parent.width
+        contentMargins: Appearance.padding.normal
 
         Column {
-            Layout.fillWidth: true
-            spacing: Appearance.spacing.smaller
-
-            StyledText {
-                // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
-                readonly property var memUsed: SystemUsage.formatKib(SystemUsage.memUsed)
-                // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
-                readonly property var memTotal: SystemUsage.formatKib(SystemUsage.memTotal)
-
-                text: `${memUsed.value.toFixed(1)} ${memUsed.unit} / ${memTotal.value.toFixed(1)} ${memTotal.unit}`
-                font.pointSize: Appearance.font.size.normal
-                font.weight: 500
-            }
-
-            StyledText {
-                text: qsTr("Memory Usage: %1%").arg(Math.round(SystemUsage.memPerc * 100))
-                font.pointSize: Appearance.font.size.small
-                opacity: 0.8
-            }
-        }
-    }
-
-    // Separator
-    Rectangle {
-        width: parent.width
-        height: 1
-        color: Colours.palette.m3outline
-        opacity: 0.3
-    }
-
-    // Header for process list
-    StyledText {
-        width: parent.width
-        text: qsTr("Top Memory Usage")
-        font.weight: 500
-        opacity: 0.8
-        horizontalAlignment: Text.AlignHCenter
-    }
-
-    // Scrollable process list
-    Item {
-        width: parent.width
-        height: ProcessMemory.topProcesses.length > 0
-            ? Math.min(processList.contentHeight, root.maxListHeight)
-            : loadingText.implicitHeight
-
-        StyledListView {
-            id: processList
-
-            visible: ProcessMemory.topProcesses.length > 0
-            model: ProcessMemory.topProcesses
-            width: parent.width
-            height: Math.min(contentHeight, root.maxListHeight)
-            clip: true
+            anchors.left: parent.left
+            anchors.right: parent.right
+            // Sections 1 and 3 inherit a left inset from their leading icon
+            // (memory_alt / workspace icon column). Section 2 has no leading
+            // glyph, so add explicit horizontal margin to match their feel.
+            anchors.leftMargin: Appearance.padding.small
+            anchors.rightMargin: Appearance.padding.small
             spacing: Appearance.spacing.small
-            reuseItems: true  // Essential: recycles delegates for 50-item list performance
 
-            delegate: ProcessRow {
-                // intentional var: heterogeneous JS object from ProcessMemory model
-                required property var modelData
-                required property int index
-
-                width: processList.width
-                pid: modelData.pid
-                name: modelData.name
-                memoryKib: modelData.memoryKib
-                memoryFormatted: modelData.memoryFormatted
+            StyledText {
+                width: parent.width
+                text: qsTr("Gaming Readiness: %1").arg(SystemUsage.gamingReadiness)
+                font.weight: 500
+                opacity: 0.8
+                horizontalAlignment: Text.AlignHCenter
             }
 
-            StyledScrollBar.vertical: StyledScrollBar {
-                flickable: processList
+            RowLayout {
+                width: parent.width
+                spacing: Appearance.spacing.normal
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: qsTr("Swap file")
+                    opacity: 0.8
+                }
+                StyledText {
+                    text: SystemUsage.fileSwapMib >= 1024
+                        ? `${(SystemUsage.fileSwapMib / 1024).toFixed(1)} GiB`
+                        : `${Math.round(SystemUsage.fileSwapMib)} MiB`
+                    font.family: Appearance.font.family.mono
+                    font.pointSize: Appearance.font.size.small
+                }
+            }
+
+            RowLayout {
+                width: parent.width
+                spacing: Appearance.spacing.normal
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: qsTr("zram")
+                    opacity: 0.8
+                }
+                StyledText {
+                    text: `${Math.round(SystemUsage.zramFillPerc)}%`
+                    font.family: Appearance.font.family.mono
+                    font.pointSize: Appearance.font.size.small
+                }
+            }
+
+            RowLayout {
+                width: parent.width
+                spacing: Appearance.spacing.normal
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: qsTr("Available")
+                    opacity: 0.8
+                }
+                StyledText {
+                    // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
+                    readonly property var avail: SystemUsage.formatKib(SystemUsage.memTotal - SystemUsage.memUsed)
+                    text: `${avail.value.toFixed(1)} ${avail.unit}`
+                    font.family: Appearance.font.family.mono
+                    font.pointSize: Appearance.font.size.small
+                }
             }
         }
+    }
 
-        // Loading state
-        StyledText {
-            id: loadingText
+    // Section 3 — Top Memory Usage.
+    PillCardSection {
+        width: parent.width
+        contentMargins: Appearance.padding.normal
 
-            visible: ProcessMemory.topProcesses.length === 0
-            text: qsTr("Loading...")
-            font.pointSize: Appearance.font.size.small
-            opacity: 0.6
+        Column {
+            id: processColumn
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: Appearance.spacing.small
+
+            StyledText {
+                width: parent.width
+                text: qsTr("Top Memory Usage")
+                font.weight: 500
+                opacity: 0.8
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Item {
+                width: parent.width
+                height: ProcessMemory.topProcesses.length > 0
+                    ? Math.min(processList.contentHeight, root.maxListHeight)
+                    : loadingText.implicitHeight
+
+                StyledListView {
+                    id: processList
+
+                    visible: ProcessMemory.topProcesses.length > 0
+                    model: ProcessMemory.topProcesses
+                    width: parent.width
+                    height: Math.min(contentHeight, root.maxListHeight)
+                    clip: true
+                    spacing: Appearance.spacing.small
+                    reuseItems: true  // Essential: recycles delegates for 50-item list performance
+
+                    delegate: ProcessRow {
+                        // intentional var: heterogeneous JS object from ProcessMemory model
+                        required property var modelData
+                        required property int index
+
+                        width: processList.width
+                        pid: modelData.pid
+                        name: modelData.name
+                        memoryKib: modelData.memoryKib
+                        memoryFormatted: modelData.memoryFormatted
+                    }
+
+                    StyledScrollBar.vertical: StyledScrollBar {
+                        flickable: processList
+                    }
+                }
+
+                // Loading state
+                StyledText {
+                    id: loadingText
+
+                    visible: ProcessMemory.topProcesses.length === 0
+                    text: qsTr("Loading...")
+                    font.pointSize: Appearance.font.size.small
+                    opacity: 0.6
+                }
+            }
         }
     }
 

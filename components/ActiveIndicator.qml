@@ -25,13 +25,48 @@ StyledRect {
 
     // --- Color customization (special workspaces use tertiary colors) ---
     property color indicatorColor: Colours.palette.m3primary
+
+    // MEASURED INERT — do not tune this expecting to see a result. A screen
+    // capture of the merged bar with a workspace active shows the label over
+    // this indicator rendering LIGHT, not in this dark m3onPrimary tint. Every
+    // consumer puts the indicator in a Loader at `z: -1`, i.e. below its own
+    // mask, and Colouriser is a MultiEffect that does not hide its source — so
+    // the real workspace labels paint over the tinted copy and this never
+    // reaches the screen.
+    //
+    // Left in place rather than deleted: SpecialWorkspaces sets it explicitly
+    // (to m3onTertiary) while Workspaces and MergedBarContent take this default,
+    // so it is live public API on all three paths. Removing it along with the
+    // Colouriser is a separate change that deserves its own verification pass
+    // rather than riding along with a colour tweak.
     property color textColor: Colours.palette.m3onPrimary
 
     // --- Pill styling (strong intensity for active indicator) ---
-    readonly property var glassStyle: Colours.pillStyle(indicatorColor, Colours.glass.strong) // intentional var: heterogeneous JS { background, border }
+    // ENGAGED, but at the BROAD lift rather than the socket's `standard`.
+    //
+    // This is the widest engaged surface in the shell — a workspace pill with a
+    // window title in it runs 300px+ — and area is the variable the small-control
+    // presets do not account for. At `standard` its 0.400 body rendered ~0.42
+    // against a 0.09 bar plate and peaked past 0.50 across the specular sweep,
+    // which made the indicator the loudest thing on screen and washed out the
+    // very label it sits behind. `broad` puts the body at 0.300. The full set of
+    // measurements, and why the computed and rendered figures differ, is in
+    // Colours.polish.
+    readonly property var glassStyle: Colours.engagedPillStyle(indicatorColor, Colours.glass.strong, Colours.polish.broad) // intentional var: heterogeneous JS { background, border }
 
     // --- Mode detection ---
     readonly property bool useListView: listView !== null
+
+    // When true (merged agent bar), the mask wraps onto multiple rows and the indicator must
+    // track the active slot's row vertically. Default false → single-row consumers (top bar,
+    // special workspaces, calendar) are byte-for-byte unaffected (rowYOffset stays 0 and the
+    // colouriser keeps its original implicit sizing).
+    property bool multiRow: false
+
+    // Horizontal shift applied to the active row so the indicator tracks a centred (partial)
+    // wrapped row's slots. Supplied by the merged-bar consumer to match the per-item Translate
+    // that centres wrapped rows; 0 (and thus inert) for single-row consumers.
+    property real rowXOffset: 0
 
     // --- Repeater mode: find active workspace index ---
     readonly property int currentWsIdx: {
@@ -70,16 +105,31 @@ StyledRect {
     property real trailing: (currentWs?.x ?? 0) - contentOffset
     property real currentSize: itemSize
     property real indicatorOffset: itemOffset
-    property real offset: Math.min(leading, trailing) - indicatorOffset
+    property real offset: Math.min(leading, trailing) - indicatorOffset + rowXOffset
     property real size: {
         const s = Math.abs(leading - trailing) + currentSize;
         // Handle activeTrail animation: extend indicator to cover previous workspace
         // (only applicable in Repeater mode - ListView mode doesn't support trail)
         if (!useListView && Config.bar.workspaces.activeTrail && previousWsIdx >= 0 && previousWsIdx > currentWsIdx) {
             const prevWs = workspaces?.itemAt(previousWsIdx);
-            return prevWs ? Math.min(prevWs.x + prevWs.indicatorSize - offset, s) : s;
+            // In the merged multi-row bar, only trail across same-row neighbours — a cross-row
+            // trail would compute a bogus horizontal span (item x is relative to its own row).
+            // The !multiRow short-circuit keeps single-row consumers' behaviour byte-identical.
+            if (prevWs && (!multiRow || prevWs.y === currentWs?.y))
+                return Math.min(prevWs.x + prevWs.indicatorSize - offset, s);
+            return s;
         }
         return s;
+    }
+
+    // Vertical offset of the active slot's row centre from the mask's overall centre. Drives
+    // both the indicator box (via the consumer's Loader anchors.verticalCenterOffset, which reads
+    // this back) and the colouriser's compensating shift. Zero on a single row, so it only does
+    // anything once multiRow content has actually wrapped.
+    property real rowYOffset: {
+        if (!multiRow || useListView || !currentWs || !mask)
+            return 0;
+        return (currentWs.y + currentWs.height / 2) - (mask.height / 2);
     }
 
     // Track workspace index changes for trail animation
@@ -97,8 +147,48 @@ StyledRect {
     implicitWidth: size
     radius: Appearance.rounding.full
     color: glassStyle.background
-    border.width: 1
-    border.color: glassStyle.border
+    // Neumorphic recipe: zero border so a drawn outline doesn't compete with
+    // the gradient-defined depression edges, matching PillToggleSurface's
+    // pressed-in look on the quick toggles. (border.color is omitted because
+    // width is hard-zero here — unlike PillToggleSurface, this indicator
+    // never animates the border up.)
+    border.width: 0
+
+    // Inset depression — shared with PillToggleSurface and the calendar's today
+    // cell. These alphas used to be written here as literals (0.55 / 0.12 /
+    // × 0.5), which are CLAY's numbers, so this indicator kept drawing clay's
+    // depression after metal became the default material. Reading Theme.toggle
+    // is what makes it follow `symmetria shell surface material <name>` like
+    // everything else.
+    // Rendered before the Colouriser so the icon glyph stays crisp.
+    // `Theme.toggle` is BORROWED here, not owned: this indicator is not a
+    // toggle, but it should feel like one, so it reads the toggle role's inset
+    // numbers. The cost is that a material cannot give the active-workspace
+    // marker a different depression from the quick toggles without splitting
+    // them. Acceptable while they are meant to match; if that stops being true,
+    // add an `inset` sub-block to each material's `engaged` recipe.
+    //
+    // `root.radius`, not `parent.radius` — correct here either way since the
+    // root IS the rounded rect, but the parent-radius form is right in some
+    // primitives and silently wrong in others (docs/qml-pitfalls.md), so the
+    // codebase should not train it.
+    InsetDepression {
+        anchors.fill: parent
+        radius: root.radius
+        darkAlpha: Theme.toggle.darkInsetAlpha
+        lightAlpha: Theme.toggle.lightInsetAlpha
+        horizontalWeight: Theme.toggle.horizontalInsetWeight
+    }
+
+    // Polished finish. `specularFactor` is not defaulted away here the way
+    // PillToggleSurface defaults it to zero for a pressed pill: this surface is
+    // inset AND lit, which is the same call the connected socket makes. Without
+    // it the indicator is a flat swatch with no highlight.
+    SurfaceFinish {
+        anchors.fill: parent
+        radius: root.radius
+        recipe: Theme.engaged
+    }
 
     Colouriser {
         source: root.mask
@@ -106,11 +196,15 @@ StyledRect {
         colorizationColor: root.textColor
 
         x: -root.offset
-        y: 0
-        implicitWidth: root.mask.implicitWidth
-        implicitHeight: root.mask.implicitHeight
+        // Multi-row (merged bar): size to the mask's ACTUAL extent so the rendered texture maps
+        // 1:1 (MultiEffect renders the source at its real size, not implicitWidth) and includes
+        // every row; verticalCenterOffset then shifts the active row's band into the one-row-tall
+        // indicator. Single-row consumers keep the original implicit sizing and a zero offset.
+        implicitWidth: root.multiRow ? root.mask.width : root.mask.implicitWidth
+        implicitHeight: root.multiRow ? root.mask.height : root.mask.implicitHeight
 
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: -root.rowYOffset
     }
 
     Behavior on leading {
@@ -144,6 +238,11 @@ StyledRect {
         // ListView mode always uses standard animation (no trail support)
         enabled: useListView || !Config.bar.workspaces.activeTrail
 
+        EAnim {}
+    }
+
+    // Vertical glide when the active slot switches rows (merged multi-row bar only).
+    Behavior on rowYOffset {
         EAnim {}
     }
 

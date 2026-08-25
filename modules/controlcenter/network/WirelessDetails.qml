@@ -119,7 +119,7 @@ DeviceDetails {
                             if (checked) {
                                 NetworkConnection.handleConnect(root.network, root.session, null);
                             } else {
-                                NmcliWifi.disconnectFromNetwork();
+                                NmcliWifi.disconnectFromNetwork(root.network.ssid);
                             }
                         }
                     }
@@ -141,7 +141,7 @@ DeviceDetails {
                         onClicked: {
                             if (root.network && root.network.ssid) {
                                 if (root.network.active) {
-                                    NmcliWifi.disconnectFromNetwork();
+                                    NmcliWifi.disconnectFromNetwork(root.network.ssid);
                                 }
                                 NmcliWifi.forgetNetwork(root.network.ssid);
                             }

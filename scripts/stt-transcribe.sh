@@ -7,7 +7,7 @@
 # stderr: ERROR:<http_code>:<message> (on failure)
 # Exit:   0=success, 1=API error, 2=network error, 3=missing args
 
-set -e
+set -euo pipefail
 
 command -v curl >/dev/null 2>&1 || {
     echo "Error: required command 'curl' not found" >&2
@@ -35,8 +35,12 @@ fi
 
 stt_log "transcribe" "started | file=$AUDIO_FILE model=$MODEL"
 
-# Temp file for response body
+# Temp file for response body. CURL_ERR is created later (just before the curl
+# call) but must be pre-declared: the EXIT trap references it, and under
+# `set -u` an exit between here and that assignment would make the trap fault
+# on an unbound variable (leaking RESP_BODY). Empty is safe — `rm -f ""` no-ops.
 RESP_BODY=$(mktemp)
+CURL_ERR=""
 trap 'rm -f "$RESP_BODY" "$CURL_ERR"' EXIT
 
 # Verbatim prompt prevents the LLM-based models (gpt-4o-transcribe) from
@@ -46,6 +50,22 @@ VERBATIM_PROMPT="Transcribe the following audio verbatim. Do NOT omit, summarize
 The speaker primarily speaks English and Spanish.
 
 When the transcription is long or covers multiple topics, organize it into paragraphs separated by blank lines. Break paragraphs at natural topic shifts or idea transitions. Do NOT add headings, bullet points, or any formatting other than paragraph breaks. Short, single-topic transcriptions should remain as a single paragraph."
+
+# Select the base prompt by model family. gpt-4o-transcribe is an LLM that
+# follows the verbatim/paragraph instructions above. whisper-1 instead treats
+# `prompt` as a ~224-token style/vocabulary *prime* (continuation context), NOT
+# instructions — feeding it the long directive block is inert at best and can
+# bias output (it may transcribe fragments of the prompt). So whisper gets only
+# a short language hint. whisper-1 is used here for long recordings because it
+# chunks audio internally and won't truncate like gpt-4o-transcribe does.
+case "$MODEL" in
+    whisper*)
+        PROMPT="The speaker primarily speaks English and Spanish."
+        ;;
+    *)
+        PROMPT="$VERBATIM_PROMPT"
+        ;;
+esac
 
 # Append vocabulary hints if provided (comma-separated via env var)
 if [ -n "${STT_VOCABULARY_HINTS:-}" ]; then
@@ -60,14 +80,16 @@ if [ -n "${STT_VOCABULARY_HINTS:-}" ]; then
         fi
         stt_log "transcribe" "WARN: vocabulary hints truncated to fit token budget"
     fi
-    VERBATIM_PROMPT="${VERBATIM_PROMPT}
+    PROMPT="${PROMPT}
 
 The following proper nouns, technical terms, or names may appear. Use these exact spellings when recognized: ${STT_VOCABULARY_HINTS}"
     stt_log "transcribe" "hints=${STT_VOCABULARY_HINTS}"
 fi
 
 CURL_ERR=$(mktemp)
-HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
+# -sS (not bare -s): silent progress bar but keep error messages on stderr,
+# otherwise $CURL_ERR stays empty and failures log as "curl-failed | unknown".
+HTTP_CODE=$(curl -sS -w '%{http_code}' -o "$RESP_BODY" \
     --connect-timeout 10 \
     --max-time 110 \
     -X POST "https://api.openai.com/v1/audio/transcriptions" \
@@ -75,7 +97,7 @@ HTTP_CODE=$(curl -s -w '%{http_code}' -o "$RESP_BODY" \
     -F "file=@$AUDIO_FILE" \
     -F "model=$MODEL" \
     -F "response_format=text" \
-    -F "prompt=$VERBATIM_PROMPT" \
+    -F "prompt=$PROMPT" \
     -F "temperature=0" \
     2>"$CURL_ERR" <<< "Authorization: Bearer $API_KEY") || {
         CURL_DETAIL=$(head -c 200 "$CURL_ERR" 2>/dev/null)

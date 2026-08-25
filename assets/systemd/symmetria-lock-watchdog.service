@@ -1,0 +1,16 @@
+[Unit]
+Description=Symmetria lock-screen watchdog (external backstop for lock observability)
+Documentation=file:%h/.config/quickshell/symmetria/docs/lock-crash-observability.md
+# Run inside the graphical session so notify-send can reach the notification daemon.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.config/quickshell/symmetria/scripts/lock-watchdog.py
+Restart=always
+RestartSec=2
+# The watchdog must outlive a qs crash; do not couple its lifecycle to the shell.
+
+[Install]
+WantedBy=default.target

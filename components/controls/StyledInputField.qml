@@ -13,12 +13,19 @@ Item {
     property var validator: null // intentional var: nullable QML Validator (IntValidator, RegularExpressionValidator, etc.)
     property bool readOnly: false
     property int horizontalAlignment: TextInput.AlignHCenter
-    property int implicitWidth: 70
-    property bool enabled: true
-    
+
+    // `implicitWidth` and `enabled` are ASSIGNED here, never re-declared.
+    // Both already exist on Item, and `property <type> implicitWidth` /
+    // `property bool enabled` create SHADOW properties instead of setting them:
+    // Qt logs "Member ... overrides a member of the base object", layouts keep
+    // reading the (unset, 0) base implicitWidth, and `enabled` stops
+    // propagating to the subtree the way Item.enabled does. See
+    // docs/qml-pitfalls.md (required property shadowing) — same failure mode.
+    implicitWidth: 70
+
     // Expose activeFocus through alias to avoid FINAL property override
     readonly property alias hasFocus: inputField.activeFocus
-    
+
     signal textEdited(string text)
     signal editingFinished()
 
@@ -47,7 +54,6 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.IBeamCursor
             acceptedButtons: Qt.NoButton
-            enabled: root.enabled
         }
 
         StyledTextField {
@@ -57,7 +63,6 @@ Item {
             horizontalAlignment: root.horizontalAlignment
             validator: root.validator
             readOnly: root.readOnly
-            enabled: root.enabled
             
             Binding {
                 target: inputField

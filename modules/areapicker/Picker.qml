@@ -6,6 +6,7 @@ import qs.config
 import Symmetria
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io
 import QtQuick
 import QtQuick.Effects
 
@@ -74,7 +75,9 @@ MouseArea {
     function save(): void {
         const tmpfile = Qt.resolvedUrl(`/tmp/symmetria-picker-${Quickshell.processId}-${Date.now()}.png`);
         CUtils.saveItem(screencopy, tmpfile, Qt.rect(Math.ceil(rsx), Math.ceil(rsy), Math.floor(sw), Math.floor(sh)), path => {
-            if (root.loader.clipboardOnly) {
+            if (root.loader.sshTransfer) {
+                ScreenshotTransfer.transfer(path);
+            } else if (root.loader.clipboardOnly) {
                 Quickshell.execDetached(["sh", "-c", "wl-copy --type image/png < " + path]);
             } else {
                 Quickshell.execDetached(["swappy", "-f", path]);

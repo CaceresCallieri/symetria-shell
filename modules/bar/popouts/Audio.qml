@@ -11,13 +11,12 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import "../../controlcenter/network"
 
-Item {
+PillCardSection {
     id: root
 
     required property Item wrapper
 
-    implicitWidth: layout.implicitWidth + Appearance.padding.normal * 2
-    implicitHeight: layout.implicitHeight + Appearance.padding.normal * 2
+    implicitWidth: layout.implicitWidth + root.contentMargins * 2
 
     ButtonGroup {
         id: sinks
@@ -31,7 +30,7 @@ Item {
         id: layout
 
         anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.right: parent.right
         spacing: Appearance.spacing.normal
 
         StyledText {
@@ -105,16 +104,45 @@ Item {
             }
         }
 
-        IconTextButton {
+        // Always-raised neumorphic action pill — drops the previous flat
+        // IconTextButton in favor of the shell-wide Tier 2 toggle surface,
+        // so the "Open settings" affordance now reads as a pressable
+        // action against the surrounding claymorphism card. `active: false`
+        // is fixed since this is an action, not a toggleable state.
+        PillToggleSurface {
+            id: settingsBtn
+
             Layout.fillWidth: true
             Layout.topMargin: Appearance.spacing.normal
-            inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-            inactiveOnColour: Colours.palette.m3onSurface
-            verticalPadding: Appearance.padding.small
-            text: qsTr("Open settings")
-            icon: "settings"
+            implicitHeight: settingsRow.implicitHeight + Appearance.padding.normal * 2
+            active: false
 
-            onClicked: root.wrapper.detach("audio")
+            StateLayer {
+                color: Colours.palette.m3onSurface
+
+                function onClicked(): void {
+                    root.wrapper.detach("audio");
+                }
+            }
+
+            RowLayout {
+                id: settingsRow
+
+                anchors.centerIn: parent
+                spacing: Appearance.spacing.small
+
+                MaterialIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: "settings"
+                    color: Colours.palette.m3onSurface
+                }
+
+                StyledText {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: qsTr("Open settings")
+                    color: Colours.palette.m3onSurface
+                }
+            }
         }
     }
 }

@@ -3,7 +3,11 @@ import qs.services
 import qs.config
 import QtQuick
 
-StyledRect {
+// Visual root is now PillToggleSurface so toggle-style IconButtons get the
+// Tier 2 raised-claymorphism (inactive) ↔ flat-accent (active) treatment for
+// free. Non-toggle IconButtons (`toggle: false`) auto-derive `raised: false`
+// and stay flat — Tier 3 behavior preserved with no consumer changes.
+PillToggleSurface {
     id: root
 
     enum Type {
@@ -26,7 +30,21 @@ StyledRect {
     property alias radiusAnim: radiusAnim
 
     property bool internalChecked
-    property color activeColour: Qt.lighter(Colours.pillStyle(type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5)
+    // Toggle buttons (toggle: true, non-Text): pure-monochrome neumorphism.
+    // Body color is IDENTICAL to inactive — depth direction (inset vs
+    // raised) is the entire state signal, matching the reference where
+    // pressed-in elements share the surrounding surface color and only
+    // their inverted shadow defines them. The icon's `fill` change
+    // (outlined vs filled) provides a secondary cue.
+    //
+    // Non-toggle Filled action buttons keep the vivid lightened-primary fill
+    // (their state never flips, so the inset cue isn't available — they
+    // need color to communicate the action).
+    property color activeColour: {
+        if (toggle && type !== IconButton.Text)
+            return inactiveColour;
+        return Qt.lighter(Colours.pillStyle(type === IconButton.Filled ? Colours.palette.m3primary : Colours.palette.m3secondary, Colours.glass.veryStrong).background, 1.5);
+    }
     property color inactiveColour: {
         if (!toggle && type === IconButton.Filled)
             return Qt.lighter(Colours.pillStyle(Colours.palette.m3primary, Colours.glass.veryStrong).background, 1.5);
@@ -43,10 +61,52 @@ StyledRect {
 
     signal clicked
 
+    // Programmatic press feedback for IPC-driven state changes (e.g. external
+    // pause/cancel/stop fired from a keybind or remote source). Mirrors
+    // PillButton.triggerPress(). Direct user clicks already get StateLayer
+    // ripple feedback; this is purely for cases where the action originates
+    // outside the control itself.
+    function triggerPress(): void {
+        pressAnim.restart();
+    }
+
+    SequentialAnimation {
+        id: pressAnim
+
+        NumberAnimation {
+            target: root
+            property: "scale"
+            to: 0.85
+            duration: 80
+            easing.type: Easing.OutQuad
+        }
+
+        NumberAnimation {
+            target: root
+            property: "scale"
+            to: 1.0
+            duration: 150
+            easing.type: Easing.OutBack
+        }
+    }
+
     onCheckedChanged: internalChecked = checked
 
+    // --- PillToggleSurface bindings -----------------------------------
+    // Tier 2 only when this is a real toggle button. Filled/Tonal toggles
+    // get raised claymorphism in the inactive state; Text variant is always
+    // flat (transparent surface).
+    raised: toggle && type !== IconButton.Text
+    active: internalChecked
+
+    // PillToggleSurface body fill is driven by inactiveColor / activeColor.
+    // For Text type, the body must be transparent regardless of state.
+    // For disabled, both colors collapse to disabledColour so the disabled
+    // pill reads uniformly without losing the active-on-disabled animation.
+    inactiveColor: type === IconButton.Text ? "transparent" : (disabled ? disabledColour : inactiveColour)
+    activeColor: type === IconButton.Text ? "transparent" : (disabled ? disabledColour : activeColour)
+
     radius: internalChecked ? Appearance.rounding.small : implicitHeight / 2 * Math.min(1, Appearance.rounding.scale)
-    color: type === IconButton.Text ? "transparent" : disabled ? disabledColour : internalChecked ? activeColour : inactiveColour
 
     implicitWidth: implicitHeight
     implicitHeight: label.implicitHeight + padding * 2

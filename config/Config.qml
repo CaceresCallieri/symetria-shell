@@ -35,6 +35,7 @@ Singleton {
     property alias keychords: adapter.keychords
     property alias agentbar: adapter.agentbar
     property alias audioRecorder: adapter.audioRecorder
+    property alias screenshot: adapter.screenshot
 
     // Public save function - call this to persist config changes
     function save(): void {
@@ -112,7 +113,8 @@ Singleton {
             calculator: serializeCalculator(),
             packages: serializePackages(),
             keychords: serializeKeyChords(),
-            agentbar: serializeAgentBar()
+            agentbar: serializeAgentBar(),
+            screenshot: serializeScreenshot()
         };
     }
 
@@ -137,8 +139,7 @@ Singleton {
                 enabled: appearance.transparency.enabled,
                 base: appearance.transparency.base,
                 layers: appearance.transparency.layers
-            },
-            pillStyle: appearance.pillStyle
+            }
         };
     }
 
@@ -222,6 +223,7 @@ Singleton {
                 showNetwork: bar.status.showNetwork,
                 showBluetooth: bar.status.showBluetooth,
                 showBattery: bar.status.showBattery,
+                showPowerProfile: bar.status.showPowerProfile,
                 showLockStatus: bar.status.showLockStatus
             },
             clock: {
@@ -249,6 +251,7 @@ Singleton {
     function serializeBorder(): var {
         return {
             thickness: border.thickness,
+            sideThickness: border.sideThickness,
             rounding: border.rounding
         };
     }
@@ -337,10 +340,8 @@ Singleton {
             hideDelay: osd.hideDelay,
             enableBrightness: osd.enableBrightness,
             enableMicrophone: osd.enableMicrophone,
-            sizes: {
-                sliderWidth: osd.sizes.sliderWidth,
-                sliderHeight: osd.sizes.sliderHeight
-            }
+            triggerHeight: osd.triggerHeight,
+            triggerWidth: osd.triggerWidth
         };
     }
 
@@ -372,13 +373,36 @@ Singleton {
 
     function serializeLock(): var {
         return {
-            recolourLogo: lock.recolourLogo,
             enableFprint: lock.enableFprint,
             maxFprintTries: lock.maxFprintTries,
             sizes: {
-                heightMult: lock.sizes.heightMult,
-                ratio: lock.sizes.ratio,
-                centerWidth: lock.sizes.centerWidth
+                fieldWidth: lock.sizes.fieldWidth
+            },
+            // Every Beams key must be listed. Config.save() rewrites shell.json
+            // wholesale from these serializers, so anything omitted here is
+            // silently DELETED from the user's file the next time any settings
+            // pane saves — which would quietly defeat the "tune it by editing
+            // shell.json" workflow this block exists for.
+            beams: {
+                speed: lock.beams.speed,
+                noiseScale: lock.beams.noiseScale,
+                grain: lock.beams.grain,
+                beamWidth: lock.beams.beamWidth,
+                rotation: lock.beams.rotation,
+                roughness: lock.beams.roughness,
+                lightIntensity: lock.beams.lightIntensity,
+                ambient: lock.beams.ambient,
+                edgeDarken: lock.beams.edgeDarken,
+                sheenRoughness: lock.beams.sheenRoughness,
+                sheenStrength: lock.beams.sheenStrength,
+                fresnel: lock.beams.fresnel,
+                stagger: lock.beams.stagger,
+                growSpan: lock.beams.growSpan,
+                beamQuantise: lock.beams.beamQuantise,
+                feather: lock.beams.feather,
+                frontGlow: lock.beams.frontGlow,
+                growFlip: lock.beams.growFlip,
+                revealDuration: lock.beams.revealDuration
             }
         };
     }
@@ -403,7 +427,9 @@ Singleton {
                 kbLayoutChanged: utilities.toasts.kbLayoutChanged,
                 vpnChanged: utilities.toasts.vpnChanged,
                 nowPlaying: utilities.toasts.nowPlaying,
-                focusModeChanged: utilities.toasts.focusModeChanged
+                focusModeChanged: utilities.toasts.focusModeChanged,
+                windowUrgent: utilities.toasts.windowUrgent,
+                windowUrgentBlocklist: utilities.toasts.windowUrgentBlocklist
             },
             vpn: {
                 enabled: utilities.vpn.enabled,
@@ -425,6 +451,7 @@ Singleton {
     function serializeServices(): var {
         return {
             weatherLocation: services.weatherLocation,
+            weatherUseCurrentLocation: services.weatherUseCurrentLocation,
             useFahrenheit: services.useFahrenheit,
             useTwelveHourClock: services.useTwelveHourClock,
             gpuType: services.gpuType,
@@ -476,16 +503,24 @@ Singleton {
             autoHideDelay: stt.autoHideDelay,
             processingTimeout: stt.processingTimeout,
             deliveryMode: stt.deliveryMode,
+            voiceTag: stt.voiceTag,
             vocabularyHints: stt.vocabularyHints,
             recording: {
                 format: stt.recording.format,
                 sampleRate: stt.recording.sampleRate,
-                channels: stt.recording.channels
+                channels: stt.recording.channels,
+                source: stt.recording.source
             },
             cache: {
                 enabled: stt.cache.enabled,
                 maxEntries: stt.cache.maxEntries,
-                deleteOnSuccess: stt.cache.deleteOnSuccess
+                deleteOnSuccess: stt.cache.deleteOnSuccess,
+                retainSuccessHours: stt.cache.retainSuccessHours,
+                maxSuccessEntries: stt.cache.maxSuccessEntries
+            },
+            ducking: {
+                enabled: stt.ducking.enabled,
+                volume: stt.ducking.volume
             }
         };
     }
@@ -542,6 +577,16 @@ Singleton {
             mergeWorkspaces: agentbar.mergeWorkspaces,
             sizes: {
                 innerHeight: agentbar.sizes.innerHeight
+            }
+        };
+    }
+
+    function serializeScreenshot(): var {
+        return {
+            ssh: {
+                enabled: screenshot.ssh.enabled,
+                host: screenshot.ssh.host,
+                remoteDir: screenshot.ssh.remoteDir
             }
         };
     }
@@ -610,6 +655,7 @@ Singleton {
             property KeyChordsConfig keychords: KeyChordsConfig {}
             property AgentBarConfig agentbar: AgentBarConfig {}
             property AudioRecorderConfig audioRecorder: AudioRecorderConfig {}
+            property ScreenshotConfig screenshot: ScreenshotConfig {}
         }
     }
 }

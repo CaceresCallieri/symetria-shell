@@ -74,6 +74,38 @@ Scope {
         }
     }
 
+    function activeShellScreen(): var {
+        for (const screen of Visibilities.popouts.keys()) {
+            if (Hypr.monitorFor(screen) === Hypr.focusedMonitor)
+                return screen;
+        }
+        return null;
+    }
+
+    function toggleWirelessPopout(): void {
+        const screen = activeShellScreen();
+        const popout = screen ? Visibilities.popouts.get(screen) : null;
+        if (!popout) {
+            console.warn("[WirelessShortcut] No popout is registered for the focused monitor");
+            return;
+        }
+
+        if (popout.keyboardNavigationActive && popout.hasCurrent) {
+            popout.close();
+            return;
+        }
+
+        popout.keyboardNavigationActive = true;
+        const bar = Visibilities.bars.get(screen);
+        if (!bar?.openNamedPopout("network")) {
+            // The network indicator can be hidden by configuration. Keep the
+            // keyboard entry point usable and center the popout in that case.
+            popout.currentName = "network";
+            popout.currentCenter = screen.width / 2;
+            popout.hasCurrent = true;
+        }
+    }
+
     CustomShortcut {
         name: "controlCenter"
         description: "Open control center"
@@ -107,8 +139,8 @@ Scope {
         name: "session"
         description: "Toggle session menu"
         onPressed: {
-            if (root.hasFullscreen)
-                return;
+            // Session menu renders on WlrLayer.Overlay (SessionOverlay.qml),
+            // so it works above fullscreen clients — no hasFullscreen guard.
             const visibilities = Visibilities.getForActive();
             visibilities.session = !visibilities.session;
         }
@@ -162,7 +194,9 @@ Scope {
             }
 
             if (list().split("\n").includes(drawer)) {
-                if (root.hasFullscreen && ["launcher", "session", "clipboard", "calculator", "packages"].includes(drawer))
+                // session is omitted — its overlay is on WlrLayer.Overlay and
+                // remains usable above fullscreen clients.
+                if (root.hasFullscreen && ["launcher", "clipboard", "calculator", "packages"].includes(drawer))
                     return;
 
                 // Mutual exclusion for launcher <-> clipboard
@@ -194,6 +228,14 @@ Scope {
     }
 
     IpcHandler {
+        target: "wifi"
+
+        function toggle(): void {
+            root.toggleWirelessPopout();
+        }
+    }
+
+    IpcHandler {
         target: "toaster"
 
         function info(title: string, message: string, icon: string): void {
@@ -212,9 +254,79 @@ Scope {
             Toaster.toast(title, message, icon, Toast.Error);
         }
 
+        // Keyed variants: update an existing toast with matching key in-place, or create a new one.
+        // infoKeyed uses timeout=-1 (persistent) so the loading toast stays visible until the
+        // follow-up successKeyed/errorKeyed call explicitly replaces it.
+        // successKeyed/warnKeyed/errorKeyed use timeout=0 (type-default auto-close).
+        function infoKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Info, -1, "", key);
+        }
+
+        function successKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Success, 0, "", key);
+        }
+
+        function warnKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Warning, 0, "", key);
+        }
+
+        function errorKeyed(title: string, message: string, icon: string, key: string): void {
+            Toaster.toast(title, message, icon, Toast.Error, 0, "", key);
+        }
+
         // IPC entrypoint: symmetria shell toaster infoImage <title> <message> <icon> <imagePath>
         function infoImage(title: string, message: string, icon: string, imagePath: string): void {
             Toaster.toast(title, message, icon, Toast.Info, 5000, imagePath);
+        }
+    }
+
+    // Surface design language — two orthogonal axes. Switching is live.
+    //   symmetria shell surface material metal    (clay | metal)
+    //   symmetria shell surface form panel        (islands | panel)
+    //   symmetria shell surface toggleMaterial
+    //   symmetria shell surface toggleForm
+    //   symmetria shell surface get
+    //   symmetria shell surface list
+    //
+    // Target is "surface", NOT "theme": services/Colours.qml already registers a
+    // "theme" handler (the palette dump). Quickshell silently drops the SECOND
+    // handler registered for a target — it logs "Handler was registered but will
+    // not be used" and the IPC call then fails with no obvious cause. "surface"
+    // is also the more accurate name: this selects the surface design language,
+    // while Colours' "theme" is about the colour palette.
+    IpcHandler {
+        target: "surface"
+
+        function material(name: string): void {
+            if (!Theme.isValidMaterial(name)) {
+                console.warn(`[IPC] Unknown material "${name}". Available: ${Theme.materials.join(", ")}`);
+                return;
+            }
+            Theme.material = name;
+        }
+
+        function form(name: string): void {
+            if (!Theme.isValidForm(name)) {
+                console.warn(`[IPC] Unknown form "${name}". Available: ${Theme.forms.join(", ")}`);
+                return;
+            }
+            Theme.form = name;
+        }
+
+        function toggleMaterial(): void {
+            Theme.cycleMaterial();
+        }
+
+        function toggleForm(): void {
+            Theme.cycleForm();
+        }
+
+        function get(): string {
+            return `${Theme.material} / ${Theme.form}`;
+        }
+
+        function list(): string {
+            return `materials: ${Theme.materials.join(", ")}\nforms: ${Theme.forms.join(", ")}`;
         }
     }
 }

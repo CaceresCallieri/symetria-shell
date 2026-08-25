@@ -54,7 +54,11 @@ Item {
             StyledText {
                 anchors.centerIn: parent
 
-                text: root.keyLetter.toUpperCase()
+                // Render the key verbatim (do NOT force-uppercase): groups may bind
+                // a letter and its Shifted form separately (e.g. recording f vs F),
+                // and the badge must show "f" vs "F" so the two are distinguishable.
+                // Existing groups already use uppercase keys, so this is a no-op for them.
+                text: root.keyLetter
                 font.pointSize: Appearance.font.size.small
                 font.family: Appearance.font.family.mono
                 font.weight: Font.Normal

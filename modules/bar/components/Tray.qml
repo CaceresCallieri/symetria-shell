@@ -6,7 +6,7 @@ import qs.config
 import Quickshell.Services.SystemTray
 import QtQuick
 
-StyledRect {
+Item {
     id: root
 
     // Popout interface: trayContainer is the Row, trayItems is the Repeater
@@ -19,11 +19,6 @@ StyledRect {
 
     property bool expanded
 
-    // Pill styling (subtle intensity for background containers,
-    // matching OccupiedBg and WorkspaceAppIcons grouped pill styling)
-    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var glassStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle)
-
     // Width calculation: In non-compact mode, Row's implicitWidth includes
     // leftPadding + rightPadding. In compact mode, we manually calculate
     // based on expanded state and add padding for the expand icon area.
@@ -33,21 +28,33 @@ StyledRect {
         return (expanded ? expandIcon.implicitWidth + layout.implicitWidth + spacing : expandIcon.implicitWidth) + pillPadding * 2;
     }
 
-    clip: true
     visible: width > 0
 
-    implicitHeight: Config.bar.sizes.innerWidth
+    // FORM axis — see the comment in PillContainer.qml. Tray carries its own
+    // geometry rather than going through PillContainer, so it reads the shared
+    // Theme contract directly; otherwise it would be the one plate that stops
+    // short of the screen edge.
+    readonly property int contentOffset: Theme.barPlateContentOffset
+
+    implicitHeight: Theme.barPlateHeight
     implicitWidth: nonAnimWidth
 
-    color: items.count > 0 ? glassStyle.background : "transparent"
-    radius: Appearance.rounding.full
-    border.width: items.count > 0 ? 1 : 0
-    border.color: glassStyle.border
+    // Shared pill background. Hidden when the tray is empty so the bar shows
+    // no floating shadow/frame when there are no items. Borderless/transparent
+    // state is handled by `visible` rather than fading `color` → "transparent"
+    // because the pill's drop shadow must also disappear.
+    PillSurface {
+        anchors.fill: parent
+        visible: items.count > 0
+    }
 
     Row {
         id: layout
 
         anchors.centerIn: parent
+        // Content sits centred on the VISIBLE part of the plate, not its full
+        // height — the top of the plate is off-screen under the panel form.
+        anchors.verticalCenterOffset: root.contentOffset
         spacing: Appearance.spacing.small
 
         // Row has built-in padding properties (unlike RowLayout)
@@ -93,6 +100,9 @@ StyledRect {
         id: expandIcon
 
         anchors.verticalCenter: parent.verticalCenter
+        // Same visible-area correction as the tray Row above — this Loader is a
+        // direct child of the plate, so it inherits the off-screen bleed.
+        anchors.verticalCenterOffset: root.contentOffset
         anchors.right: parent.right
 
         active: Config.bar.tray.compact

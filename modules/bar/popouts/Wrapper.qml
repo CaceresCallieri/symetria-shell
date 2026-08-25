@@ -22,6 +22,12 @@ Item {
     property string currentName
     property real currentCenter
     property bool hasCurrent
+    property bool keyboardNavigationActive: false
+
+    onHasCurrentChanged: {
+        if (!hasCurrent)
+            keyboardNavigationActive = false;
+    }
 
     property string detachedMode
     property string queuedMode
@@ -60,14 +66,20 @@ Item {
 
     function close(): void {
         const wasDetached = isDetached;
+        // `gen` is computed at FUNCTION scope, before the blocks that use it:
+        // the release callback at the bottom of this function reads it from a
+        // second `if (wasDetached)` block. Declaring it inside the first block
+        // threw "ReferenceError: gen is not defined" on every detached close, so
+        // the early release never ran and _suppressAnim stayed set until
+        // _closingTimer fired. Mirrors detach(), which gets this right.
+        const gen = wasDetached ? ++_suppressGeneration : 0;
         if (wasDetached) {
             _closingFromDetached = true;
-            _suppressGeneration++;
-            const gen = _suppressGeneration;
             _suppressAnim = true;
             _closingTimer.start();
         }
         hasCurrent = false;
+        keyboardNavigationActive = false;
         animLength = Appearance.anim.durations.normal;
         detachedMode = "";
         queuedMode = "";
@@ -113,6 +125,11 @@ Item {
                 return;
             }
         }
+        // Cancel the pending update process when Escape is pressed during password entry —
+        // the process is blocked on stdin and must not linger after the popout closes.
+        if (_updatesPasswordActive) {
+            UpdateRunner.cancel();
+        }
         close();
     }
 
@@ -123,10 +140,36 @@ Item {
         }
     }
 
+    // Grab is active for detached panels (controlcenter, winfo) and also for
+    // the STT recording popout while vocab hints are visible — the vocab-hints
+    // TextField lives in THIS window, so the grab must live here too to avoid
+    // a focus tug-of-war with the drawer window's grab.
+    readonly property bool _vocabHintsActive: root.hasCurrent
+        && root.currentName === "recording"
+        && SttService.vocabHintsVisible
+
+    // The updates popout's sudo password field lives in THIS window too, so it
+    // needs the same grab treatment as the vocab hints input: without the grab
+    // the compositor never routes keys here until the user clicks the field.
+    readonly property bool _updatesPasswordActive: root.hasCurrent
+        && root.currentName === "updates"
+        && UpdateRunner.phase === "password"
+
     HyprlandFocusGrab {
-        active: root.isDetached
+        active: root.isDetached || (root.keyboardNavigationActive && root.hasCurrent) || root._vocabHintsActive || root._updatesPasswordActive
         windows: [QsWindow.window]
-        onCleared: root.close()
+        onCleared: {
+            if (root._vocabHintsActive)
+                // Popout intentionally stays open — only the hints input closes on click-outside.
+                SttService.vocabHintsVisible = false;
+            else if (root._updatesPasswordActive) {
+                // Click-outside during password entry abandons the pending run —
+                // the process is blocked on stdin and must not linger.
+                UpdateRunner.cancel();
+                root.close();
+            } else
+                root.close();
+        }
     }
 
     Binding {
@@ -138,7 +181,16 @@ Item {
     }
 
     Binding {
-        when: root.hasCurrent && root.currentName === "wirelesspassword"
+        when: root.hasCurrent && (root.keyboardNavigationActive || root.currentName === "wirelesspassword")
+
+        target: QsWindow.window
+        property: "WlrLayershell.keyboardFocus"
+        value: WlrKeyboardFocus.OnDemand
+    }
+
+    // Keyboard focus for the updates popout while it shows the sudo password field.
+    Binding {
+        when: root._updatesPasswordActive
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"
@@ -146,7 +198,7 @@ Item {
     }
 
     Binding {
-        when: root.hasCurrent && root.currentName === "recording" && SttService.vocabHintsVisible
+        when: root._vocabHintsActive
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"

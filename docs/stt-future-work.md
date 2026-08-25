@@ -130,13 +130,27 @@ Each backend implements this contract. `SttService` calls the active backend wit
 
 ---
 
+## Client-Side Chunking for Long Audio (keep gpt-4o on long takes)
+
+**Priority:** Medium
+**Complexity:** Medium
+**Purpose:** Transcribe long recordings with `gpt-4o-transcribe` without hitting its silent output-token truncation (~10 min), preserving its accuracy and paragraph formatting.
+
+Current mitigation routes long recordings to `whisper-1` (see `stt-design-decisions.md` → *Model Selection & Long-Audio Truncation*), which is complete but loses paragraph formatting and is slightly less accurate. A better long-term path: split the recorded WAV into <10-min chunks (e.g. via `ffmpeg -f segment`, ideally on silence boundaries to avoid mid-word cuts), transcribe each chunk with gpt-4o-transcribe, and concatenate. The multi-segment ffmpeg-concat infra in `SttJob` exists for pause/resume and could be adapted for *size*-based splitting. Caveats: chunk boundaries can drop/duplicate a word; per-chunk prompt priming needs care for cross-chunk continuity.
+
+---
+
 ## Live Transcription Preview (Streaming)
 
-**Priority:** Low
+**Priority:** Active — next major workstream (promoted from Low, 2026-06-16)
 **Complexity:** High
-**Purpose:** Show partial transcription as words arrive during the "processing" state.
+**Purpose:** Show partial transcripts *while recording* so the user can read along and re-dictate mishearings on the fly. The value is live *control*, not better model accuracy (batch over full audio is generally more accurate).
 
-OpenAI's `gpt-4o-transcribe` supports SSE streaming. Implementation would require streaming HTTP parsing in either a helper process or C++ plugin.
+**Full design:** [`stt-streaming-spec.md`](stt-streaming-spec.md) — backend-agnostic helper (PCM stdin → JSON-lines stdout), local-first (whisper.cpp `stream` → faster-whisper), then cloud benchmark (OpenAI `gpt-realtime-whisper` / Deepgram Nova-3 / Google Chirp 3). Batch is retained for long-form.
+
+**Two distinct streaming mechanisms — don't conflate them:**
+- **SSE on `/audio/transcriptions` (`stream=true`)** streams the transcript *of an already-complete file* as the model generates it — i.e. you still record the whole clip first. Low effort, but does NOT meet the live-while-speaking goal.
+- **Realtime WebSocket** (OpenAI `gpt-realtime-whisper`, Deepgram, Google `StreamingRecognize`) feeds audio continuously and emits deltas *as the user speaks*. This is what the streaming spec targets.
 
 ---
 

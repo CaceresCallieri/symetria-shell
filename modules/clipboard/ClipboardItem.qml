@@ -31,13 +31,23 @@ Item {
     // Accessibility for screen readers
     Accessible.role: Accessible.Button
     Accessible.name: root.isImage ? qsTr("Image clipboard entry") : root.preview
-    Accessible.description: qsTr("Click to restore to clipboard")
+    Accessible.description: (root.entry?._kind === "transcription")
+        ? qsTr("Click to copy transcription to clipboard")
+        : qsTr("Click to restore to clipboard")
 
     StateLayer {
         radius: Appearance.rounding.normal
 
         function onClicked(): void {
-            Clipboard.restore(root.entry.id);
+            // Transcription entries (synthetic shape from Content.qml) carry
+            // a `_kind` tag. They route through TranscriptionStore.paste()
+            // (wl-copy + cliphist delete-query scrub) so the user can paste
+            // immediately with Ctrl+V without polluting the Text tab.
+            // Clipboard.restore() is the cliphist round-trip path.
+            if (root.entry?._kind === "transcription")
+                TranscriptionStore.paste(root.entry.id);
+            else
+                Clipboard.restore(root.entry.id);
             root.visibilities.clipboard = false;
         }
     }
@@ -140,7 +150,10 @@ Item {
 
             sourceText: root.preview
             searchQuery: root.searchQuery
-            font.pointSize: Appearance.font.size.normal
+            // Smaller body size so more characters survive ElideRight per row,
+            // letting the user scan more clipboard / transcription content at
+            // a glance. Icon at .large stays as the row's visual anchor.
+            font.pointSize: Appearance.font.size.small
             elide: Text.ElideRight
             maximumLineCount: 1
         }

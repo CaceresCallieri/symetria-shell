@@ -88,6 +88,7 @@ Singleton {
             } else if (result && result.needsPassword) {
                 // Password needed - callback will handle showing dialog
                 if (callback) callback(result);
+                root.pendingConnection = null;
             } else {
                 // Connection failed
                 if (result && result.error) {
@@ -112,6 +113,7 @@ Singleton {
             } else if (result && result.needsPassword) {
                 // Password needed - callback will handle showing dialog
                 if (callback) callback(result);
+                root.pendingConnection = null;
             } else {
                 // Connection failed
                 if (result && result.error) {
@@ -123,9 +125,9 @@ Singleton {
         }, bssid);
     }
 
-    function disconnectFromNetwork(): void {
+    function disconnectFromNetwork(ssid: string): void {
         // Try to disconnect - use connection name if available, otherwise use device
-        NmcliWifi.disconnectFromNetwork();
+        NmcliWifi.disconnectFromNetwork(ssid);
         // Refresh network list after disconnection
         Qt.callLater(() => {
             NmcliWifi.getNetworks(() => {

@@ -55,6 +55,17 @@ Item {
         anchors.bottom: searchWrapper.top
         anchors.bottomMargin: root.padding
 
+        // Claymorphism backdrop for the results list. Tracks `list`'s
+        // geometry so it auto-resizes when ContentList swaps between full
+        // app rows and the centered "No results" empty state — both share
+        // the same card frame. Hidden when list collapses to 0 height so
+        // we don't paint an empty clay sliver above the search pill.
+        PillCard {
+            anchors.fill: list
+            radius: root.rounding
+            visible: list.height > 0
+        }
+
         ContentList {
             id: list
 
@@ -68,10 +79,14 @@ Item {
         }
     }
 
-    StyledRect {
+    // Search input pill — capsule PillCard sibling to the result-list card
+    // above it. Two parallel Tier-1 clay frames separated by padding.large,
+    // each hosting its own content cluster. Capsule rounding keeps the
+    // search-bar silhouette; the claymorphic rim + bottom inner-shadow give
+    // it the same warm material as the result card.
+    PillCard {
         id: searchWrapper
 
-        color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
         radius: Appearance.rounding.full
 
         anchors.left: parent.left

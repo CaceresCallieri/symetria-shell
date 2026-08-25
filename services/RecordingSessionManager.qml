@@ -51,7 +51,7 @@ Singleton {
         return null;
     }
 
-    /// Ordered delivery mode list for cycling (STT "ask" mode only).
+    /// Ordered delivery mode list for cycling (STT sessions).
     // intentional var: JS string array used as constant lookup table
     readonly property var _deliveryModes: ["clipboard", "inject", "submit"]
 
@@ -63,7 +63,8 @@ Singleton {
     }
 
     /// Cycle the current job's delivery mode through clipboard → inject → submit.
-    /// Only effective in STT "ask" mode.
+    /// One-shot override: applies to the current STT job only; the next job
+    /// re-seeds from Config.stt.deliveryMode.
     function cycleDeliveryMode(): void {
         const job = currentJob;
         if (!job || _activeMode !== "stt") return;

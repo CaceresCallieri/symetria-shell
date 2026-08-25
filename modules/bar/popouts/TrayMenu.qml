@@ -39,6 +39,37 @@ StackView {
         property bool isSubMenu
         property bool shown
 
+        // Split menuOpener.children on `isSeparator` boundaries so each
+        // separator-delimited section becomes its own claymorphism card.
+        // The native menu protocol already encodes section structure via
+        // separators; we consume that signal here instead of painting it
+        // as a 1px line.
+        // intentional var: array of arrays of QsMenuEntry from QsMenuOpener
+        readonly property var groupedEntries: {
+            const groups = [];
+            let current = [];
+            // Quickshell typed list properties expose `.values` for JS iteration.
+            // The bare `menuOpener.children` works as a Repeater model but not as
+            // an iterable here, and accessing it without `.values` fails to register
+            // dependency tracking — the binding would never re-fire when the menu
+            // populates asynchronously after open.
+            const list = menuOpener.children.values;
+            for (let i = 0; i < list.length; i++) {
+                const entry = list[i];
+                if (entry.isSeparator) {
+                    if (current.length > 0) {
+                        groups.push(current);
+                        current = [];
+                    }
+                } else {
+                    current.push(entry);
+                }
+            }
+            if (current.length > 0)
+                groups.push(current);
+            return groups;
+        }
+
         padding: Appearance.padding.smaller
         spacing: Appearance.spacing.small
 
@@ -65,102 +96,128 @@ StackView {
         }
 
         Repeater {
-            model: menuOpener.children
+            model: menu.groupedEntries
 
-            StyledRect {
-                id: item
+            PillCardSection {
+                id: groupCard
 
-                required property QsMenuEntry modelData
+                // intentional var: array of QsMenuEntry — one separator-delimited section
+                required property var modelData
 
                 implicitWidth: Config.bar.sizes.trayMenuWidth
-                implicitHeight: modelData.isSeparator ? 1 : children.implicitHeight
 
-                radius: Appearance.rounding.full
-                color: modelData.isSeparator ? Colours.palette.m3outlineVariant : "transparent"
-
-                Loader {
-                    id: children
+                Column {
+                    id: groupColumn
 
                     anchors.left: parent.left
                     anchors.right: parent.right
+                    spacing: Appearance.spacing.small
 
-                    active: !item.modelData.isSeparator
-                    asynchronous: true
+                    Repeater {
+                        model: groupCard.modelData
 
-                    sourceComponent: Item {
-                        implicitHeight: label.implicitHeight
+                        StyledRect {
+                            id: item
 
-                        StateLayer {
-                            anchors.margins: -Appearance.padding.small / 2
-                            anchors.leftMargin: -Appearance.padding.smaller
-                            anchors.rightMargin: -Appearance.padding.smaller
+                            required property QsMenuEntry modelData
 
-                            radius: item.radius
-                            disabled: !item.modelData.enabled
+                            width: parent.width
+                            implicitHeight: itemContent.implicitHeight
 
-                            function onClicked(): void {
-                                const entry = item.modelData;
-                                if (entry.hasChildren)
-                                    root.push(subMenuComp.createObject(null, {
-                                        handle: entry,
-                                        isSubMenu: true
-                                    }));
-                                else {
-                                    item.modelData.triggered();
-                                    root.popouts.hasCurrent = false;
+                            radius: Appearance.rounding.full
+                            color: "transparent"
+
+                            // No active guard needed — separators are pre-filtered by
+                            // groupedEntries, so every entry reaching this Repeater is a
+                            // real menu item. (The original active: !isSeparator guard was
+                            // removed in the claymorphism refactor once filtering moved upstream.)
+                            Loader {
+                                id: itemContent
+
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+
+                                asynchronous: true
+
+                                sourceComponent: Item {
+                                    implicitHeight: label.implicitHeight
+
+                                    StateLayer {
+                                        anchors.margins: -Appearance.padding.small / 2
+                                        anchors.leftMargin: -Appearance.padding.smaller
+                                        anchors.rightMargin: -Appearance.padding.smaller
+
+                                        radius: item.radius
+                                        disabled: !item.modelData.enabled
+
+                                        function onClicked(): void {
+                                            const entry = item.modelData;
+                                            if (entry.hasChildren)
+                                                root.push(subMenuComp.createObject(root, {
+                                                    handle: entry,
+                                                    isSubMenu: true
+                                                }));
+                                            else {
+                                                entry.triggered();
+                                                root.popouts.hasCurrent = false;
+                                            }
+                                        }
+                                    }
+
+                                    Loader {
+                                        id: icon
+
+                                        anchors.left: parent.left
+
+                                        active: item.modelData.icon !== ""
+                                        asynchronous: true
+
+                                        sourceComponent: IconImage {
+                                            // Minimum 16px to prevent invalid icon requests during initialization
+                                            implicitSize: Math.max(label.implicitHeight, 16)
+
+                                            source: item.modelData.icon
+                                        }
+                                    }
+
+                                    StyledText {
+                                        id: label
+
+                                        anchors.left: icon.right
+                                        anchors.leftMargin: icon.active ? Appearance.spacing.smaller : 0
+
+                                        text: labelMetrics.elidedText
+                                        color: item.modelData.enabled ? Colours.palette.m3onSurface : Colours.palette.m3outline
+                                    }
+
+                                    TextMetrics {
+                                        id: labelMetrics
+
+                                        text: item.modelData.text
+                                        font.pointSize: label.font.pointSize
+                                        font.family: label.font.family
+
+                                        elide: Text.ElideRight
+                                        // icon.implicitWidth is 0 until the async Loader finishes; gate on Ready to
+                                        // prevent the text from showing un-elided during the icon load frame.
+                                        elideWidth: item.width - (icon.active && icon.status === Loader.Ready ? icon.implicitWidth + label.anchors.leftMargin : 0) - (expand.active ? expand.implicitWidth + Appearance.spacing.normal : 0)
+                                    }
+
+                                    Loader {
+                                        id: expand
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.right: parent.right
+
+                                        active: item.modelData.hasChildren
+                                        asynchronous: true
+
+                                        sourceComponent: MaterialIcon {
+                                            text: "chevron_right"
+                                            color: item.modelData.enabled ? Colours.palette.m3onSurface : Colours.palette.m3outline
+                                        }
+                                    }
                                 }
-                            }
-                        }
-
-                        Loader {
-                            id: icon
-
-                            anchors.left: parent.left
-
-                            active: item.modelData.icon !== ""
-                            asynchronous: true
-
-                            sourceComponent: IconImage {
-                                // Minimum 16px to prevent invalid icon requests during initialization
-                                implicitSize: Math.max(label.implicitHeight, 16)
-
-                                source: item.modelData.icon
-                            }
-                        }
-
-                        StyledText {
-                            id: label
-
-                            anchors.left: icon.right
-                            anchors.leftMargin: icon.active ? Appearance.spacing.smaller : 0
-
-                            text: labelMetrics.elidedText
-                            color: item.modelData.enabled ? Colours.palette.m3onSurface : Colours.palette.m3outline
-                        }
-
-                        TextMetrics {
-                            id: labelMetrics
-
-                            text: item.modelData.text
-                            font.pointSize: label.font.pointSize
-                            font.family: label.font.family
-
-                            elide: Text.ElideRight
-                            elideWidth: Config.bar.sizes.trayMenuWidth - (icon.active ? icon.implicitWidth + label.anchors.leftMargin : 0) - (expand.active ? expand.implicitWidth + Appearance.spacing.normal : 0)
-                        }
-
-                        Loader {
-                            id: expand
-
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.right: parent.right
-
-                            active: item.modelData.hasChildren
-                            asynchronous: true
-
-                            sourceComponent: MaterialIcon {
-                                text: "chevron_right"
-                                color: item.modelData.enabled ? Colours.palette.m3onSurface : Colours.palette.m3outline
                             }
                         }
                     }

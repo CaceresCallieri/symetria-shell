@@ -20,13 +20,93 @@ Searcher {
     property bool focusMode: false
     readonly property bool wallpaperVisible: !focusMode
 
+    // Texture-load gate distinct from wallpaperVisible: stays TRUE during fade-out
+    // so the GPU texture survives the opacity animation, then flips FALSE so the
+    // CachingImage source is cleared and the texture is dropped. Re-enabled
+    // immediately when focus mode turns off so Qt can async-load before the
+    // fade-in starts. See modules/background/Wallpaper.qml for the consumer.
+    //
+    // Managed imperatively by onFocusModeChanged and FileView.onLoaded — NOT a
+    // live binding. Initial value is true (focusMode defaults false; onLoaded
+    // corrects it synchronously before the first frame if restored from disk).
+    property bool wallpaperLoaded: true
+
+    // Buffer beyond Appearance.anim.durations.normal to guarantee the wrapper
+    // Item opacity reaches 0 before we drop the texture. Bound to the actual
+    // animation duration so custom anim.scale values (e.g. scale=2 for slow
+    // motion / accessibility) don't cause the texture to pop mid-fade.
+    Timer {
+        id: focusUnloadTimer
+        interval: Appearance.anim.durations.normal + 50
+        onTriggered: root.wallpaperLoaded = false
+    }
+
+    // Flag suppresses the "focus mode toggled" toast during the initial load
+    // from disk — otherwise the user would see a stale toast every shell restart.
+    property bool _focusModeLoadedFromDisk: false
+
     onFocusModeChanged: {
+        // Persist immediately (debounced save fires after a short delay)
+        if (_focusModeLoadedFromDisk)
+            focusModeSaveTimer.restart();
+
+        // Load/unload texture coordination
+        if (focusMode) {
+            focusUnloadTimer.restart();  // delay unload until fade-out completes
+        } else {
+            focusUnloadTimer.stop();
+            wallpaperLoaded = true;  // begin reload immediately, fade-in follows
+        }
+
+        // User-facing toast (skip on the initial restoration from disk)
+        if (!_focusModeLoadedFromDisk)
+            return;
         if (!Config.utilities.toasts.focusModeChanged)
             return;
         if (focusMode)
             Toaster.toast(qsTr("Focus mode"), qsTr("Wallpaper hidden for distraction-free work"), "visibility_off");
         else
             Toaster.toast(qsTr("Focus mode off"), qsTr("Wallpaper restored"), "visibility");
+    }
+
+    // Debounced save to avoid hammering disk if the user toggles rapidly.
+    Timer {
+        id: focusModeSaveTimer
+        interval: 250
+        onTriggered: focusStateFile.setText(JSON.stringify({ focusMode: root.focusMode }))
+    }
+
+    FileView {
+        id: focusStateFile
+
+        path: `${Paths.state}/wallpaper-state.json`
+        onLoaded: {
+            try {
+                const data = JSON.parse(text());
+                if (typeof data.focusMode === "boolean")
+                    root.focusMode = data.focusMode;
+            } catch (e) {
+                console.warn("[Wallpapers] Failed to parse wallpaper-state.json:", e);
+            }
+            // wallpaperLoaded must mirror the restored focusMode synchronously —
+            // onFocusModeChanged would have started focusUnloadTimer (for the focus=true
+            // case) before we could correct wallpaperLoaded here. Stop it now: we've
+            // already applied the correct value directly, no deferred unload needed.
+            root.wallpaperLoaded = !root.focusMode;
+            focusUnloadTimer.stop();
+            root._focusModeLoadedFromDisk = true;
+        }
+        onLoadFailed: err => {
+            if (err === FileViewError.FileNotFound) {
+                setText(JSON.stringify({ focusMode: false }));
+                root._focusModeLoadedFromDisk = true;
+            } else {
+                // Non-FileNotFound errors (permission denied, IO error, etc.) must still
+                // set the flag so toasts and disk saves work for the rest of the session.
+                console.warn("[Wallpapers] Failed to load wallpaper-state.json:", err);
+                root._focusModeLoadedFromDisk = true;
+            }
+        }
     }
 
     // Per-workspace wallpaper support

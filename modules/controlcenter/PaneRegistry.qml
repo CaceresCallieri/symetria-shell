@@ -41,6 +41,12 @@ QtObject {
             readonly property string label: "launcher"
             readonly property string icon: "apps"
             readonly property string component: "launcher/LauncherPane.qml"
+        },
+        QtObject {
+            readonly property string id: "services"
+            readonly property string label: "services"
+            readonly property string icon: "cloud"
+            readonly property string component: "services/ServicesPane.qml"
         }
     ]
 

@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.config
+import qs.services
 import qs.utils
 import Symmetria
 import Quickshell
@@ -160,13 +161,239 @@ Singleton {
         return { background: background, border: border };
     }
 
-    // Unified pill style accessor — delegates to glassmorphism or mattePill
-    // based on config toggle. Same signature and return type as glassmorphism().
+    // Metal constants — machined dark surface.
+    //
+    // For SURFACES the hue is FIXED rather than derived from the palette. Metal
+    // reads as metal by being chromatically neutral (a faint cool cast, as if
+    // lit by daylight); tinting a surface toward whatever the palette's hue
+    // happens to be turns it into coloured plastic.
+    //
+    // STATE colours are the deliberate exception: a caller passing a chromatic
+    // baseColor (error, urgency, checked, focused) is encoding meaning, not
+    // choosing a surface, so metalPill borrows that hue — capped and lifted so
+    // it reads as tinted metal. See the accent constants below.
+    readonly property QtObject metalConstants: QtObject {
+        // Darker than matte's 0.10 — metal needs headroom above the body for the
+        // specular rim to read as bright. Contrast against the highlights is
+        // what sells the material, so the body is pushed down rather than the
+        // highlights merely pushed up: a bright rim on a mid-grey body reads as
+        // lit plastic, the same rim on a near-black body reads as metal.
+        readonly property real baseLightness: 0.042
+        readonly property real lightnessRange: 0.055
+
+        // Cool cast, barely saturated. ~209° at 5%. Used for SURFACE colours —
+        // see the accent constants below for the state-coded path.
+        readonly property real hue: 0.58
+        readonly property real saturation: 0.05
+
+        // --- Accent path -----------------------------------------------------
+        // Above this saturation, a baseColor is treated as a deliberate STATE
+        // colour (error, urgency, checked, focused) rather than a surface
+        // container, and metalPill borrows its hue instead of forcing neutral.
+        //
+        // Without this, every accent collapses to the same near-black: toast
+        // types, notification urgency, filled-vs-secondary buttons, checked
+        // switches and focused agent chips all become indistinguishable, since
+        // the only surviving variable is `intensity` across a 0.042–0.097
+        // lightness span. Several call sites even wrap the result in
+        // Qt.lighter(…, 1.5), which cannot recover a hue that was discarded.
+        //
+        // The threshold sits above the palette's neutral containers (0.017–0.048)
+        // and below its accent roles (0.073–0.082), so surfaces stay machined and
+        // states stay legible. Saturation is capped and lightness lifted so an
+        // accent still reads as tinted metal rather than as coloured plastic.
+        //
+        // THIS CONSTANT MAKES PALETTE SATURATION LOAD-BEARING. The scheme file is
+        // JSON and cannot say so itself, so `_warnOnUnderSaturatedAccents()` in
+        // load() enforces the accent side at runtime — keep its role list current.
+        //
+        // The container side has a floor the palette cannot go under: hue is only
+        // expressible in 8-bit hex as a spread between channels, so at L<0.08 the
+        // smallest non-zero step at this hue is max−min = 2, which already works
+        // out to S≈0.067 — ABOVE this threshold. The darkest containers are
+        // therefore achromatic by necessity, not by preference. Do not "restore
+        // the cool cast" to surfaceDim / surfaceContainerLowest / mantle / crust:
+        // the only representable tint pushes them onto the accent path.
+        readonly property real accentSaturationThreshold: 0.05
+
+        // Currently inert: the palette's most saturated accent is 0.082, so the
+        // cap never binds and its value is untested against real data. It exists
+        // for schemes with genuinely chromatic accents (the pre-monochrome
+        // palettes reached 0.37) — do not tune it by observing today's shell.
+        readonly property real accentSaturationMax: 0.30
+        readonly property real accentLift: 0.10
+
+        // The edge is derived from the BODY colour, lifted slightly in lightness
+        // and fully opaque — it is not white at low alpha.
+        //
+        // This distinction is the whole point. White-at-low-alpha over a cool
+        // near-black desaturates it toward neutral grey, so the outline reads as
+        // a *drawn line on top of* the surface — a diagram convention. Lifting
+        // the body's own colour keeps the cool cast intact, so the same pixel
+        // width reads as the surface's own machined edge catching a little more
+        // light than its face. Same thickness, completely different impression.
+        //
+        // The lift is applied to the pill's FINAL lightness (after intensity),
+        // so plates at different intensities keep a consistent edge relationship
+        // rather than the brighter ones losing their edge.
+        readonly property real borderLightnessLift: 0.038
+    }
+
+    // Metal pill helper: near-black cool body + slightly brighter edge.
+    // Same signature and return type as glassmorphism() / mattePill().
+    //
+    // baseColor is accepted for API symmetry but intentionally unused — see the
+    // fixed-hue rationale on metalConstants.
+    function metalPill(baseColor: color, intensity: real): var {
+        const clampedIntensity = Math.max(0, Math.min(1, intensity));
+
+        // A chromatic baseColor is a deliberate STATE colour, not a surface
+        // container — keep its hue so the state stays readable. Desaturated
+        // bases (the m3surface* family) take the neutral machined cast.
+        const accented = baseColor.hslSaturation > metalConstants.accentSaturationThreshold;
+
+        const hue = accented ? baseColor.hslHue : metalConstants.hue;
+        const saturation = accented ? Math.min(metalConstants.accentSaturationMax, baseColor.hslSaturation) : metalConstants.saturation;
+        const lightness = Math.min(1.0, metalConstants.baseLightness + clampedIntensity * metalConstants.lightnessRange + (accented ? metalConstants.accentLift : 0));
+
+        const background = Qt.hsla(hue, saturation, lightness, 1.0);
+        const border = Qt.hsla(hue, saturation, Math.min(1.0, lightness + metalConstants.borderLightnessLift), 1.0);
+
+        return { background: background, border: border };
+    }
+
+    // Unified pill style accessor — delegates to the active theme's colour
+    // recipe. Same signature and return type across all of them.
+    //
+    // Reading Theme.material HERE is what makes theme switching live: QML
+    // captures binding dependencies dynamically, including properties read
+    // inside a called function, so every `Colours.pillStyle(...)` binding in the
+    // shell re-evaluates the moment Theme.material changes. No reload, no signal.
     function pillStyle(baseColor: color, intensity: real): var {
-        if (Appearance.pillStyle === "matte")
-            return mattePill(baseColor, intensity);
-        // Default / "glass": use glassmorphism as fallback for any non-"matte" value
-        return glassmorphism(baseColor, intensity);
+        if (Theme.material === "metal")
+            return metalPill(baseColor, intensity);
+        // Unreachable today: "glass" is not in Theme.materials, so isValidMaterial()
+        // rejects it and Theme.material can never hold it. Kept — with
+        // glassmorphism() — because glass is a named planned material in the
+        // Theme header; wiring it up means adding a recipe block and one array
+        // entry, not rewriting this dispatch. Do not delete either as dead code.
+        if (Theme.material === "glass")
+            return glassmorphism(baseColor, intensity);
+        // Default "clay" — and any unrecognised value, matching Theme's own
+        // fallback so colours and structure never disagree about the theme.
+        return mattePill(baseColor, intensity);
+    }
+
+    // How far above its material's ceiling an ENGAGED part is pushed.
+    //
+    // Every surface recipe caps hard — metal accents top out at lightness 0.197,
+    // clay at 0.18 — because a SURFACE that drifts bright stops reading as the
+    // material and starts reading as coloured plastic. That cap is correct for
+    // the hundreds of pills that merely carry state.
+    //
+    // It is wrong for the one or two controls the eye actually lands on. This
+    // lift is the exception, and it is physically honest rather than a fudge:
+    // an engaged part is POLISHED, not emitting. A machined face that has been
+    // worn bright by use returns far more of the light source than the matte
+    // stock around it, and that is a real thing metal does — unlike glowing,
+    // which is what a raw `m3primary` fill was faking.
+    //
+    // TWO presets, because the same body lightness does not read the same in
+    // every context. THE MEASUREMENT THAT PRODUCED THEM: with both parts on the
+    // same 0.22 lift, the switch knob landed at 0.417 and the connected socket
+    // at 0.400 — the knob objectively brighter — and the knob still looked
+    // dimmer in situ. Simultaneous contrast is the reason: the knob is a small
+    // disc ringed by a shadowed groove, the socket sits flat on the card. The
+    // correction belongs in the value rather than in the viewer's eye, so the
+    // knob was moved to its own preset and now resolves to 0.537.
+    //
+    // Do not "simplify" these back into one constant on the grounds that the
+    // numbers should match. They differ precisely so the RESULT matches.
+    readonly property QtObject polish: QtObject {
+        // A part sitting in the panel plane: the connected socket.
+        readonly property real standard: 0.22
+
+        // A part ringed by a dark inset groove: the switch knob. Picked against
+        // `standard` in a side-by-side render so the knob reads brighter than
+        // the socket, not merely equal to it. Past a LIFT of ~0.40 (not a
+        // resulting lightness of 0.40, which this preset already exceeds) it
+        // stops reading as metal and starts recreating the pale disc this whole
+        // rework replaced.
+        readonly property real inGroove: 0.34
+
+        // A BROAD part: the active-workspace indicator, which can be 300px+ of
+        // continuous surface. The other two presets are for small controls, and
+        // AREA is the variable they do not account for — the same lightness that
+        // reads as a tidy highlight on a 30px disc reads as a slab that dominates
+        // the whole bar when it is ten times as wide, and it stops being an
+        // accent and becomes the thing you look at first.
+        //
+        // Numbers, kept separate because they measure different things and
+        // conflating them produced a wrong rationale the first time:
+        //
+        //   computed body   0.1805 + lift        (this file's arithmetic)
+        //   rendered        body + ~0.015, and MUCH higher inside the specular
+        //                   sweep band, which on a 300px plate is wide enough
+        //                   to sample by accident
+        //   bar plate       0.090                (measured)
+        //
+        // At `standard` that is a 0.400 body rendering ~0.42, peaking past 0.50
+        // across the sweep — against a 0.09 plate, with a light workspace label
+        // sitting on top of it that lost most of its contrast. This preset puts
+        // the body at 0.300, rendering ~0.315: not a precise midpoint, but the
+        // value that stopped the plate competing with its own label when the
+        // candidates were rendered side by side.
+        //
+        // This is why the presets are a family rather than one number: three
+        // parts, all genuinely "engaged", none of which reads correctly at
+        // another's value.
+        readonly property real broad: 0.12
+    }
+
+    // The engaged accent every non-parameterised consumer wants: polished
+    // primary at socket strength. Exists because the full call was written out
+    // verbatim at three sites, which is the same drift this change set out to
+    // remove — a tuning pass would have changed one and missed two.
+    // ActiveIndicator deliberately keeps its own call, since its base colour is
+    // supplied by the consumer (special workspaces pass tertiary).
+    // intentional var: heterogeneous JS { background, border }
+    readonly property var engagedAccent: engagedPillStyle(palette.m3primary, glass.strong, polish.standard)
+
+    // pillStyle() for a part that is actuated / connected / on.
+    //
+    // Use this ONLY for the engaged state of an interactive control, never for
+    // a container or a static display pill. It deliberately breaks the material
+    // ceiling, so applying it broadly would flatten the contrast it exists to
+    // create.
+    //
+    // `lift` is required rather than defaulted: a caller has to state which
+    // context its part lives in, because picking the wrong one is invisible in
+    // code review and only shows up as a control that looks flat on screen.
+    // Pass a `Colours.polish.*` preset, not a literal.
+    function engagedPillStyle(baseColor: color, intensity: real, lift: real): var {
+        const style = pillStyle(baseColor, intensity);
+        const body = style.background;
+        const lit = Math.min(1.0, body.hslLightness + lift);
+
+        // The border must keep the SAME relationship to the body that its
+        // material defines, not merely inherit the unlifted edge — an edge
+        // derived from the old body against a lifted one makes the plate read
+        // as a flat swatch, which is the failure this function exists to avoid.
+        //
+        // Branch on the EDGE ITSELF, not on Theme.material. An opaque edge (as
+        // metal builds by lifting the body's lightness) has to be re-derived
+        // against the new body; a translucent one (clay's white-at-0.12)
+        // composites correctly over any body and passes through. Testing the
+        // property rather than the material name is what keeps this from
+        // becoming a second per-material dispatch site parallel to pillStyle():
+        // a future material gets correct behaviour by construction instead of
+        // silently falling into an else branch nobody remembered to update.
+        const opaqueEdge = style.border.a >= 1;
+
+        return {
+            background: Qt.hsla(body.hslHue, body.hslSaturation, lit, 1.0),
+            border: opaqueEdge ? Qt.hsla(body.hslHue, body.hslSaturation, Math.min(1.0, lit + metalConstants.borderLightnessLift), 1.0) : style.border
+        };
     }
 
     // Glassmorphism intensity presets for common use cases
@@ -211,6 +438,31 @@ Singleton {
             }
         }
         root._paletteKeys = keys;
+        _warnOnUnderSaturatedAccents();
+    }
+
+    // Roles that are passed to pillStyle()/engagedPillStyle() as ACCENT bases —
+    // i.e. callers that need metalPill() to take the state-colour path rather
+    // than the neutral-surface one. Kept next to the check that enforces it.
+    readonly property var _accentBaseRoles: ["m3primary", "m3secondary", "m3tertiary", "m3success"]
+
+    // Dev guard for the invariant the scheme file cannot express.
+    //
+    // metalPill() decides between "neutral machined surface" and "deliberate
+    // state colour" purely on hslSaturation > accentSaturationThreshold, so a
+    // palette edit that desaturates an accent role past that line silently
+    // strips its hue AND its accentLift — a visibly duller control with no
+    // error anywhere. JSON holds no comments, so without this the constraint
+    // would live only in a commit message.
+    //
+    // Warn, never clamp: a scheme is user data and a shell that quietly
+    // rewrites it is harder to debug than one that complains.
+    function _warnOnUnderSaturatedAccents(): void {
+        for (const role of _accentBaseRoles) {
+            const sat = current[role].hslSaturation;
+            if (sat <= metalConstants.accentSaturationThreshold)
+                console.warn(`[Colours] ${role} saturation ${sat.toFixed(4)} is at or below metalConstants.accentSaturationThreshold (${metalConstants.accentSaturationThreshold}) — metalPill() will treat it as a neutral surface, dropping its hue and accent lift.`);
+        }
     }
 
     // Read scheme from state directory (where the CLI writes).

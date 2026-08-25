@@ -29,6 +29,11 @@ Item {
         // Force re-evaluation when map updates by referencing version
         const _ = Wallpapers.workspaceMapVersion;
 
+        // Focus mode: release texture once the wrapper fade-out completes.
+        // wallpaperLoaded flips false after Wallpapers' unload timer fires.
+        if (!Wallpapers.wallpaperLoaded)
+            return "";
+
         // Safe fallback during initialization
         if (Config.background.perWorkspaceWallpapers.enabled && (!workspaceDataReady || !mapReady))
             return Wallpapers.actualCurrent;
@@ -45,9 +50,17 @@ Item {
     anchors.fill: parent
 
     onSourceChanged: {
-        if (!source)
+        if (!source) {
+            // Drop GPU textures. Setting `path` alone updates CachingImageManager's
+            // m_path but never clears the Image's `source` property — the texture
+            // would stay resident. Clear `source` directly on both Imgs so Qt
+            // releases the decoded pixmap and GPU texture.
             current = null;
-        else if (current === one)
+            one.path = "";
+            one.source = "";
+            two.path = "";
+            two.source = "";
+        } else if (current === one)
             two.update();
         else
             one.update();
@@ -61,7 +74,9 @@ Item {
     Loader {
         anchors.fill: parent
 
-        active: !root.source
+        // Skip the fallback UI during focus mode — `source` is intentionally
+        // empty there, not because the wallpaper is missing.
+        active: !root.source && Wallpapers.wallpaperLoaded
         asynchronous: true
 
         sourceComponent: StyledRect {

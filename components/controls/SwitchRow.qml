@@ -11,7 +11,11 @@ StyledRect {
 
     required property string label
     required property bool checked
-    property bool enabled: true
+    // No `property bool enabled` here — Item.enabled already exists.
+    // Re-declaring it creates a shadow: Qt warns about overriding a base
+    // member, and the shadow does NOT propagate to children the way the real
+    // Item.enabled does, so consumers' `enabled: false` silently left the
+    // subtree interactive. Assigning the inherited one gets both.
     property var onToggled: function(checked) {} // intentional var: function callback (no QML function-property type)
 
     Layout.fillWidth: true
@@ -39,7 +43,6 @@ StyledRect {
 
         StyledSwitch {
             checked: root.checked
-            enabled: root.enabled
             onToggled: {
                 root.onToggled(checked);
             }

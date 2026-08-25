@@ -1,12 +1,21 @@
 pragma ComponentBehavior: Bound
 
 import qs.components
+import qs.components.effects
 import qs.services
 import qs.config
 import Quickshell.Wayland
 import QtQuick
-import QtQuick.Effects
 
+// The lock screen is three layers:
+//
+//   1. ScreencopyView  — a snapshot of the desktop as it was
+//   2. BeamsBackground — metallic beams that WIPE IN over that snapshot
+//   3. PasswordPrompt  — a single password field, arriving once the wipe lands
+//
+// Locking plays 1 → 2 → 3; unlocking plays it backwards, so the beams retract
+// and hand the desktop back. The wipe is the whole point of the screen: the
+// beams are what covers your session, and watching them do it is the effect.
 WlSessionLockSurface {
     id: root
 
@@ -15,13 +24,57 @@ WlSessionLockSurface {
 
     readonly property alias unlocking: unlockAnim.running
 
+    // Per-output identity for diagnostics. WlSessionLockSurface is created once
+    // per screen; the surface is torn down and recreated when Hyprland removes/
+    // re-adds outputs across suspend/resume — the prime suspect window.
+    readonly property string screenName: root.screen?.name ?? "unknown"
+
     color: "transparent"
+
+    Component.onCompleted: LockDiagnostics.markSurfaceCreated(root.screenName)
+    Component.onDestruction: LockDiagnostics.markSurfaceDestroyed(root.screenName)
 
     Connections {
         target: root.lock
 
         function onUnlock(): void {
+            // Stop the intro first: unlock can land DURING it (fingerprint, or
+            // an IPC/shortcut unlock right after locking). Both sequences drive
+            // beams.reveal and the prompt's opacity/scale, so leaving initAnim
+            // running lets them fight frame to frame — the reveal can animate
+            // back UP after the retract has started.
+            initAnim.stop();
             unlockAnim.start();
+        }
+    }
+
+    SequentialAnimation {
+        id: initAnim
+
+        running: true
+
+        Anim {
+            target: beams
+            property: "reveal"
+            from: 0
+            to: 1
+            duration: Config.lock.beams.revealDuration
+            easing.bezierCurve: Appearance.anim.curves.standard
+        }
+        ParallelAnimation {
+            Anim {
+                target: prompt
+                property: "opacity"
+                to: 1
+                duration: Appearance.anim.durations.large
+            }
+            Anim {
+                target: prompt
+                property: "scale"
+                to: 1
+                duration: Appearance.anim.durations.expressiveDefaultSpatial
+                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+            }
         }
     }
 
@@ -30,52 +83,24 @@ WlSessionLockSurface {
 
         ParallelAnimation {
             Anim {
-                target: lockContent
-                properties: "implicitWidth,implicitHeight"
-                to: lockContent.size
-                duration: Appearance.anim.durations.expressiveDefaultSpatial
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-            Anim {
-                target: lockBg
-                property: "radius"
-                to: lockContent.radius
-            }
-            Anim {
-                target: content
-                property: "scale"
-                to: 0
-                duration: Appearance.anim.durations.expressiveDefaultSpatial
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-            Anim {
-                target: content
+                target: prompt
                 property: "opacity"
                 to: 0
                 duration: Appearance.anim.durations.small
             }
             Anim {
-                target: lockIcon
-                property: "opacity"
-                to: 1
-                duration: Appearance.anim.durations.large
+                target: prompt
+                property: "scale"
+                to: 0.9
+                duration: Appearance.anim.durations.normal
             }
-            Anim {
-                target: background
-                property: "opacity"
-                to: 0
-                duration: Appearance.anim.durations.large
-            }
-            SequentialAnimation {
-                PauseAnimation {
-                    duration: Appearance.anim.durations.small
-                }
-                Anim {
-                    target: lockContent
-                    property: "opacity"
-                    to: 0
-                }
-            }
+        }
+        Anim {
+            target: beams
+            property: "reveal"
+            to: 0
+            duration: Config.lock.beams.revealDuration
+            easing.bezierCurve: Appearance.anim.curves.standard
         }
         PropertyAction {
             target: root.lock
@@ -84,147 +109,58 @@ WlSessionLockSurface {
         }
     }
 
-    ParallelAnimation {
-        id: initAnim
-
-        running: true
-
-        Anim {
-            target: background
-            property: "opacity"
-            to: 1
-            duration: Appearance.anim.durations.large
-        }
-        SequentialAnimation {
-            ParallelAnimation {
-                Anim {
-                    target: lockContent
-                    property: "scale"
-                    to: 1
-                    duration: Appearance.anim.durations.expressiveFastSpatial
-                    easing.bezierCurve: Appearance.anim.curves.expressiveFastSpatial
-                }
-                Anim {
-                    target: lockContent
-                    property: "rotation"
-                    to: 360
-                    duration: Appearance.anim.durations.expressiveFastSpatial
-                    easing.bezierCurve: Appearance.anim.curves.standardAccel
-                }
-            }
-            ParallelAnimation {
-                Anim {
-                    target: lockIcon
-                    property: "rotation"
-                    to: 360
-                    easing.bezierCurve: Appearance.anim.curves.standardDecel
-                }
-                Anim {
-                    target: lockIcon
-                    property: "opacity"
-                    to: 0
-                }
-                Anim {
-                    target: content
-                    property: "opacity"
-                    to: 1
-                }
-                Anim {
-                    target: content
-                    property: "scale"
-                    to: 1
-                    duration: Appearance.anim.durations.expressiveDefaultSpatial
-                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                }
-                Anim {
-                    target: lockBg
-                    property: "radius"
-                    to: Appearance.rounding.large * 1.5
-                }
-                Anim {
-                    target: lockContent
-                    property: "implicitWidth"
-                    to: root.screen.height * Config.lock.sizes.heightMult * Config.lock.sizes.ratio
-                    duration: Appearance.anim.durations.expressiveDefaultSpatial
-                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                }
-                Anim {
-                    target: lockContent
-                    property: "implicitHeight"
-                    to: root.screen.height * Config.lock.sizes.heightMult
-                    duration: Appearance.anim.durations.expressiveDefaultSpatial
-                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                }
-            }
-        }
-    }
-
+    // Desktop snapshot — what the beams cover.
+    //
+    // Deliberately NOT blurred. It was, on the theory that the desktop is
+    // briefly legible during the wipe; in practice the blur added nothing to
+    // the look and cost a full-screen MultiEffect pass. The tradeoff is real
+    // though: for the ~1.4s of the wipe, the uncovered part of your session is
+    // readable to anyone watching. Re-add a `layer.effect: MultiEffect` here if
+    // that ever matters.
     ScreencopyView {
         id: background
 
         anchors.fill: parent
         captureSource: root.screen
-        opacity: 0
 
-        layer.enabled: true
-        layer.effect: MultiEffect {
-            autoPaddingEnabled: false
-            blurEnabled: true
-            blur: 1
-            blurMax: 64
-            blurMultiplier: 1
-        }
+        // Explicit, because the whole design depends on it: this is a SNAPSHOT
+        // of the desktop at lock time. If it ever went live, the view would
+        // capture the lock surface it sits inside — a feedback loop plus
+        // continuous capture cost for the entire lock session.
+        live: false
+
+        // THE smoking-gun signal. If hasContent never flips true while locked,
+        // the lock is "armed but undrawn" — the exact crash signature — with qs
+        // still alive. Logged for post-mortem and fed into the heartbeat the
+        // external watchdog tails.
+        //
+        // NOTE: this view is no longer the surface's only opaque content — the
+        // beams above it are opaque once revealed. So a blank ScreencopyView
+        // would now show as beams-over-nothing rather than a fully black screen.
+        // The signal is still worth having; its symptom just changed.
+        onHasContentChanged: LockDiagnostics.markScreencopy(root.screenName, hasContent)
     }
 
-    Item {
-        id: lockContent
+    // One instance per output, by design. The beam bands derive from this
+    // surface's own UV and aspect, so on a multi-monitor setup the pattern does
+    // NOT span the desktop — each screen gets its own beams and its own wipe.
+    // Making it span would mean feeding global desktop coordinates through
+    // uResolution/qt_TexCoord0. Recorded so it isn't refiled as a bug.
+    BeamsBackground {
+        id: beams
 
-        readonly property int size: lockIcon.implicitHeight + Appearance.padding.large * 4
-        readonly property int radius: size / 4 * Appearance.rounding.scale
+        anchors.fill: parent
+        cfg: Config.lock.beams
+        reveal: 0
+    }
+
+    PasswordPrompt {
+        id: prompt
 
         anchors.centerIn: parent
-        implicitWidth: size
-        implicitHeight: size
+        surface: root
 
-        rotation: 180
-        scale: 0
-
-        StyledRect {
-            id: lockBg
-
-            anchors.fill: parent
-            color: Colours.palette.m3surface
-            radius: parent.radius
-            opacity: Colours.transparency.enabled ? Colours.transparency.base : 1
-
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                blurMax: 15
-                shadowColor: Qt.alpha(Colours.palette.m3shadow, 0.7)
-            }
-        }
-
-        MaterialIcon {
-            id: lockIcon
-
-            anchors.centerIn: parent
-            text: "lock"
-            font.pointSize: Appearance.font.size.extraLarge * 4
-            font.bold: true
-            rotation: 180
-        }
-
-        Content {
-            id: content
-
-            anchors.centerIn: parent
-            width: (root.screen?.height ?? 0) * Config.lock.sizes.heightMult * Config.lock.sizes.ratio - Appearance.padding.large * 2
-            height: (root.screen?.height ?? 0) * Config.lock.sizes.heightMult - Appearance.padding.large * 2
-
-            lock: root
-            opacity: 0
-            scale: 0
-        }
+        opacity: 0
+        scale: 0.9
     }
 }

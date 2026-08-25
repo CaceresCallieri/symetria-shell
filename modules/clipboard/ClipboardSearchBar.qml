@@ -10,7 +10,10 @@ import QtQuick
 /// Collapses to zero height on the Images tab with a smooth animation.
 /// Owns: search text field, debounce timer, clear/delete-all button state.
 /// Loaded inline by Content.qml; exposes focusTarget for FocusManager.
-StyledRect {
+///
+/// Visual: capsule PillCard sibling to the tabs card and results card —
+/// same Tier-1 clay frame composition as the launcher and recorder pills.
+PillCard {
     id: root
 
     required property bool isTextTab
@@ -63,9 +66,11 @@ StyledRect {
 
     // ── Layout ────────────────────────────────────────────────────
 
-    clip: true
+    // clipContent (not clip) so the PillCard's outer shadows still paint
+    // freely — only the inner cardBody clips, which hides children during
+    // the implicitHeight 0 ↔ naturalHeight collapse animation.
+    clipContent: true
     visible: implicitHeight > 0
-    color: Colours.layer(Colours.palette.m3surfaceContainer, 2)
     radius: Appearance.rounding.full
 
     implicitHeight: root.isTextTab ? naturalHeight : 0

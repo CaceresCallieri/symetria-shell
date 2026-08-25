@@ -4,6 +4,7 @@ import qs.components
 import qs.components.controls
 import qs.services
 import qs.config
+import qs.utils
 import QtQuick
 import QtQuick.Layouts
 
@@ -15,27 +16,15 @@ ColumnLayout {
     property var network: null
     property bool isClosing: false
 
+    // Fences stale connect callbacks. An attempt can outlive the dialog state it
+    // was started from: cancel mid-connect, reopen for another network, and the
+    // first attempt's callback still arrives. Without this it would wipe the newly
+    // typed password, show an error for the wrong SSID, or close a dialog the user
+    // just reopened. Bumped on every close and every reopen; a callback whose
+    // captured token no longer matches is discarded.
+    property int attemptToken: 0
+
     readonly property bool shouldBeVisible: root.wrapper.currentName === "wirelesspassword"
-
-    Connections {
-        target: root.wrapper
-        function onCurrentNameChanged() {
-            if (root.wrapper.currentName === "wirelesspassword") {
-                // Force focus to password container when popout becomes active.
-                // Network is set by Content.qml's reactive binding.
-                focusTimer.start();
-            }
-        }
-    }
-
-    Timer {
-        id: focusTimer
-        // PasswordField manages its own focus via isActive → _focusTimer (50ms).
-        // WirelessPassword only needs to ensure the outer ColumnLayout has focus
-        // so keyboard events route into the component tree.
-        interval: 150
-        onTriggered: root.forceActiveFocus()
-    }
 
     spacing: Appearance.spacing.normal
 
@@ -46,29 +35,25 @@ ColumnLayout {
     enabled: shouldBeVisible && !isClosing
     focus: enabled
 
-    Component.onCompleted: {
-        if (shouldBeVisible) {
-            // Use Timer for actual delay to ensure dialog is fully rendered
-            focusTimer.start();
-        }
-    }
-
     onShouldBeVisibleChanged: {
         if (shouldBeVisible) {
+            // Reset any stale state from a previous attempt that may have ended
+            // without going through closeDialog (e.g. popout navigated away
+            // externally while connecting). Without this the next open can
+            // appear stuck in "Connecting…" with a disabled Connect button.
+            root.attemptToken++;
             connectButton.hasError = false;
-            focusTimer.start();
+            connectButton.connecting = false;
         }
     }
 
     Keys.onEscapePressed: closeDialog()
 
-    StyledRect {
+    PillCardSection {
+        id: dialogSurface
+
         Layout.fillWidth: true
         Layout.preferredWidth: 400
-        implicitHeight: content.implicitHeight + Appearance.padding.large * 2
-
-        radius: Appearance.rounding.normal
-        color: Colours.tPalette.m3surfaceContainer
         visible: root.shouldBeVisible || root.isClosing
         opacity: root.shouldBeVisible && !root.isClosing ? 1 : 0
         scale: root.shouldBeVisible && !root.isClosing ? 1 : 0.7
@@ -90,12 +75,12 @@ ColumnLayout {
             }
 
             Anim {
-                target: parent
+                target: dialogSurface
                 property: "opacity"
                 to: 0
             }
             Anim {
-                target: parent
+                target: dialogSurface
                 property: "scale"
                 to: 0.7
             }
@@ -109,7 +94,6 @@ ColumnLayout {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            anchors.margins: Appearance.padding.large
 
             spacing: Appearance.spacing.normal
 
@@ -127,7 +111,6 @@ ColumnLayout {
             }
 
             StyledText {
-                id: networkNameText
                 Layout.alignment: Qt.AlignHCenter
                 text: {
                     if (root.network) {
@@ -143,8 +126,6 @@ ColumnLayout {
             }
 
             StyledText {
-                id: statusText
-
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Appearance.spacing.small
                 visible: connectButton.connecting || connectButton.hasError
@@ -164,15 +145,27 @@ ColumnLayout {
                 Layout.maximumWidth: parent.width - Appearance.padding.large * 2
             }
 
+            StyledText {
+                Layout.fillWidth: true
+                Layout.topMargin: Appearance.spacing.large
+                Layout.leftMargin: Appearance.padding.small
+                text: qsTr("Password")
+                color: Colours.palette.m3onSurfaceVariant
+                font.pointSize: Appearance.font.size.small
+                font.weight: 500
+            }
+
             PasswordField {
                 id: passwordField
 
-                Layout.topMargin: Appearance.spacing.large
                 Layout.fillWidth: true
                 isActive: root.shouldBeVisible
                 hasError: connectButton.hasError
-                onSubmitted: { if (connectButton.enabled) connectButton.clicked(); }
+                cancelOnEscape: true
+                placeholderText: ""
+                onSubmitted: { if (!connectButton.disabled) connectButton.clicked(); }
                 onErrorCleared: connectButton.hasError = false
+                onCancelled: root.closeDialog()
             }
 
             RowLayout {
@@ -180,19 +173,15 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Appearance.spacing.normal
 
-                TextButton {
-                    id: cancelButton
-
+                RaisedTextButton {
                     Layout.fillWidth: true
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-                    inactiveOnColour: Colours.palette.m3onSurface
                     text: qsTr("Cancel")
 
                     onClicked: root.closeDialog()
                 }
 
-                TextButton {
+                RaisedTextButton {
                     id: connectButton
 
                     property bool connecting: false
@@ -200,10 +189,13 @@ ColumnLayout {
 
                     Layout.fillWidth: true
                     Layout.minimumHeight: Appearance.font.size.normal + Appearance.padding.normal * 2
-                    inactiveColour: Colours.palette.m3primary
-                    inactiveOnColour: Colours.palette.m3onPrimary
-                    text: qsTr("Connect")
-                    enabled: passwordField.password.length > 0 && !connecting
+                    // Both stay declarative. REGRESSION GUARD: do NOT assign
+                    // `disabled` or `text` imperatively — an imperative write severs
+                    // the binding permanently, which is what previously left Connect
+                    // clickable with an empty password after a failed attempt.
+                    // `connecting` remains the only imperative state.
+                    text: connecting ? qsTr("Connecting...") : qsTr("Connect")
+                    disabled: passwordField.password.length === 0 || connecting
 
                     onClicked: {
                         if (!root.network || connecting) {
@@ -215,133 +207,49 @@ ColumnLayout {
                             return;
                         }
 
-                        // Clear any previous error
                         hasError = false;
-
-                        // Set connecting state
                         connecting = true;
-                        enabled = false;
-                        text = qsTr("Connecting...");
+                        const token = root.attemptToken;
 
-                        // Connect to network
+                        // The callback is authoritative and always fires exactly
+                        // once — NmcliWifi derives it from nmcli's exit code, not
+                        // from polling. Every terminal state is handled right here.
                         NetworkConnection.connectWithPassword(root.network, password, result => {
+                            if (token !== root.attemptToken)
+                                return;
+
                             if (result && result.success) {
-                                // Connection successful, monitor will handle the rest
-                            } else {
-                                // Connection failed immediately (bad password or needsPassword) — show error
-                                connectionMonitor.stop();
-                                connecting = false;
-                                hasError = true;
-                                enabled = true;
-                                text = qsTr("Connect");
-                                passwordField.password = "";
-                                if (root.network && root.network.ssid) {
-                                    NmcliWifi.forgetNetwork(root.network.ssid);
-                                }
+                                root.closeDialog();
+                                return;
                             }
+
+                            connecting = false;
+                            hasError = true;
+                            passwordField.password = "";
+                            passwordField.passwordVisible = false;
+
+                            // REGRESSION GUARD: do NOT call forgetNetwork() here.
+                            // This ran on every failure, including failures that
+                            // were not failures — a connection NetworkManager had
+                            // already activated got its profile deleted, tearing
+                            // down working wifi (verified 2026-07-27). Stale
+                            // profiles are cleared by connectWithSecret at the
+                            // start of the next attempt, where nothing is in flight.
                         });
-
-                        // Start monitoring connection
-                        connectionMonitor.start();
                     }
                 }
             }
         }
     }
 
-    function checkConnectionStatus(): void {
-        if (!root.shouldBeVisible || !connectButton.connecting) {
-            return;
-        }
-
-        // Check if we're connected to the target network (case-insensitive SSID comparison)
-        const isConnected = root.network && NmcliWifi.active && NmcliWifi.active.ssid && NmcliWifi.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
-
-        if (isConnected) {
-            // Successfully connected - give it a moment for network list to update
-            // Use Timer for actual delay
-            connectionSuccessTimer.start();
-            return;
-        }
-
-        // Check for connection failures - if pending connection was cleared but we're not connected
-        if (NmcliWifi.pendingConnection === null && connectButton.connecting) {
-            // Wait a bit more before giving up (allow time for connection to establish)
-            if (connectionMonitor.repeatCount > 10) {
-                connectionMonitor.stop();
-                connectButton.connecting = false;
-                connectButton.hasError = true;
-                connectButton.enabled = true;
-                connectButton.text = qsTr("Connect");
-                passwordField.password = "";
-                // Delete the failed connection
-                if (root.network && root.network.ssid) {
-                    NmcliWifi.forgetNetwork(root.network.ssid);
-                }
-            }
-        }
-    }
-
-    Timer {
-        id: connectionMonitor
-        interval: 1000
-        repeat: true
-        triggeredOnStart: false
-        property int repeatCount: 0
-
-        onTriggered: {
-            repeatCount++;
-            root.checkConnectionStatus();
-        }
-
-        onRunningChanged: {
-            if (!running) {
-                repeatCount = 0;
-            }
-        }
-    }
-
-    Timer {
-        id: connectionSuccessTimer
-        interval: 500
-        onTriggered: {
-            // Double-check connection is still active
-            if (root.shouldBeVisible && NmcliWifi.active && NmcliWifi.active.ssid) {
-                const stillConnected = NmcliWifi.active.ssid.toLowerCase().trim() === root.network.ssid.toLowerCase().trim();
-                if (stillConnected) {
-                    connectionMonitor.stop();
-                    connectButton.connecting = false;
-                    connectButton.text = qsTr("Connect");
-                    // Return to network popout on successful connection
-                    if (root.wrapper.currentName === "wirelesspassword") {
-                        root.wrapper.currentName = "network";
-                    }
-                    closeDialog();
-                }
-            }
-        }
-    }
-
-    Connections {
-        target: NmcliWifi
-        function onActiveChanged() {
-            if (root.shouldBeVisible) {
-                root.checkConnectionStatus();
-            }
-        }
-        function onConnectionFailed(ssid: string) {
-            if (root.shouldBeVisible && root.network && root.network.ssid === ssid && connectButton.connecting) {
-                connectionMonitor.stop();
-                connectButton.connecting = false;
-                connectButton.hasError = true;
-                connectButton.enabled = true;
-                connectButton.text = qsTr("Connect");
-                passwordField.password = "";
-                // Delete the failed connection
-                NmcliWifi.forgetNetwork(ssid);
-            }
-        }
-    }
+    // NOTE: this dialog deliberately has NO polling monitor.
+    //
+    // REGRESSION GUARD: it used to run a 1s repeating timer that compared
+    // NmcliWifi.active.ssid against the target and, past 15 ticks, declared
+    // failure and deleted the profile. Every part of that was unsound: `active`
+    // is the first active AP across ALL radios (not necessarily this one), and a
+    // connection slower than the threshold was reported as a failure and then
+    // destroyed. The connect callback now reports the real outcome exactly once.
 
     function closeDialog(): void {
         if (isClosing) {
@@ -349,11 +257,10 @@ ColumnLayout {
         }
 
         isClosing = true;
+        root.attemptToken++;
         passwordField.password = "";
         connectButton.connecting = false;
         connectButton.hasError = false;
-        connectButton.text = qsTr("Connect");
-        connectionMonitor.stop();
 
         // Return to network popout
         if (root.wrapper.currentName === "wirelesspassword") {
@@ -361,4 +268,3 @@ ColumnLayout {
         }
     }
 }
-

@@ -21,6 +21,7 @@ MouseArea {
     // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
     readonly property var memTotalFormatted: SystemUsage.formatKib(SystemUsage.memTotal)
     readonly property int memUsagePercent: Math.round(SystemUsage.memPerc * 100)
+    readonly property string gamingReadiness: SystemUsage.gamingReadiness
 
     implicitWidth: content.implicitWidth
     implicitHeight: content.implicitHeight
@@ -70,6 +71,6 @@ MouseArea {
 
     Tooltip {
         target: root
-        text: `RAM Used: ${root.memUsedFormatted.value.toFixed(1)} ${root.memUsedFormatted.unit}\nTotal: ${root.memTotalFormatted.value.toFixed(1)} ${root.memTotalFormatted.unit}\nUsage: ${root.memUsagePercent}%`
+        text: `RAM Used: ${root.memUsedFormatted.value.toFixed(1)} ${root.memUsedFormatted.unit}\nTotal: ${root.memTotalFormatted.value.toFixed(1)} ${root.memTotalFormatted.unit}\nUsage: ${root.memUsagePercent}%\nGaming Readiness: ${root.gamingReadiness}`
     }
 }

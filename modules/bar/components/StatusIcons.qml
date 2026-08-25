@@ -16,8 +16,9 @@ import QtQuick.Layouts
 PillContainer {
     id: root
 
-    // Use secondary color to distinguish status pills from info pills (tertiary).
-    property color colour: Colours.palette.m3secondary
+    // `colour` is inherited from PillContainer on purpose — see the rationale
+    // on that property. Do not redeclare it here; that shadows rather than
+    // overrides.
 
     // Popout interface: container with named WrappedLoader children (each has 'name' property)
     iconContainer: iconColumn
@@ -236,21 +237,51 @@ PillContainer {
             }
         }
 
+        // Power profile icon — dedicated slot. Icon mirrors PowerMode.activeMode
+        // (Silent + the three PPD profiles). Clicking cycles through every mode
+        // in PowerMode.modes order, Silent included. Hover triggers the
+        // "powerprofile" popout via Bar.qml:checkPopout; the inner MouseArea
+        // handles click-to-cycle without consuming hover events (hoverEnabled
+        // stays false) so the screen-wide Interactions area still drives popout
+        // detection.
+        PillContainer.WrappedLoader {
+            name: "powerprofile"
+            active: Config.bar.status.showPowerProfile
+
+            sourceComponent: MouseArea {
+                implicitWidth: profileIcon.implicitWidth
+                implicitHeight: profileIcon.implicitHeight
+
+                hoverEnabled: false
+
+                onClicked: PowerMode.cycle()
+
+                MaterialIcon {
+                    id: profileIcon
+
+                    anchors.centerIn: parent
+                    animate: true
+                    // Glyph follows the active mode (PowerMode owns the ordered
+                    // set, so a future mode brings its own icon for free).
+                    text: PowerMode.activeMode.icon
+                    color: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Colours.palette.m3powerButton : root.colour
+                    fill: 1
+                }
+            }
+        }
+
         // Battery icon
         PillContainer.WrappedLoader {
             name: "battery"
-            active: Config.bar.status.showBattery
+            // Hide on non-laptop hardware when the dedicated power-profile icon is shown — both
+            // icons would otherwise display the same profile glyph simultaneously.
+            active: Config.bar.status.showBattery && (UPower.displayDevice.isLaptopBattery || !Config.bar.status.showPowerProfile)
 
             sourceComponent: MaterialIcon {
                 animate: true
                 text: {
-                    if (!UPower.displayDevice.isLaptopBattery) {
-                        if (PowerProfiles.profile === PowerProfile.PowerSaver)
-                            return "energy_savings_leaf";
-                        if (PowerProfiles.profile === PowerProfile.Performance)
-                            return "rocket_launch";
-                        return "balance";
-                    }
+                    if (!UPower.displayDevice.isLaptopBattery)
+                        return PowerMode.activeMode.icon;
 
                     const perc = UPower.displayDevice.percentage;
                     const charging = [UPowerDeviceState.Charging, UPowerDeviceState.FullyCharged, UPowerDeviceState.PendingCharge].includes(UPower.displayDevice.state);
@@ -263,6 +294,19 @@ PillContainer {
                 }
                 color: !UPower.onBattery || UPower.displayDevice.percentage > 0.2 ? root.colour : Colours.palette.m3error
                 fill: 1
+            }
+        }
+
+        // Dictation streaming active indicator — appears while STT streaming
+        // mode is toggled on (Super+Alt+D → SttService.streamingActive).
+        PillContainer.WrappedLoader {
+            name: "dictation"
+            active: Config.bar.status.showDictationStatus && SttService.streamingActive
+
+            sourceComponent: MaterialIcon {
+                animate: true
+                text: "graphic_eq"
+                color: root.colour
             }
         }
 

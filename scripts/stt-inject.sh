@@ -25,6 +25,8 @@ done
 #   STT_EXPECTED_TEXT:    The text that should be in the clipboard (for verification)
 #   STT_NVIM_SOCKET:     Pre-determined Neovim socket (PID-scoped + focus-verified)
 #   STT_NVIM_ACTIVE_BUF: Buffer number captured at stop-time for target_buf parameter
+#   STT_IDE_PID:         Symmetria IDE pid for DIRECT injection into its agent panes
+#   STT_IDE_BUF:         Agent slot for direct injection (captured at stop-time)
 #
 # Always exits 0 — injection failure is non-fatal (clipboard still has text).
 
@@ -34,6 +36,17 @@ SUBMIT="${3:-}"
 EXPECTED_TEXT="${STT_EXPECTED_TEXT:-}"
 NVIM_SOCKET="${STT_NVIM_SOCKET:-}"
 NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
+# Direct-injection target (Symmetria IDE terminal-agent panes): the IDE pid +
+# agent slot to address via the IDE's own agent socket (agent-ownership
+# inversion, Phase 4 — replaces the old bridge `inject` verb round-trip).
+# Mutually exclusive with NVIM_SOCKET by construction (SttJob resolves one
+# or the other from the agent's inject_via capability).
+IDE_PID="${STT_IDE_PID:-}"
+# Mesura Code target pid, for dictation into its composer. Separate from
+# IDE_PID because Mesura has no agent panes and no buf to address — the
+# conversation on screen is the whole target.
+MESURA_PID="${STT_MESURA_PID:-}"
+IDE_BUF="${STT_IDE_BUF:--1}"
 DOWNGRADED=""
 # Must be literal "true" or "false" — embedded as JSON boolean by emit_result()
 RPC_SUBMITTED="false"
@@ -141,10 +154,93 @@ try_neovim_inject() {
     return 1
 }
 
-# Check if window class is a terminal emulator
+# ── Direct injection (Symmetria IDE agent panes) ─────────────────────────────
+# Connects straight to the owning IDE's agent socket
+# ($XDG_RUNTIME_DIR/symmetria-ide-agents-<ide_pid>.sock) and sends an
+# stt_inject request: the IDE writes the text into the target claude pane's
+# pty (bracketed paste + Enter) and replies an stt_inject_result on the same
+# connection. Sets RPC_SUBMITTED from the result so emit_result reports submit
+# confirmation like the nvim path. Replaces the old bridge `inject` round-trip
+# (agent-ownership inversion, Phase 4) — one socket, one timeout.
+try_direct_inject() {
+    local submit_bool
+    case "$SUBMIT" in
+        submit) submit_bool="true" ;;
+        *)      submit_bool="false" ;;
+    esac
+
+    if [ -z "$IDE_PID" ]; then
+        echo "[STT:INJ-DIRECT] no IDE target pid — skipping direct inject" >&2
+        return 1
+    fi
+
+    local runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    local sock="${runtime}/symmetria-ide-agents-${IDE_PID}.sock"
+    if [ ! -S "$sock" ]; then
+        echo "[STT:INJ-DIRECT] IDE socket missing: $sock" >&2
+        return 1
+    fi
+
+    stt_log "inject" "direct-attempt | idePid=$IDE_PID buf=$IDE_BUF"
+    local result
+    if ! result=$(STT_IDE_SOCK="$sock" STT_INJECT_SUBMIT="$submit_bool" python3 - <<'PYEOF'
+import json, os, socket, sys
+
+request = {
+    "type": "stt_inject",
+    "buf": int(os.environ.get("STT_IDE_BUF") or -1),
+    "text": os.environ.get("STT_EXPECTED_TEXT", ""),
+    "submit": os.environ["STT_INJECT_SUBMIT"] == "true",
+}
+# The IDE stamps its own request_id internally — the direct client needn't send
+# one (unlike the bridge path, which correlated replies by request_id).
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+# MUST exceed the IDE's _INJECT_TIMEOUT_SECONDS (5s) so its structured timeout
+# reply wins over this socket timeout's bare exception.
+sock.settimeout(6.0)
+try:
+    sock.connect(os.environ["STT_IDE_SOCK"])
+    sock.sendall((json.dumps(request) + "\n").encode())
+    buf = b""
+    while b"\n" not in buf:
+        chunk = sock.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    line = buf.split(b"\n", 1)[0].decode("utf-8", "replace")
+    response = json.loads(line)
+    print(json.dumps(response))
+    ok = (
+        response.get("type") == "stt_inject_result"
+        and response.get("ok") is True
+    )
+    sys.exit(0 if ok else 1)
+except Exception as exc:  # noqa: BLE001 — any failure means no delivery
+    print(json.dumps({"ok": False, "error": str(exc)}))
+    sys.exit(1)
+finally:
+    sock.close()
+PYEOF
+    ); then
+        echo "[STT:INJ-DIRECT] direct inject failed | response=$result" >&2
+        return 1
+    fi
+
+    echo "[STT:INJ-DIRECT] direct inject succeeded | response=$result" >&2
+    if echo "$result" | grep -Eq '"submitted"[[:space:]]*:[[:space:]]*true'; then
+        RPC_SUBMITTED="true"
+    else
+        RPC_SUBMITTED="false"
+    fi
+    return 0
+}
+
+# Check if window class is a terminal emulator (or an embedding host that
+# exposes nvim over RPC, like symmetria-ide). Must agree with
+# SttJob.qml::_isTerminalClass — see the comment there.
 is_terminal_class() {
     case "$1" in
-        *ghostty*|*warp*|*wezterm*|*alacritty*|*kitty*|*foot*|*konsole*|xterm*|urxvt*|*termite*|*sakura*|*tilix*|*terminator*|st-*)
+        *ghostty*|*warp*|*wezterm*|*alacritty*|*kitty*|*foot*|*konsole*|*xterm*|*urxvt*|*termite*|*sakura*|*tilix*|*terminator*|st-*|*symmetria-ide*)
             return 0
             ;;
         *)
@@ -176,30 +272,189 @@ fi
 echo "[STT:INJ02] checking if window $ADDRESS still exists..." >&2
 if ! hyprctl clients -j 2>/dev/null | grep -qF "\"address\": \"$ADDRESS\""; then
     echo "[STT:INJ02] ABORT — target window $ADDRESS no longer exists" >&2
-    notify_failure "STT Inject Skipped" "Target window no longer exists. Text saved to clipboard."
+    # In RPC-only mode wl-copy was never run, so the text is NOT in the clipboard.
+    # Direct the user to Alt+V (Transcriptions tab re-paste) instead.
+    if [ -n "${STT_RPC_ONLY:-}" ]; then
+        notify_failure "STT Inject Skipped" "Target window no longer exists. Use Alt+V to paste from Transcriptions."
+    else
+        notify_failure "STT Inject Skipped" "Target window no longer exists. Text saved to clipboard."
+    fi
     emit_result "none" "false"
     exit 0
 fi
 stt_log "inject" "window-verified | addr=$ADDRESS"
 echo "[STT:INJ02] window exists" >&2
 
+CLASS_LOWER=$(echo "$WINDOW_CLASS" | tr '[:upper:]' '[:lower:]')
+
+# ── RPC-only fast path ──────────────────────────────────────────────────────
+# When STT_RPC_ONLY=1, the QML caller deliberately skipped wl-copy because
+# it expects RPC to handle delivery. There is no clipboard content to fall
+# back on — sendshortcut paste would either paste nothing or paste stale
+# content. Try RPC; on any failure, surface a clear error and bail. The
+# user can re-paste from the Transcriptions tab via Alt+V.
+if [ -n "${STT_RPC_ONLY:-}" ]; then
+    stt_log "inject" "rpc-only-mode"
+    echo "[STT:INJ-RPCONLY] STT_RPC_ONLY=1 — RPC required, no clipboard fallback" >&2
+
+    if ! is_terminal_class "$CLASS_LOWER"; then
+        echo "[STT:INJ-RPCONLY] target is not a terminal — RPC unavailable" >&2
+        notify_failure "STT Inject Failed" "RPC requires a terminal target. Use Alt+V to paste from Transcriptions."
+        emit_result "none" "false"
+        exit 0
+    fi
+    if [ -z "$EXPECTED_TEXT" ]; then
+        echo "[STT:INJ-RPCONLY] EXPECTED_TEXT empty — nothing to inject" >&2
+        emit_result "none" "false"
+        exit 0
+    fi
+
+    # Direct-injectable target (IDE agent pane) — IDE socket, no nvim.
+    if [ -n "$IDE_PID" ]; then
+        if try_direct_inject; then
+            stt_log "inject" "direct-success"
+            emit_result "direct" "true"
+            exit 0
+        fi
+        stt_log "inject" "direct-failed | rpc-only=bail"
+        echo "[STT:INJ-RPCONLY] direct inject failed and STT_RPC_ONLY set — no fallback" >&2
+        notify_failure "STT Inject Failed" "Voice → agent pane (direct) failed. Use Alt+V to paste from Transcriptions."
+        emit_result "direct" "false"
+        exit 0
+    fi
+
+    stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
+    if try_neovim_inject; then
+        stt_log "inject" "rpc-success"
+        echo "[STT:INJ-NVIM] Neovim injection succeeded (rpc-only)" >&2
+        emit_result "rpc" "true"
+        exit 0
+    fi
+    stt_log "inject" "rpc-failed | rpc-only=bail"
+    echo "[STT:INJ-RPCONLY] RPC failed and STT_RPC_ONLY set — no fallback" >&2
+    notify_failure "STT Inject Failed" "Voice → buffer (RPC) failed. Use Alt+V to paste from Transcriptions."
+    emit_result "rpc" "false"
+    exit 0
+fi
+
+# ── Mesura Code: dictation into the composer ────────────────────────────────
+# Mesura binds its own per-process socket and answers one receipt line, the
+# same shape the IDE path uses.
+#
+# ⚠ Deliberately NOT part of is_terminal_class, and deliberately below the
+# wl-copy that has already run. Mesura and the installed T3 Code report the
+# SAME window class (`t3code`), so there is no way to tell them apart before
+# trying the socket. Marking the class RPC-eligible would skip wl-copy, and a
+# dictation aimed at the installed app would then be lost with no clipboard to
+# fall back on. Here a missing socket simply falls through to the Ctrl+V paste
+# below, which is what the user already gets for any non-terminal window.
+try_mesura_inject() {
+    local submit_bool
+    case "$SUBMIT" in
+        submit) submit_bool="true" ;;
+        *)      submit_bool="false" ;;
+    esac
+
+    local runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    local sock="${runtime}/symmetria-mesura-${MESURA_PID}.sock"
+    if [ ! -S "$sock" ]; then
+        echo "[STT:INJ-MESURA] no Mesura socket at $sock — not a Mesura window" >&2
+        return 1
+    fi
+
+    stt_log "inject" "mesura-attempt | pid=$MESURA_PID"
+    local result
+    if ! result=$(STT_MESURA_SOCK="$sock" STT_INJECT_SUBMIT="$submit_bool" python3 - <<'PYEOF'
+import json, os, socket, sys
+
+request = {
+    "type": "stt_inject",
+    "text": os.environ.get("STT_EXPECTED_TEXT", ""),
+    "submit": os.environ["STT_INJECT_SUBMIT"] == "true",
+}
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+# Must exceed Mesura's own 5s window deadline so its structured answer wins
+# over this socket timing out with a bare exception.
+sock.settimeout(6.0)
+try:
+    sock.connect(os.environ["STT_MESURA_SOCK"])
+    sock.sendall((json.dumps(request) + "\n").encode())
+    buf = b""
+    while b"\n" not in buf:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+    print(buf.decode("utf-8", "replace").strip())
+except Exception as exc:  # noqa: BLE001 — any failure is a fall-through
+    print(json.dumps({"ok": False, "outcome": "client-error", "detail": str(exc)}))
+    sys.exit(1)
+finally:
+    sock.close()
+PYEOF
+    ); then
+        echo "[STT:INJ-MESURA] client failed" >&2
+        return 1
+    fi
+
+    echo "[STT:INJ-MESURA] response: $result" >&2
+    local ok outcome
+    ok=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("ok"))' 2>/dev/null)
+    outcome=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("outcome",""))' 2>/dev/null)
+
+    # `placed-not-submitted` is a partial success: the words ARE in the
+    # composer, so falling through to a Ctrl+V paste would duplicate them.
+    # Treat it as delivered and let the submit flag report the truth.
+    if [ "$ok" = "True" ] || [ "$outcome" = "placed-not-submitted" ]; then
+        case "$outcome" in
+            placed-and-submitted) RPC_SUBMITTED="true" ;;
+            *)                    RPC_SUBMITTED="false" ;;
+        esac
+        stt_log "inject" "mesura-success | outcome=$outcome"
+        return 0
+    fi
+
+    stt_log "inject" "mesura-failed | outcome=$outcome"
+    return 1
+}
+
+if [ -n "$MESURA_PID" ] && [ -n "$EXPECTED_TEXT" ]; then
+    echo "[STT:INJ-MESURA] Mesura target detected — attempting composer delivery" >&2
+    if try_mesura_inject; then
+        echo "[STT:INJ-MESURA] delivered to the composer — skipping sendshortcut" >&2
+        emit_result "mesura" "true"
+        exit 0
+    fi
+    echo "[STT:INJ-MESURA] falling back to sendshortcut paste" >&2
+fi
+
 # ── Try Neovim RPC injection for terminal windows ───────────────────────────
 # Bypass clipboard entirely by writing directly to Claude Code's terminal stdin
 # via Neovim's RPC socket. Only attempted for terminal emulator windows.
 
-CLASS_LOWER=$(echo "$WINDOW_CLASS" | tr '[:upper:]' '[:lower:]')
-
 if is_terminal_class "$CLASS_LOWER" && [ -n "$EXPECTED_TEXT" ]; then
-    stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
-    echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2
-    if try_neovim_inject; then
-        stt_log "inject" "rpc-success"
-        echo "[STT:INJ-NVIM] Neovim injection succeeded — skipping sendshortcut" >&2
-        emit_result "rpc" "true"
-        exit 0
+    if [ -n "$IDE_PID" ]; then
+        echo "[STT:INJ-DIRECT] IDE target detected — attempting direct injection" >&2
+        if try_direct_inject; then
+            stt_log "inject" "direct-success"
+            echo "[STT:INJ-DIRECT] direct injection succeeded — skipping sendshortcut" >&2
+            emit_result "direct" "true"
+            exit 0
+        fi
+        stt_log "inject" "direct-failed | fallback=sendshortcut"
+        echo "[STT:INJ-DIRECT] direct injection failed — falling back to sendshortcut paste" >&2
+    else
+        stt_log "inject" "rpc-attempt | socket=$NVIM_SOCKET"
+        echo "[STT:INJ-NVIM] terminal class detected — attempting Neovim RPC injection" >&2
+        if try_neovim_inject; then
+            stt_log "inject" "rpc-success"
+            echo "[STT:INJ-NVIM] Neovim injection succeeded — skipping sendshortcut" >&2
+            emit_result "rpc" "true"
+            exit 0
+        fi
+        stt_log "inject" "rpc-failed | fallback=sendshortcut"
+        echo "[STT:INJ-NVIM] Neovim injection failed — falling back to sendshortcut paste" >&2
     fi
-    stt_log "inject" "rpc-failed | fallback=sendshortcut"
-    echo "[STT:INJ-NVIM] Neovim injection failed — falling back to sendshortcut paste" >&2
 fi
 
 # ── Downgrade submit on sendshortcut path ────────────────────────────────────

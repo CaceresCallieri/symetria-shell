@@ -22,8 +22,6 @@ RowLayout {
 
     StyledSwitch {
         id: toggle
-
-        cLayer: 2
     }
 }
 

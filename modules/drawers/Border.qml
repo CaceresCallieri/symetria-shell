@@ -37,14 +37,13 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            anchors.margins: Config.border.thickness
+            anchors.leftMargin: Config.border.sideThickness
+            anchors.rightMargin: Config.border.sideThickness
             anchors.topMargin: root.bar.implicitHeight
             anchors.bottomMargin: root.agentBar.implicitHeight
             // Left corners rounded by Border, right corners handled by Backgrounds
             topLeftRadius: Config.border.rounding
-            topRightRadius: 0
             bottomLeftRadius: Config.border.rounding
-            bottomRightRadius: 0
         }
     }
 }

@@ -18,6 +18,8 @@ Item {
     required property PersistentProperties visibilities
     required property BarPopouts.Wrapper popouts
     readonly property int hPadding: Config.bar.sizes.edgePadding
+    // FORM axis: true when bar plates extend above the screen edge.
+    readonly property bool bleeds: Theme.layout.barTopBleed > 0
     // External margin between glassmorphism pill components and adjacent bar entries
     readonly property int pillExternalMargin: Appearance.spacing.small
 
@@ -81,6 +83,32 @@ Item {
         }
     }
 
+    function activatePopoutAtChild(popoutName: string, child: Item): void {
+        popouts.currentName = popoutName;
+        popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
+        popouts.hasCurrent = true;
+    }
+
+    function openNamedPopout(popoutName: string): bool {
+        const repeaters = [leftRepeater, rightRepeater];
+        for (const repeater of repeaters) {
+            for (let i = 0; i < repeater.count; i++) {
+                const container = repeater.itemAt(i)?.item?.iconContainer;
+                if (!container)
+                    continue;
+
+                for (const child of container.children) {
+                    if (child?.name === popoutName && child.visible) {
+                        activatePopoutAtChild(popoutName, child);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Popout Detection System
     //
@@ -113,9 +141,7 @@ Item {
         const popoutName = nameResolver(child);
         if (!popoutName) return false;
 
-        popouts.currentName = popoutName;
-        popouts.currentCenter = Qt.binding(() => child.mapToItem(root, child.implicitWidth / 2, 0).x);
-        popouts.hasCurrent = true;
+        activatePopoutAtChild(popoutName, child);
         return true;
     }
 
@@ -255,31 +281,62 @@ Item {
         popouts.hasCurrent = false;
     }
 
+    /// Wheel handling for the whole bar strip. Interactions.qml forwards every
+    /// wheel event whose y falls inside the bar, so these regions cover the empty
+    /// space between widgets too, not just the widgets themselves.
+    ///
+    /// ALL THREE REGIONS ARE OFF in shell.json, which makes this a no-op today.
+    /// That is deliberate, not neglect. Splitting the bar into half-screen zones
+    /// gives the gesture no visual affordance: scrolling over a gap, the tray or
+    /// the clock changed volume or brightness with nothing on screen to suggest
+    /// it would, and both read as bugs rather than features. Re-enabling a region
+    /// without first binding it to a specific widget brings that back.
+    ///
+    /// Each branch tests POSITION ONLY and checks its enable flag inside. An
+    /// earlier version folded the flag into the position test
+    /// (`x < screen.width / 2 && ...volume`), which made a DISABLED action fall
+    /// through to the next branch — with volume off, scrolling the left half of
+    /// the bar changed screen brightness. A region that is switched off must do
+    /// nothing, never hand the gesture to its neighbour.
     function handleWheel(x: real, angleDelta: point): void {
-        // Check if over workspaces (center section)
+        // Centre section — workspaces
         if (x >= centerLoader.x && x <= centerLoader.x + centerLoader.width) {
-            if (Config.bar.scrollActions.workspaces) {
-                const mon = (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor);
-                const specialWs = mon?.lastIpcObject.specialWorkspace.name;
-                if (specialWs?.length > 0)
-                    Hypr.dispatch(`togglespecialworkspace ${specialWs.slice(8)}`);
-                else if (angleDelta.y < 0 || (Config.bar.workspaces.perMonitorWorkspaces ? mon.activeWorkspace?.id : Hypr.activeWsId) > 1)
-                    Hypr.dispatch(`workspace r${angleDelta.y > 0 ? "-" : "+"}1`);
-            }
-        } else if (x < screen.width / 2 && Config.bar.scrollActions.volume) {
-            // Volume scroll on left half
+            if (!Config.bar.scrollActions.workspaces)
+                return;
+
+            const mon = (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor);
+            const specialWs = mon?.lastIpcObject.specialWorkspace.name;
+            if (specialWs?.length > 0)
+                Hypr.dispatch(`togglespecialworkspace ${specialWs.slice(8)}`);
+            else if (angleDelta.y < 0 || (Config.bar.workspaces.perMonitorWorkspaces ? mon.activeWorkspace?.id : Hypr.activeWsId) > 1)
+                Hypr.dispatch(`workspace r${angleDelta.y > 0 ? "-" : "+"}1`);
+            return;
+        }
+
+        // Left half — volume. Off: the whole half reacted, including the gaps
+        // left of the tray and any widget that does not handle its own wheel.
+        if (x < screen.width / 2) {
+            if (!Config.bar.scrollActions.volume)
+                return;
+
             if (angleDelta.y > 0)
                 Audio.incrementVolume();
             else if (angleDelta.y < 0)
                 Audio.decrementVolume();
-        } else if (Config.bar.scrollActions.brightness) {
-            // Brightness scroll on right half
-            const monitor = Brightness.getMonitorForScreen(screen);
-            if (angleDelta.y > 0)
-                monitor.setBrightness(monitor.brightness + Config.services.brightnessIncrement);
-            else if (angleDelta.y < 0)
-                monitor.setBrightness(monitor.brightness - Config.services.brightnessIncrement);
+            return;
         }
+
+        // Right half — brightness. Off: scrolling anywhere right of centre, over
+        // the tray or the clock or the gaps between them, silently dimmed the
+        // screen.
+        if (!Config.bar.scrollActions.brightness)
+            return;
+
+        const monitor = Brightness.getMonitorForScreen(screen);
+        if (angleDelta.y > 0)
+            monitor?.setBrightness(monitor.brightness + Config.services.brightnessIncrement);
+        else if (angleDelta.y < 0)
+            monitor?.setBrightness(monitor.brightness - Config.services.brightnessIncrement);
     }
 
     // Left section - anchored to left
@@ -287,7 +344,13 @@ Item {
         id: leftSection
         anchors.left: parent.left
         anchors.leftMargin: leftRepeater.count > 0 ? root.hPadding : 0
-        anchors.verticalCenter: parent.verticalCenter
+        // FORM axis: when plates bleed past the screen edge they grow UPWARD, so
+        // the row must hang from the bar's bottom instead of being centred in it
+        // — otherwise the extra height splits evenly and half of it pushes the
+        // content down instead of off-screen. Assigning `undefined` clears the
+        // unused anchor; setting both at once is an error.
+        anchors.bottom: root.bleeds ? parent.bottom : undefined
+        anchors.verticalCenter: root.bleeds ? undefined : parent.verticalCenter
         spacing: Appearance.spacing.normal
 
         Repeater {
@@ -317,7 +380,12 @@ Item {
         readonly property bool _shouldBeActive: root.centerEntry?.enabled !== false && !AgentService.mergeActive
 
         anchors.horizontalCenter: parent.horizontalCenter
+        // The centre entry draws its own plate, so under the panel form it is
+        // taller than the bar. Centring would split the excess evenly and push
+        // half of it BELOW the bar; shifting up by half the bleed sends all of
+        // it off the top instead, matching the bottom-anchored side rows.
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.bleeds ? -Theme.barPlateContentOffset : 0
         active: _shouldBeActive || opacity > 0
         opacity: _shouldBeActive ? 1 : 0
         visible: opacity > 0
@@ -332,31 +400,56 @@ Item {
     }
 
     // Recording bar embed — unified center embed for both STT and audio recording.
-    // Clip-reveals from center outward: container grows horizontally while
-    // content stays centered, so the middle portion appears first.
+    // Scales from 0 → 1 with a slight overshoot when opening (and 1 → 0 when
+    // closing), so the pill "pops" in/out at the bar center instead of being
+    // revealed via a horizontal clip. The container's reserved layout width
+    // follows the embed's visible scale (clamped at 1) so neighboring bar
+    // sections reflow smoothly without being pushed by the overshoot peak.
     //
     // Animation is decoupled from service active states (which linger ~450ms
     // for the drawer hide animation) — instead, the job's `closing` signal
-    // triggers the reverse clip animation immediately on cancel/restart.
+    // triggers the reverse scale animation immediately on cancel/restart.
     Item {
         id: recordingCenterContainer
 
-        property bool _showEmbed: false
-        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
-
-        // Track the active job to watch its closing signal
+        // Track the active job so _showEmbed can depend on its closing flag.
         // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
         readonly property var _activeJob: RecordingSessionManager.currentJob
 
+        // Declarative visibility — a pure function of current state.
+        //
+        // This replaced a procedurally-latched property that was updated by
+        // three separate signal handlers (onActiveChanged / onClosingChanged
+        // / on_ActiveJobChanged). That design had a latent failure mode: any
+        // state transition that didn't fire all the relevant handlers could
+        // leave _showEmbed stuck at the wrong value — which is exactly how
+        // the STT restart regression happened (the lock-preservation fix
+        // eliminated the activeChanged edge the old code relied on to
+        // re-raise the embed). Deriving _showEmbed as a binding means it
+        // re-evaluates whenever ANY source changes, so there's no "forgot to
+        // flip it" failure mode. The close/open animations still play
+        // correctly because the Behavior on the embed's scale animates
+        // whenever the bound value changes.
+        readonly property bool _showEmbed:
+            RecordingSessionManager.active && !(_activeJob?.closing ?? false)
+
+        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
+
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
-        clip: true
 
-        // visible must be true BEFORE width > 0 so children compute
-        // layout sizes (Qt Quick Layouts defer when ancestors are invisible).
-        // clip: true + width: 0 naturally hides content until the reveal animation.
-        visible: _shouldBeActive || width > 0
-        implicitWidth: _shouldBeActive ? recordingEmbed.implicitWidth : 0
+        // visible must be true BEFORE width > 0 so children compute layout
+        // sizes (Qt Quick Layouts defer when ancestors are invisible). The
+        // embed.scale > epsilon term keeps us painted through the shrink
+        // animation; once scale reaches 0 the container collapses to zero
+        // width and we naturally hide.
+        visible: _shouldBeActive || recordingEmbed.scale > 0.001
+
+        // Reserve layout width proportional to the visible scale so the bar
+        // collapses smoothly when scale-out completes. Clamped at 1.0 so the
+        // overshoot peak (scale ≈ 1.05) doesn't push neighboring sections
+        // outward — only the visual transform overflows, not the layout.
+        implicitWidth: recordingEmbed.implicitWidth * Math.min(recordingEmbed.scale, 1.0)
         implicitHeight: recordingEmbed.implicitHeight
         width: implicitWidth
         height: implicitHeight
@@ -364,23 +457,21 @@ Item {
         RecorderModule.RecordingBarEmbed {
             id: recordingEmbed
 
-            x: (recordingCenterContainer.width - implicitWidth) / 2
-            width: implicitWidth
-        }
+            anchors.centerIn: parent
+            transformOrigin: Item.Center
+            scale: recordingCenterContainer._shouldBeActive ? 1.0 : 0.0
 
-        Behavior on implicitWidth {
-            Anim {
-                duration: Appearance.anim.durations.expressiveDefaultSpatial
-                easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-            }
-        }
-
-        // Show embed when any recording mode becomes active.
-        Connections {
-            target: RecordingSessionManager
-
-            function onActiveChanged(): void {
-                recordingCenterContainer._showEmbed = RecordingSessionManager.active;
+            // NOTE: duration is coupled to SttService.restartDelayTimer.interval.
+            // The STT restart animation relies on the close (scale → 0) animation
+            // finishing before _startInternal swaps _job to the new job (which
+            // triggers the open scale → 1). If you change either duration, change
+            // both — they must reference the same Appearance.anim.durations value.
+            Behavior on scale {
+                NumberAnimation {
+                    duration: Appearance.anim.durations.expressiveDefaultSpatial
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
+                }
             }
         }
 
@@ -402,19 +493,6 @@ Item {
                 }
             }
         }
-
-        // Immediate close animation: react to job.closing rather than
-        // waiting for the job to be removed from the jobs array (~450ms).
-        // For STT restart: close starts at T=0, new job opens at T=500ms —
-        // producing a clean close → gap → open sequence.
-        Connections {
-            target: recordingCenterContainer._activeJob
-
-            function onClosingChanged(): void {
-                if (recordingCenterContainer._activeJob?.closing)
-                    recordingCenterContainer._showEmbed = false;
-            }
-        }
     }
 
     // Right section - anchored to right
@@ -422,7 +500,9 @@ Item {
         id: rightSection
         anchors.right: parent.right
         anchors.rightMargin: rightRepeater.count > 0 ? root.hPadding : 0
-        anchors.verticalCenter: parent.verticalCenter
+        // See leftSection for why this hangs from the bottom when bleeding.
+        anchors.bottom: root.bleeds ? parent.bottom : undefined
+        anchors.verticalCenter: root.bleeds ? undefined : parent.verticalCenter
         spacing: Appearance.spacing.normal
 
         Repeater {
@@ -458,7 +538,13 @@ Item {
             || entryId === "timePill"
             || entryId === "systemPill"
 
-        Layout.alignment: Qt.AlignVCenter
+        // Only entries that draw a PLATE carry the extra bleed height, so only
+        // they may bottom-align. Anything else (logo, power, workspaces spacer)
+        // is a short item and would be pinned to the bar's bottom edge instead
+        // of centred; it stays vertically centred, shifted onto the VISIBLE
+        // band by the same offset the plates use for their content.
+        Layout.alignment: (root.bleeds && hasPillMargins) ? Qt.AlignBottom : Qt.AlignVCenter
+        Layout.topMargin: (root.bleeds && !hasPillMargins) ? Theme.layout.barTopBleed : 0
         Layout.leftMargin: hasPillMargins ? root.pillExternalMargin : 0
         Layout.rightMargin: hasPillMargins ? root.pillExternalMargin : 0
         visible: entryEnabled

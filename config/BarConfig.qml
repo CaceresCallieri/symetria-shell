@@ -51,6 +51,11 @@ JsonObject {
             enabled: true
         }
     ]
+    // Upstream defaults, all three ON. The tracked shell.json turns all of them
+    // OFF, and that is what actually applies — a JSON override always beats the
+    // QML default, and shell.json ships with the repo. Read the rationale on
+    // Bar.qml's handleWheel before switching any of these back on: the regions
+    // are half-screen bands with no visual affordance, not widget-bound gestures.
     component ScrollActions: JsonObject {
         property bool workspaces: true
         property bool volume: true
@@ -94,14 +99,17 @@ JsonObject {
             { name: ".dotfiles", icon: "mat:settings" },
             { name: ".hyprdots", icon: "mat:tune" },
             { name: "kosmos", icon: "mat:rocket_launch" },
-            { name: "magistralia", icon: "mat:school" },
-            { name: "corpy", icon: "mat:code" },
             { name: "nvim", icon: "mat:edit" }
         ]
     }
     component Tray: JsonObject {
         property bool background: false
-        property bool recolour: false
+        // Matches the shipped shell.json. Kept in sync deliberately: a QML
+        // default that disagrees with the shipped override means anyone who
+        // deletes or regenerates shell.json silently gets different behaviour —
+        // here, raw app pixmaps blowing past the palette's brightness ceiling.
+        // Rationale for flattening tray icons is on TrayItem.qml's layer.enabled.
+        property bool recolour: true
         property bool compact: false
         property list<var> iconSubs: []
     }
@@ -113,7 +121,12 @@ JsonObject {
         property bool showNetwork: true
         property bool showBluetooth: true
         property bool showBattery: true
+        property bool showPowerProfile: true
         property bool showLockStatus: true
+        // Show a "dictation active" icon while STT streaming mode is toggled on
+        // (SttService.streamingActive). The icon only appears when streaming is
+        // active; this flag lets it be disabled entirely.
+        property bool showDictationStatus: true
     }
 
     component Clock: JsonObject {
@@ -145,7 +158,20 @@ JsonObject {
         property int batteryWidth: 250
         property int networkWidth: 320
         property int weatherWidth: 250
-        property int updatesWidth: 200  // Also used by Ram popout
+        property int updatesWidth: 200
+        // Much wider while a run is in progress: the progress view shows a phase
+        // line, current package name, and a tall live log that need real estate —
+        // sized so full pacman/makepkg lines are readable without elision.
+        property int updatesProgressWidth: 680
+        // Compact width for the password-entry step: just a label, a short
+        // password field, and the Update button.
+        property int updatesPasswordWidth: 340
+        // Wider than updatesWidth: the RAM popout's process list shows
+        // long executable names (e.g. claude-code, zen-browser) and a
+        // %-column on the right, which together over-elide the name
+        // column at 200px. 290px gives the name column ~90px more room
+        // without making the popout dominate the bar.
+        property int ramWidth: 290
         property int calendarWidth: 300
     }
 }

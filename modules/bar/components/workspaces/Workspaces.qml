@@ -20,57 +20,34 @@ Item {
     readonly property bool multiMonitor: Quickshell.screens.length > 1
     readonly property bool isMonitorFocused: multiMonitor && (Hypr.monitorFor(screen)?.focused ?? false)
 
-    // intentional var: JS object used as hash map ({ [wsId]: bool }) built via .reduce()
-    readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
-        acc[curr.id] = curr.lastIpcObject.windows > 0;
-        return acc;
-    }, {})
+    // intentional var: JS object used as hash map ({ [wsId]: bool }).
+    // Computation centralized in Hypr.occupiedMap() — shared with merged agentbar.
+    readonly property var occupied: Hypr.occupiedMap()
     readonly property int groupOffset: Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown
 
+    // In fixed mode return a static [1..shown] window; otherwise delegate to the
+    // shared Hypr.displayedWorkspaceIds() (special workspaces excluded — the top
+    // bar handles them via SpecialWorkspaces.qml overlay, not inline slots).
     readonly property list<int> displayedWorkspaces: {
         if (!Config.bar.workspaces.showOnlyOccupied) {
-            // Legacy fixed mode - return array [1, 2, ..., shown]
             return Array.from({length: Config.bar.workspaces.shown}, (_, i) => groupOffset + i + 1)
         }
-
-        // Dynamic mode - occupied + active + named workspaces
-        // Exclude special workspaces (name starts with "special:") but keep named workspaces (which also have negative IDs)
-        const validWorkspaces = Hypr.workspaces.values.filter(w => !w.name.startsWith("special:"))
-        const occupiedWs = validWorkspaces.filter(w => w.lastIpcObject.windows > 0)
-        const activeId = root.activeWsId
-
-        // Get configured named workspace names
-        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)
-
-        // Find named workspaces (always show these even if empty)
-        const namedWs = validWorkspaces.filter(w => namedWsNames.includes(w.name))
-
-        // Collect workspace IDs: occupied + named
-        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])]
-
-        // Ensure active workspace is included even if empty
-        if (!ids.includes(activeId)) {
-            ids.push(activeId)
-        }
-
-        // Sort ascending: negative IDs (named workspaces) first, then positive IDs
-        return ids.sort((a, b) => a - b)
+        return Hypr.displayedWorkspaceIds(false, root.activeWsId)
     }
 
     property real blur: onSpecial ? 1 : 0
-
-    // Pill styling (matching other bar pills like Tray, TimePill, SystemPill)
-    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var glassStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
 
     // Dot sizing
     readonly property int dotSize: 4
     readonly property int dotSpacing: Appearance.spacing.normal
 
-    implicitHeight: Config.bar.sizes.innerWidth
+    // FORM axis: this is the third bar-plate producer. It sizes and offsets
+    // through the shared Theme contract so the panel form's off-screen bleed
+    // reaches it too — see the CONTRACT note on barPlateHeight in
+    // services/Theme.qml.
+    readonly property int contentOffset: Theme.barPlateContentOffset
+
+    implicitHeight: Theme.barPlateHeight
     implicitWidth: multiMonitor ? leftDot.width + dotSpacing + pill.implicitWidth + dotSpacing + rightDot.width : pill.implicitWidth
 
     // Focus indicator dot - left side
@@ -79,6 +56,7 @@ Item {
         anchors.right: pill.left
         anchors.rightMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.contentOffset
         visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize
@@ -93,19 +71,17 @@ Item {
         }
     }
 
-    // The workspace pill
-    StyledClippingRect {
+    // The workspace pill — uses the shared PillSurface for claymorphism styling.
+    // Content is declared inside its default slot so full-bleed overlays
+    // (OccupiedBg, ActiveIndicator, SpecialWorkspaces) are clipped to the
+    // rounded capsule shape.
+    PillSurface {
         id: pill
 
         anchors.centerIn: parent
 
-        implicitHeight: Config.bar.sizes.innerWidth
+        implicitHeight: Theme.barPlateHeight
         implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
-
-        color: root.glassStyle.background
-        radius: Appearance.rounding.full
-        border.width: 1
-        border.color: root.glassStyle.border
 
         Item {
             anchors.fill: parent
@@ -138,6 +114,9 @@ Item {
                 id: layout
 
                 anchors.centerIn: parent
+                // Centred on the VISIBLE band: the plate's top `barTopBleed` px
+                // are off-screen under the panel form.
+                anchors.verticalCenterOffset: root.contentOffset
                 spacing: Math.floor(Appearance.spacing.small / 2)
 
                 Repeater {
@@ -211,6 +190,7 @@ Item {
         anchors.left: pill.right
         anchors.leftMargin: root.dotSpacing
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.contentOffset
         visible: root.multiMonitor
         width: root.dotSize
         height: root.dotSize

@@ -21,6 +21,8 @@ Item {
 
         IdleInhibit {}
 
+        ScheduleSuspend {}
+
         Record {
             props: root.props
             visibilities: root.visibilities

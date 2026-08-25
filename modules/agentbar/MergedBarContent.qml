@@ -20,8 +20,70 @@ Item {
 
     readonly property HyprlandMonitor monitor: Hypr.monitorFor(screen)
 
-    implicitHeight: Config.bar.sizes.innerWidth
+    implicitHeight: pill.implicitHeight
+    // Vestigial: the actual width comes from the Wrapper Loader's left+right anchors (full screen
+    // width), so this implicitWidth is never consulted for sizing. Kept only for convention.
     implicitWidth: pill.implicitWidth
+
+    // Layout metrics for the wrapping content row.
+    readonly property int _rowHeight: Config.bar.sizes.innerWidth
+    // Wrap budget: the widest a row may grow before items flow onto the next row. Leaves room for
+    // the pill's own horizontal padding plus an edge margin so the capsule never touches the
+    // screen edge. root.width is the full screen width (the Loader in Wrapper anchors left+right).
+    readonly property int _edgeMargin: Appearance.padding.large
+    // When width isn't laid out yet (anchors resolve a frame after creation, so root.width is
+    // briefly 0) fall back to a huge budget so everything stays on one row — a 1px budget would
+    // otherwise force every item onto its own row, ballooning childrenRect.height and the exclusive
+    // zone and shoving application windows for a frame. Recomputes to the real budget once width
+    // arrives.
+    readonly property int _maxContentWidth: root.width > 0
+        ? Math.max(1, root.width - _edgeMargin * 2 - Appearance.padding.large * 2)
+        : 100000
+    // True once content occupies more than one row. This is the hinge for the whole stability
+    // strategy: a single row can never re-wrap (so it animates freely and the pill hugs it),
+    // whereas a wrapped layout must snap and use a fixed width (so a workspace switch can't make
+    // Flow oscillate or the pill overflow the screen). 1.5× guards against float jitter at the
+    // exact one-row height.
+    readonly property bool _wrapped: layout.childrenRect.height > _rowHeight * 1.5
+    // Count of Flow children — changes whenever a slot is added/removed. _rowCenterOffset reads it
+    // as a reactivity anchor: QML doesn't reliably re-fire a binding on `layout.children` list
+    // mutation, and a slot appended to a partial last row moves no existing sibling, so without
+    // this the existing slots would keep a stale centre offset until the next unrelated relayout.
+    readonly property int _layoutChildCount: root.filteredWorkspaces.length
+        + (root.hasRemote ? 1 : 0)
+        + root.orphanAgents.length
+
+    /// Horizontal shift that centres the wrapped row containing itemY WITHIN THE FIXED CONTENT
+    /// WIDTH (the Flow's budget). Because the wrapped pill is locked to that budget, centring each
+    /// row within it makes every row sit centred inside the stable pill. Returns 0 on a single row
+    /// (the pill hugs that row, so there's nothing to centre, and the slot animates instead).
+    /// Applied as a per-item Translate (purely visual — leaves Flow's wrapping math and
+    /// childrenRect untouched, so no binding loop) and fed to the ActiveIndicator so the highlight
+    /// tracks centred slots. Reads live child geometry, so it re-evaluates whenever Flow relayouts.
+    function _rowCenterOffset(itemY: real): real {
+        if (!_wrapped)
+            return 0;
+        // Reactivity anchor (see _layoutChildCount): reading it makes this binding depend on slot
+        // add/remove, which otherwise moves no existing sibling and so wouldn't re-fire the binding.
+        void root._layoutChildCount;
+        let rowRight = 0;
+        const kids = layout.children;
+        for (let i = 0; i < kids.length; i++) {
+            const c = kids[i];
+            // Skip the Repeater objects themselves (zero width) and the hidden remote slot.
+            if (!c || !c.visible || c.width <= 0)
+                continue;
+            const right = c.x + c.width;
+            // Same-row test by y. Every Flow child is forced to height: _rowHeight, so Flow assigns
+            // identical row y values; the <1px tolerance defends that invariant against a future
+            // child of a different height.
+            if (Math.abs(c.y - itemY) < 1 && right > rowRight)
+                rowRight = right;
+        }
+        // Clamp at 0: a lone slot wider than the budget (Flow can't break a single item) would make
+        // rowRight > layout.width and push the row off the left edge — left-align it instead.
+        return Math.max(0, (layout.width - rowRight) / 2);
+    }
 
     // Per-monitor or global active workspace ID (same logic as Workspaces.qml)
     readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces
@@ -35,7 +97,7 @@ Item {
     readonly property bool onSpecial: activeSpecialName !== ""
     readonly property int activeSpecialWsId: {
         if (!onSpecial) return -1;
-        const ws = Hypr.workspaces.values.find(w => w.name === activeSpecialName);
+        const ws = Hypr.workspaceByName(activeSpecialName);
         return ws?.id ?? -1;
     }
 
@@ -44,54 +106,14 @@ Item {
     // where activeSpecialName is set before the workspace appears in workspaces.values).
     readonly property int visualActiveWsId: onSpecial && activeSpecialWsId !== -1 ? activeSpecialWsId : activeWsId
 
-    // Occupied workspace map
-    readonly property var occupied: Hypr.workspaces.values.reduce((acc, curr) => {
-        acc[curr.id] = curr.lastIpcObject.windows > 0;
-        return acc;
-    }, {})
+    // Occupied workspace map.
+    // Computation centralized in Hypr.occupiedMap() — shared with the top bar.
+    readonly property var occupied: Hypr.occupiedMap()
 
-    // Dynamic workspace list: occupied + active + named + special workspaces.
-    // Sort order: named (negative, non-special) → regular (positive) → special (at end).
-    readonly property var displayedWorkspaces: {
-        const allWorkspaces = Hypr.workspaces.values
-        const regularAndNamed = allWorkspaces.filter(w => !w.name.startsWith("special:"))
-        const specialWs = allWorkspaces.filter(w => w.name.startsWith("special:"))
-
-        const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0)
-        const activeId = root.activeWsId
-
-        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)
-        const namedWs = regularAndNamed.filter(w => namedWsNames.includes(w.name))
-
-        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])]
-
-        if (!ids.includes(activeId))
-            ids.push(activeId)
-
-        // Append special workspace IDs (de-dup at end in case any special ws was already included)
-        for (const sw of specialWs)
-            ids.push(sw.id);
-        ids = [...new Set(ids)];
-
-        // Build a name lookup for sort categorization
-        const nameById = {};
-        for (const w of allWorkspaces)
-            nameById[w.id] = w.name;
-
-        // Sort: named (category 0) → regular (category 1) → special (category 2)
-        return ids.sort((a, b) => {
-            const catA = _wsSortCategory(a, nameById[a] ?? "");
-            const catB = _wsSortCategory(b, nameById[b] ?? "");
-            if (catA !== catB) return catA - catB;
-            return a - b;
-        });
-    }
-
-    function _wsSortCategory(wsId: int, wsName: string): int {
-        if (wsName.startsWith("special:")) return 2;
-        if (wsId < 0) return 0;
-        return 1;
-    }
+    // Dynamic workspace list including special workspaces at the end.
+    // Sort order is centralized in Hypr.displayedWorkspaceIds():
+    // named (negative, non-special) → regular (positive) → special.
+    readonly property var displayedWorkspaces: Hypr.displayedWorkspaceIds(true, root.activeWsId)
 
     // Grouped agents by workspace. Args are unused in the body — they exist solely
     // to make QML track AgentService.agents and _workspaceMap as binding dependencies
@@ -136,7 +158,9 @@ Item {
     readonly property var remoteAgents: _agentGrouping.remote
     readonly property bool hasRemote: remoteAgents.length > 0
 
-    // Group remote agents by project for display: [{project: "foo", agents: [...]}]
+    // Group remote agents by project — Array<agentArray>, one inner array per project.
+    // Shape matches MergedWorkspacePill._clusterGroups so the same AgentChipGroup Repeater
+    // pattern can be used: agents: modelData, workspaceName: "" (always show label for remote).
     readonly property var _remoteProjectGroups: {
         const groups = {};
         const order = [];
@@ -148,32 +172,41 @@ Item {
             }
             groups[p].push(agent);
         }
-        return order.map(p => ({ project: p, agents: groups[p] }));
+        return order.map(p => groups[p]);
     }
 
-    // Glass style for the outer container (matches top bar workspace pill)
-    readonly property var glassStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
-    StyledClippingRect {
+    // Outer pill — shared claymorphism surface, matches the top-bar workspace pill.
+    // Full-bleed overlays (ActiveIndicator) clip against its rounded shape.
+    PillSurface {
         id: pill
 
         anchors.centerIn: parent
 
-        implicitHeight: Config.bar.sizes.innerWidth
-        implicitWidth: layout.implicitWidth + Appearance.padding.large * 2
+        // Single row: hug the content (compact), and since one row never re-wraps it can animate
+        // and re-centre smoothly. Wrapped: LOCK to the full budget width so the pill is STABLE —
+        // it neither re-centres nor overflows the screen edge when a workspace switch changes the
+        // active slot's content width (the active slot shows app icons, so that width is volatile).
+        // Height always hugs the wrapped rows (childrenRect spans every row), so the capsule grows
+        // in height — not width — as entries wrap.
+        implicitWidth: root._wrapped
+            ? root._maxContentWidth + Appearance.padding.large * 2
+            : layout.childrenRect.width + Appearance.padding.large * 2
+        implicitHeight: layout.childrenRect.height
 
-        color: root.glassStyle.background
-        radius: Appearance.rounding.full
-        border.width: 1
-        border.color: root.glassStyle.border
-
-        RowLayout {
+        // Wrapping content row. `width` is the wrap budget: when the content would exceed it, Flow
+        // breaks the next item onto a new row. Left/top anchored (not centred) with leftMargin =
+        // pill padding. When wrapped the pill equals budget + padding*2, so the Flow exactly fills
+        // the pill's content area and per-row Translates centre the rows within it. On a single row
+        // the pill hugs childrenRect (narrower than the budget) and the Flow's empty right-hand
+        // slack simply extends past the pill edge harmlessly (no children there to clip).
+        Flow {
             id: layout
 
-            anchors.centerIn: parent
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.leftMargin: Appearance.padding.large
+
+            width: root._maxContentWidth
             spacing: Math.floor(Appearance.spacing.small / 2)
 
             // Workspace slots — direct Repeater so ActiveIndicator can access items via itemAt()
@@ -185,21 +218,37 @@ Item {
                 }
 
                 MergedWorkspacePill {
+                    id: wsDelegate
+
                     required property int modelData
 
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: implicitWidth
-                    Layout.leftMargin: isActive ? activePadding : 0
-                    Layout.rightMargin: isActive ? activePadding : 0
+                    // Active slot's breathing room is baked into width (content stays centred via
+                    // anchors.centerIn), replacing the RowLayout left/right margins — Flow has no
+                    // per-item margins. Uniform height keeps every row the same thickness.
+                    width: implicitWidth + (isActive ? activePadding * 2 : 0)
+                    height: root._rowHeight
 
                     wsId: modelData
                     visualActiveWsId: root.visualActiveWsId
                     agents: root.agentsForWorkspace(modelData)
                     occupied: root.occupied
 
-                    Behavior on Layout.preferredWidth { Anim {} }
-                    Behavior on Layout.leftMargin { Anim {} }
-                    Behavior on Layout.rightMargin { Anim {} }
+                    // Centre this slot within its wrapped row (0 on a single row).
+                    transform: Translate {
+                        x: root._rowCenterOffset(wsDelegate.y)
+                    }
+
+                    // Width animates ONLY on a single row (the original smooth slide). A single row
+                    // can't re-wrap, so animating is safe. When WRAPPED the width must SNAP: Flow
+                    // re-wraps on child width, so animating it makes a workspace switch sweep through
+                    // intermediate widths — slots flip rows mid-animation and the centering flings
+                    // them to opposite ends, then glide back (the "jumping around" regression).
+                    // Snapping settles the wrapped layout in one step; the ActiveIndicator still
+                    // glides via its own Behaviors. DO NOT make this Behavior unconditional.
+                    Behavior on width {
+                        enabled: !root._wrapped
+                        Anim {}
+                    }
                 }
             }
 
@@ -208,8 +257,14 @@ Item {
                 id: remoteSlot
 
                 visible: root.hasRemote
-                Layout.alignment: Qt.AlignVCenter
                 implicitWidth: remoteSlotLayout.implicitWidth
+                height: root._rowHeight
+
+                // Centre within its wrapped row (0 on full rows). Snaps — see the regression
+                // guard on the workspace delegate above.
+                transform: Translate {
+                    x: root._rowCenterOffset(remoteSlot.y)
+                }
 
                 RowLayout {
                     id: remoteSlotLayout
@@ -225,65 +280,66 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    // Per-project groups: project name + agent chips
+                    // Per-project groups: reuse AgentChipGroup (project label + chips).
+                    // workspaceName: "" → always show the label (remote has no local workspace).
                     Repeater {
                         model: root._remoteProjectGroups
 
-                        RowLayout {
+                        AgentChipGroup {
+                            // intentional var: JS array of one project's agents from _remoteProjectGroups
                             required property var modelData
-                            // Alias to avoid shadowing by inner Repeater's modelData
-                            readonly property var groupData: modelData
 
                             Layout.alignment: Qt.AlignVCenter
-                            spacing: Appearance.spacing.smaller
-
-                            StyledText {
-                                Layout.alignment: Qt.AlignVCenter
-                                text: groupData.project
-                                color: Colours.palette.m3primary
-                                font.weight: Font.Bold
-                                font.pointSize: Appearance.font.size.small
-                            }
-
-                            Repeater {
-                                model: groupData.agents
-
-                                AgentChip {
-                                    required property var modelData
-
-                                    Layout.alignment: Qt.AlignVCenter
-
-                                    active: modelData.active ?? false
-                                    activityState: modelData.activity_state ?? ""
-                                    activityTool: modelData.activity_tool ?? ""
-                                    isSttTarget: AgentService.isAgentSttTarget(modelData)
-                                }
-                            }
+                            agents: modelData
+                            workspaceName: ""
                         }
                     }
                 }
             }
 
-            // Orphan agents (no workspace mapping) — inline chips
+            // Orphan agents (no workspace mapping) — inline chips, wrapped in a row-height box so
+            // they sit vertically centred within their Flow row (Flow top-aligns raw children).
+            // ScriptModel keyed on the stable agent id (see AgentChipGroup) so a churning orphan
+            // agent doesn't force a full delegate reset that flashes busy sparkles onto siblings.
             Repeater {
-                model: root.hasOrphans ? root.orphanAgents : []
+                model: ScriptModel {
+                    values: root.hasOrphans ? root.orphanAgents : []
+                    objectProp: "id"
+                }
 
-                AgentChip {
+                Item {
+                    id: orphanWrap
+
+                    // intentional var: heterogeneous agent JS object from bridge JSON
                     required property var modelData
 
-                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: orphanChip.implicitWidth
+                    height: root._rowHeight
 
-                    active: modelData.active ?? false
-                    activityState: modelData.activity_state ?? ""
-                    activityTool: modelData.activity_tool ?? ""
-                    isSttTarget: AgentService.isAgentSttTarget(modelData)
+                    // Centre within its wrapped row (0 on full rows). Snaps — see the regression
+                    // guard on the workspace delegate above.
+                    transform: Translate {
+                        x: root._rowCenterOffset(orphanWrap.y)
+                    }
+
+                    AgentChipFor {
+                        id: orphanChip
+
+                        anchors.verticalCenter: parent.verticalCenter
+                        agent: orphanWrap.modelData
+                    }
                 }
             }
         }
 
-        // Active workspace indicator (sliding highlight pill behind the layout)
+        // Active workspace indicator (sliding highlight pill behind the layout). Its
+        // verticalCenterOffset follows the active slot onto its wrapped row — rowYOffset is 0
+        // while everything fits one row, so this is inert until the content actually wraps.
         Loader {
+            id: indicatorLoader
+
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: indicatorLoader.item?.rowYOffset ?? 0
             active: Config.bar.workspaces.activeIndicator
             asynchronous: true
             z: -1
@@ -292,6 +348,9 @@ Item {
                 activeWsId: root.visualActiveWsId
                 workspaces: workspaceRepeater
                 mask: layout
+                multiRow: true
+                // Match the per-item Translate so the highlight tracks a centred wrapped row.
+                rowXOffset: currentWs ? root._rowCenterOffset(currentWs.y) : 0
             }
         }
     }

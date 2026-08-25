@@ -12,8 +12,8 @@
     "font": {
       "family": {
         "sans": "JetBrainsMono Nerd Font Propo",
-        "mono": "JetBrainsMono Nerd Font Propo",
-        "material": "Material Symbols Rounded",
+        "mono": "IBM Plex Mono",
+        "material": "Material Symbols Sharp",
         "clock": "JetBrainsMono Nerd Font Propo"
       },
       "size": {
@@ -112,8 +112,8 @@
     "dragThreshold": 20,
     "scrollActions": {
       "workspaces": false,
-      "volume": true,
-      "brightness": true
+      "volume": false,
+      "brightness": false
     },
     "popouts": {
       "tray": true,
@@ -145,7 +145,7 @@
     },
     "tray": {
       "background": false,
-      "recolour": false,
+      "recolour": true,
       "compact": false,
       "iconSubs": []
     },
@@ -156,6 +156,7 @@
       "showNetwork": true,
       "showBluetooth": true,
       "showBattery": true,
+      "showPowerProfile": true,
       "showLockStatus": true
     },
     "clock": {
@@ -170,9 +171,10 @@
     }
   },
   "border": {
-    "thickness": 7,
+    "thickness": 0,
     "rounding": 25,
-    "keepAliveMargin": 50
+    "keepAliveMargin": 50,
+    "sideThickness": 0
   },
   "dashboard": {
     "enabled": false,
@@ -341,8 +343,8 @@
     "groupPreviewNum": 3,
     "sizes": {
       "width": 400,
-      "image": 41,
-      "badge": 20
+      "image": 32,
+      "badge": 16
     }
   },
   "osd": {
@@ -350,10 +352,8 @@
     "hideDelay": 2000,
     "enableBrightness": true,
     "enableMicrophone": false,
-    "sizes": {
-      "sliderWidth": 30,
-      "sliderHeight": 150
-    }
+    "triggerHeight": 320,
+    "triggerWidth": 5
   },
   "session": {
     "enabled": true,
@@ -369,9 +369,9 @@
         "systemctl",
         "poweroff"
       ],
-      "hibernate": [
+      "suspend": [
         "systemctl",
-        "hibernate"
+        "suspend"
       ],
       "reboot": [
         "systemctl",
@@ -389,13 +389,10 @@
     }
   },
   "lock": {
-    "recolourLogo": false,
     "enableFprint": true,
     "maxFprintTries": 3,
     "sizes": {
-      "heightMult": 0.7,
-      "ratio": 1.7777777777777777,
-      "centerWidth": 600
+      "fieldWidth": 261
     }
   },
   "utilities": {
@@ -433,7 +430,7 @@
     }
   },
   "services": {
-    "weatherLocation": "",
+    "weatherLocation": "Córdoba",
     "useFahrenheit": false,
     "useTwelveHourClock": false,
     "gpuType": "",
@@ -446,7 +443,8 @@
         "from": "com.github.th_ch.youtube_music",
         "to": "YT Music"
       }
-    ]
+    ],
+    "weatherUseCurrentLocation": false
   },
   "paths": {
     "wallpaperDir": "/home/jc/Pictures/Wallpapers",
@@ -475,18 +473,23 @@
     "apiKey": "",
     "backend": "openai",
     "model": "gpt-4o-transcribe",
+    "mode": "batch",
     "autoHideDelay": 1500,
     "processingTimeout": 120000,
-    "deliveryMode": "ask",
+    "deliveryMode": "submit",
     "recording": {
       "format": "wav",
       "sampleRate": 16000,
-      "channels": 1
+      "channels": 1,
+      "source": ""
     },
     "cache": {
       "enabled": true,
       "maxEntries": 10,
       "deleteOnSuccess": true
+    },
+    "ducking": {
+      "volume": 0
     }
   },
   "keycaster": {
@@ -527,6 +530,14 @@
     "enabled": true,
     "sizes": {
       "innerHeight": 18
+    },
+    "mergeWorkspaces": false
+  },
+  "screenshot": {
+    "ssh": {
+      "enabled": true,
+      "host": "corpy",
+      "remoteDir": "/tmp"
     }
   }
 }

@@ -63,6 +63,16 @@ Singleton {
         reloadableId: "notifs"
     }
 
+    // Shared image-extension validator used by both the arrival observability log
+    // (onNotification) and Notif.isValidImagePath(). Keeping one canonical list
+    // prevents the two call-sites from drifting when a new extension is added.
+    function _isValidImageExt(path: string): bool {
+        if (!path) return false;
+        const validExts = [".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif"];
+        const lower = path.toLowerCase().split('?')[0].split('#')[0];
+        return validExts.some(ext => lower.endsWith(ext));
+    }
+
     NotificationServer {
         id: server
 
@@ -76,6 +86,22 @@ Singleton {
 
         onNotification: notif => {
             notif.tracked = true;
+
+            // Observability: capture every raw input that affects icon
+            // resolution. Used to diagnose blank-disc renders (esp. from
+            // Electron clients like Altus that may send pixel-data or
+            // extension-less temp paths). Grep `[notif-debug] arrival` to
+            // correlate against later image-load failures.
+            const ipHint = notif.hints["image-path"] ?? "";
+            const idHint = notif.hints["image-data"];
+            const legacyIconData = notif.hints["icon_data"];
+            const ipValid = ipHint && root._isValidImageExt(ipHint);
+            console.log(`[notif-debug] arrival id=${notif.id} appName='${notif.appName}'`,
+                `appIcon='${notif.appIcon}'`,
+                `image='${(notif.image || "").slice(0, 120)}'`,
+                `hint.image-path='${ipHint}' ipValid=${ipValid}`,
+                `hint.image-data=${idHint !== undefined}`,
+                `hint.icon_data=${legacyIconData !== undefined}`);
 
             const comp = notifComp.createObject(root, {
                 popup: !props.dnd && ![...Visibilities.screens.values()].some(v => v.sidebar),
@@ -272,6 +298,15 @@ Singleton {
                     opacity: 0
 
                     onStatusChanged: {
+                        // Observability: log Error/Null on the pixel-data
+                        // loader. If this fires, notif.image will remain the
+                        // raw image:// URL and the visible Image at render
+                        // time will also fail (blank disc symptom).
+                        if (status === Image.Error || status === Image.Null) {
+                            console.warn(`[notif-debug] dummy-image-failed id=${notif.id} appName='${notif.appName}'`,
+                                `source='${(source.toString() || "").slice(0, 120)}' status=${status}`);
+                            return;
+                        }
                         if (status !== Image.Ready)
                             return;
 
@@ -377,12 +412,11 @@ Singleton {
             }
         }
 
-        // Validate that a path has a supported image extension
+        // Validate that a path has a supported image extension.
+        // Delegates to the singleton-level helper so both this method and the
+        // arrival-log block in onNotification share one canonical extension list.
         function isValidImagePath(path: string): bool {
-            if (!path) return false;
-            const validExts = [".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif"];
-            const lower = path.toLowerCase().split('?')[0].split('#')[0];  // Strip query params
-            return validExts.some(ext => lower.endsWith(ext));
+            return root._isValidImageExt(path);
         }
 
         Component.onCompleted: {

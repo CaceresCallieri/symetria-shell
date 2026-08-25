@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components.containers
 import qs.components.misc
+import qs.services
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
@@ -13,6 +14,15 @@ Scope {
         property bool freeze
         property bool closing
         property bool clipboardOnly
+        property bool sshTransfer
+
+        function _openPicker(freeze: bool, clipboardOnly: bool, sshTransfer: bool): void {
+            root.freeze = freeze;
+            root.closing = false;
+            root.clipboardOnly = clipboardOnly;
+            root.sshTransfer = sshTransfer;
+            root.activeAsync = true;
+        }
 
         Variants {
             model: Quickshell.screens
@@ -49,76 +59,46 @@ Scope {
     IpcHandler {
         target: "picker"
 
-        function open(): void {
-            root.freeze = false;
-            root.closing = false;
-            root.clipboardOnly = false;
-            root.activeAsync = true;
-        }
+        function open(): void { root._openPicker(false, false, false) }
+        function openFreeze(): void { root._openPicker(true, false, false) }
+        function openClip(): void { root._openPicker(false, true, false) }
+        function openFreezeClip(): void { root._openPicker(true, true, false) }
+    }
 
-        function openFreeze(): void {
-            root.freeze = true;
-            root.closing = false;
-            root.clipboardOnly = false;
-            root.activeAsync = true;
-        }
+    IpcHandler {
+        target: "screenshot"
 
-        function openClip(): void {
-            root.freeze = false;
-            root.closing = false;
-            root.clipboardOnly = true;
-            root.activeAsync = true;
-        }
+        function region(): void { root._openPicker(false, false, true) }
+        function regionFreeze(): void { root._openPicker(true, false, true) }
 
-        function openFreezeClip(): void {
-            root.freeze = true;
-            root.closing = false;
-            root.clipboardOnly = true;
-            root.activeAsync = true;
-        }
+        function window(): void { ScreenshotTransfer.captureAndTransfer("window") }
+        function monitor(): void { ScreenshotTransfer.captureAndTransfer("monitor") }
+        function monitorSelect(): void { ScreenshotTransfer.captureAndTransfer("monitorSelect") }
+        function keyboard(): void { ScreenshotTransfer.captureAndTransfer("keyboard") }
+        function captureFirst(): void { ScreenshotTransfer.captureAndTransfer("captureFirst") }
     }
 
     CustomShortcut {
         name: "screenshot"
         description: "Open screenshot tool"
-        onPressed: {
-            root.freeze = false;
-            root.closing = false;
-            root.clipboardOnly = false;
-            root.activeAsync = true;
-        }
+        onPressed: root._openPicker(false, false, false)
     }
 
     CustomShortcut {
         name: "screenshotFreeze"
         description: "Open screenshot tool (freeze mode)"
-        onPressed: {
-            root.freeze = true;
-            root.closing = false;
-            root.clipboardOnly = false;
-            root.activeAsync = true;
-        }
+        onPressed: root._openPicker(true, false, false)
     }
 
     CustomShortcut {
         name: "screenshotClip"
         description: "Open screenshot tool (clipboard)"
-        onPressed: {
-            root.freeze = false;
-            root.closing = false;
-            root.clipboardOnly = true;
-            root.activeAsync = true;
-        }
+        onPressed: root._openPicker(false, true, false)
     }
 
     CustomShortcut {
         name: "screenshotFreezeClip"
         description: "Open screenshot tool (freeze mode, clipboard)"
-        onPressed: {
-            root.freeze = true;
-            root.closing = false;
-            root.clipboardOnly = true;
-            root.activeAsync = true;
-        }
+        onPressed: root._openPicker(true, true, false)
     }
 }

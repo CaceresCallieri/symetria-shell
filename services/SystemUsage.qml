@@ -17,6 +17,17 @@ Singleton {
     property real memUsed
     property real memTotal
     readonly property real memPerc: memTotal > 0 ? memUsed / memTotal : 0
+    property real fileSwapMib
+    property real zramFillPerc
+    readonly property string gamingReadiness: {
+        // MemAvailable in KiB; thresholds 8 GiB / 4 GiB → 8388608 / 4194304 KiB.
+        const availKib = memTotal - memUsed;
+        if (fileSwapMib > 512 || zramFillPerc >= 95 || availKib < 4194304)
+            return "Stutter risk";
+        if (fileSwapMib > 0 || zramFillPerc >= 80 || availKib < 8388608)
+            return "Caution";
+        return "Ready";
+    }
     property real storageUsed
     property real storageTotal
     property real storagePerc: storageTotal > 0 ? storageUsed / storageTotal : 0
@@ -60,6 +71,7 @@ Singleton {
         onTriggered: {
             stat.reload();
             meminfo.reload();
+            swaps.reload();
             storage.running = true;
             gpuUsage.running = true;
             sensors.running = true;
@@ -95,6 +107,36 @@ Singleton {
             const data = text();
             root.memTotal = parseInt(data.match(/MemTotal: *(\d+)/)[1], 10) || 1;
             root.memUsed = (root.memTotal - parseInt(data.match(/MemAvailable: *(\d+)/)[1], 10)) || 0;
+        }
+    }
+
+    FileView {
+        id: swaps
+
+        path: "/proc/swaps"
+        onLoaded: {
+            const lines = text().split("\n");
+            let diskKib = 0;
+            let zramUsed = 0;
+            let zramSize = 0;
+            // Skip header (line 0). Columns: Filename Type Size Used Priority
+            for (let i = 1; i < lines.length; i++) {
+                const fields = lines[i].split(/\s+/).filter(f => f.length > 0);
+                if (fields.length < 4)
+                    continue;
+                const filename = fields[0];
+                const type = fields[1];
+                const size = parseInt(fields[2], 10) || 0;
+                const used = parseInt(fields[3], 10) || 0;
+                if (type === "file") {
+                    diskKib += used;
+                } else if (filename.startsWith("/dev/zram")) {
+                    zramSize += size;
+                    zramUsed += used;
+                }
+            }
+            root.fileSwapMib = diskKib / 1024;
+            root.zramFillPerc = zramSize > 0 ? (zramUsed / zramSize) * 100 : 0;
         }
     }
 

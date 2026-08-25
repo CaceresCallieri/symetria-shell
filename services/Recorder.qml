@@ -32,6 +32,10 @@ Singleton {
         // Only start if not already running
         if (props.running) {
             console.log("[Recorder] start IGNORED — already recording");
+            // Surface feedback for entry points without a disabled state (e.g. the
+            // keychords recording menu). The dashboard Record card disables its
+            // button while running, so it never reaches this branch.
+            Toaster.toast(qsTr("Already recording"), qsTr("Stop the current recording from the dashboard first"), "screen_record", Toast.Info);
             return;
         }
         if (startPending) {
@@ -46,7 +50,11 @@ Singleton {
         const args = Array.from(extraArgs).filter(s => s.length > 0);
         const cmd = baseCmd.concat(args);
 
-        // Detect region mode: only "-r" and "-sr" are region flags
+        // Detect region mode: only "-r" and combined "-sr" are region flags (all
+        // in-shell callers pass separate flags now, but external `symmetria shell`
+        // invocations may still combine them). -w (active window) is intentionally
+        // NOT region mode: the CLI resolves the geometry itself without slurp, so
+        // the instant fullscreen-style verify applies, not region polling.
         const isRegion = args.some(a => a === "-r" || a === "-sr");
 
         console.log("[Recorder] start —", isRegion ? "REGION" : "FULLSCREEN", "— execDetached:", JSON.stringify(cmd));
@@ -177,9 +185,12 @@ Singleton {
                     slurpCheckProc.running = true;
                 }
             } else {
-                // Fullscreen mode: single check failed
+                // Fullscreen/window mode: single check failed. Window mode has a
+                // realistic failure cause (no active window to resolve), so surface
+                // it — the region paths already toast on their failure branches.
                 root.startPending = false;
                 console.log("[Recorder] VERIFY FAILED — gpu-screen-recorder not running");
+                Toaster.toast(qsTr("Recording failed"), qsTr("Recorder did not start"), "error", Toast.Error);
                 props.running = false;
             }
         }
@@ -248,6 +259,64 @@ Singleton {
 
         function onSecondsChanged(): void {
             props.elapsed++;
+        }
+    }
+
+    // IPC start surface for the keychords recording menu. Routing through this
+    // service's start() — rather than invoking `symmetria record` directly — is
+    // what keeps Recorder.running in sync: running-state is only updated by
+    // start()/stop()'s verify polling and the startup pidof check, so a direct CLI
+    // recording would run but never appear as "recording" in the bar/utility
+    // dashboard. The Record card uses these same start([...]) variants.
+    //
+    // stop() is exposed for the keychords menu ("s" while recording) and the
+    // Super+Alt+Space Hyprland bind — it is safe under rapid external invocation
+    // because it no-ops unless running and guards re-entry via stopPending.
+    // togglePause() is intentionally NOT exposed: it flips props.paused
+    // optimistically with no in-progress guard and would desync under rapid
+    // external invocation — add that guard before ever exposing it.
+    //
+    // Target is "screenRecorder", NOT "recorder" — "recorder" is already owned by
+    // the audio/STT recorder (modules/recorder/RecorderRoot.qml).
+    IpcHandler {
+        target: "screenRecorder"
+
+        function fullscreen(): void {
+            root.start([]);
+        }
+
+        function region(): void {
+            root.start(["-r"]);
+        }
+
+        // Active window: records the window's current screen region (resolved by
+        // the CLI via `hyprctl activewindow`). Instant like fullscreen — no slurp —
+        // so start()'s single-check verify path applies, not region polling.
+        function window(): void {
+            root.start(["-w"]);
+        }
+
+        function fullscreenAudio(): void {
+            root.start(["-s"]);
+        }
+
+        function regionAudio(): void {
+            root.start(["-r", "-s"]);
+        }
+
+        function windowAudio(): void {
+            root.start(["-w", "-s"]);
+        }
+
+        function stop(): void {
+            root.stop();
+        }
+
+        // Meeting mode: fullscreen + system audio + microphone merged into one
+        // track (CLI: `record -s -m`). Captures BOTH sides of a video call — the
+        // remote voice via default_output and the local voice via default_input.
+        function meeting(): void {
+            root.start(["-s", "-m"]);
         }
     }
 }

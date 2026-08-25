@@ -99,6 +99,11 @@ Item {
         }
 
         Popout {
+            name: "powerprofile"
+            sourceComponent: PowerProfile {}
+        }
+
+        Popout {
             name: "audio"
             sourceComponent: Audio {
                 wrapper: root.wrapper

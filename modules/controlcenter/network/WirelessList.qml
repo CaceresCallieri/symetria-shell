@@ -184,29 +184,15 @@ DeviceList {
                     }
                 }
 
-                StyledRect {
-                    implicitWidth: implicitHeight
-                    implicitHeight: connectIcon.implicitHeight + Appearance.padding.smaller * 2
+                ConnectToggleButton {
+                    connected: modelData.active
 
-                    radius: Appearance.rounding.full
-                    color: modelData.active ? Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.medium).background : "transparent"
-
-                    StateLayer {
-                        function onClicked(): void {
-                            if (modelData.active) {
-                                NmcliWifi.disconnectFromNetwork();
-                            } else {
-                                NetworkConnection.handleConnect(modelData, root.session, null);
-                            }
+                    onClicked: {
+                        if (modelData.active) {
+                            NmcliWifi.disconnectFromNetwork(modelData.ssid);
+                        } else {
+                            NetworkConnection.handleConnect(modelData, root.session, null);
                         }
-                    }
-
-                    MaterialIcon {
-                        id: connectIcon
-
-                        anchors.centerIn: parent
-                        text: modelData.active ? "link_off" : "link"
-                        color: Colours.palette.m3onSurface
                     }
                 }
             }

@@ -33,15 +33,8 @@ Singleton {
     readonly property string wirelessSsidField: "802-11-wireless.ssid"
     readonly property string networkListFields: "SSID,SIGNAL,SECURITY"
     readonly property string networkDetailFields: "ACTIVE,SIGNAL,FREQ,SSID,BSSID,SECURITY"
-    readonly property string securityKeyMgmt: "802-11-wireless-security.key-mgmt"
-    readonly property string securityPsk: "802-11-wireless-security.psk"
-    readonly property string keyMgmtWpaPsk: "wpa-psk"
-    readonly property string connectionParamType: "type"
-    readonly property string connectionParamConName: "con-name"
     readonly property string connectionParamIfname: "ifname"
-    readonly property string connectionParamSsid: "ssid"
     readonly property string connectionParamPassword: "password"
-    readonly property string connectionParamBssid: "802-11-wireless.bssid"
 
     // --- Command execution ---
 
@@ -60,8 +53,53 @@ Singleton {
         });
 
         Qt.callLater(() => {
+            proc.startedAt = Date.now();
             proc.exec(proc.command);
         });
+        watchdogSweeper.start();
+    }
+
+    /// Ceiling on how long a single nmcli invocation may go without reporting.
+    /// Sits above NmcliWifi.connectTimeoutSeconds (45s) so nmcli's own --wait
+    /// reports the real outcome first in every normal case; this only catches a
+    /// process that failed to spawn or genuinely wedged.
+    readonly property int commandTimeoutMs: 60000
+
+    // Enforces the callback contract for processes that never exit.
+    //
+    // REGRESSION GUARD: this was originally written as a Timer declared INSIDE
+    // the CommandProcess component. That does not load — Process has no default
+    // property, so a child object is "Cannot assign to non-existent default
+    // property" and the whole shell fails to start. qmllint does not catch it
+    // (it cannot resolve Quickshell imports). One sweeper over activeProcesses is
+    // also cheaper than one Timer per invocation.
+    Timer {
+        id: watchdogSweeper
+
+        interval: 5000
+        repeat: true
+
+        onTriggered: {
+            if (root.activeProcesses.length === 0) {
+                stop();
+                return;
+            }
+
+            const now = Date.now();
+            // Iterate over a copy: deliver() runs caller callbacks that can spawn
+            // or retire processes, mutating activeProcesses mid-loop.
+            for (const proc of root.activeProcesses.slice()) {
+                if (!proc || proc.callbackCalled || proc.startedAt === 0)
+                    continue;
+                if (now - proc.startedAt < root.commandTimeoutMs)
+                    continue;
+
+                console.warn("[NMCLI] no response after " + Math.round(root.commandTimeoutMs / 1000) + "s, abandoning: " + proc.command.join(" "));
+                proc.deliver(false, "", "nmcli did not respond", -1);
+                proc.running = false;
+                proc.processFinished();
+            }
+        }
     }
 
     function isConnectionCommand(command: list<string>): bool {
@@ -69,7 +107,12 @@ Singleton {
             return false;
         }
 
-        return command.includes(root.nmcliCommandWifi) || command.includes(root.nmcliCommandConnection);
+        // Only commands that actually ACTIVATE a connection can meaningfully
+        // report "secrets required". Read-only queries (`connection show`,
+        // `device wifi list`) must not have their stderr mined for password
+        // keywords — that produced needsPassword on commands that never tried
+        // to connect.
+        return command.includes("connect") || (command.includes(root.nmcliCommandConnection) && command.includes("up"));
     }
 
     // --- Parsing utilities ---
@@ -214,13 +257,31 @@ Singleton {
         });
     }
 
+    // --- Password detection ---
+    // A pure predicate over nmcli's stderr. It lives here, in the nmcli layer,
+    // because it describes nmcli's own output vocabulary — no wifi-domain state
+    // is involved. (It previously lived in NmcliWifi, which forced CommandProcess
+    // into a documented layer inversion; that inversion is gone.)
+
+    function detectPasswordRequired(error: string): bool {
+        if (!error || error.length === 0) {
+            return false;
+        }
+
+        const notSuccess = !error.includes("Connection activated") && !error.includes("successfully");
+        const hasSecretKeyword = error.includes("Secrets were required")
+            || error.includes("No secrets provided")
+            || error.includes("802-11-wireless-security.psk")
+            || error.includes("password for")
+            || error.includes("No agents were available");
+        const hasPasswordWord = error.includes("password") && notSuccess;
+        const hasSecretsWord = error.includes("Secrets") && notSuccess;
+        const has80211Word = error.includes("802.11") && notSuccess;
+
+        return notSuccess && (hasSecretKeyword || hasPasswordWord || hasSecretsWord || has80211Word);
+    }
+
     // --- CommandProcess component ---
-    // NOTE: Intentional layer inversion — CommandProcess references NmcliWifi
-    // for password detection (handlePasswordRequired, detectPasswordRequired,
-    // pendingConnection, connectionFailed). This coupling exists because password
-    // errors arrive via stderr on ANY nmcli process, and the detection must happen
-    // at the process level before the generic callback fires. Refactoring to a
-    // signal-based approach risks breaking the delicate password detection flow.
 
     component CommandProcess: Process {
         id: proc
@@ -233,6 +294,29 @@ Singleton {
 
         signal processFinished
 
+        /// Wall-clock ms when exec() was issued; 0 until then. Read by the
+        /// watchdog sweeper to find processes that never reported back.
+        property double startedAt: 0
+
+        // Guarantees the callback contract even when the process never exits.
+        // Everything upstream assumes "the callback always fires exactly once";
+        // without this, an nmcli that fails to spawn or wedges reproduces the exact
+        // permanent-"Connecting…" hang this whole flow was rewritten to eliminate.
+        function deliver(success: bool, output: string, error: string, code: int): void {
+            if (callbackCalled)
+                return;
+            callbackCalled = true;
+            if (proc.callback) {
+                proc.callback({
+                    success: success,
+                    output: output,
+                    error: error,
+                    exitCode: code,
+                    needsPassword: root.isConnectionCommand(proc.command) && root.detectPasswordRequired(error)
+                });
+            }
+        }
+
         environment: ({
                 LANG: "C.UTF-8",
                 LC_ALL: "C.UTF-8"
@@ -244,55 +328,20 @@ Singleton {
 
         stderr: StdioCollector {
             id: stderrCollector
-
-            onStreamFinished: {
-                const error = text.trim();
-                if (error && error.length > 0) {
-                    const output = (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "";
-                    NmcliWifi.handlePasswordRequired(proc, error, output, -1);
-                }
-            }
         }
 
+        // The process exit IS the result. nmcli blocks until NetworkManager has
+        // settled the operation, so there is nothing left to infer afterwards:
+        // exit code 0 means it worked, and stderr says why when it did not.
         onExited: code => {
             exitCode = code;
 
             Qt.callLater(() => {
-                if (callbackCalled) {
-                    processFinished();
-                    return;
-                }
-
-                if (proc.callback) {
-                    const output = (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "";
-                    const error = (stderrCollector && stderrCollector.text) ? stderrCollector.text : "";
-                    const success = exitCode === 0;
-                    const cmdIsConnection = root.isConnectionCommand(proc.command);
-
-                    if (NmcliWifi.handlePasswordRequired(proc, error, output, exitCode)) {
-                        processFinished();
-                        return;
-                    }
-
-                    const needsPassword = cmdIsConnection && NmcliWifi.detectPasswordRequired(error);
-
-                    if (!success && cmdIsConnection && NmcliWifi.pendingConnection) {
-                        const failedSsid = NmcliWifi.pendingConnection.ssid;
-                        NmcliWifi.connectionFailed(failedSsid);
-                    }
-
-                    callbackCalled = true;
-                    callback({
-                        success: success,
-                        output: output,
-                        error: error,
-                        exitCode: proc.exitCode,
-                        needsPassword: needsPassword || false
-                    });
-                    processFinished();
-                } else {
-                    processFinished();
-                }
+                proc.deliver(code === 0,
+                    (stdoutCollector && stdoutCollector.text) ? stdoutCollector.text : "",
+                    (stderrCollector && stderrCollector.text) ? stderrCollector.text : "",
+                    code);
+                processFinished();
             });
         }
     }
@@ -334,25 +383,13 @@ Singleton {
             const newActive = NmcliWifi.active;
 
             if (newActive && newActive.active) {
-                Qt.callLater(() => {
-                    if (NmcliWifi.wirelessInterfaces.length > 0) {
-                        const activeWireless = NmcliWifi.wirelessInterfaces.find(iface => {
-                            return isConnectedState(iface.state);
-                        });
-                        if (activeWireless && activeWireless.device) {
-                            NmcliWifi.getWirelessDeviceDetails(activeWireless.device, () => {});
-                        }
-                    }
-
-                    if (NmcliEthernet.ethernetInterfaces.length > 0) {
-                        const activeEth = NmcliEthernet.ethernetInterfaces.find(iface => {
-                            return isConnectedState(iface.state);
-                        });
-                        if (activeEth && activeEth.device) {
-                            NmcliEthernet.getEthernetDeviceDetails(activeEth.device, () => {});
-                        }
-                    }
-                }, 500);
+                // A real Timer, because the wait is real intent: NetworkManager
+                // needs a moment after activation before IP/DNS details are
+                // populated. REGRESSION GUARD: do NOT collapse this back to
+                // `Qt.callLater(fn, 500)` — Qt.callLater cannot delay; its trailing
+                // arguments are passed TO fn, so that form ran immediately and read
+                // details NetworkManager had not filled in yet.
+                deviceDetailsRefreshTimer.restart();
             } else {
                 NmcliWifi.wirelessDeviceDetails = null;
                 NmcliEthernet.ethernetDeviceDetails = null;
@@ -361,12 +398,28 @@ Singleton {
             NmcliWifi.getWirelessInterfaces(() => {});
             NmcliEthernet.getEthernetInterfaces(() => {
                 if (NmcliEthernet.activeEthernet && NmcliEthernet.activeEthernet.connected) {
-                    Qt.callLater(() => {
-                        NmcliEthernet.getEthernetDeviceDetails(NmcliEthernet.activeEthernet.interface, () => {});
-                    }, 500);
+                    deviceDetailsRefreshTimer.restart();
                 }
             });
         });
+    }
+
+    // Settle window after a NetworkManager state change, before re-reading the
+    // IP/DNS details of whatever is now active. restart() coalesces the burst of
+    // monitor events a single connect produces into one refresh.
+    Timer {
+        id: deviceDetailsRefreshTimer
+
+        interval: 500
+        onTriggered: {
+            const activeWireless = NmcliWifi.wirelessInterfaces.find(iface => root.isConnectedState(iface.state));
+            if (activeWireless && activeWireless.device)
+                NmcliWifi.getWirelessDeviceDetails(activeWireless.device, () => {});
+
+            const activeEth = NmcliEthernet.ethernetInterfaces.find(iface => root.isConnectedState(iface.state));
+            if (activeEth && activeEth.device)
+                NmcliEthernet.getEthernetDeviceDetails(activeEth.device, () => {});
+        }
     }
 
     Component.onCompleted: {

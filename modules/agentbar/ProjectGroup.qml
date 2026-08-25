@@ -4,11 +4,12 @@ import qs.components
 import qs.services
 import qs.utils
 import qs.config
+import Quickshell
 import QtQuick
 import QtQuick.Layouts
 
 /// Per-project pill: styled container with project name and agent chips.
-StyledRect {
+PillSurface {
     id: root
 
     required property string project
@@ -44,19 +45,23 @@ StyledRect {
     // Representative terminal PID: active agent's, or first agent's
     readonly property int terminalPid: AgentService.representativeAgent(agents)?.terminal_pid ?? 0
 
-    // Pre-computed pill styles — not reactive to pillStyle config hot-reload (requires shell restart)
+    // Pre-computed pill styles. These ARE live across theme switches: QML captures
+    // binding dependencies dynamically, so Colours.pillStyle() re-evaluates when
+    // Theme.material changes — no restart needed.
     readonly property var focusedStyle: Colours.pillStyle(Colours.palette.m3primary, 1.0)
     readonly property var unfocusedStyle: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, 0.15)
 
     color: isCurrentProject ? focusedStyle.background : unfocusedStyle.background
     radius: Appearance.rounding.full
-    border.width: hasPermissionNeeded ? 2 : 1
-    border.color: {
+    borderWidth: hasPermissionNeeded ? 2 : 1
+    borderColor: {
         if (hasPermissionNeeded) return Colours.palette.m3tertiary;
         if (isCurrentProject) return focusedStyle.border;
         return unfocusedStyle.border;
     }
-    clip: true  // clips outer half of sweepCanvas halo stroke → inward glow effect
+    // PillSurface's body is a StyledClippingRect, which already clips children to
+    // the rounded capsule shape — this clips the outer half of sweepCanvas's halo
+    // stroke, producing the inward-glow effect we want. No extra clip flag needed.
 
     Behavior on color {
         ColorAnimation {
@@ -65,14 +70,14 @@ StyledRect {
         }
     }
 
-    Behavior on border.width {
+    Behavior on borderWidth {
         Anim {
             duration: Appearance.anim.durations.normal
             easing.type: Easing.OutCubic
         }
     }
 
-    Behavior on border.color {
+    Behavior on borderColor {
         ColorAnimation {
             duration: Appearance.anim.durations.normal
             easing.type: Easing.OutCubic
@@ -193,27 +198,28 @@ StyledRect {
         }
 
         // Project name label
-        StyledText {
+        ProjectNameLabel {
             Layout.alignment: Qt.AlignVCenter
             text: root.project
-            color: Colours.palette.m3primary
-            font.weight: Font.Bold
-            font.pointSize: Appearance.font.size.small
         }
 
-        // Agent chips
+        // Agent chips. Use AgentChipFor (not a bare AgentChip) so the agent→chip
+        // field mapping — including the backend agent_type that drives the accent
+        // color — lives in exactly one place and can't drift between callsites.
         Repeater {
-            model: root.agents
+            // ScriptModel keyed on the stable agent id — see AgentChipGroup for the full
+            // rationale. A plain JS array forces a full delegate reset on every bridge
+            // emission (fresh-parsed objects), flashing busy sparkles onto idle siblings.
+            model: ScriptModel {
+                values: root.agents
+                objectProp: "id"
+            }
 
-            AgentChip {
+            AgentChipFor {
                 required property var modelData
 
                 Layout.alignment: Qt.AlignVCenter
-
-                active: modelData.active ?? false
-                activityState: modelData.activity_state ?? ""
-                activityTool: modelData.activity_tool ?? ""
-                isSttTarget: AgentService.isAgentSttTarget(modelData)
+                agent: modelData
             }
         }
 
@@ -243,7 +249,7 @@ StyledRect {
         ctx.clearRect(0, 0, w, h);
         if (w <= 0 || h <= 0) return;
 
-        const bw = root.border.width;
+        const bw = root.borderWidth;
         const inset = bw / 2;
         const ew = w - bw;      // effective width inside border
         const eh = h - bw;      // effective height inside border

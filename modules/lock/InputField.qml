@@ -11,7 +11,6 @@ Item {
     id: root
 
     required property Pam pam
-    readonly property alias placeholder: placeholder
     property string buffer
 
     Layout.fillWidth: true
@@ -26,38 +25,21 @@ Item {
             if (root.pam.buffer.length > root.buffer.length) {
                 charList.bindImWidth();
             } else if (root.pam.buffer.length === 0) {
-                charList.implicitWidth = charList.implicitWidth;
-                placeholder.animate = true;
+                charList.freezeImWidth();
             }
 
             root.buffer = root.pam.buffer;
         }
     }
 
-    StyledText {
-        id: placeholder
-
-        anchors.centerIn: parent
-
-        text: {
-            if (root.pam.passwd.active)
-                return qsTr("Loading...");
-            if (root.pam.state === "max")
-                return qsTr("You have reached the maximum number of tries");
-            return qsTr("Enter your password");
-        }
-
-        animate: true
-        color: root.pam.passwd.active ? Colours.palette.m3secondary : Colours.palette.m3outline
-        font.pointSize: Appearance.font.size.normal
-        font.family: Appearance.font.family.mono
-
-        opacity: root.buffer ? 0 : 1
-
-        Behavior on opacity {
-            Anim {}
-        }
-    }
+    // NO placeholder text. An empty field shows nothing at all — the flat,
+    // unlabelled pill is the intended look.
+    //
+    // Nothing was lost by removing it: its three states are all covered
+    // elsewhere now. "Loading..." is the submit button turning into a spinner,
+    // the max-tries text is one of the PAM messages under the field, and
+    // "Enter your password" labelled the only input on an otherwise empty
+    // screen.
 
     ListView {
         id: charList
@@ -68,6 +50,15 @@ Item {
             imWidthBehavior.enabled = false;
             implicitWidth = Qt.binding(() => fullWidth);
             imWidthBehavior.enabled = true;
+        }
+
+        // Inverse of bindImWidth: assigning a property over its binding is how
+        // QML BREAKS that binding, so this pins the width at its current value.
+        // It looks like a self-assigning no-op and is not — without it the list
+        // collapses the instant the buffer empties and the dots vanish rather
+        // than animating out.
+        function freezeImWidth(): void {
+            implicitWidth = implicitWidth;
         }
 
         anchors.centerIn: parent

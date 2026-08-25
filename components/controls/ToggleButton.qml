@@ -7,7 +7,9 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-StyledRect {
+// Visual root is PillToggleSurface so toggled state automatically drives
+// raised-claymorphism (off) ↔ flat-accent (on) treatment. Always Tier 2.
+PillToggleSurface {
     id: root
 
     required property bool toggled
@@ -41,7 +43,15 @@ StyledRect {
     implicitHeight: toggleBtnIcon.implicitHeight + verticalPadding * 2
 
     radius: toggled || toggleStateLayer.pressed ? Appearance.rounding.small : Math.min(width, height) / 2 * Math.min(1, Appearance.rounding.scale)
-    color: toggled ? Colours.palette[`m3${accent.toLowerCase()}`] : Colours.palette[`m3${accent.toLowerCase()}Container`]
+
+    // --- PillToggleSurface bindings -----------------------------------
+    // Tier 2 always. `toggled` drives the active state directly.
+    // Active: filled with `m3${accent}` (e.g. m3primary, m3secondary).
+    // Inactive: filled with `m3${accent}Container` (the muted container variant)
+    // — same surface mapping the original StyledRect used.
+    active: toggled
+    activeColor: Colours.palette[`m3${accent.toLowerCase()}`]
+    inactiveColor: Colours.palette[`m3${accent.toLowerCase()}Container`]
 
     StateLayer {
         id: toggleStateLayer
@@ -99,7 +109,7 @@ StyledRect {
         }
     }
 
-    // Tooltip - positioned absolutely, doesn't affect layout
+    // Tooltip — positioned absolutely, doesn't affect layout
     Loader {
         id: tooltipLoader
         active: root.tooltip !== ""
@@ -124,4 +134,3 @@ StyledRect {
         Layout.minimumHeight: 0
     }
 }
-

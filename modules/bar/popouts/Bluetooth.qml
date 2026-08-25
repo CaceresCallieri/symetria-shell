@@ -11,170 +11,175 @@ import QtQuick
 import QtQuick.Layouts
 import "../../controlcenter/network"
 
-ColumnLayout {
+PillCardSection {
     id: root
 
     required property Item wrapper
 
-    spacing: Appearance.spacing.small
+    implicitWidth: layout.implicitWidth + root.contentMargins * 2
 
-    StyledText {
-        Layout.topMargin: Appearance.padding.normal
-        Layout.rightMargin: Appearance.padding.small
-        text: qsTr("Bluetooth")
-        font.weight: 500
-    }
+    ColumnLayout {
+        id: layout
 
-    Toggle {
-        label: qsTr("Enabled")
-        checked: Bluetooth.defaultAdapter?.enabled ?? false
-        toggle.onToggled: {
-            const adapter = Bluetooth.defaultAdapter;
-            if (adapter)
-                adapter.enabled = checked;
-        }
-    }
+        anchors.left: parent.left
+        anchors.right: parent.right
+        spacing: Appearance.spacing.small
 
-    Toggle {
-        label: qsTr("Discovering")
-        checked: Bluetooth.defaultAdapter?.discovering ?? false
-        toggle.onToggled: {
-            const adapter = Bluetooth.defaultAdapter;
-            if (adapter)
-                adapter.discovering = checked;
-        }
-    }
-
-    StyledText {
-        Layout.topMargin: Appearance.spacing.small
-        Layout.rightMargin: Appearance.padding.small
-        text: {
-            const devices = Bluetooth.devices.values;
-            let available = qsTr("%1 device%2 available").arg(devices.length).arg(devices.length === 1 ? "" : "s");
-            const connected = devices.filter(d => d.connected).length;
-            if (connected > 0)
-                available += qsTr(" (%1 connected)").arg(connected);
-            return available;
-        }
-        color: Colours.palette.m3onSurfaceVariant
-        font.pointSize: Appearance.font.size.small
-    }
-
-    Repeater {
-        model: ScriptModel {
-            values: [...Bluetooth.devices.values].sort((a, b) => (b.connected - a.connected) || (b.paired - a.paired) || a.name.localeCompare(b.name)).slice(0, 5)
+        StyledText {
+            text: qsTr("Bluetooth")
+            font.weight: 500
         }
 
-        RowLayout {
-            id: device
+        Toggle {
+            label: qsTr("Enabled")
+            checked: Bluetooth.defaultAdapter?.enabled ?? false
+            toggle.onToggled: {
+                const adapter = Bluetooth.defaultAdapter;
+                if (adapter)
+                    adapter.enabled = checked;
+            }
+        }
 
-            required property BluetoothDevice modelData
-            readonly property bool loading: modelData.state === BluetoothDeviceState.Connecting || modelData.state === BluetoothDeviceState.Disconnecting
+        Toggle {
+            label: qsTr("Discovering")
+            checked: Bluetooth.defaultAdapter?.discovering ?? false
+            toggle.onToggled: {
+                const adapter = Bluetooth.defaultAdapter;
+                if (adapter)
+                    adapter.discovering = checked;
+            }
+        }
 
-            Layout.fillWidth: true
-            Layout.rightMargin: Appearance.padding.small
-            spacing: Appearance.spacing.small
+        StyledText {
+            Layout.topMargin: Appearance.spacing.small
+            text: {
+                const devices = Bluetooth.devices.values;
+                let available = qsTr("%1 device%2 available").arg(devices.length).arg(devices.length === 1 ? "" : "s");
+                const connected = devices.filter(d => d.connected).length;
+                if (connected > 0)
+                    available += qsTr(" (%1 connected)").arg(connected);
+                return available;
+            }
+            color: Colours.palette.m3onSurfaceVariant
+            font.pointSize: Appearance.font.size.small
+        }
 
-            opacity: 0
-            scale: 0.7
-
-            Component.onCompleted: {
-                opacity = 1;
-                scale = 1;
+        Repeater {
+            model: ScriptModel {
+                values: [...Bluetooth.devices.values].sort((a, b) => (b.connected - a.connected) || (b.paired - a.paired) || a.name.localeCompare(b.name)).slice(0, 5)
             }
 
-            Behavior on opacity {
-                Anim {}
-            }
+            RowLayout {
+                id: device
 
-            Behavior on scale {
-                Anim {}
-            }
+                required property BluetoothDevice modelData
+                readonly property bool loading: modelData.state === BluetoothDeviceState.Connecting || modelData.state === BluetoothDeviceState.Disconnecting
 
-            MaterialIcon {
-                text: Icons.getBluetoothIcon(device.modelData.icon)
-            }
-
-            StyledText {
-                Layout.leftMargin: Appearance.spacing.small / 2
-                Layout.rightMargin: Appearance.spacing.small / 2
                 Layout.fillWidth: true
-                text: device.modelData.name
-            }
+                spacing: Appearance.spacing.small
 
-            StyledRect {
-                id: connectBtn
+                opacity: 0
+                scale: 0.7
 
-                implicitWidth: implicitHeight
-                implicitHeight: connectIcon.implicitHeight + Appearance.padding.small
-
-                radius: Appearance.rounding.full
-                color: Qt.alpha(Colours.palette.m3primary, device.modelData.state === BluetoothDeviceState.Connected ? 1 : 0)
-
-                CircularIndicator {
-                    anchors.fill: parent
-                    running: device.loading
+                Component.onCompleted: {
+                    opacity = 1;
+                    scale = 1;
                 }
 
-                StateLayer {
-                    color: device.modelData.state === BluetoothDeviceState.Connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-                    disabled: device.loading
+                Behavior on opacity {
+                    Anim {}
+                }
 
-                    function onClicked(): void {
-                        device.modelData.connected = !device.modelData.connected;
-                    }
+                Behavior on scale {
+                    Anim {}
                 }
 
                 MaterialIcon {
-                    id: connectIcon
-
-                    anchors.centerIn: parent
-                    animate: true
-                    text: device.modelData.connected ? "link_off" : "link"
-                    color: device.modelData.state === BluetoothDeviceState.Connected ? Colours.palette.m3onPrimary : Colours.palette.m3onSurface
-
-                    opacity: device.loading ? 0 : 1
-
-                    Behavior on opacity {
-                        Anim {}
-                    }
+                    text: Icons.getBluetoothIcon(device.modelData.icon)
                 }
-            }
 
-            Loader {
-                asynchronous: true
-                active: device.modelData.bonded
-                sourceComponent: Item {
-                    implicitWidth: connectBtn.implicitWidth
-                    implicitHeight: connectBtn.implicitHeight
+                StyledText {
+                    Layout.leftMargin: Appearance.spacing.small / 2
+                    Layout.rightMargin: Appearance.spacing.small / 2
+                    Layout.fillWidth: true
+                    text: device.modelData.name
+                }
 
-                    StateLayer {
-                        radius: Appearance.rounding.full
+                // `connected`, not `state === Connected`: the old block drove
+                // the plate and the ripple colour from `state` but the glyph
+                // from `connected`, so mid-transition the button showed a
+                // seated socket with an unplugged icon. One source now.
+                ConnectToggleButton {
+                    id: connectBtn
 
-                        function onClicked(): void {
-                            device.modelData.forget();
+                    connected: device.modelData.connected
+                    loading: device.loading
+
+                    onClicked: device.modelData.connected = !device.modelData.connected
+                }
+
+                Loader {
+                    asynchronous: true
+                    active: device.modelData.bonded
+                    sourceComponent: Item {
+                        implicitWidth: connectBtn.implicitWidth
+                        implicitHeight: connectBtn.implicitHeight
+
+                        StateLayer {
+                            radius: Appearance.rounding.full
+
+                            function onClicked(): void {
+                                device.modelData.forget();
+                            }
                         }
-                    }
 
-                    MaterialIcon {
-                        anchors.centerIn: parent
-                        text: "delete"
+                        MaterialIcon {
+                            anchors.centerIn: parent
+                            text: "delete"
+                        }
                     }
                 }
             }
         }
-    }
 
-    IconTextButton {
-        Layout.fillWidth: true
-        Layout.topMargin: Appearance.spacing.normal
-        inactiveColour: Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
-        inactiveOnColour: Colours.palette.m3onSurface
-        verticalPadding: Appearance.padding.small
-        text: qsTr("Open settings")
-        icon: "settings"
+        // Always-raised neumorphic action pill — replaces the prior flat
+        // IconTextButton so the "Open settings" CTA matches the shell's
+        // tier-2 button language. `active: false` keeps it press-able only.
+        PillToggleSurface {
+            id: settingsBtn
 
-        onClicked: root.wrapper.detach("bluetooth")
+            Layout.fillWidth: true
+            Layout.topMargin: Appearance.spacing.normal
+            implicitHeight: settingsRow.implicitHeight + Appearance.padding.normal * 2
+            active: false
+
+            StateLayer {
+                color: Colours.palette.m3onSurface
+
+                function onClicked(): void {
+                    root.wrapper.detach("bluetooth");
+                }
+            }
+
+            RowLayout {
+                id: settingsRow
+
+                anchors.centerIn: parent
+                spacing: Appearance.spacing.small
+
+                MaterialIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: "settings"
+                    color: Colours.palette.m3onSurface
+                }
+
+                StyledText {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: qsTr("Open settings")
+                    color: Colours.palette.m3onSurface
+                }
+            }
+        }
     }
 
     component Toggle: RowLayout {
@@ -183,7 +188,6 @@ ColumnLayout {
         property alias toggle: toggle
 
         Layout.fillWidth: true
-        Layout.rightMargin: Appearance.padding.small
         spacing: Appearance.spacing.normal
 
         StyledText {

@@ -27,8 +27,11 @@ Item {
         target: dialog
     }
 
-    // Dialog container
-    StyledRect {
+    // Dialog container — bare Item wrapping a PillCard backdrop + content.
+    // Two-tier hierarchy: the card (m3surfaceContainerLow) frames the
+    // dialog and the inner password pill (m3surfaceContainer) plus the
+    // matte-glass Cancel/Authenticate pills protrude from it.
+    Item {
         id: dialog
 
         anchors.top: parent.top
@@ -38,10 +41,15 @@ Item {
         implicitWidth: 350
         implicitHeight: content.implicitHeight + Appearance.padding.normal * 2
 
-        radius: Appearance.rounding.normal
-        color: "transparent"
-
         readonly property bool showButtons: dialogHover.hovered
+
+        // Claymorphism backdrop. Default fill (m3surfaceContainerLow) +
+        // default radius (rounding.normal) intentional: this is a section
+        // card, not a capsule pill, so we want the warmer rim/inner-shadow
+        // recipe that PillCard's defaults already encode.
+        PillCard {
+            anchors.fill: parent
+        }
 
         HoverHandler {
             id: dialogHover
@@ -84,6 +92,12 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.margins: Appearance.padding.normal
+            // Extra horizontal breathing room so the password pill and button
+            // row don't crowd the PillCard's rim. Vertical stays normal —
+            // dialog.implicitHeight already reserves padding.normal * 2 above
+            // and below this column.
+            anchors.leftMargin: Appearance.padding.large
+            anchors.rightMargin: Appearance.padding.large
 
             spacing: Appearance.spacing.normal
 

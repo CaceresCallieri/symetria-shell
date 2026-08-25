@@ -7,8 +7,10 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-// Base component for pill-styled containers in the bar.
-// Provides consistent styling and layout structure for StatusIcons, TimePill, SystemPill, etc.
+// Base component for bar pills with a single centered RowLayout child
+// (StatusIcons, TimePill, SystemPill). Uses the shared PillSurface primitive
+// for background styling, so visual changes (claymorphism / flat / glass)
+// happen in PillSurface.qml and propagate here for free.
 //
 // Usage:
 //   PillContainer {
@@ -21,11 +23,20 @@ import QtQuick.Layouts
 //       }
 //   }
 
-StyledRect {
+Item {
     id: root
 
-    // Content color passed to child components (default: m3tertiary for info pills).
-    // StatusIcons uses m3secondary for visual distinction between status and info pills.
+    // Content colour for every pill's children, and the canonical rationale for
+    // why the bar's foreground is uniform — this type owns the property, so the
+    // explanation lives here rather than in the subclasses that inherit it.
+    //
+    // StatusIcons used to redeclare this as m3secondary to rank status pills
+    // below info pills. A subclass redeclaration does not override a base
+    // property, it SHADOWS it — so one rule lived as two values in two files,
+    // free to drift. It also cost 13 points of lightness (65.5% vs 78.4%)
+    // against text that shares its hue, which reads as a mismatched colour
+    // rather than as a lower rank. Pill kinds are distinguished by grouping and
+    // glyph vocabulary instead. Do not reintroduce a per-pill tone.
     property color colour: Colours.palette.m3tertiary
 
     // Popout interface: reference to the child's content container for Bar.qml's
@@ -35,27 +46,23 @@ StyledRect {
     // Children with popouts should set: iconContainer: <RowLayout id>
     property Item iconContainer: null
 
-    // Glassmorphism styling (subtle intensity for background containers).
-    // Centralized here - changes apply to all pills automatically.
-    // intentional var: JS object { background: color, border: color } from Colours.pillStyle()
-    readonly property var glassStyle: Colours.pillStyle(
-        Colours.palette.m3surfaceContainerHigh,
-        Colours.glass.subtle
-    )
-
-    color: glassStyle.background
-    radius: Appearance.rounding.full
-    border.width: 1
-    border.color: glassStyle.border
-
     // Internal padding constant for pill edges
     readonly property int pillPadding: Appearance.spacing.large
 
     // Index of primary content child (assumes single RowLayout child)
     readonly property int primaryContentIndex: 0
 
-    clip: true
-    implicitHeight: Config.bar.sizes.innerWidth
+    // FORM axis: the panel form grows the plate UPWARD so its top edge — border,
+    // specular rim and all — falls outside the layer-shell surface and gets
+    // clipped by the compositor. The plate then reads as a slab entering the
+    // frame from off-screen rather than a chip sitting inside it. Bar.qml
+    // bottom-aligns the row so the whole excess goes up, never down.
+    //
+    // Height and offset come from Theme so all three plate producers stay in
+    // step — see the CONTRACT note on barPlateHeight in services/Theme.qml.
+    readonly property int contentOffset: Theme.barPlateContentOffset
+
+    implicitHeight: Theme.barPlateHeight
     implicitWidth: contentArea.children[primaryContentIndex]?.implicitWidth ?? 0
 
     // Default property: children declared inside PillContainer { ... } are automatically
@@ -63,9 +70,24 @@ StyledRect {
     // This enables natural syntax: PillContainer { RowLayout { ... } }
     default property alias content: contentArea.data
 
+    // Shared pill visual (claymorphism shadow + fill + border + inner gradient).
+    // Defaults match the shell-wide pill appearance, so we don't pass any
+    // styling overrides here.
+    PillSurface {
+        anchors.fill: parent
+    }
+
+    // Content lives as a SIBLING of PillSurface (not inside it): pill content
+    // is always smaller than the pill body and centered, so no rounded clipping
+    // is needed. Keeping it at the Item-root level avoids interfering with
+    // PillSurface's internal holder/clipping machinery.
     Item {
         id: contentArea
         anchors.centerIn: parent
+        // Push the content down by half the bleed: the plate is centred on its
+        // FULL height, but the top of it is off-screen, so without this the
+        // visible content would sit half a bleed too high.
+        anchors.verticalCenterOffset: root.contentOffset
         implicitWidth: children[root.primaryContentIndex]?.implicitWidth ?? 0
         implicitHeight: children[root.primaryContentIndex]?.implicitHeight ?? 0
     }

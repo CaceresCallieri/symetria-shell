@@ -36,8 +36,13 @@ Singleton {
     /// The currently recording job (at most one), or null
     readonly property SttJob activeRecording: _activeRecording
 
-    /// Whether the delivery mode radio toggle should be shown (from config)
-    readonly property bool isAskMode: _deliveryMode === "ask"
+    /// Streaming dictation toggle (runtime). Initialized from Config.stt.mode,
+    /// flipped by toggleStreaming() (Super+Alt+D). When true, recordings use the
+    /// streaming helper for live partials; when false, batch. Read by SttJob and
+    /// the bar's dictation-status icon. NOT readonly — toggleStreaming() writes
+    /// it imperatively (a readonly binding would block the write; see
+    /// docs/qml-pitfalls.md "readonly blocks ALL assignment").
+    property bool streamingActive: Config.stt?.mode === "streaming"
 
 
     /// Emitted when an action is successfully dispatched.
@@ -52,13 +57,14 @@ Singleton {
     property SttJob _job: null
     property SttJob _activeRecording: null
 
+    // Old job kept alive across a restart so _job can swap atomically
+    // oldJob → newJob without going through null. Destroyed from inside
+    // _startInternal after the new job takes over.
+    property SttJob _pendingOldJob: null
+
     // Toggle debouncing
     property real _lastToggleTime: 0
     readonly property int _toggleDebounceMs: 200
-
-    // Runtime delivery choice for "ask" mode.
-    // Persists across recordings within the same shell session.
-    property string _lastDeliveryChoice: "submit"
 
     // Temp directory readiness
     property bool _tempDirReady: false
@@ -75,11 +81,52 @@ Singleton {
     // Directories
     readonly property string _runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
     readonly property string _tempDir: `${_runtimeDir}/symmetria-stt`
+    // Persistent storage for audio/sidecars whose transcription failed.
+    // Lives under XDG_STATE_HOME so it survives shell restart and logout
+    // (unlike _tempDir, which is tmpfs). Created on startup below.
+    readonly property string _recoveryDir: `${Paths.state}/stt/recoverable`
+    // Persistent storage for *successful* recordings, retained as a safety net
+    // against silent truncation / bad transcriptions (see SttConfig.cache).
+    // Also on disk so the "keep for a day" window survives logout/reboot.
+    // Pruned by age (Config.stt.cache.retainSuccessHours) and count.
+    readonly property string _historyDir: `${Paths.state}/stt/history`
 
-    // Delivery mode from config: "clipboard" (default), "inject", "submit", or "ask"
+    // Delete retained successful-recording entries older than the configured
+    // window. Called at startup (sweeps stale files from previous days even if
+    // no new recording happens) and after each successful persist. Fire-and-
+    // forget — a transient failure just defers cleanup to the next call.
+    function _pruneHistory(): void {
+        const hours = Config.stt?.cache?.retainSuccessHours ?? 24;
+        if (hours <= 0) return;
+        const mins = Math.round(hours * 60);
+        Quickshell.execDetached(["find", _historyDir, "-maxdepth", "1",
+            "-name", "session_*", "-mmin", `+${mins}`, "-delete"]);
+    }
+
+    // "Ducked = mic is hot": duck the master sink while audio is actively
+    // being captured. Covers start/resume (→true) and pause/submit/cancel/
+    // restart/crash (→false): stop()/cancel()/restart() null _activeRecording
+    // synchronously; pause and pw-record crash flip the job's state away from
+    // "recording". Lives here, not in SttJob: cancel/restart destroy the job
+    // while its state is still "recording", which would leak a duck.
+    readonly property bool _micHot: _activeRecording !== null && _activeRecording.recording
+
+    on_MicHotChanged: {
+        if (_micHot) {
+            if (Config.stt.ducking.enabled)
+                AudioDucking.duck(Config.stt.ducking.volume);
+        } else {
+            // Unconditional: handles ducking.enabled flipping false mid-duck
+            AudioDucking.restore();
+        }
+    }
+
+    // Default delivery mode from config: "clipboard" (default), "inject", or
+    // "submit". Seeds each new job's _activeDeliveryChoice; mode keys override
+    // per-job only (one-shot).
     readonly property string _deliveryMode: {
         const mode = Config.stt?.deliveryMode ?? "clipboard";
-        if (mode === "inject" || mode === "submit" || mode === "ask") return mode;
+        if (mode === "inject" || mode === "submit") return mode;
         return "clipboard";
     }
 
@@ -116,6 +163,15 @@ Singleton {
                 );
             }
         }
+    }
+
+    /// Toggle streaming dictation mode (Super+Alt+D). Flips streamingActive,
+    /// which switches subsequent recordings between streaming (live partials)
+    /// and batch, and drives the bar's dictation-status icon. Combined toggle
+    /// for now — later this may split into "mode" vs "warm the model" controls.
+    function toggleStreaming(): void {
+        streamingActive = !streamingActive;
+        Logger.log("qml", "stt", "toggleStreaming → " + (streamingActive ? "streaming" : "batch"));
     }
 
     /// Start a new recording job. Blocked if a job already exists.
@@ -161,7 +217,20 @@ Singleton {
 
         // Assign _job AFTER state is "recording" so the bar embed
         // (which binds to _activeJob via job) sees the correct state immediately.
+        // When called from the restart path, _job transitions directly from
+        // the parked old job to this new job — the bar embed's binding on
+        // RecordingSessionManager.currentJob re-evaluates, swapping content
+        // seamlessly without any close/open animation.
         _job = job;
+
+        // If a restart is in progress, dispose the parked old job now that
+        // the new job has taken over. Must happen AFTER _job = job so the
+        // QML binding on currentJob has moved to the new reference before
+        // the old one is destroyed.
+        if (_pendingOldJob) {
+            _pendingOldJob.destroy();
+            _pendingOldJob = null;
+        }
 
         // Ensure temp dir exists, then start recording
         if (_tempDirReady) {
@@ -200,19 +269,68 @@ Singleton {
 
     /// Cancel the active recording (discard audio).
     function cancel(): void {
-        const sid = _activeRecording?.sessionId ?? "";
-        actionTriggered(sid, "cancel");
+        // A restart is mid-flight if _pendingOldJob is set and the
+        // restartDelayTimer hasn't fired _startInternal yet. In that window
+        // _activeRecording is already null, so the normal branch below would
+        // silently no-op — leaving the parked old job leaked and the bar
+        // embed stuck on it. Abort the pending restart explicitly.
+        if (_pendingOldJob) {
+            restartDelayTimer.stop();
+            const pending = _pendingOldJob;
+            _pendingOldJob = null;
+            actionTriggered(pending.sessionId, "cancel");
+            // Run the normal close-animation path now that we know the user
+            // didn't actually want to continue recording.
+            _removeJob(pending);
+            return;
+        }
+
+        // Cancel the live recording if one exists; otherwise dismiss a FAILED
+        // job. The fallback to _job is gated to the error state on purpose:
+        //   - It lets a keybind/IPC tear down the failed-state card. Once a job
+        //     errors, _activeRecording is already null (cleared at stop()), so
+        //     without this cancel() would silently no-op and the user stays
+        //     stuck — the error card's triggerPress() only animates the ✗ button
+        //     (visual feedback) and never invokes cancel() itself, so the
+        //     teardown must happen here, mirroring how retry() calls
+        //     _job.retry() directly.
+        //   - It deliberately does NOT cover processing/delivering/transcribed.
+        //     In those states a transcribe/clipboard/inject Process is still
+        //     running, and the delivery handlers (clipboardProcess/injectProcess
+        //     onExited) aren't guarded against a mid-flight teardown — they'd
+        //     flip the job to "success" after it was removed. The error state is
+        //     quiescent (every Process has already exited), so tearing down
+        //     there is race-free. Stuck processing is handled by
+        //     processingTimeoutTimer → error instead.
+        const target = _activeRecording ?? (_job?.state === "error" ? _job : null);
+        if (!target) return;
+        actionTriggered(target.sessionId, "cancel");
+        // target === _activeRecording only when a live recording exists; on the
+        // error-dismissal path target is _job and _activeRecording is already null.
         if (_activeRecording) {
-            const job = _activeRecording;
             _activeRecording = null;
             _sessionVocabHints = [];
             vocabHintsVisible = false;
-            job.cancel();
         }
+        target.cancel();
     }
 
     /// Restart: cancel active recording + start a new one.
     /// No-op if there is no active recording.
+    ///
+    /// Plays a close → open animation sequence:
+    ///   T=0          close animation starts (closing=true on old job causes
+    ///                Bar.qml's declarative _showEmbed binding to evaluate
+    ///                false → implicitWidth animates to 0 → shrink)
+    ///   T=500ms      _startInternal fires: _job swaps to new job atomically,
+    ///                old job is destroyed, Bar.qml's _showEmbed re-evaluates
+    ///                true (new job has closing=false) → open animation,
+    ///                pw-record spawns, recording begins.
+    ///
+    /// The lock-release bug the old 500ms delay suffered from is prevented by
+    /// parking the old job in _pendingOldJob so _job stays non-null across
+    /// the animation window — SttService.active never flips false, so
+    /// RecordingSessionManager doesn't auto-release the "stt" lock.
     function restart(): void {
         if (!_activeRecording) return;
         actionTriggered(_activeRecording.sessionId, "restart");
@@ -221,7 +339,25 @@ Singleton {
         _activeRecording = null;
         _sessionVocabHints = [];
         vocabHintsVisible = false;
-        job.cancel();
+        job.cancelForRestart(true);
+        // Trigger the bar embed's close animation. job.closing=true causes the
+        // declarative _showEmbed binding in Bar.qml to evaluate false, which
+        // animates implicitWidth to 0 (shrink). _job is NOT cleared here —
+        // _pendingOldJob keeps it alive so the lock stays held; the swap
+        // happens in _startInternal.
+        job.closing = true;
+
+        // Defense-in-depth: clean up any leftover pending job that wasn't consumed
+        // by _startInternal. Structurally unreachable via the normal code path
+        // (restart() returns early when !_activeRecording, which is always the
+        // case when _pendingOldJob is set), but retained as an explicit
+        // leak-prevention guard in case future callers change the preconditions.
+        if (_pendingOldJob && _pendingOldJob !== job) {
+            _pendingOldJob._destroyCleanup();
+            _pendingOldJob.destroy();
+        }
+        _pendingOldJob = job;
+
         restartDelayTimer.start();
     }
 
@@ -232,21 +368,25 @@ Singleton {
         _job.retry();
     }
 
-    /// Switch the runtime delivery choice (only effective in "ask" mode).
+    /// Switch the current job's delivery choice (one-shot — the next job
+    /// re-seeds from Config.stt.deliveryMode). Targets _job rather than
+    /// _activeRecording so mode keys keep working during processing/
+    /// delivering/error: the choice is read at delivery time.
     /// This is the IPC entry point — emits actionTriggered for UI feedback.
     /// For direct UI interaction, use SttJob.setDeliveryChoice (no signal).
     function setDeliveryChoice(mode: string): void {
-        if (_deliveryMode !== "ask") {
-            console.debug("[STT] setDeliveryChoice() ignored: deliveryMode is", _deliveryMode, "(not ask)");
+        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
+        // No-job guard: the session-scoped Hyprland binds could be stale
+        // after a shell crash (cleared on next startup), so ignore quietly.
+        // Also ignore the parked closing job during the restart window —
+        // it is about to be destroyed and the new job re-seeds from config.
+        if (!_job || _job.closing) {
+            console.debug("[STT] setDeliveryChoice() ignored: no active job");
             return;
         }
-        if (mode !== "clipboard" && mode !== "inject" && mode !== "submit") return;
-        if (_lastDeliveryChoice === mode) return;
-        _lastDeliveryChoice = mode;
-        if (_activeRecording) {
-            _activeRecording._activeDeliveryChoice = mode;
-            actionTriggered(_activeRecording.sessionId, "mode-" + mode);
-        }
+        if (_job._activeDeliveryChoice === mode) return;
+        _job._activeDeliveryChoice = mode;
+        actionTriggered(_job.sessionId, "mode-" + mode);
     }
 
     /// Add a per-session vocabulary hint (shown as chip in the widget).
@@ -269,6 +409,50 @@ Singleton {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Session-scoped Hyprland keybinds
+    // ─────────────────────────────────────────────────────────────────────────
+    // These Alt combos only make sense while an STT session exists, so they
+    // are registered dynamically (hyprctl keyword bind) when a job appears
+    // and removed when it goes away — outside a session the keys pass through
+    // to applications. Alt+V (pasteTranscription) stays a static global bind
+    // in the Hyprland config because it is useful when idle.
+    //
+    // The bind window is `active` (job exists), not just recording: the
+    // delivery choice is read at delivery time, so mode keys must work during
+    // processing, and restart/hints no-op harmlessly via their own guards.
+    // restart() never flips `active` false (_pendingOldJob keeps _job alive),
+    // so there is no unbind/rebind churn across the restart animation.
+
+    // [key, stt IPC function] pairs. Kept in sync with the comment block in
+    // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
+    readonly property var _sessionBinds: [
+        ["R", "restart"],
+        ["S", "mode clipboard"],   // S = Save to clipboard (not submit — that's Return)
+        ["I", "mode inject"],
+        ["Return", "mode submit"],
+        ["W", "hints"]
+    ]
+
+    onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
+
+    function _unbindCmd(bind: var): string {
+        return `keyword unbind ALT,${bind[0]}`;
+    }
+
+    function _registerSessionBinds(): void {
+        // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
+        // binds on the same combo (which would double-fire the IPC command),
+        // so a leftover bind from a crashed shell must be cleared first.
+        const cmds = _sessionBinds.map(b =>
+            `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
+        Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
+    }
+
+    function _unregisterSessionBinds(): void {
+        Quickshell.execDetached(["hyprctl", "--batch", _sessionBinds.map(_unbindCmd).join(" ; ")]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Job lifecycle
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -277,7 +461,7 @@ Singleton {
     function _createJob(): SttJob {
         const job = jobComponent.createObject(root, {
             sessionId: Date.now().toString(),
-            _activeDeliveryChoice: _lastDeliveryChoice
+            _activeDeliveryChoice: _deliveryMode
         });
 
         job.finished.connect(() => _onJobFinished(job));
@@ -289,7 +473,7 @@ Singleton {
     }
 
     function _removeJob(job: SttJob): void {
-        job.closing = true;  // triggers bar-embed close animation via _activeJob.closing in Bar.qml
+        job.closing = true;  // closes embed via _showEmbed declarative binding in Bar.qml
         job.startRemoval();  // per-job timer, avoids overwrite race
     }
 
@@ -308,10 +492,15 @@ Singleton {
     // Service-level timers & processes
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Delayed start after cancel (used by restart)
+    // Delay between setting closing=true on the old job and swapping in the
+    // new job. Matched to the bar embed's scale Behavior duration
+    // (expressiveDefaultSpatial = 500ms) so the close (scale → 0) animation
+    // has fully played out before the new job triggers the open (scale → 1)
+    // animation. The lock isn't released during this window because
+    // _pendingOldJob keeps _job non-null (see restart()).
     Timer {
         id: restartDelayTimer
-        interval: 500
+        interval: Appearance.anim.durations.expressiveDefaultSpatial
         onTriggered: root._startInternal()
     }
 
@@ -332,13 +521,96 @@ Singleton {
         }
     }
 
+    // Adopt recordings orphaned in the tmpfs working dir by a previous shell
+    // that died mid-session (crash, or SIGTERM during dictation).
+    // SttJob._destroyCleanup deliberately preserves the working WAV for
+    // non-terminal jobs; this sweep moves those files into the persistent
+    // recovery dir — before a reboot can discard the tmpfs copy — writes a
+    // minimal sidecar per session, and toasts so the user knows the audio
+    // is recoverable. Runs once at startup, before any new job can write
+    // into the temp dir.
+    Process {
+        id: orphanSweepProcess
+
+        command: ["sh", "-c",
+            'mkdir -p "$RECOVERY_DIR"\n' +
+            'count=0\n' +
+            // -mmin +1 age gate: a LIVE capture's WAV has an ever-fresh mtime
+            // (pw-record flushes continuously), so a recording started inside
+            // the startup window can never be swept out from under pw-record.
+            // A crashed file's mtime froze at death and qualifies within a
+            // minute. Filenames contain no whitespace (session_<digits>_...),
+            // so the word-split loop over find output is safe.
+            'for f in $(find "$TEMP_DIR" -maxdepth 1 -name "session_*.wav" -mmin +1 2>/dev/null); do\n' +
+            '    base=$(basename "$f")\n' +
+            // session id = digits between "session_" and the first "_" or "."
+            // (working files: session_<id>_segment_<N>.wav and, when segments
+            // were concatenated, session_<id>_combined.wav — all adopted)
+            '    sid=${base#session_}; sid=${sid%%[_.]*}\n' +
+            '    mv -n "$f" "$RECOVERY_DIR/$base"\n' +
+            // mv -n exits 0 even when it skips a name collision; only count
+            // and sidecar-annotate files that actually left the temp dir.
+            '    [ -e "$f" ] && continue\n' +
+            '    sidecar="$RECOVERY_DIR/session_${sid}.json"\n' +
+            '    if [ ! -e "$sidecar" ]; then\n' +
+            '        printf \'{\\n  "sessionId": "%s",\\n  "recoveredAt": "%s",\\n  "reason": "orphaned recording adopted at shell startup",\\n  "audioFile": "%s"\\n}\\n\' "$sid" "$(date -Is)" "$base" > "$sidecar"\n' +
+            '    fi\n' +
+            '    count=$((count+1))\n' +
+            'done\n' +
+            'echo "$count"\n'
+        ]
+        onExited: (code, status) => {
+            if (code !== 0)
+                Logger.log("qml", "stt", "orphan-sweep-failed | code=" + code);
+        }
+        environment: ({
+            TEMP_DIR: root._tempDir,
+            RECOVERY_DIR: root._recoveryDir
+        })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const count = parseInt(text.trim(), 10) || 0;
+                if (count === 0) return;
+                Logger.log("qml", "stt", "orphan-sweep | adopted=" + count);
+                Toaster.toast(
+                    qsTr("STT: Recovered interrupted audio"),
+                    qsTr("%1 file(s) from a previous session moved to %2").arg(count).arg(root._recoveryDir),
+                    "",
+                    Toast.Warning
+                );
+            }
+        }
+    }
+
+    // Create the persistent recovery directory once at startup. Fire-and-forget:
+    // jobs only attempt to write into it after a final error, and those writes
+    // also `mkdir -p` defensively, so a transient failure here is non-fatal.
+    Component.onCompleted: {
+        // Clear session keybinds left registered by a crashed shell — no job
+        // exists at startup, so none of them should be bound.
+        root._unregisterSessionBinds();
+        Quickshell.execDetached(["mkdir", "-p", root._recoveryDir]);
+        Quickshell.execDetached(["mkdir", "-p", root._historyDir]);
+        // Sweep retained successful recordings that have aged out since last run.
+        root._pruneHistory();
+        // Rescue any recording the previous shell instance left behind.
+        orphanSweepProcess.running = true;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Cleanup
     // ─────────────────────────────────────────────────────────────────────────
 
     Component.onDestruction: {
+        _unregisterSessionBinds();
         restartDelayTimer.stop();
-        if (_job)
+        if (_pendingOldJob)
+            _pendingOldJob._destroyCleanup();
+        // Guard: during the restart gap _job === _pendingOldJob, so skip the
+        // second _destroyCleanup call — cancelForRestart() already tore everything
+        // down, and calling _stopAllTimers() + process signals a second time is
+        // harmless but noisy.
+        if (_job && _job !== _pendingOldJob)
             _job._destroyCleanup();
     }
 }

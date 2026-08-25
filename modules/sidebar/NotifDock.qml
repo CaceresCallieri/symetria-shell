@@ -176,20 +176,29 @@ Item {
         active: opacity > 0
 
         sourceComponent: IconButton {
-            id: clearBtn
-
             icon: "clear_all"
             radius: Appearance.rounding.normal
             padding: Appearance.padding.normal
             font.pointSize: Math.round(Appearance.font.size.large * 1.2)
             onClicked: clearTimer.start()
 
-            Elevation {
-                anchors.fill: parent
-                radius: parent.radius
-                z: -1
-                level: clearBtn.stateLayer.containsMouse ? 4 : 3
-            }
+            // Note: previously had an `Elevation` here for a hover-reactive
+            // shadow. It never rendered and cannot: IconButton is a
+            // PillToggleSurface, whose default property reparents children into
+            // `contentHolder`, nested inside a ClippingRectangle. A RectangularShadow
+            // paints OUTSIDE its own bounds, so clipping erased all of it. The
+            // same reparenting also made `radius: parent.radius` resolve against
+            // that plain content Item, which has no radius — logging "Unable to
+            // assign [undefined] to double" on every open. Same clipping trap as
+            // modules/toasts/ToastItem.qml.
+            //
+            // This button is deliberately flat: IconButton derives
+            // `raised: toggle && type !== Text`, and this instance sets no
+            // `toggle`, so the pill renders without depth by design — do not read
+            // the removal as "the surface already draws the shadow". If a
+            // hover-reactive shadow is ever wanted here, it must be a SIBLING of
+            // the IconButton inside the Loader (behind it, z: -1), never a child;
+            // children are reparented into the clipped content holder.
         }
 
         Behavior on scale {

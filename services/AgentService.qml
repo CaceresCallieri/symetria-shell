@@ -7,6 +7,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
+import Symmetria
 
 /// AgentService — bridges orchestrator.nvim agent state into QML.
 ///
@@ -58,6 +59,25 @@ Singleton {
     readonly property int sttTargetTerminalPid: _sttTargetTerminalPid
     readonly property int sttTargetBufId: _sttTargetBufId  // -1 = representative agent
 
+    // True while the active STT job is in any post-recording phase
+    // (processing / transcribed / delivering), per the SttJob state machine
+    // (SttJob.qml:18). AgentChip uses this to swap the looping center-pulse
+    // sprite for the left-to-right traveling wave during the transcribing window.
+    // "success" and "error" are intentionally excluded — the chip stops showing
+    // the STT animation before the job reaches those terminal states (clearSttTarget
+    // fires on success/error, which sets isSttTarget = false → _sttWaving = false).
+    // NOTE: This creates a circular singleton read: AgentService → SttService,
+    // while SttJob (owned by SttService) already calls back into AgentService
+    // (setSttTarget / clearSttTarget). QML resolves all qs.services singletons
+    // before any binding evaluates, so the circular read is safe at runtime —
+    // but be aware of this coupling when refactoring either service.
+    readonly property bool sttIsTranscribing: {
+        const j = SttService.job;
+        if (!j) return false;
+        const s = j.state;
+        return s === "processing" || s === "transcribed" || s === "delivering";
+    }
+
     // Internal state — always reassigned (never mutated in-place) so QML
     // bindings on agents/agentCount fire correctly. Do not use .push()/.splice().
     // intentional var: heterogeneous JS objects from bridge JSON
@@ -77,6 +97,11 @@ Singleton {
     // Resolve script path relative to this QML file
     // Qt.resolvedUrl returns "file:///abs/path" on Linux; strip "file://" to get "/abs/path"
     readonly property string _bridgeScript: Qt.resolvedUrl("../scripts/agent-bridge.py").toString().replace(/^file:\/\//, "")
+
+    // Fire-and-forget helper that pushes STT recording state straight to the
+    // owning IDE's agent socket (agent-ownership inversion, Phase 4 — replaces
+    // the bridge-snapshot `stt` field). See _pushSttRecording.
+    readonly property string _sttRecordingScript: Qt.resolvedUrl("../scripts/stt-recording.py").toString().replace(/^file:\/\//, "")
 
     // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
     readonly property list<color> palette: [
@@ -100,8 +125,17 @@ Singleton {
 
     property int _sttTargetTerminalPid: -1
     property int _sttTargetBufId: -1
+    // IDE pid (= agent.nvim_pid) that owns the current STT target, so the
+    // recording dot can be pushed and later cleared on that IDE's socket
+    // directly. -1 = no target, or a non-IDE (plain nvim / remote) target.
+    property int _sttTargetIdePid: -1
 
     /// terminal_pid → {id: int, name: string}
+    // CONTRACT: despite the "_" prefix, modules/agentbar/MergedBarContent.qml
+    // reads this cross-module as a binding dependency. The public `workspaceMap`
+    // alias that used to front it went away with the agent overview, its only
+    // consumer. Grep _workspaceMap before changing its shape or how it is
+    // reassigned — see CLAUDE.md, "Property contract drift across containers".
     // intentional var: JS object used as hash map (pid → workspace info)
     property var _workspaceMap: ({})
 
@@ -191,7 +225,7 @@ Singleton {
     /// special ws → getSpecialWsIcon, named ws → getNamedWsIcon, numbered → romanize
     function workspaceIconForWsId(wsId: int): string {
         // Look up workspace object from Hyprland for name-based resolution
-        const ws = Hypr.workspaces.values.find(w => w.id === wsId) ?? null;
+        const ws = Hypr.workspaceById(wsId);
 
         if (ws) {
             // Special workspaces (negative ID, name starts with "special:")
@@ -262,12 +296,56 @@ Singleton {
     function setSttTarget(terminalPid: int, bufId: int): void {
         _sttTargetTerminalPid = terminalPid;
         _sttTargetBufId = bufId;
+        // Remember which IDE owns this target so the recording dot can be
+        // pushed now and cleared later, on that IDE's socket directly.
+        _sttTargetIdePid = _resolveSttIdePid(terminalPid);
+        _pushSttRecording(_sttTargetIdePid, bufId, sttIsTranscribing);
     }
 
     /// Clear the STT target highlight. Called by SttService on cancel/idle.
     function clearSttTarget(): void {
+        // Tell the owning IDE to clear its chip dot (buf 0) BEFORE forgetting
+        // which IDE it was — the direct channel has no implicit "no target"
+        // (the old bridge path inferred a clear from terminal_pid <= 0).
+        _pushSttRecording(_sttTargetIdePid, 0, false);
         _sttTargetTerminalPid = -1;
         _sttTargetBufId = -1;
+        _sttTargetIdePid = -1;
+    }
+
+    /// Resolve the Symmetria IDE pid owning the agent on `terminalPid`, or -1
+    /// for a non-IDE (plain nvim / remote) target. IDE-pane agents declare
+    /// inject_via === "bridge" and carry the IDE pid as nvim_pid.
+    function _resolveSttIdePid(terminalPid: int): int {
+        const agent = activeAgentForTerminal(terminalPid);
+        if (agent && (agent.inject_via ?? "") === "bridge")
+            return agent.nvim_pid ?? -1;
+        return -1;
+    }
+
+    /// Light (or clear) the recording soundwave on a specific IDE's agent chip
+    /// by writing straight to the IDE's own agent socket (agent-ownership
+    /// inversion, Phase 4 — replaces the bridge-snapshot `stt` field). The IDE
+    /// reads {buf, transcribing}: buf = agent slot, -1 = focused agent, 0 (or
+    /// any unknown slot) = clear (AppController._on_stt_recording). Best-effort
+    /// fire-and-forget — a missing/dead IDE socket is a silent no-op (matching
+    /// the old "write to a dead hub is a no-op" semantics). The shell's OWN
+    /// agentbar dot reads local _sttTarget* state (isAgentSttTarget) and is
+    /// unaffected by this push; only the cross-process IDE mirror moves here.
+    function _pushSttRecording(idePid: int, buf: int, transcribing: bool): void {
+        if (idePid <= 0) return;  // non-IDE / remote agent — no direct socket
+        Quickshell.execDetached([
+            "python3", _sttRecordingScript,
+            idePid.toString(), buf.toString(), transcribing ? "1" : "0"
+        ]);
+    }
+
+    // The recording→transcribing flip happens without a setSttTarget call
+    // (sttIsTranscribing derives from SttService.job.state), so push it
+    // explicitly — the IDE swaps center-pulse → traveling wave on it.
+    onSttIsTranscribingChanged: {
+        if (_sttTargetIdePid > 0)
+            _pushSttRecording(_sttTargetIdePid, _sttTargetBufId, sttIsTranscribing);
     }
 
     /// Check if a single agent matches the current STT injection target.
@@ -284,7 +362,16 @@ Singleton {
     // and terminal_pid. We add workspace info from _workspaceMap and spawn
     // notify-send. This replaces the old claude-notify.sh shell script.
 
-    readonly property string _notifIcon: `${Paths.home}/.dotfiles/scripts/claude-icon.svg`
+    // Backend-specific notification icons — mirror the agentbar identities
+    // (Claude sparkle vs OpenCode 3×3 grid) so a glance at a popup says which
+    // agent it came from. _notifIconFor() picks by agent_type; absent/"" → Claude
+    // (backward-compatible: pre-agent_type notifications and Claude agents).
+    readonly property string _claudeNotifIcon: `${Paths.home}/.dotfiles/scripts/claude-icon.svg`
+    readonly property string _openCodeNotifIcon: `${Paths.home}/.dotfiles/scripts/opencode-icon.svg`
+
+    function _notifIconFor(agentType: string): string {
+        return agentType === "opencode" ? root._openCodeNotifIcon : root._claudeNotifIcon;
+    }
 
     function _handleNotification(notif: var): void {
         const project = notif.project ?? "unknown";
@@ -308,17 +395,23 @@ Singleton {
 
         const message = notif.message ?? "";
         const urgency = notif.urgency ?? "normal";
+        const agentType = notif.agent_type ?? "";
 
-        console.debug(`[AgentService] NOTIFY: "${title}" — ${message} (${urgency})`);
-        _sendNotification(title, message, urgency);
+        Logger.log("qml", "agent", `notify | title="${title}" msg="${message}" urgency=${urgency} type=${agentType || "claude"}`);
+        _sendNotification(title, message, urgency, agentType);
     }
 
-    function _sendNotification(title: string, message: string, urgency: string): void {
+    function _sendNotification(title: string, message: string, urgency: string, agentType: string): void {
+        // App name AND icon both track the backend: the notification center groups
+        // by app name (Notifs.closeGroup), so a distinct name keeps OpenCode and
+        // Claude popups in separate stacks, each showing its own glyph. Empty/
+        // unknown agentType falls back to Claude — see _notifIconFor.
+        const appName = agentType === "opencode" ? "OpenCode" : "Claude Code";
         Quickshell.execDetached([
             "notify-send",
-            "--app-name=Claude Code",
+            `--app-name=${appName}`,
             `--urgency=${urgency}`,
-            `--icon=${root._notifIcon}`,
+            `--icon=${root._notifIconFor(agentType)}`,
             "--expire-time=15000",
             title,
             message,
@@ -337,10 +430,17 @@ Singleton {
         return representativeAgent(matching);
     }
 
-    /// Derive Neovim socket path from agent's nvim_pid.
-    /// Pattern: /run/user/$UID/nvim.<nvim_pid>.0
+    /// Resolve the agent's Neovim RPC socket path.
+    /// Prefers the real socket (v:servername) reported by the orchestrator's
+    /// hello message and forwarded by the bridge — authoritative for
+    /// embedding hosts that pass an explicit --listen path (Symmetria IDE
+    /// uses /tmp/symmetria-nvim-*/nvim.sock, where the pid-derived guess
+    /// below does not exist). Falls back to nvim's default servername
+    /// pattern (/run/user/$UID/nvim.<nvim_pid>.0) for agents registered
+    /// before the bridge forwarded nvim_socket.
     function nvimSocketForAgent(agent: var): string {
         if (!agent || !agent.nvim_pid) return "";
+        if (agent.nvim_socket) return agent.nvim_socket;
         const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000";
         return `${runtimeDir}/nvim.${agent.nvim_pid}.0`;
     }
@@ -377,7 +477,7 @@ Singleton {
     }
 
     Component.onCompleted: {
-        console.debug("[AgentService] INIT: agentbar.enabled =", Config.agentbar.enabled);
+        Logger.log("qml", "agent", `init | enabled=${Config.agentbar.enabled}`);
         if (Config.agentbar.enabled)
             _startBridge();
     }
@@ -390,7 +490,12 @@ Singleton {
     /// Apply a parsed bridge state update to agent/project properties.
     function _applyBridgeUpdate(parsed: var): void {
         const prevCount = root._agents.length;
-        root._agents = parsed.agents ?? [];
+        const nextAgents = parsed.agents ?? [];
+
+        // Diff and log activity state changes — pairs with bridge's "activity |" line.
+        _logAgentStateDiff(root._agents, nextAgents);
+
+        root._agents = nextAgents;
         root._projects = parsed.projects ?? [];
         // Start the backoff reset timer once (not restart!) — it fires after 10s
         // of the bridge being alive, regardless of data flow. Using .restart()
@@ -398,20 +503,132 @@ Singleton {
         // arrive every 3-5s, the timer would never fire.
         if (!backoffResetTimer.running)
             backoffResetTimer.start();
-        console.debug(`[AgentService] RECV: ${root._agents.length} agents, ${root._projects.length} projects (was ${prevCount})`);
+        Logger.log("qml", "agent", `recv | agents=${root._agents.length} projects=${root._projects.length} prev=${prevCount}`);
+    }
+
+    /// Log per-agent activity_state changes between prevAgents and nextAgents.
+    /// Pairs with bridge's "activity |" line to confirm UI-side propagation.
+    /// Also updates _stateEnteredAt so the QML-side stuck watchdog can
+    /// detect any agent that has held a non-idle state for too long even
+    /// when the bridge process is silent.
+    function _logAgentStateDiff(prevAgents: var, nextAgents: var): void {
+        // Build prev-state lookup using a Set to track seen IDs — avoids
+        // 'delete obj.prop' which de-optimizes V8 hidden class (project-standards P0).
+        const prevStateById = {};
+        for (const a of prevAgents) prevStateById[a.id] = a.activity_state ?? "";
+
+        const seenIds = new Set();
+        const now = Date.now();
+        for (const a of nextAgents) {
+            seenIds.add(a.id);
+            const prev = prevStateById[a.id] ?? "";
+            const curr = a.activity_state ?? "";
+            if (prev !== curr) {
+                Logger.log("qml", "agent",
+                    `state | ${a.id} ${prev || "-"}→${curr || "-"} tool=${a.activity_tool || "-"} plan=${a.in_plan_mode === true}`);
+                root._stateEnteredAt[a.id] = now;
+                root._stuckWarned.delete(a.id);
+            } else if (!(a.id in root._stateEnteredAt)) {
+                // First sighting of this agent — record the entry time so
+                // the stuck watchdog has a reference even if no transition
+                // ever follows (e.g., bridge restart leaves us already in
+                // "working").
+                root._stateEnteredAt[a.id] = now;
+            }
+        }
+        // Anything left in prevStateById that wasn't seen disappeared from
+        // the new set. We deliberately do NOT delete the entry from
+        // _stateEnteredAt: V8 de-optimizes hash maps that get keys deleted
+        // (project standard P0). A stale entry is harmless — it'll be
+        // overwritten on the agent's next sighting, and the key set is
+        // bounded by the lifetime of all agent_ids in this shell session.
+        for (const aid in prevStateById) {
+            if (!seenIds.has(aid)) {
+                const prev = prevStateById[aid];
+                if (prev) Logger.log("qml", "agent", `state | ${aid} ${prev}→removed`);
+                root._stuckWarned.delete(aid);
+            }
+        }
+    }
+
+    // ── Stuck-state watchdog (QML side) ─────────────────────────────────
+    // Mirrors the bridge-side check_stuck_working() but observes from the
+    // rendering layer. Catches the case where the bridge has up-to-date
+    // state but QML missed an emission, AND surfaces the symptom directly
+    // in the QML log so it interleaves with rendering events.
+
+    // {agent_id: ms-since-epoch when this agent's current state began}
+    // intentional var: JS object used as hash map (string → number)
+    property var _stateEnteredAt: ({})
+    // Set of agent_ids we've already warned about; cleared on transition.
+    // intentional var: JS Set — no QML equivalent for .has()/.delete()
+    property var _stuckWarned: new Set()
+    // Threshold for warning (ms). Mirrors bridge STUCK_WORKING_WARN_SECONDS.
+    readonly property int _stuckWorkingWarnMs: 120 * 1000
+
+    Timer {
+        id: stuckWatchdog
+        interval: 30 * 1000  // Check every 30s
+        running: Config.agentbar.enabled
+        repeat: true
+
+        onTriggered: {
+            const now = Date.now();
+            for (const a of root._agents) {
+                const state = a.activity_state ?? "";
+                if (state !== "working") continue;
+                const entered = root._stateEnteredAt[a.id] ?? now;
+                const stuckFor = now - entered;
+                if (stuckFor < root._stuckWorkingWarnMs) continue;
+                if (root._stuckWarned.has(a.id)) continue;
+                root._stuckWarned.add(a.id);
+                Logger.log("qml", "agent",
+                    `STUCK WORKING | ${a.id} project=${a.project} tool=${a.activity_tool || "-"} stuck_for=${Math.round(stuckFor / 1000)}s`);
+            }
+        }
+    }
+
+    /// Build a JSON-serializable snapshot of QML-side agent state for
+    /// diagnostic dumps. Mirrors the bridge's diagnostic dump but from the
+    /// rendering layer's perspective so we can compare and find drift.
+    function diagnosticSnapshot(): var {
+        const now = Date.now();
+        return {
+            ts: new Date().toISOString(),
+            agentCount: root._agents.length,
+            projects: root._projects,
+            mergeActive: root.mergeActive,
+            userHidden: root.userHidden,
+            bridgeRunning: root.bridgeRunning,
+            agents: root._agents.map(a => ({
+                id: a.id,
+                project: a.project,
+                state: a.activity_state ?? "",
+                tool: a.activity_tool ?? "",
+                in_plan_mode: a.in_plan_mode === true,
+                active: a.active === true,
+                remote: a.remote === true,
+                terminal_pid: a.terminal_pid ?? 0,
+                state_age_ms: now - (root._stateEnteredAt[a.id] ?? now),
+                warned_stuck: root._stuckWarned.has(a.id),
+            })),
+        };
     }
 
     function _startBridge(): void {
         if (bridgeProcess.running) {
-            console.debug("[AgentService] _startBridge: already running, skipping");
+            Logger.log("qml", "agent", "start | already running, skipping");
             return;
         }
-        console.debug("[AgentService] _startBridge: launching", _bridgeScript);
+        Logger.log("qml", "agent", `start | launching ${_bridgeScript}`);
         bridgeProcess.command = ["python3", _bridgeScript];
         bridgeProcess.running = true;
     }
 
-    // Bridge process — long-running, writes JSON lines to stdout
+    // Bridge process — long-running, writes JSON lines to stdout. As of the
+    // agent-ownership inversion (Phase 4) the shell no longer pushes anything
+    // INTO the bridge over stdin — STT recording state now goes straight to the
+    // owning IDE's socket (see _pushSttRecording), so this is stdout-only.
     Process {
         id: bridgeProcess
 
@@ -441,13 +658,13 @@ Singleton {
                         root._pendingUpdate = parsed;
                     }
                 } catch (e) {
-                    console.warn("[AgentService] Failed to parse bridge output:", text);
+                    Logger.log("qml", "agent", `parse-error | ${text.slice(0, 200)}`);
                 }
             }
         }
 
         onExited: (code, status) => {
-            console.debug(`[AgentService] BRIDGE EXITED: code=${code}, status=${status}, had ${root._agents.length} agents`);
+            Logger.log("qml", "agent", `bridge-exit | code=${code} status=${status} hadAgents=${root._agents.length}`);
             // Clear state on exit (including throttle state)
             root._agents = [];
             root._projects = [];
@@ -457,7 +674,7 @@ Singleton {
             backoffResetTimer.stop();
 
             if (!Config.agentbar.enabled) {
-                console.debug("[AgentService] agentbar disabled, not restarting");
+                Logger.log("qml", "agent", "bridge-exit | agentbar disabled, not restarting");
                 return;
             }
 
@@ -465,7 +682,7 @@ Singleton {
             const delay = Math.min(1000 * Math.pow(2, root._restartCount), root._maxRestartDelay);
             // Cap _restartCount to prevent unbounded growth (2^10 = 1024s, well past 30s cap)
             root._restartCount = Math.min(root._restartCount + 1, 10);
-            console.warn(`[AgentService] Bridge exited (code ${code}), restarting in ${delay}ms (attempt #${root._restartCount})`);
+            Logger.log("qml", "agent", `bridge-restart | code=${code} delayMs=${delay} attempt=${root._restartCount}`);
             restartTimer.interval = delay;
             restartTimer.restart();
         }
@@ -502,7 +719,7 @@ Singleton {
         interval: 10000
         onTriggered: {
             root._restartCount = 0;
-            console.debug("[AgentService] Bridge stable for 10s, backoff reset");
+            Logger.log("qml", "agent", "bridge-stable | backoff reset after 10s");
         }
     }
 
@@ -517,6 +734,32 @@ Singleton {
                 userHidden: root.userHidden,
                 mergeActive: root.mergeActive,
             });
+        }
+
+        /// Full per-agent diagnostic snapshot: state, tool, age, stuck flags.
+        /// Pair with bridge-side dump (SIGUSR1) for end-to-end pipeline view.
+        ///
+        /// Usage:
+        ///   symmetria shell agentbar diagnose
+        ///   pkill -USR1 -f agent-bridge.py  # then read the bridge JSON
+        function diagnose(): string {
+            const snap = root.diagnosticSnapshot();
+            Logger.log("qml", "agent", `diagnose | ${JSON.stringify(snap)}`);
+            return JSON.stringify(snap, null, 2);
+        }
+
+        /// Log a user report that a specific agent is stuck. Use this as the
+        /// user-controlled escape hatch for the "stuck on working" symptom —
+        /// it records the complaint in the log so we can grep for the exact
+        /// moment the user noticed, and emits a full diagnostic snapshot for
+        /// correlation with the bridge's SIGUSR1 dump.
+        ///
+        /// NOTE: This does NOT actually clear the stuck state. The bridge does
+        /// not accept clear messages from arbitrary clients. A proper IPC verb
+        /// is future work. Until then, the log record is the entire action.
+        function reportStuck(agentId: string): void {
+            Logger.log("qml", "agent", `report-stuck | user reports ${agentId} stuck — full snapshot to follow`);
+            Logger.log("qml", "agent", `report-stuck-snap | ${JSON.stringify(root.diagnosticSnapshot())}`);
         }
 
         function toggle(): void {
