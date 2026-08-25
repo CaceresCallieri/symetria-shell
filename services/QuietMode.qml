@@ -31,7 +31,7 @@ Singleton {
     // throw "Cannot assign to read-only property", leaving `enabled` stuck false
     // forever — the Silent pill never lights up and never toggles. (Found in
     // review 2026-06-05; reverted because the toggle broke.)
-    readonly property bool enabled: false
+    property bool enabled: false
 
     function enable(): void {
         // -n: never prompt for a password. Relies on the NOPASSWD sudoers rule
