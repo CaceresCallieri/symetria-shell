@@ -72,3 +72,18 @@ max-complexity = 10 # enables C901 — no separate complexity tool needed
 [tool.pyrefly]
 project-includes = ["scripts/**/*.py"]
 project-excludes = ["build/**", "node_modules/**", ".venv/**"]
+
+# Pinned, NOT inferred from whichever interpreter happens to run pyrefly.
+# Without this the checker queries the local python3 — 3.14 on the developer
+# machine, 3.12 in the Nix CI — and the two infer different types for the same
+# code. That produced four CI-only errors on a tree that was clean locally,
+# which is a gate reporting an environment difference as a defect.
+# Keep this in step with ruff's target-version above.
+python-version = "3.11"
+
+# numpy is an optional runtime dependency, imported lazily inside
+# pcm_bytes_to_float32 and only reached by the faster-whisper backend. It is
+# deliberately not declared anywhere, so it is absent in CI and the import is
+# unresolvable there. Same treatment as faster_whisper, which is suppressed at
+# its import site.
+replace-imports-with-any = ["numpy", "numpy.*"]

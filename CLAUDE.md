@@ -116,6 +116,8 @@ vulture scripts/ --min-confidence 80
 
 The repository gate starts clean for blocking findings: every one must be fixed, or suppressed narrowly with a reason, before setup is complete. The `pyrefly` line here deliberately omits the review baseline so an audit sees the true total. `vulture` is scoped to `scripts/` because that directory holds every tracked `.py` file. Note that `vulture` exits 0 on a file it cannot parse, so treat a suspiciously empty result as unverified rather than clean.
 
+**`run-qmlformat.sh` is local-only — CI does not run it.** qmlformat's output is version-coupled, and the two sides disagree: nixpkgs pins Qt 6.10.1 while Arch ships 6.11.1. On a tree formatted with 6.11.1, 6.10.1 reported 18 files as unformatted and a *different* set as unprocessable. Neither is a defect. The gate therefore lives in the pre-commit hook, where exactly one Qt version is ever in play. Anything that reformats QML must run on the same machine that commits it.
+
 **Not adopted, with reasons.** `pytest` — there is no Python test suite to run. `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. QuickShell configs also have no viable test runner at all: `qmltestrunner` cannot load Quickshell's statically-linked plugins. → `docs/qmllint-setup.md`
 
 ## Branch Structure

@@ -62,9 +62,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: nix develop .#lint --command bash .github/scripts/run-qmllint.sh
 
-      - name: Run qmlformat
-        if: ${{ !cancelled() }}
-        run: nix develop .#lint --command bash .github/scripts/run-qmlformat.sh
+      # qmlformat is deliberately NOT run here. It lives in the pre-commit hook
+      # only, because its output is version-coupled and the two sides disagree:
+      # nixpkgs pins Qt 6.10.1 while developers on Arch run 6.11.1. Measured on
+      # a tree formatted with 6.11.1, CI's 6.10.1 reported 18 files as
+      # unformatted and a DIFFERENT set of files as unprocessable. None of that
+      # is a defect — it is one formatter disagreeing with another version of
+      # itself, and gating on it would mean permanent red.
+      #
+      # Restore this step if CI and developers ever share one Qt version.
+      # Re-check after Qt 6.14 regardless: QTBUG-144943 rewrites qmlformat from
+      # the DOM onto the AST, which moves both the output and the failure set.
 
       - name: Run ruff
         if: ${{ !cancelled() }}
