@@ -52,14 +52,15 @@
         # resolves `import QtQuick`, `import Quickshell` and `import Symmetria`
         # through QML_IMPORT_PATH built from this list.
         #
-        # Qt is split across derivations: QtQuick and QtQml ship in
-        # qtdeclarative, QtQuick.Controls and QtQuick.Templates in
-        # qtquickcontrols2, and so on. Listing only qtdeclarative resolves
-        # QtQuick and leaves QtQuick.Controls failing.
+        # Do NOT add `qtquickcontrols2` here. It is a Qt5-era package name and
+        # does not exist in pkgs.qt6 — Qt 6 merged Qt Quick Controls into
+        # qtdeclarative, which therefore already provides QtQuick,
+        # QtQuick.Controls, QtQuick.Templates, QtQuick.Layouts, QtQuick.Shapes
+        # and Qt.labs.*. Referencing it aborts flake evaluation with
+        # `undefined variable 'qtquickcontrols2'`.
         qmlModulePackages =
           (with pkgs.qt6; [
             qtdeclarative
-            qtquickcontrols2
             qtmultimedia
             qt5compat
             qtsvg
