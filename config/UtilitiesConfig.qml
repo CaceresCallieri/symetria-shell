@@ -25,6 +25,11 @@ JsonObject {
         /// unopenable. Nothing errors when that happens; the compositor simply
         /// hands the event to the window underneath.
         ///
+        /// ONE number drives both the carved zone (Panels.qml) and the depth of
+        /// the vertical band that inUtilitiesTriggerZone accepts. Do not add a
+        /// second constant for the band: it would drift, and the test would go
+        /// on accepting coordinates the mask no longer delivers.
+        ///
         /// The screen edge stops the pointer, so a few pixels are enough. Keep
         /// it narrow: these pixels stop belonging to the window underneath
         /// whenever the agent bar is not already covering them.
