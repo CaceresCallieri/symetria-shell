@@ -225,7 +225,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Transparency compensation** — Components outside the unified `Backgrounds` system appear darker (50% vs 22.5% black). Must manually compute `generalBackgroundAlpha × transparency.base`. → `docs/qml-pitfalls.md`
 
-**XOR mask inversion** — The drawers window input region uses XOR. Expanding `mainRect` SHRINKS the clickable area. The bar must stay OUTSIDE `mainRect` to receive input. → `docs/qml-pitfalls.md`
+**XOR mask inversion** — The drawers window input region uses XOR. Expanding `mainRect` SHRINKS the clickable area. The bar must stay OUTSIDE `mainRect` to receive input. Corollary: every `Panels` child is turned into a `Subtract` Region, so a child whose width OR height reaches 0 carves nothing and the pointer is never delivered there — with no error. Invisible hover zones must floor both dimensions while they are live. → `docs/qml-pitfalls.md`
 
 **Cursor shadowing** — A `visible: true` MouseArea at highest z-order shadows ALL `cursorShape` settings below it, even when `enabled: false`. Overlay MouseAreas need both `enabled` and `visible` guards. → `docs/qml-pitfalls.md`
 

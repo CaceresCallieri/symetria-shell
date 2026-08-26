@@ -168,6 +168,22 @@ y: bar.implicitHeight + win.dragMaskPadding  // Bar is OUTSIDE mainRect → rece
 
 **If changed to `y: 0`:** Bar is INSIDE mainRect → XOR removes it → bar loses all input.
 
+### Corollary: a zero-size `Panels` child carves nothing
+
+`Wrapper.qml` builds one `Subtract` Region per `Panels` child (`Variants { model: panels.children }`). A child's **size is what restores its area to the input region**, so a zone whose width **or** height can reach 0 produces a zero-size Region and the pointer is never delivered there at all. Nothing errors: the compositor simply hands the event to the window underneath, and every hit test written against that area silently stops running.
+
+This has now caused two separate bugs:
+
+1. **OSD trigger** — `implicitWidth` was 0, so the right-edge strip never fired. Its own `x > panel.x` test was unsatisfiable too, because a zero-width right-anchored Item has `x == parent.width`. → `config/OsdConfig.qml`, `triggerWidth`.
+2. **Utilities drawer trigger** — the drawer relied on the mask's bottom strip instead of carving its own. That strip is exactly `agentBar.implicitHeight` tall, and `dragMaskPadding` drops to 0 as soon as one window is open, so hiding the agent bar left the bottom-right corner unhoverable. → `config/UtilitiesConfig.qml`, `sizes.triggerHeight`.
+
+**Rules for any invisible hover zone:**
+
+- Floor every dimension at ≥ 1 while the zone is meant to be live. Collapse it to 0 only to switch it OFF — those pixels stop belonging to the window underneath, so an always-on zone is a real cost.
+- Never let a config key set a live dimension without a `Math.max` floor in the QML. Prose in the config file does not enforce anything.
+- Derive the hit test's bounds FROM the zone item, never from a second expression. Two spellings of the same edge drift, and the drift is invisible: the test keeps returning true for coordinates the mask no longer delivers.
+- Do not size a zone off another panel's collapsible height (`Config.border.rounding`, an animated bar) and assume it stays non-zero. Ask what the value is when every optional surface is switched off.
+
 ---
 
 ## Cursor Shadowing by Visible Disabled MouseAreas

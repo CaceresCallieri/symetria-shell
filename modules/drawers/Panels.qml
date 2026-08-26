@@ -258,16 +258,34 @@ Item {
     ///
     /// Height is what the agent bar does NOT already provide, floored at 0, so
     /// the zone costs the window underneath nothing while the agent bar is up.
-    /// Width mirrors the rightmost quarter that inUtilitiesTriggerZone accepts —
-    /// and Interactions reads that edge back from HERE rather than recomputing
-    /// it, so the mask and the hit test cannot drift apart.
+    /// The inner Math.max(1) enforces the "must be greater than zero" that
+    /// UtilitiesConfig documents and nothing else checks — a triggerHeight of 0
+    /// in shell.json would otherwise reproduce the exact unhoverable corner this
+    /// zone exists to repair, silently. OsdTriggerZone floors its own dimension
+    /// for the same reason.
+    ///
+    /// Width is the rightmost quarter of the drawer, and this line is its SOLE
+    /// definition: inUtilitiesTriggerZone reads the edge back from here rather
+    /// than recomputing it, so the mask and the hit test cannot drift apart.
+    ///
+    /// The zone stays carved over FULLSCREEN clients, deliberately. The bottom
+    /// strip already belongs to the drawers window whenever the agent bar is
+    /// up — including over a fullscreen surface — so gating this zone on
+    /// hasFullscreen would make the corner work or not work depending on
+    /// whether the agent bar happens to be visible. One consistent rule beats a
+    /// state-dependent one. Note that Wrapper.qml's onHasFullscreenChanged does
+    /// not clear `visibilities.utilities` either, which matches.
     Item {
         id: utilitiesTrigger
 
+        /// Fraction of the drawer's width, measured in from its right edge,
+        /// that accepts the opening hover. A quarter keeps the target a corner
+        /// rather than the whole bottom edge, which the launcher already owns.
+        readonly property real widthFraction: 0.25
         readonly property bool zoneEnabled: Config.utilities.enabled
 
-        implicitWidth: zoneEnabled ? Math.max(1, Math.round(utilities.width / 4)) : 0
-        implicitHeight: zoneEnabled ? Math.max(0, Config.utilities.sizes.triggerHeight - root.agentBar.implicitHeight) : 0
+        implicitWidth: zoneEnabled ? Math.max(1, Math.round(utilities.width * widthFraction)) : 0
+        implicitHeight: zoneEnabled ? Math.max(0, Math.max(1, Config.utilities.sizes.triggerHeight) - root.agentBar.implicitHeight) : 0
 
         anchors.bottom: parent.bottom
         anchors.right: parent.right
