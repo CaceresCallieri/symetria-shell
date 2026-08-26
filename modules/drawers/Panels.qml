@@ -34,6 +34,7 @@ Item {
     readonly property alias launcher: launcher
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
+    readonly property alias utilitiesTrigger: utilitiesTrigger
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
@@ -239,6 +240,37 @@ Item {
                 Visibilities.utilitiesPanelsVersion++;
             }
         }
+    }
+
+    /// Invisible hover strip that summons the utilities drawer, in the same
+    /// spirit as OsdTriggerZone above: its size is what carves it out of the
+    /// drawers input mask, so it is the thing that makes the corner reachable
+    /// at all.
+    ///
+    /// The drawer used to have no zone of its own. The mask is an Xor region, so
+    /// the pointer only reaches Interactions through the strips OUTSIDE it — the
+    /// bar on top, the agent bar at the bottom, and whatever a Panels child
+    /// subtracts back in. A closed utilities drawer is 0 px tall and subtracts
+    /// nothing, and `dragMaskPadding` drops to 0 as soon as one window is open,
+    /// so the whole bottom strip was exactly `agentBar.implicitHeight` tall.
+    /// Hide the agent bar and it became 0: the hit test in
+    /// inUtilitiesTriggerZone was correct and simply never ran.
+    ///
+    /// Height is what the agent bar does NOT already provide, floored at 0, so
+    /// the zone costs the window underneath nothing while the agent bar is up.
+    /// Width mirrors the rightmost quarter that inUtilitiesTriggerZone accepts —
+    /// and Interactions reads that edge back from HERE rather than recomputing
+    /// it, so the mask and the hit test cannot drift apart.
+    Item {
+        id: utilitiesTrigger
+
+        readonly property bool zoneEnabled: Config.utilities.enabled
+
+        implicitWidth: zoneEnabled ? Math.max(1, Math.round(utilities.width / 4)) : 0
+        implicitHeight: zoneEnabled ? Math.max(0, Config.utilities.sizes.triggerHeight - root.agentBar.implicitHeight) : 0
+
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
     }
 
     Utilities.RecordingIndicator {
