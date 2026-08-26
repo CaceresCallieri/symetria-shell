@@ -123,17 +123,33 @@ CustomMouseArea {
 
     // Narrower trigger zone for the utilities drawer — only the rightmost 1/4 of the panel width
     // activates on hover, so the user must move to the very bottom-right corner to trigger it.
-    function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
-        const triggerWidth = panel.width / 4;
-        const panelRight = Config.border.sideThickness + panel.x + panel.width + Config.border.rounding;
-        const triggerLeft = panelRight - triggerWidth;
-        const inTriggerX = x >= triggerLeft && x <= panelRight;
+    //
+    // The x range comes from panels.utilitiesTrigger rather than from a second
+    // `panel.width / 4` spelled out here. That zone is what carves the corner
+    // out of the drawers input mask, so a hit test computed independently could
+    // accept x values the pointer is never delivered at — which is exactly how
+    // this trigger died once the agent bar could be hidden.
+    //
+    // The y range stays deliberately WIDER than the carved zone: it spans the
+    // whole open panel plus the agent bar strip, so the drawer keeps reacting
+    // across its full height once open. Narrowing it to the trigger zone's few
+    // pixels would make the drawer far harder to summon while the agent bar is
+    // visible, since that strip is the generous part of the target today.
+    function inUtilitiesTriggerZone(x: real, y: real): bool {
+        const zone = panels.utilitiesTrigger;
+        if (zone.width <= 0)
+            return false;
+
+        const zoneLeft = panels.x + zone.x;
+        const zoneRight = zoneLeft + zone.width + Config.border.rounding;
+        if (x < zoneLeft || x > zoneRight)
+            return false;
 
         const panelBottomEdge = root.height - agentBar.implicitHeight;
-        const inPanel = y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding;
+        const inPanel = y < panelBottomEdge && y > panelBottomEdge - panels.utilities.height - Config.border.rounding;
         const inAgentBar = y >= root.height - agentBar.implicitHeight - Config.border.rounding;
 
-        return inTriggerX && (inPanel || inAgentBar);
+        return inPanel || inAgentBar;
     }
 
     function onWheel(event: WheelEvent): void {
@@ -233,7 +249,7 @@ CustomMouseArea {
         }
 
         // Show utilities on hover (corner-only trigger to open, full panel to keep alive)
-        const showUtilities = inUtilitiesTriggerZone(panels.utilities, x, y);
+        const showUtilities = inUtilitiesTriggerZone(x, y);
 
         if (!utilitiesShortcutActive) {
             if (!visibilities.utilities) {
@@ -292,7 +308,7 @@ CustomMouseArea {
         function onUtilitiesChanged() {
             if (root.visibilities.utilities) {
                 // Utilities became visible, immediately check if this should be shortcut mode
-                const inUtilitiesArea = root.inUtilitiesTriggerZone(root.panels.utilities, root.mouseX, root.mouseY);
+                const inUtilitiesArea = root.inUtilitiesTriggerZone(root.mouseX, root.mouseY);
                 if (!inUtilitiesArea) {
                     root.utilitiesShortcutActive = true;
                 }
