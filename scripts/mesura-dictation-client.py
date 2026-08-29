@@ -20,9 +20,12 @@ import threading
 from pathlib import Path
 from typing import Any, TextIO
 
-PROTOCOL_VERSION = {"major": 1, "minor": 4}
+PROTOCOL_VERSION = {"major": 1, "minor": 5}
 SOCKET_NAME = re.compile(r"^symmetria-mesura-dictation-(\d+)\.sock$")
 DISCOVERY_INTERVAL_SECONDS = 0.25
+RETRYABLE_FAILURE_CODES = frozenset(
+    {"provider_start_failed", "persistence_failed", "deadline_exceeded"}
+)
 
 
 def discover_socket_paths(runtime_dir: Path) -> dict[int, Path]:
@@ -108,10 +111,23 @@ def parse_server_message(peer_pid: int, line: str) -> dict[str, Any]:
             "session": message.get("session"),
         }
     if message_type == "dictation.receipt":
+        receipt = message.get("receipt")
+        if not isinstance(receipt, dict):
+            return {
+                "type": "client.error",
+                "peerPid": peer_pid,
+                "code": "malformed_input",
+                "detail": "Mesura sent an invalid dictation receipt",
+            }
+        normalized_receipt = dict(receipt)
+        normalized_receipt["retryable"] = (
+            receipt.get("outcome") == "failed"
+            and receipt.get("code") in RETRYABLE_FAILURE_CODES
+        )
         return {
             "type": "receipt",
             "peerPid": peer_pid,
-            "receipt": message.get("receipt"),
+            "receipt": normalized_receipt,
         }
     if message_type == "dictation.error":
         return {
@@ -252,6 +268,9 @@ class DictationClient:
                 with self._lock:
                     self._peers[peer_pid] = peer
                     self._peer_paths[peer_pid] = socket_path
+                opening_event = peer.read_event()
+                for tracked in self._tracker.events_for(peer_pid, opening_event):
+                    self.emit(tracked)
                 self.emit({"type": "peer.connected", "peerPid": peer_pid})
                 while not self._stopping.is_set():
                     event = peer.read_event()

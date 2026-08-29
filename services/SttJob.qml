@@ -427,7 +427,7 @@ QtObject {
         TranscriptionStore.add(_transcribedText);
         _mesuraFailureCode = receipt?.code ?? "renderer_lost";
         _mesuraFailureDetail = receipt?.detail ?? "Mesura delivery failed";
-        _mesuraRetryAvailable = receipt.outcome === "failed" && (_mesuraFailureCode === "provider_start_failed" || _mesuraFailureCode === "persistence_failed" || _mesuraFailureCode === "deadline_exceeded");
+        _mesuraRetryAvailable = receipt?.retryable === true;
         if (_mesuraFailureCode === "target_missing" || _mesuraFailureCode === "renderer_lost") {
             _mesuraRecoveryToastPending = true;
             _copyMesuraRecovery();
@@ -490,17 +490,30 @@ QtObject {
     }
 
     function _sendMesuraDelivery(): void {
+        if (_state !== "delivering" && _state !== "confirming")
+            return;
         if (MesuraDictation.deliver(job)) {
             mesuraDeliveryTimer.start();
             return;
         }
+        _failMesuraTargetUnavailable("Mesura dictation is unavailable");
+    }
+
+    function _failMesuraTargetUnavailable(detail: string): void {
+        mesuraDeliveryTimer.stop();
         TranscriptionStore.add(_transcribedText);
         _mesuraFailureCode = "renderer_lost";
-        _mesuraFailureDetail = "Mesura dictation is unavailable";
+        _mesuraFailureDetail = detail;
         _mesuraRetryAvailable = false;
         _mesuraRecoveryToastPending = true;
         _copyMesuraRecovery();
-        _setErrorState("mesura", "Mesura dictation is unavailable", "The transcript remains available in Transcriptions", true);
+        _setErrorState("mesura", detail, "The transcript remains available in Transcriptions", true);
+    }
+
+    function handleMesuraPeerDisconnected(detail: string): void {
+        if (!_mesuraIntegrated || (_state !== "delivering" && _state !== "confirming"))
+            return;
+        _failMesuraTargetUnavailable(detail);
     }
 
     function retryMesuraDelivery(): void {
@@ -890,24 +903,18 @@ QtObject {
         return /(?:ghostty|warp|wezterm|alacritty|kitty|foot|konsole|xterm|urxvt|termite|sakura|tilix|terminator|st-|symmetria-ide)/.test(lc);
     }
 
-    /// Whether the window is Mesura Code, which takes dictation straight into
-    /// its composer over its own per-process socket.
+    /// Whether the window is Mesura Code, which reserves an exact composer
+    /// target through MesuraDictation before recording starts.
     ///
     /// The class comes from Mesura's own `wmClass` (scripts/lib/brand-assets.ts):
     /// `mesura-code` for a release build, `mesura-code-dev` for a dev one.
     /// It used to be `t3code` — the fork's rebranding renamed it, this matcher
-    /// kept the old string, and dictation silently fell back to a Ctrl+V paste
-    /// for days. Read the class off a live window before editing this regex.
+    /// kept the old string, and dictation missed the integrated route for days.
+    /// Read the class off a live window before editing this regex.
     ///
     /// `t3code` is deliberately NOT matched. That is the installed T3 Code,
-    /// which has no dictation socket at all, so naming it here would only buy
-    /// a socket probe that can never find a peer.
-    ///
-    /// ⚠ Deliberately NOT folded into _isTerminalClass. That would mark the
-    /// class RPC-eligible and skip wl-copy, so a Mesura build without the
-    /// socket — an older one, or one already shutting down — would lose the
-    /// dictation outright. Staying out of it keeps the Ctrl+V paste as the
-    /// fall-through.
+    /// which has no reserved-session protocol. Naming it here would start a
+    /// recording with no exact destination.
     function _isMesuraClass(cls: string): bool {
         if (!cls)
             return false;
@@ -969,10 +976,6 @@ QtObject {
                 STT_NVIM_ACTIVE_BUF: forceSendshortcut ? "-1" : _targetNvimActiveBuf.toString(),
                 STT_IDE_PID: effectiveIdePid > 0 ? effectiveIdePid.toString() : "",
                 STT_IDE_BUF: effectiveIdePid > 0 ? _targetNvimActiveBuf.toString() : "",
-                // Mesura Code takes the window pid and nothing else — it has no
-                // agent panes, so there is no buf to address. Suppressed in
-                // clipboard mode, like every other smart-routing hint.
-                STT_MESURA_PID: (!forceSendshortcut && _isMesuraClass(_targetWindowClass) && _targetWindowPid > 0) ? _targetWindowPid.toString() : "",
                 STT_RPC_ONLY: rpcOnly ? "1" : ""
             });
         injectProcess.command = cmd;

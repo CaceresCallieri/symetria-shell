@@ -737,6 +737,11 @@ Singleton {
             if (root._job.state === "delivering" || root._job.state === "confirming")
                 root._job._sendMesuraDelivery();
         }
+
+        function onPeerDisconnected(peerPid: int, detail: string): void {
+            if (root._job?._mesuraPeerPid === peerPid)
+                root._job.handleMesuraPeerDisconnected(detail);
+        }
     }
 
     function _removeJob(job: SttJob): void {
