@@ -39,13 +39,17 @@ Item {
         const s = job?.state ?? "idle";
         if (mode === "audio" && s === "saving")
             return "processing";
-        if (mode === "stt" && (s === "transcribed" || s === "delivering"))
-            return "processing";
+        if (mode === "stt" && s === "transcribed")
+            return "grace";
+        if (mode === "stt" && (s === "delivering" || s === "confirming"))
+            return "confirming";
         return s;
     }
 
     readonly property real audioLevel: job?.audioLevel ?? 0
     readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
+    readonly property string projectName: mode === "stt" ? (job?.projectName ?? "") : ""
+    property real confirmationPulse: 1
 
     // Live partial transcript (STT streaming mode). "" for non-STT jobs.
     readonly property string partialTranscript: mode === "stt" ? (job?.partialTranscript ?? "") : ""
@@ -87,6 +91,14 @@ Item {
             "processing": {
                 icon: "hourglass_top",
                 iconColor: Colours.palette.m3secondary
+            },
+            "grace": {
+                icon: "timer",
+                iconColor: Colours.palette.m3primary
+            },
+            "confirming": {
+                icon: "send",
+                iconColor: Colours.palette.m3primary
             },
             "error": {
                 icon: "error",
@@ -204,17 +216,34 @@ Item {
             // ── Compact row: [timer] · [waveform] · [mode icon] ───
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing"
+                show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing" || root.displayState === "grace" || root.displayState === "confirming"
 
                 RowLayout {
                     id: compactRow
 
                     spacing: Appearance.spacing.small
 
+                    StyledText {
+                        visible: root.projectName !== ""
+                        text: root.projectName
+                        font.pointSize: Appearance.font.size.small * 0.88
+                        font.weight: Font.DemiBold
+                        color: Colours.palette.m3onSurfaceVariant
+                        Layout.maximumWidth: 180
+                        elide: Text.ElideRight
+                    }
+
+                    StyledText {
+                        visible: root.projectName !== ""
+                        text: "·"
+                        font.pointSize: Appearance.font.size.small
+                        color: Colours.palette.m3outlineVariant
+                    }
+
                     // Elapsed timer
                     StyledText {
                         opacity: root.displayState === "paused" ? 0.55 : 1.0
-                        text: RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
+                        text: root.displayState === "grace" ? "0:" + Math.ceil((root.job?.graceRemainingMs ?? 0) / 1000).toString().padStart(2, "0") : RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
                         font.pointSize: Appearance.font.size.small * 0.88
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
@@ -239,7 +268,15 @@ Item {
                         displayState: root.displayState
                         barCount: root.barCount
                         containerHeight: root.audioBarContainerHeight
-                        active: root.visibilities.recorder
+                        active: root.visible && root.visibilities.recorder && RecordingSessionManager.shellOwnsSttPresentation
+                        sessionId: root.job?.sessionId ?? ""
+                    }
+
+                    StyledText {
+                        visible: root.displayState === "confirming"
+                        text: "Confirming"
+                        font.pointSize: Appearance.font.size.small * 0.88
+                        color: Colours.palette.m3onSurfaceVariant
                     }
 
                     // Separator before trailing icon
@@ -273,7 +310,23 @@ Item {
                         type: IconButton.Tonal
                         toggle: false
                         raised: true
+                        enabled: root.displayState !== "confirming"
+                        scale: root.displayState === "confirming" ? root.confirmationPulse : 1
+                        Accessible.role: Accessible.Button
+                        Accessible.name: root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode"
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
+                    }
+
+                    IconButton {
+                        visible: root.mode === "stt" && root.displayState === "grace"
+                        icon: "send"
+                        type: IconButton.Tonal
+                        toggle: false
+                        raised: true
+                        inactiveOnColour: Colours.palette.m3confirm
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Send now"
+                        onClicked: SttService.sendNow()
                     }
 
                     // Inline vocab-hint count sibling — placed after the
@@ -354,7 +407,7 @@ Item {
                         inactiveOnColour: root.displayState === "paused" ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
                         onClicked: {
                             if (root.mode === "stt")
-                                root.job?.recording ? root.job.pause() : root.job.resume();
+                                SttService.pause();
                             else
                                 AudioRecorderService.pause();
                         }
@@ -378,7 +431,7 @@ Item {
                         toggle: false
                         raised: true
                         inactiveOnColour: Colours.palette.m3error
-                        onClicked: root.job?.cancel()
+                        onClicked: root.mode === "stt" ? SttService.cancel() : root.job?.cancel()
                     }
 
                     IconButton {
@@ -390,7 +443,7 @@ Item {
                         inactiveOnColour: Colours.palette.m3confirm
                         onClicked: {
                             if (root.mode === "stt")
-                                root.job?.stop();
+                                SttService.stop();
                             else
                                 AudioRecorderService.stop();
                         }
@@ -471,5 +524,22 @@ Item {
                 }
             }
         }
+    }
+
+    SequentialAnimation on confirmationPulse {
+        running: root.visible && root.displayState === "confirming"
+        loops: 2
+        NumberAnimation {
+            to: 0.68
+            duration: 600
+            easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+            to: 1
+            duration: 600
+            easing.type: Easing.InOutSine
+        }
+        onRunningChanged: if (!running)
+            root.confirmationPulse = 1
     }
 }

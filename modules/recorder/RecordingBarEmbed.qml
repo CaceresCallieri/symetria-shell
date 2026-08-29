@@ -38,12 +38,16 @@ Item {
         const s = job.state;
         if (mode === "audio" && s === "saving")
             return "processing";
-        if (mode === "stt" && (s === "transcribed" || s === "delivering"))
-            return "processing";
+        if (mode === "stt" && s === "transcribed")
+            return "grace";
+        if (mode === "stt" && (s === "delivering" || s === "confirming"))
+            return "confirming";
         return s;
     }
 
-    readonly property bool isRecordingPhase: displayState === "recording" || displayState === "paused" || displayState === "processing"
+    readonly property bool isRecordingPhase: displayState === "recording" || displayState === "paused" || displayState === "processing" || displayState === "grace" || displayState === "confirming"
+    readonly property string projectName: mode === "stt" ? (job?.projectName ?? "") : ""
+    property real confirmationPulse: 1
 
     // Live streaming partial transcript (STT streaming mode). "" otherwise.
     //
@@ -119,6 +123,23 @@ Item {
         anchors.centerIn: parent
         spacing: Appearance.spacing.small
 
+        StyledText {
+            visible: root.projectName !== ""
+            text: root.projectName
+            font.pointSize: Appearance.font.size.small * 0.88
+            font.weight: Font.DemiBold
+            color: Colours.palette.m3onSurfaceVariant
+            elide: Text.ElideRight
+            Layout.maximumWidth: 140
+        }
+
+        StyledText {
+            visible: root.projectName !== ""
+            text: "\u00b7"
+            font.pointSize: Appearance.font.size.small
+            color: Colours.palette.m3outlineVariant
+        }
+
         Behavior on opacity {
             Anim {}
         }
@@ -126,7 +147,7 @@ Item {
         // Elapsed timer
         StyledText {
             opacity: root.displayState === "paused" ? 0.55 : 1.0
-            text: root.job ? RecordingSessionManager.formatElapsedTime(root.job.elapsedSeconds) : "00:00"
+            text: root.displayState === "grace" ? "0:" + Math.ceil((root.job?.graceRemainingMs ?? 0) / 1000).toString().padStart(2, "0") : (root.job ? RecordingSessionManager.formatElapsedTime(root.job.elapsedSeconds) : "00:00")
             font.pointSize: Appearance.font.size.small * 0.88
             font.family: Appearance.font.family.mono
             color: Colours.palette.m3outline
@@ -152,7 +173,15 @@ Item {
             audioLevel: root.job?.audioLevel ?? 0
             displayState: root.displayState
             containerHeight: 24
-            active: root.isRecordingPhase
+            active: root.visible && root.isRecordingPhase && RecordingSessionManager.shellOwnsSttPresentation
+            sessionId: root.job?.sessionId ?? ""
+        }
+
+        StyledText {
+            visible: root.displayState === "confirming"
+            text: "Confirming"
+            font.pointSize: Appearance.font.size.small * 0.88
+            color: Colours.palette.m3onSurfaceVariant
         }
 
         // STT streaming: live partial transcript inside the pill. The pill
@@ -205,7 +234,24 @@ Item {
             toggle: false
             raised: true
             font.pointSize: Appearance.font.size.normal
+            enabled: root.displayState !== "confirming"
+            scale: root.displayState === "confirming" ? root.confirmationPulse : 1
+            Accessible.role: Accessible.Button
+            Accessible.name: root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode"
             onClicked: RecordingSessionManager.cycleDeliveryMode()
+        }
+
+        IconButton {
+            visible: root.mode === "stt" && root.displayState === "grace"
+            icon: "send"
+            type: IconButton.Tonal
+            toggle: false
+            raised: true
+            inactiveOnColour: Colours.palette.m3confirm
+            font.pointSize: Appearance.font.size.normal
+            Accessible.role: Accessible.Button
+            Accessible.name: "Send now"
+            onClicked: SttService.sendNow()
         }
 
         // Inline vocab-hint count, placed after the delivery pill.
@@ -214,6 +260,23 @@ Item {
             id: vocabBadge
             Layout.alignment: Qt.AlignTop
         }
+    }
+
+    SequentialAnimation on confirmationPulse {
+        running: root.visible && root.displayState === "confirming"
+        loops: 2
+        NumberAnimation {
+            to: 0.68
+            duration: 600
+            easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+            to: 1
+            duration: 600
+            easing.type: Easing.InOutSine
+        }
+        onRunningChanged: if (!running)
+            root.confirmationPulse = 1
     }
 
     // ── Compact success indicator ───────────────────────────

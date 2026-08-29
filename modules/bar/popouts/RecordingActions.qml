@@ -50,7 +50,7 @@ ColumnLayout {
                     if (!root.job)
                         return;
                     if (root.mode === "stt")
-                        root.job.recording ? root.job.pause() : root.job.resume();
+                        SttService.pause();
                     else
                         AudioRecorderService.pause();
                 }
@@ -95,11 +95,27 @@ ColumnLayout {
                 inactiveOnColour: Colours.palette.m3confirm
                 onClicked: {
                     if (root.mode === "stt")
-                        root.job?.stop();
+                        SttService.stop();
                     else
                         AudioRecorderService.stop();
                 }
             }
+        }
+    }
+
+    FadeTransition {
+        Layout.alignment: Qt.AlignHCenter
+        show: root.mode === "stt" && root.job?.state === "grace"
+
+        IconButton {
+            icon: "send"
+            type: IconButton.Tonal
+            toggle: false
+            raised: true
+            inactiveOnColour: Colours.palette.m3confirm
+            Accessible.role: Accessible.Button
+            Accessible.name: "Send now"
+            onClicked: SttService.sendNow()
         }
     }
 
