@@ -132,6 +132,32 @@ Singleton {
     function acceptSession(peer: int, acceptedSession: var): void {
         _peerPid = peer;
         _session = acceptedSession;
+        _refreshPresentationLease();
+    }
+
+    function _relinquishPresentation(): void {
+        presentationLeaseTimer.stop();
+        if (_session?.presentation?.mesuraOwnsPresentation !== true)
+            return;
+        _session = Object.assign({}, _session, {
+            presentation: {
+                mesuraOwnsPresentation: false,
+                leaseExpiresAt: null
+            }
+        });
+    }
+
+    function _refreshPresentationLease(): void {
+        presentationLeaseTimer.stop();
+        if (_session?.presentation?.mesuraOwnsPresentation !== true)
+            return;
+        const expiresAt = Date.parse(_session.presentation.leaseExpiresAt ?? "");
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+            _relinquishPresentation();
+            return;
+        }
+        presentationLeaseTimer.interval = Math.max(1, expiresAt - Date.now());
+        presentationLeaseTimer.start();
     }
 
     function setMode(mode: string): void {
@@ -229,8 +255,7 @@ Singleton {
     function deliver(job: var): bool {
         if (!job?._mesuraIntegrated || _session === null || job.sessionId !== _session.sessionId || job._mesuraPeerPid !== _peerPid || job.transcribedText.trim() === "")
             return false;
-        const commandId = job._mesuraDeliveryCommandId !== "" ? job._mesuraDeliveryCommandId : _newCommandId("deliver");
-        job._mesuraDeliveryCommandId = commandId;
+        const commandId = ensureDeliveryCommandId(job);
         return _send(_peerPid, {
             type: "dictation.deliver",
             protocolVersion: {
@@ -244,6 +269,12 @@ Singleton {
             mode: job.activeDeliveryChoice,
             text: job.transcribedText
         }, "");
+    }
+
+    function ensureDeliveryCommandId(job: var): string {
+        if (job._mesuraDeliveryCommandId === "")
+            job._mesuraDeliveryCommandId = _newCommandId("deliver");
+        return job._mesuraDeliveryCommandId;
     }
 
     function _applySnapshot(peer: int, nextSession: var): void {
@@ -284,6 +315,7 @@ Singleton {
 
         if (_peerPid === peer && _session?.sessionId === nextSession.sessionId) {
             _session = nextSession;
+            _refreshPresentationLease();
         }
 
         if (!activePhase) {
@@ -324,6 +356,8 @@ Singleton {
             const peers = Object.assign({}, _connectedPeers);
             delete peers[peer];
             _connectedPeers = peers;
+            if (_peerPid === peer)
+                _relinquishPresentation();
             if (_pendingReservation?.peerPid === peer)
                 _failPendingReservation(event.detail ?? "Mesura disconnected during reservation");
         } else if (event.type === "snapshot") {
@@ -359,11 +393,17 @@ Singleton {
         }
         onExited: (code, status) => {
             root._connectedPeers = {};
+            root._relinquishPresentation();
             if (root._pendingReservation !== null)
                 root._failPendingReservation("Mesura dictation helper stopped");
             if (!restartTimer.running)
                 restartTimer.start();
         }
+    }
+
+    Timer {
+        id: presentationLeaseTimer
+        onTriggered: root._relinquishPresentation()
     }
 
     Timer {
