@@ -14,6 +14,10 @@ Singleton {
     readonly property var session: _session
     readonly property int peerPid: _peerPid
     readonly property bool connected: _peerPid > 0 && _connectedPeers[_peerPid] === true
+    readonly property var protocolVersion: ({
+            major: 1,
+            minor: 5
+        })
 
     property var _session: null
     property int _peerPid: -1
@@ -35,6 +39,7 @@ Singleton {
     signal receiptReceived(int peerPid, var receipt)
     signal sessionChangedForPeer(int peerPid, var session)
     signal peerConnected(int peerPid)
+    signal peerDisconnected(int peerPid, string detail)
 
     function _newCommandId(kind: string): string {
         _commandCounter++;
@@ -67,10 +72,7 @@ Singleton {
         };
         const sent = _send(peer, {
             type: "dictation.reserve.request",
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: sessionId,
             commandId: commandId,
             createdAt: new Date().toISOString(),
@@ -117,10 +119,7 @@ Singleton {
         const commandId = _newCommandId(action);
         const sent = _send(peer, {
             type: "dictation.control",
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: targetSession.sessionId,
             commandId: commandId,
             createdAt: new Date().toISOString(),
@@ -165,10 +164,7 @@ Singleton {
             return;
         _send(_peerPid, {
             type: "dictation.mode.set",
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: _session.sessionId,
             commandId: _newCommandId("mode"),
             createdAt: new Date().toISOString(),
@@ -205,10 +201,7 @@ Singleton {
         _appliedActionOrder = order;
         _send(_peerPid, {
             type: "dictation.action.acknowledge",
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: _session.sessionId,
             commandId: _newCommandId("acknowledge"),
             createdAt: new Date().toISOString(),
@@ -222,10 +215,7 @@ Singleton {
             return;
         _send(_peerPid, Object.assign({
             type: `dictation.vocabulary.${action}`,
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: _session.sessionId,
             commandId: _newCommandId("vocabulary"),
             createdAt: new Date().toISOString()
@@ -238,10 +228,7 @@ Singleton {
         const phase = job._canonicalMesuraPhase();
         _send(_peerPid, {
             type: "dictation.state.update",
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: job.sessionId,
             commandId: _newCommandId("state"),
             createdAt: new Date().toISOString(),
@@ -258,10 +245,7 @@ Singleton {
         const commandId = ensureDeliveryCommandId(job);
         return _send(_peerPid, {
             type: "dictation.deliver",
-            protocolVersion: {
-                major: 1,
-                minor: 4
-            },
+            protocolVersion: root.protocolVersion,
             sessionId: job.sessionId,
             commandId: commandId,
             createdAt: new Date().toISOString(),
@@ -360,7 +344,11 @@ Singleton {
                 _relinquishPresentation();
             if (_pendingReservation?.peerPid === peer)
                 _failPendingReservation(event.detail ?? "Mesura disconnected during reservation");
+            peerDisconnected(peer, event.detail ?? "Mesura disconnected");
         } else if (event.type === "snapshot") {
+            const peers = Object.assign({}, _connectedPeers);
+            peers[peer] = true;
+            _connectedPeers = peers;
             _applySnapshot(peer, event.session ?? null);
         } else if (event.type === "control") {
             const actionKey = `${event.sessionId ?? ""}:${event.commandId ?? ""}`;

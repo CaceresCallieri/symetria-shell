@@ -36,6 +36,29 @@ These document WHY certain code patterns exist:
 
 - **500ms restart delay** — Between cancel and re-start in `restart()`. Ensures all processes from the cancelled session are fully terminated.
 
+## Mesura Reserved Sessions
+
+Mesura Code delivery never uses `stt-inject.sh`. The Shell reserves an exact Mesura target before it
+publishes recording state. The target remains immutable through transcription, grace, delivery, and
+confirmation. If reservation fails, Shell does not start audio and does not fall back to the focused
+window.
+
+The helper connects only to `symmetria-mesura-dictation-<pid>.sock`. The old
+`symmetria-mesura-<pid>.sock` request carried no thread identity and is not discovered. Mesura keeps a
+refusal-only endpoint at that old path for old Shell builds, but current Shell never sends to it.
+
+Mesura receipts carry confirmed outcomes. Shell shows the final toast. `provider_start_failed`,
+`persistence_failed`, and `deadline_exceeded` permit delivery-only retry with the same command and
+transcript. `provider_turn_failed` does not permit retry because the provider turn already dispatched.
+
+Mesura owns the visible recorder only while it renews the focused exact-target presentation lease.
+Shell shows the same job after route change, window blur, disconnect, or lease expiry. Presentation
+ownership never changes the recording or delivery target.
+
+If Mesura disconnects during recording, processing, or grace, Shell finishes the transcript and then
+uses the normal unavailable-target recovery. A disconnect during delivery or confirmation fails
+immediately as `renderer_lost`, copies the transcript, and does not offer Retry.
+
 ## Model Selection & Long-Audio Truncation
 
 **The gotcha:** `gpt-4o-transcribe` (and `gpt-4o-mini-transcribe`) silently truncate long transcriptions. They are LLMs that emit the transcript as *output tokens*, and they have a bounded output ceiling (~2000 tokens ≈ ~9,000 characters ≈ ~10 minutes of speech). Past that, the model **stops generating mid-transcript and still returns HTTP 200** — so the failure is invisible to the pipeline, which only inspects the status code. A real incident: an 18-minute recording came back as 9,006 characters (the tail third was missing), reported as a success, and the source audio was deleted before anyone noticed.
@@ -68,7 +91,8 @@ This is distinct from `_persistRecovery()` / `${Paths.state}/stt/recoverable/`, 
 ## Design Principles
 
 - **No focus change** — `sendshortcut` with address targeting pastes without stealing focus from the user's current window.
-- **Best-effort injection** — Injection failure is non-fatal; clipboard always has the text as fallback.
+- **Best-effort generic injection** — Non-Mesura injection failure is non-fatal; clipboard always has the text as fallback.
+- **Fail-closed Mesura delivery** — Mesura failure preserves recovery text and never pastes into the focused chat.
 - **Terminal detection** — Ghostty, Alacritty, Kitty, Foot, WezTerm, Warp, Konsole use `Ctrl+Shift+V`; all others use `Ctrl+V`.
 - **Retry preserves target** — `retry()` does NOT clear the captured window, so re-transcription injects to the same target.
 - **Explicit target_buf** — When QML passes a specific `target_buf`, the script MUST find it or fail. No silent fallback.
