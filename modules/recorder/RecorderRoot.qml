@@ -105,19 +105,19 @@ Scope {
         target: "stt"
 
         function toggle(): void {
-            if (!RecordingSessionManager.acquire("stt"))
-                return;
             SttService.toggle();
         }
 
         function start(): void {
-            if (!RecordingSessionManager.acquire("stt"))
-                return;
             SttService.start();
         }
 
         function stop(): void {
             SttService.stop();
+        }
+
+        function sendNow(): void {
+            SttService.sendNow();
         }
 
         function pause(): void {
