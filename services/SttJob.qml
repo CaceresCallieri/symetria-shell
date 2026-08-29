@@ -25,7 +25,7 @@ QtObject {
     // ── Public properties ──────────────────────────────────────────────
 
     /// Current state: "idle", "recording", "paused", "processing", "transcribed",
-    ///   "delivering", "error", "success"
+    ///   "grace", "delivering", "confirming", "error", "success"
     readonly property string state: _state
 
     /// Audio level (0.0-1.0) during recording
@@ -70,6 +70,16 @@ QtObject {
 
     /// Session identifier
     property string sessionId: ""
+
+    /// Reserved Mesura session metadata. These stay empty for every existing
+    /// terminal, IDE, generic-window, and clipboard-only path.
+    property bool _mesuraIntegrated: false
+    property int _mesuraPeerPid: -1
+    property var _mesuraTarget: null
+    property string _mesuraDeliveryCommandId: ""
+    property bool _applyingMesuraSnapshot: false
+    property int _graceRemainingMs: 0
+    property real _graceDeadlineMs: 0
 
     // ── Signals ───────────────────────────────────��────────────────────
 
@@ -242,7 +252,10 @@ QtObject {
         if (_state !== "paused")
             return;
         _segmentCounter++;
-        _startRecording();
+        if (SttService._tempDirReady)
+            _startRecording();
+        else
+            SttService._prepareRecordingDirectory();
         // Assign _state last so on_StateChanged fires with _recordingStartTime
         // still 0, matching the start() path. The handler initializes it.
         _state = "recording";
@@ -347,9 +360,72 @@ QtObject {
     function setDeliveryChoice(mode: string): void {
         if (mode !== "clipboard" && mode !== "inject" && mode !== "submit")
             return;
+        if (_mesuraIntegrated && _state !== "recording" && _state !== "paused" && _state !== "processing" && _state !== "transcribed" && _state !== "grace")
+            return;
         if (_activeDeliveryChoice === mode)
             return;
         _activeDeliveryChoice = mode;
+    }
+
+    function _canonicalMesuraPhase(): string {
+        if (_state === "transcribed")
+            return "grace";
+        if (_state === "success")
+            return "completed";
+        if (_state === "error")
+            return "failed";
+        if (_state === "idle")
+            return "recording";
+        return _state;
+    }
+
+    function _beginDeliveryAfterTranscription(): void {
+        if (!_mesuraIntegrated) {
+            _startDeliveryChain();
+            return;
+        }
+        _graceDeadlineMs = Date.now() + 3000;
+        _graceRemainingMs = 3000;
+        _state = "grace";
+        graceTimer.start();
+    }
+
+    function sendNow(): void {
+        if (_state !== "grace")
+            return;
+        graceTimer.stop();
+        _graceRemainingMs = 0;
+        _startDeliveryChain();
+    }
+
+    function _handleMesuraReceipt(receipt: var): void {
+        if (!_mesuraIntegrated || receipt?.sessionId !== sessionId || receipt?.commandId !== _mesuraDeliveryCommandId)
+            return;
+        mesuraDeliveryTimer.stop();
+        if (receipt.outcome === "confirmation-pending") {
+            _state = "confirming";
+            return;
+        }
+        if (receipt.outcome === "copied" || receipt.outcome === "inserted" || receipt.outcome === "turn-running") {
+            TranscriptionStore.add(_transcribedText);
+            if (_ranWlCopy) {
+                _pendingCliphistDelete = _transcribedText;
+                cliphistDeleteTimer.restart();
+            }
+            _state = "success";
+            return;
+        }
+        TranscriptionStore.add(_transcribedText);
+        _setErrorState("mesura", receipt?.detail ?? "Mesura delivery failed", "The transcript remains available in Transcriptions", true);
+    }
+
+    function _sendMesuraDelivery(): void {
+        if (MesuraDictation.deliver(job)) {
+            mesuraDeliveryTimer.start();
+            return;
+        }
+        TranscriptionStore.add(_transcribedText);
+        _setErrorState("mesura", "Mesura dictation is unavailable", "The transcript remains available in Transcriptions", true);
     }
 
     // ── Internal methods ───────────────────────────────────────────────
@@ -663,6 +739,20 @@ QtObject {
         const effectiveMode = _activeDeliveryChoice;
         Logger.log("qml", "stt", "delivery-start | id=" + sessionId + " mode=" + effectiveMode + " textLen=" + _transcribedText.length);
 
+        if (_mesuraIntegrated) {
+            if (effectiveMode === "clipboard") {
+                _ranWlCopy = true;
+                _clipboardModeOnly = true;
+                clipboardProcess.command = ["wl-copy", _transcribedText];
+                clipboardProcess.running = true;
+            } else {
+                _ranWlCopy = false;
+                _clipboardModeOnly = false;
+                _sendMesuraDelivery();
+            }
+            return;
+        }
+
         if (effectiveMode === "clipboard") {
             console.log("[STT:D11] → delivering via wl-copy + sendshortcut (clipboard mode, no RPC) | id:", sessionId, "textLength:", _transcribedText.length);
             _ranWlCopy = true;
@@ -913,6 +1003,9 @@ QtObject {
         successTimer.stop();
         processingTimeoutTimer.stop();
         autoRetryTimer.stop();
+        graceTimer.stop();
+        mesuraProgressTimer.stop();
+        mesuraDeliveryTimer.stop();
         _removalTimer.stop();
         cliphistDeleteTimer.stop();
     }
@@ -979,6 +1072,11 @@ QtObject {
         } else {
             successTimer.stop();
         }
+        // `transcribed` is an internal bridge state. The next synchronous
+        // readyForDelivery handler initializes the full three-second grace
+        // snapshot, so publishing here would flash a false zero countdown.
+        if (_mesuraIntegrated && _state !== "transcribed")
+            MesuraDictation.updateState(job);
     }
 
     onRecordingChanged: {
@@ -992,6 +1090,8 @@ QtObject {
     on_ActiveDeliveryChoiceChanged: {
         if (_state === "idle")
             return;
+        if (_mesuraIntegrated && !_applyingMesuraSnapshot)
+            MesuraDictation.setMode(_activeDeliveryChoice);
         if (_activeDeliveryChoice === "clipboard") {
             AgentService.clearSttTarget();
         } else if (_targetWindowPid > 0 && _targetNvimActiveBuf >= 0) {
@@ -1009,6 +1109,34 @@ QtObject {
         onTriggered: {
             if (job._recordingStartTime > 0)
                 job._currentElapsed = job._accumulatedSeconds + (Date.now() - job._recordingStartTime) / 1000;
+        }
+    }
+
+    readonly property Timer graceTimer: Timer {
+        interval: 100
+        repeat: true
+        onTriggered: {
+            job._graceRemainingMs = Math.max(0, Math.round(job._graceDeadlineMs - Date.now()));
+            MesuraDictation.updateState(job);
+            if (job._graceRemainingMs <= 0) {
+                stop();
+                job._startDeliveryChain();
+            }
+        }
+    }
+
+    readonly property Timer mesuraProgressTimer: Timer {
+        interval: 250
+        repeat: true
+        running: job._mesuraIntegrated && (job._state === "recording" || job._state === "paused" || job._state === "processing")
+        onTriggered: MesuraDictation.updateState(job)
+    }
+
+    readonly property Timer mesuraDeliveryTimer: Timer {
+        interval: 17000
+        onTriggered: {
+            TranscriptionStore.add(job._transcribedText);
+            job._setErrorState("mesura", "Mesura delivery timed out", "The transcript remains available in Transcriptions", true);
         }
     }
 
@@ -1271,7 +1399,14 @@ QtObject {
                 // _injectionPath/_Down/_Submitted keep their defaults — this job
                 // is freshly created and no inject step ran.
                 TranscriptionStore.add(job._transcribedText);
-                job._state = "success";
+                if (job._mesuraIntegrated)
+                    job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", true);
+                else
+                    job._state = "success";
+                return;
+            }
+            if (job._mesuraIntegrated) {
+                job._sendMesuraDelivery();
                 return;
             }
             // forceSendshortcut === _clipboardModeOnly: clipboard mode forces
