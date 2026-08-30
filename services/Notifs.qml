@@ -51,7 +51,8 @@ Singleton {
                     urgency: n.urgency,
                     resident: n.resident,
                     hasActionIcons: n.hasActionIcons,
-                    actions: n.actions
+                    actions: n.actions,
+                    syncTag: n.syncTag
                 }))))
     }
 
@@ -73,6 +74,45 @@ Singleton {
         return validExts.some(ext => lower.endsWith(ext));
     }
 
+    // Read the self-supersede tag out of a notification's hints, "" when absent.
+    //
+    // A client that emits one notification per keypress — a volume or brightness
+    // script, a progress bar — wants only the newest on screen. `replaces_id`
+    // cannot express that: each keypress is a separate short-lived process, so it
+    // would have to persist the server-assigned id across invocations and re-learn
+    // it whenever the shell restarts and the id counter resets. The `synchronous`
+    // hint moves that bookkeeping to the server, where it belongs.
+    //
+    // Three spellings are in circulation and clients pick one without probing:
+    // libnotify's `--hint string:synchronous:`, GNOME's legacy
+    // `x-canonical-private-synchronous`, and dunst's `x-dunst-stack-tag`. Accept
+    // all three so a client already working under dunst or mako works here
+    // unchanged. Keep this list in step with `server.extraHints`, which is what
+    // GetCapabilities advertises over D-Bus.
+    function _syncTag(hints: var): string {
+        return hints["synchronous"] ?? hints["x-canonical-private-synchronous"] ?? hints["x-dunst-stack-tag"] ?? "";
+    }
+
+    // Close the notification that an incoming one supersedes, if any.
+    //
+    // Scoped by appName as well as by tag, matching dunst. "volume" is an obvious
+    // tag for any app to pick, and two unrelated clients that happen to choose it
+    // must not close each other's notifications.
+    //
+    // Uses close() rather than splicing root.list directly, deliberately: close()
+    // honours `locks`, so a card that is mid-animation is only marked closed and
+    // is destroyed later by its own delegate teardown (Notification.qml unlocks in
+    // Component.onDestruction) instead of being torn out from under the renderer.
+    // Because notClosed excludes it immediately, the superseded notification also
+    // leaves the persisted history right away — see the note on Notif.syncTag.
+    function _supersedeSynchronous(tag: string, appName: string): void {
+        if (!tag)
+            return;
+        // At most one live notification per (tag, appName) exists by construction,
+        // so the first match is the only match.
+        root.list.find(n => !n.closed && n.syncTag === tag && n.appName === appName)?.close();
+    }
+
     NotificationServer {
         id: server
 
@@ -83,6 +123,11 @@ Singleton {
         bodyMarkupSupported: true
         imageSupported: true
         persistenceSupported: true
+
+        // Advertised through GetCapabilities so a client can discover the
+        // self-supersede support instead of assuming it. Keep in step with the
+        // spellings root._syncTag() accepts.
+        extraHints: ["synchronous", "x-canonical-private-synchronous", "x-dunst-stack-tag"]
 
         onNotification: notif => {
             notif.tracked = true;
@@ -96,12 +141,18 @@ Singleton {
             const idHint = notif.hints["image-data"];
             const legacyIconData = notif.hints["icon_data"];
             const ipValid = ipHint && root._isValidImageExt(ipHint);
+            const syncTag = root._syncTag(notif.hints);
             console.log(`[notif-debug] arrival id=${notif.id} appName='${notif.appName}'`,
                 `appIcon='${notif.appIcon}'`,
                 `image='${(notif.image || "").slice(0, 120)}'`,
                 `hint.image-path='${ipHint}' ipValid=${ipValid}`,
                 `hint.image-data=${idHint !== undefined}`,
-                `hint.icon_data=${legacyIconData !== undefined}`);
+                `hint.icon_data=${legacyIconData !== undefined}`,
+                `syncTag='${syncTag}'`);
+
+            // Before inserting, retire whatever this one supersedes. Runs first so
+            // the new notification is never briefly stacked on top of the old one.
+            root._supersedeSynchronous(syncTag, notif.appName);
 
             const comp = notifComp.createObject(root, {
                 popup: !props.dnd && ![...Visibilities.screens.values()].some(v => v.sidebar),
@@ -270,6 +321,13 @@ Singleton {
         property bool resident
         property bool hasActionIcons
         property list<var> actions
+
+        // Self-supersede tag from the `synchronous` hint family, "" when the
+        // client sent none. Persisted alongside the rest so a tag still matches
+        // across a shell restart: without it a "Volume: 70%" entry restored from
+        // disk would sit in history forever beside every later volume step,
+        // because the incoming one would find nothing to supersede.
+        property string syncTag
 
         readonly property Timer timer: Timer {
             running: true
@@ -440,6 +498,10 @@ Singleton {
             urgency = notification.urgency;
             resident = notification.resident;
             hasActionIcons = notification.hasActionIcons;
+            // Restored-from-disk notifications never reach here (the guard above
+            // returns when `notification` is unset), so their syncTag keeps the
+            // value createObject seeded from notifs.json.
+            syncTag = root._syncTag(notification.hints);
             actions = notification.actions.map(a => ({
                         identifier: a.identifier,
                         text: a.text,
