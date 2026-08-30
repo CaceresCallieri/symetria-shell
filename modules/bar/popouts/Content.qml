@@ -140,11 +140,6 @@ Item {
             sourceComponent: Ram {}
         }
 
-        Popout {
-            name: "recording"
-            sourceComponent: RecordingActions {}
-        }
-
         Repeater {
             model: ScriptModel {
                 values: [...SystemTray.items.values]

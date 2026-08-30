@@ -293,7 +293,7 @@ QtObject {
         // Clear activeRecording if this job is the active one.
         // NOTE: When called via SttService.cancel(), _activeRecording has
         // already been cleared. This guard only fires when cancel() is called
-        // directly on the job (e.g. from RecordingActions.qml cancel button),
+        // directly on the job (e.g. from a cancel button on a recorder surface),
         // bypassing the service-level orchestration.
         if (SttService._activeRecording === job)
             SttService._activeRecording = null;

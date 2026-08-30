@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import qs.components
 import qs.services
 import qs.config
-import qs.modules.recorder as RecorderModule
 import "popouts" as BarPopouts
 import "components"
 import "components/workspaces"
@@ -229,16 +228,6 @@ Item {
             closeTray();
 
         if (!target) {
-            // Check recording center embed (not in left/right sections)
-            if (recordingCenterContainer.visible) {
-                const localPos = mapToItem(recordingCenterContainer, x, recordingCenterContainer.height / 2);
-                if (localPos.x >= 0 && localPos.x <= recordingCenterContainer.width) {
-                    popouts.currentName = "recording";
-                    popouts.currentCenter = Qt.binding(() => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x);
-                    popouts.hasCurrent = true;
-                    return;
-                }
-            }
             popouts.hasCurrent = false;
             return;
         }
@@ -396,13 +385,12 @@ Item {
     }
 
     // Center section - truly centered (workspaces)
-    // Hidden when merged mode is active (workspaces move to the bottom merged bar).
     // _shouldBeActive drives the desired state; active stays true while opacity > 0
     // so the Loader keeps its content alive during the fade-out animation.
     Loader {
         id: centerLoader
 
-        readonly property bool _shouldBeActive: root.centerEntry?.enabled !== false && !AgentService.mergeActive
+        readonly property bool _shouldBeActive: root.centerEntry?.enabled !== false
 
         anchors.horizontalCenter: parent.horizontalCenter
         // The centre entry draws its own plate, so under the panel form it is
@@ -421,109 +409,6 @@ Item {
 
         Behavior on opacity {
             Anim {}
-        }
-    }
-
-    // Recording bar embed — unified center embed for both STT and audio recording.
-    // Scales from 0 → 1 with a slight overshoot when opening (and 1 → 0 when
-    // closing), so the pill "pops" in/out at the bar center instead of being
-    // revealed via a horizontal clip. The container's reserved layout width
-    // follows the embed's visible scale (clamped at 1) so neighboring bar
-    // sections reflow smoothly without being pushed by the overshoot peak.
-    //
-    // Animation is decoupled from service active states (which linger ~450ms
-    // for the drawer hide animation) — instead, the job's `closing` signal
-    // triggers the reverse scale animation immediately on cancel/restart.
-    Item {
-        id: recordingCenterContainer
-
-        // Track the active job so _showEmbed can depend on its closing flag.
-        // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
-        readonly property var _activeJob: RecordingSessionManager.currentJob
-
-        // Declarative visibility — a pure function of current state.
-        //
-        // This replaced a procedurally-latched property that was updated by
-        // three separate signal handlers (onActiveChanged / onClosingChanged
-        // / on_ActiveJobChanged). That design had a latent failure mode: any
-        // state transition that didn't fire all the relevant handlers could
-        // leave _showEmbed stuck at the wrong value — which is exactly how
-        // the STT restart regression happened (the lock-preservation fix
-        // eliminated the activeChanged edge the old code relied on to
-        // re-raise the embed). Deriving _showEmbed as a binding means it
-        // re-evaluates whenever ANY source changes, so there's no "forgot to
-        // flip it" failure mode. The close/open animations still play
-        // correctly because the Behavior on the embed's scale animates
-        // whenever the bound value changes.
-        readonly property bool _showEmbed: RecordingSessionManager.active && (RecordingSessionManager.activeMode !== "stt" || RecordingSessionManager.shellOwnsSttPresentation) && !(_activeJob?.closing ?? false)
-
-        readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
-
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-
-        // visible must be true BEFORE width > 0 so children compute layout
-        // sizes (Qt Quick Layouts defer when ancestors are invisible). The
-        // embed.scale > epsilon term keeps us painted through the shrink
-        // animation; once scale reaches 0 the container collapses to zero
-        // width and we naturally hide.
-        visible: _shouldBeActive || recordingEmbed.scale > 0.001
-
-        // Reserve layout width proportional to the visible scale so the bar
-        // collapses smoothly when scale-out completes. Clamped at 1.0 so the
-        // overshoot peak (scale ≈ 1.05) doesn't push neighboring sections
-        // outward — only the visual transform overflows, not the layout.
-        implicitWidth: recordingEmbed.implicitWidth * Math.min(recordingEmbed.scale, 1.0)
-        implicitHeight: recordingEmbed.implicitHeight
-        width: implicitWidth
-        height: implicitHeight
-
-        RecorderModule.RecordingBarEmbed {
-            id: recordingEmbed
-
-            anchors.centerIn: parent
-            transformOrigin: Item.Center
-            scale: recordingCenterContainer._shouldBeActive ? 1.0 : 0.0
-
-            // NOTE: duration is coupled to SttService.restartDelayTimer.interval.
-            // The STT restart animation relies on the close (scale → 0) animation
-            // finishing before _startInternal swaps _job to the new job (which
-            // triggers the open scale → 1). If you change either duration, change
-            // both — they must reference the same Appearance.anim.durations value.
-            Behavior on scale {
-                NumberAnimation {
-                    duration: Appearance.anim.durations.expressiveDefaultSpatial
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Appearance.anim.curves.expressiveDefaultSpatial
-                }
-            }
-        }
-
-        // Vocab hints popout trigger (STT mode only).
-        Connections {
-            target: SttService
-
-            function onVocabHintsVisibleChanged(): void {
-                if (!recordingCenterContainer._shouldBeActive)
-                    return;
-
-                if (SttService.vocabHintsVisible) {
-                    root.popouts.currentName = "recording";
-                    root.popouts.currentCenter = Qt.binding(() => recordingCenterContainer.mapToItem(root, recordingCenterContainer.width / 2, 0).x);
-                    root.popouts.hasCurrent = true;
-                } else if (root.popouts.currentName === "recording") {
-                    root.popouts.hasCurrent = false;
-                }
-            }
-        }
-
-        Connections {
-            target: RecordingSessionManager
-
-            function onShellOwnsSttPresentationChanged(): void {
-                if (!RecordingSessionManager.shellOwnsSttPresentation && root.popouts.currentName === "recording")
-                    root.popouts.hasCurrent = false;
-            }
         }
     }
 

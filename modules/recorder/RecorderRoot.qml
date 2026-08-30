@@ -13,9 +13,10 @@ import QtQuick
 ///   - "stt": speech-to-text specific (toggle/start/stop/pause/resume/cancel/restart/retry/mode/hints)
 ///   - "recorder": shared actions routed to whichever mode is active
 ///
-/// Manages drawer visibility across all screens with merge mode awareness:
-/// when AgentService.mergeActive is true, the bar embed takes over and the
-/// drawer hides.
+/// Manages drawer visibility across all screens. It used to hand presentation
+/// over to a bar embed whenever the agent bar ran in merged mode; that layout
+/// went out with Symmetria IDE, so the drawer is now the only recorder surface
+/// and the handoff is gone.
 ///
 /// Named RecorderRoot (not Recorder) to avoid type-name collision with
 /// services/Recorder.qml (the screen-recorder singleton). Both names
@@ -28,8 +29,6 @@ Scope {
 
         function onActiveChanged(): void {
             if (!Config.audioRecorder.enabled)
-                return;
-            if (AgentService.mergeActive)
                 return;
 
             for (const [_, visibilities] of Visibilities.screens)
@@ -45,8 +44,6 @@ Scope {
         function onActiveChanged(): void {
             if (!Config.stt.enabled)
                 return;
-            if (AgentService.mergeActive)
-                return;
 
             for (const [_, visibilities] of Visibilities.screens)
                 visibilities.recorder = SttService.active && RecordingSessionManager.shellOwnsSttPresentation;
@@ -57,26 +54,10 @@ Scope {
         target: MesuraDictation
 
         function onSessionChanged(): void {
-            if (!Config.stt.enabled || !SttService.active || AgentService.mergeActive)
+            if (!Config.stt.enabled || !SttService.active)
                 return;
             for (const [_, visibilities] of Visibilities.screens)
                 visibilities.recorder = RecordingSessionManager.shellOwnsSttPresentation;
-        }
-    }
-
-    // ── Merge mode handoff (unified for both modes) ──────────────
-    // When merge activates: close drawer (bar embed takes over).
-    // When merge deactivates: reopen drawer.
-
-    Connections {
-        target: AgentService
-
-        function onMergeActiveChanged(): void {
-            if (!RecordingSessionManager.active)
-                return;
-
-            for (const [_, visibilities] of Visibilities.screens)
-                visibilities.recorder = !AgentService.mergeActive && (RecordingSessionManager.activeMode !== "stt" || RecordingSessionManager.shellOwnsSttPresentation);
         }
     }
 

@@ -30,6 +30,17 @@ Singleton {
     // Reactive counter - increments when utilitiesPanels map changes.
     property int utilitiesPanelsVersion: 0
 
+    /// Session-only agent bar visibility toggle (not persisted to shell.json).
+    /// When true, the agent bar is hidden regardless of how many projects the
+    /// bar's source reports. Mutated only via the "agentbar" IpcHandler.
+    ///
+    /// This lives here rather than beside the bar's data source on purpose. It
+    /// used to live in AgentService, back when that service both fed the bar
+    /// and owned the bar's IPC verbs. AgentService is now dictation plumbing
+    /// with a scheduled retirement, and a flag the surviving bar reads on every
+    /// frame has no business inside it.
+    property bool agentBarHidden: false
+
     function load(screen: ShellScreen, visibilities: var): void {
         screens.set(Hypr.monitorFor(screen), visibilities);
         screensVersion++;  // Trigger reactive updates
