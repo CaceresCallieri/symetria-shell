@@ -57,7 +57,6 @@ Singleton {
     property SttJob _activeRecording: null
     property SttJob _pendingMesuraJob: null
     property bool _applyingMesuraControl: false
-    property string _mesuraRecoveryClipboardText: ""
 
     // Old job kept alive across a restart so _job can swap atomically
     // oldJob → newJob without going through null. Destroyed from inside
@@ -551,40 +550,11 @@ Singleton {
     function retry(): void {
         if (!_job || _job.state !== "error" || _job.errorSource === "config")
             return;
-        if (_job._mesuraIntegrated && (_job.errorSource === "mesura" || _job.errorSource === "clipboard")) {
-            if (!_job._mesuraRetryAvailable)
-                return;
-            const deliveryControlId = !_applyingMesuraControl ? MesuraDictation.sendControl("retry") : "";
-            actionTriggered(_job.sessionId, "retry");
-            _job.retryMesuraDelivery();
-            if (deliveryControlId !== "")
-                MesuraDictation.acknowledgeAction("control", deliveryControlId);
-            return;
-        }
         const mesuraControlId = _job._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("retry") : "";
         actionTriggered(_job.sessionId, "retry");
-        if (_job._mesuraIntegrated) {
-            _job._mesuraToastDedupeKey = "";
-            _job._mesuraFailureCode = "";
-            _job._mesuraFailureDetail = "";
-        }
         _job.retry();
         if (mesuraControlId !== "")
             MesuraDictation.acknowledgeAction("control", mesuraControlId);
-    }
-
-    function showMesuraRecoveryToast(sessionId: string, commandId: string, text: string): void {
-        Toaster.toast("Dictation target unavailable", "Transcript copied to clipboard. Click to copy again.", "content_copy", Toast.Error, 10000, "", `stt-mesura-${sessionId}-recovery-${commandId}`, function () {
-            root.copyMesuraRecovery(text);
-        });
-    }
-
-    function copyMesuraRecovery(text: string): void {
-        if (text === "" || mesuraRecoveryClipboardProcess.running)
-            return;
-        _mesuraRecoveryClipboardText = text;
-        mesuraRecoveryClipboardProcess.command = ["wl-copy", text];
-        mesuraRecoveryClipboardProcess.running = true;
     }
 
     /// Switch the current job's delivery choice (one-shot — the next job
@@ -874,15 +844,6 @@ Singleton {
             root._tempDirReady = true;
             if (root._activeRecording && root._activeRecording._state === "recording")
                 root._activeRecording._startRecording();
-        }
-    }
-
-    Process {
-        id: mesuraRecoveryClipboardProcess
-        onExited: (code, status) => {
-            if (code !== 0)
-                Toaster.toast("Clipboard copy failed", "The transcript remains in Transcriptions.", "error", Toast.Error);
-            root._mesuraRecoveryClipboardText = "";
         }
     }
 

@@ -84,10 +84,8 @@ QtObject {
     property string _mesuraProjectName: ""
     property string _mesuraDeliveryCommandId: ""
     property string _mesuraToastDedupeKey: ""
-    property string _mesuraFailureCode: ""
-    property string _mesuraFailureDetail: ""
-    property bool _mesuraRetryAvailable: false
-    property bool _mesuraRecoveryToastPending: false
+    property bool _mesuraTranscriptStored: false
+    property bool _mesuraClipboardFallbackStarted: false
     property bool _applyingMesuraSnapshot: false
     property int _graceRemainingMs: 0
     property real _graceDeadlineMs: 0
@@ -407,7 +405,7 @@ QtObject {
         if (_isMesuraClass(_targetWindowClass) && !_mesuraIntegrated) {
             if (SttService.mesuraReservationPending(sessionId))
                 return;
-            _setErrorState("mesura", "Mesura target unavailable", "The transcript was not redirected", false);
+            _finishMesuraWithClipboardFallback();
             return;
         }
         if (!_mesuraIntegrated) {
@@ -431,13 +429,11 @@ QtObject {
     function _handleMesuraReceipt(receipt: var): void {
         if (!_mesuraIntegrated || receipt?.sessionId !== sessionId || receipt?.commandId !== _mesuraDeliveryCommandId)
             return;
-        mesuraDeliveryTimer.stop();
-        if (receipt.outcome === "confirmation-pending") {
-            _state = "confirming";
+        if (_state === "success" || _mesuraClipboardFallbackStarted)
             return;
-        }
-        if (receipt.outcome === "copied" || receipt.outcome === "inserted" || receipt.outcome === "turn-running") {
-            TranscriptionStore.add(_transcribedText);
+        mesuraDeliveryTimer.stop();
+        if (receipt.outcome === "copied" || receipt.outcome === "inserted" || receipt.outcome === "confirmation-pending" || receipt.outcome === "turn-running") {
+            _storeMesuraTranscriptOnce();
             if (_ranWlCopy) {
                 _pendingCliphistDelete = _transcribedText;
                 cliphistDeleteTimer.restart();
@@ -446,17 +442,7 @@ QtObject {
             _state = "success";
             return;
         }
-        TranscriptionStore.add(_transcribedText);
-        _mesuraFailureCode = receipt?.code ?? "renderer_lost";
-        _mesuraFailureDetail = receipt?.detail ?? "Mesura delivery failed";
-        _mesuraRetryAvailable = receipt?.retryable === true;
-        if (_mesuraFailureCode === "target_missing" || _mesuraFailureCode === "renderer_lost") {
-            _mesuraRecoveryToastPending = true;
-            _copyMesuraRecovery();
-        } else {
-            _showMesuraFailureToast();
-        }
-        _setErrorState("mesura", receipt?.detail ?? "Mesura delivery failed", "The transcript remains available in Transcriptions", true);
+        _finishMesuraWithClipboardFallback();
     }
 
     function _showMesuraSuccessToast(receipt: var): void {
@@ -470,7 +456,7 @@ QtObject {
         if (receipt.outcome === "copied") {
             title = "Copied to clipboard";
             icon = "content_copy";
-        } else if (receipt.outcome === "turn-running") {
+        } else if (receipt.outcome === "confirmation-pending" || receipt.outcome === "turn-running" || (receipt.outcome === "inserted" && receipt.action === "submit")) {
             title = "Message sent successfully";
             icon = "send";
         } else if (receipt.action === "answer") {
@@ -478,22 +464,6 @@ QtObject {
             icon = "check_circle";
         }
         Toaster.toast(title, _mesuraProjectName, icon, Toast.Success, 5000, "", `stt-mesura-${sessionId}-success-${receipt.commandId}`);
-    }
-
-    function _showMesuraFailureToast(): void {
-        const dedupeKey = `${_mesuraDeliveryCommandId}:failure:${_mesuraFailureCode}`;
-        if (_mesuraToastDedupeKey === dedupeKey)
-            return;
-        _mesuraToastDedupeKey = dedupeKey;
-        const title = _activeDeliveryChoice === "submit" ? "Message was not sent" : (_activeDeliveryChoice === "inject" ? "Text was not inserted" : "Clipboard copy failed");
-        const toastKey = `stt-mesura-${sessionId}-failure-${_mesuraDeliveryCommandId}`;
-        if (_mesuraRetryAvailable) {
-            Toaster.toast(title, `${_mesuraFailureDetail}. Click to retry.`, "error", Toast.Error, 10000, "", toastKey, function () {
-                SttService.retry();
-            });
-        } else {
-            Toaster.toast(title, _mesuraFailureDetail, "error", Toast.Error, 10000, "", toastKey);
-        }
     }
 
     function _closeMesuraToasts(): void {
@@ -504,9 +474,23 @@ QtObject {
         }
     }
 
-    function _copyMesuraRecovery(): void {
-        if (mesuraRecoveryClipboardProcess.running || _transcribedText === "")
+    function _storeMesuraTranscriptOnce(): void {
+        if (_mesuraTranscriptStored || _transcribedText === "")
             return;
+        _mesuraTranscriptStored = true;
+        TranscriptionStore.add(_transcribedText);
+    }
+
+    function _finishMesuraWithClipboardFallback(): void {
+        mesuraDeliveryTimer.stop();
+        _storeMesuraTranscriptOnce();
+        if (_mesuraClipboardFallbackStarted)
+            return;
+        _mesuraClipboardFallbackStarted = true;
+        if (_transcribedText === "") {
+            _state = "success";
+            return;
+        }
         mesuraRecoveryClipboardProcess.command = ["wl-copy", _transcribedText];
         mesuraRecoveryClipboardProcess.running = true;
     }
@@ -518,41 +502,13 @@ QtObject {
             mesuraDeliveryTimer.start();
             return;
         }
-        _failMesuraTargetUnavailable("Mesura dictation is unavailable");
-    }
-
-    function _failMesuraTargetUnavailable(detail: string): void {
-        mesuraDeliveryTimer.stop();
-        TranscriptionStore.add(_transcribedText);
-        _mesuraFailureCode = "renderer_lost";
-        _mesuraFailureDetail = detail;
-        _mesuraRetryAvailable = false;
-        _mesuraRecoveryToastPending = true;
-        _copyMesuraRecovery();
-        _setErrorState("mesura", detail, "The transcript remains available in Transcriptions", true);
+        _finishMesuraWithClipboardFallback();
     }
 
     function handleMesuraPeerDisconnected(detail: string): void {
         if (!_mesuraIntegrated || (_state !== "delivering" && _state !== "confirming"))
             return;
-        _failMesuraTargetUnavailable(detail);
-    }
-
-    function retryMesuraDelivery(): void {
-        if (_state !== "error" || !_mesuraRetryAvailable)
-            return;
-        _closeMesuraToasts();
-        _mesuraToastDedupeKey = "";
-        _clearErrorState();
-        _state = "delivering";
-        if (_activeDeliveryChoice === "clipboard") {
-            _ranWlCopy = true;
-            _clipboardModeOnly = true;
-            clipboardProcess.command = ["wl-copy", _transcribedText];
-            clipboardProcess.running = true;
-        } else {
-            _sendMesuraDelivery();
-        }
+        _finishMesuraWithClipboardFallback();
     }
 
     // ── Internal methods ───────────────────────────────────────────────
@@ -1271,14 +1227,7 @@ QtObject {
 
     readonly property Timer mesuraDeliveryTimer: Timer {
         interval: 17000
-        onTriggered: {
-            TranscriptionStore.add(job._transcribedText);
-            job._mesuraFailureCode = "deadline_exceeded";
-            job._mesuraFailureDetail = "Mesura delivery timed out";
-            job._mesuraRetryAvailable = true;
-            job._showMesuraFailureToast();
-            job._setErrorState("mesura", "Mesura delivery timed out", "The transcript remains available in Transcriptions", true);
-        }
+        onTriggered: job._finishMesuraWithClipboardFallback()
     }
 
     // Auto-hide after success state
@@ -1538,16 +1487,16 @@ QtObject {
                 // even if wl-copy itself failed in this particular run.
                 // _injectionPath/_Down/_Submitted keep their defaults — this job
                 // is freshly created and no inject step ran.
-                TranscriptionStore.add(job._transcribedText);
                 if (job._mesuraIntegrated) {
-                    job._mesuraFailureCode = "persistence_failed";
-                    job._mesuraFailureDetail = "Clipboard write failed";
-                    job._mesuraRetryAvailable = true;
-                    job._showMesuraFailureToast();
-                    job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", true);
+                    job._storeMesuraTranscriptOnce();
+                    job._mesuraClipboardFallbackStarted = true;
+                    Toaster.toast("Clipboard copy failed", "The transcript remains in Transcriptions.", "error", Toast.Error);
+                    job._state = "success";
                 } else if (job._manualClipboardFallback) {
+                    TranscriptionStore.add(job._transcribedText);
                     job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", false);
                 } else {
+                    TranscriptionStore.add(job._transcribedText);
                     job._state = "success";
                 }
                 return;
@@ -1571,15 +1520,12 @@ QtObject {
 
     readonly property Process mesuraRecoveryClipboardProcess: Process {
         onExited: (code, status) => {
-            if (!job._mesuraRecoveryToastPending)
-                return;
-            job._mesuraRecoveryToastPending = false;
-            job._mesuraToastDedupeKey = `${job._mesuraDeliveryCommandId}:recovery`;
             if (code === 0) {
-                SttService.showMesuraRecoveryToast(job.sessionId, job._mesuraDeliveryCommandId, job._transcribedText);
+                Toaster.toast("Copied to clipboard", "Paste the transcript manually.", "content_copy", Toast.Success);
             } else {
-                Toaster.toast("Dictation target unavailable", "Clipboard copy failed. The transcript remains in Transcriptions.", "error", Toast.Error, 10000, "", `stt-mesura-${job.sessionId}-recovery-${job._mesuraDeliveryCommandId}`);
+                Toaster.toast("Clipboard copy failed", "The transcript remains in Transcriptions.", "error", Toast.Error);
             }
+            job._state = "success";
         }
     }
 
