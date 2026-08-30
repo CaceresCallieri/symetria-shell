@@ -40,7 +40,7 @@ Item {
         if (mode === "audio" && s === "saving")
             return "processing";
         if (mode === "stt" && s === "transcribed")
-            return "grace";
+            return SttService.mesuraReservationPending(job?.sessionId ?? "") ? "processing" : "grace";
         if (mode === "stt" && (s === "delivering" || s === "confirming"))
             return "confirming";
         return s;
@@ -60,6 +60,7 @@ Item {
     readonly property bool serviceInjectionDowngraded: job?.injectionDowngraded ?? false
     readonly property bool serviceInjectionSubmitted: job?.injectionSubmitted ?? false
     readonly property bool serviceAutoRetrying: job?.autoRetrying ?? false
+    readonly property bool serviceManualClipboardFallback: job?.manualClipboardFallback ?? false
     readonly property string serviceErrorRaw: job?.errorRaw ?? ""
     readonly property string serviceErrorSource: job?.errorSource ?? ""
 
@@ -292,10 +293,10 @@ Item {
                         type: IconButton.Tonal
                         toggle: false
                         raised: true
-                        enabled: root.displayState !== "confirming"
+                        enabled: root.displayState !== "confirming" && !root.serviceManualClipboardFallback
                         scale: root.displayState === "confirming" ? root.confirmationPulse : 1
                         Accessible.role: Accessible.Button
-                        Accessible.name: root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode"
+                        Accessible.name: root.serviceManualClipboardFallback ? "Clipboard fallback is locked" : (root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode")
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
                     }
 

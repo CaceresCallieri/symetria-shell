@@ -516,6 +516,15 @@ Item {
                 }
             }
         }
+
+        Connections {
+            target: RecordingSessionManager
+
+            function onShellOwnsSttPresentationChanged(): void {
+                if (!RecordingSessionManager.shellOwnsSttPresentation && root.popouts.currentName === "recording")
+                    root.popouts.hasCurrent = false;
+            }
+        }
     }
 
     // Right section - anchored to right

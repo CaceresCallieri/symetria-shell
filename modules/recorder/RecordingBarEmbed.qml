@@ -39,7 +39,7 @@ Item {
         if (mode === "audio" && s === "saving")
             return "processing";
         if (mode === "stt" && s === "transcribed")
-            return "grace";
+            return SttService.mesuraReservationPending(job?.sessionId ?? "") ? "processing" : "grace";
         if (mode === "stt" && (s === "delivering" || s === "confirming"))
             return "confirming";
         return s;
@@ -216,10 +216,10 @@ Item {
             toggle: false
             raised: true
             font.pointSize: Appearance.font.size.normal
-            enabled: root.displayState !== "confirming"
+            enabled: root.displayState !== "confirming" && !(root.job?.manualClipboardFallback ?? false)
             scale: root.displayState === "confirming" ? root.confirmationPulse : 1
             Accessible.role: Accessible.Button
-            Accessible.name: root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode"
+            Accessible.name: (root.job?.manualClipboardFallback ?? false) ? "Clipboard fallback is locked" : (root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode")
             onClicked: RecordingSessionManager.cycleDeliveryMode()
         }
 

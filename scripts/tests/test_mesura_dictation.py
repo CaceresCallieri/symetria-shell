@@ -113,6 +113,24 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertNotIn("pending.cancel()", failure_handler)
         self.assertIn("job._manualClipboardFallback", clipboard_handler)
         self.assertIn("TranscriptionStore.add(job._transcribedText)", clipboard_handler)
+        self.assertIn('session.phase !== "recording"', accept_handler)
+        self.assertLess(
+            accept_handler.index('session.phase !== "recording"'),
+            accept_handler.index("MesuraDictation.acceptSession"),
+        )
+        self.assertIn("if (!terminalPhase)", accept_handler)
+        self.assertIn(
+            'MesuraDictation.sendControlTo(peerPid, session, "cancel")', accept_handler
+        )
+        self.assertLess(
+            accept_handler.index('if (pendingJob.state === "transcribed")'),
+            accept_handler.index("MesuraDictation.updateState(pendingJob)"),
+        )
+
+        self.assertIn("readonly property string _tempFilePrefix", job_source)
+        self.assertIn("${_tempFilePrefix}_segment_", job_source)
+        self.assertIn("${_tempFilePrefix}_combined.wav", job_source)
+        self.assertIn("`${_tempFilePrefix}_*`", job_source)
 
     def test_shell_session_controls_target_the_running_instance(self) -> None:
         service_source = (REPOSITORY_ROOT / "services/SttService.qml").read_text()
@@ -120,6 +138,7 @@ class MesuraDictationProtocolTests(unittest.TestCase):
             REPOSITORY_ROOT / "modules/recorder/RecordingBarEmbed.qml"
         ).read_text()
         drawer_source = (REPOSITORY_ROOT / "modules/recorder/Content.qml").read_text()
+        bar_source = (REPOSITORY_ROOT / "modules/bar/Bar.qml").read_text()
 
         session_bind_block = service_source.split(
             "readonly property var _sessionBinds", maxsplit=1
@@ -142,6 +161,18 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertIn('_ipcCommand("recorder")', unregister_block)
         self.assertNotIn("projectName", bar_embed_source)
         self.assertNotIn("projectName", drawer_source)
+        self.assertIn("mesuraReservationPending", bar_embed_source)
+        self.assertIn("mesuraReservationPending", drawer_source)
+        self.assertIn("manualClipboardFallback", bar_embed_source)
+        self.assertIn("manualClipboardFallback", drawer_source)
+
+        cancel_handler = service_source.split("function cancel", maxsplit=1)[1].split(
+            "function restart", maxsplit=1
+        )[0]
+        self.assertIn("_sessionVocabHints = [];", cancel_handler)
+        self.assertIn("vocabHintsVisible = false;", cancel_handler)
+
+        self.assertIn("onShellOwnsSttPresentationChanged", bar_source)
 
     def test_disconnect_interrupts_only_delivery_and_confirmation(self) -> None:
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
@@ -336,6 +367,9 @@ class MesuraDictationProtocolTests(unittest.TestCase):
                         connection.sendall(
                             b'{"type":"dictation.snapshot","session":null}\n'
                         )
+                        connection.shutdown(socket.SHUT_WR)
+                        while connection.recv(4096):
+                            pass
 
             server_thread = threading.Thread(target=serve)
             server_thread.start()
