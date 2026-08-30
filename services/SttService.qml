@@ -55,6 +55,9 @@ Singleton {
 
     property SttJob _job: null
     property SttJob _activeRecording: null
+    property SttJob _pendingMesuraJob: null
+    property bool _applyingMesuraControl: false
+    property string _mesuraRecoveryClipboardText: ""
 
     // Old job kept alive across a restart so _job can swap atomically
     // oldJob → newJob without going through null. Destroyed from inside
@@ -151,8 +154,7 @@ Singleton {
         } else {
             // Job exists but not recording (processing/delivering) — check for error
             if (_job.state === "error" && _job.errorSource !== "config") {
-                _job.retry();
-                actionTriggered(_job.sessionId, "retry");
+                retry();
             } else {
                 // Job is processing/delivering — inform the user
                 Toaster.toast(qsTr("STT is busy"), qsTr("Wait for the current job to finish"), "", Toast.Warning);
@@ -171,11 +173,15 @@ Singleton {
 
     /// Start a new recording job. Blocked if a job already exists.
     function start(): void {
-        if (_job) {
+        if (_job || _pendingMesuraJob) {
             Toaster.toast(qsTr("STT is busy"), qsTr("Wait for the current job to finish"), "", Toast.Warning);
             return;
         }
         _startInternal();
+    }
+
+    function mesuraReservationPending(sessionId: string): bool {
+        return _pendingMesuraJob?.sessionId === sessionId;
     }
 
     /// Internal start — bypasses the single-job guard.
@@ -189,10 +195,26 @@ Singleton {
 
         // Check API key before starting (SttJob._resolvedApiKey checks
         // both Config.stt.apiKey and OPENAI_API_KEY env var)
-        const job = _createJob();
+        const restartingMesuraJob = _pendingOldJob?._mesuraIntegrated === true ? _pendingOldJob : null;
+        const job = _createJob(restartingMesuraJob?.sessionId ?? "", restartingMesuraJob?.activeDeliveryChoice ?? _deliveryMode);
         if (job._resolvedApiKey === "") {
             job._setErrorState("config", "API key not configured", "Set OPENAI_API_KEY env var or stt.apiKey in shell.json", false);
-            _job = job;
+            if (RecordingSessionManager.acquire("stt"))
+                _job = job;
+            else
+                job.destroy();
+            return;
+        }
+
+        if (restartingMesuraJob !== null) {
+            job._mesuraIntegrated = true;
+            job._mesuraPeerPid = restartingMesuraJob._mesuraPeerPid;
+            job._mesuraTarget = restartingMesuraJob._mesuraTarget;
+            job._mesuraProjectName = restartingMesuraJob._mesuraProjectName;
+            job._targetWindowAddress = restartingMesuraJob._targetWindowAddress;
+            job._targetWindowClass = restartingMesuraJob._targetWindowClass;
+            job._targetWindowPid = restartingMesuraJob._targetWindowPid;
+            _activatePreparedJob(job, "recording");
             return;
         }
 
@@ -201,8 +223,42 @@ Singleton {
         job._resolveAgentTarget();
         Logger.log("qml", "stt", "session | id=" + job.sessionId + " target=" + job._targetWindowAddress + " class=" + job._targetWindowClass);
 
+        if (job._isMesuraClass(job._targetWindowClass) && job._targetWindowPid > 0) {
+            _pendingMesuraJob = job;
+            // Start immediately under Shell ownership. The exact Mesura target
+            // is already captured; failure downgrades only to manual clipboard,
+            // so the keybind stays useful without risking wrong-chat delivery.
+            _activatePreparedJob(job, "recording");
+            if (_job !== job)
+                return;
+            // Activate before reserve(): an unavailable peer can reject the
+            // reservation synchronously, and the failure handler must see the
+            // live job to install the manual clipboard fallback.
+            const reservationStarted = MesuraDictation.reserve(job._targetWindowPid, job.sessionId, "shell");
+            if (!reservationStarted) {
+                _failMesuraReservation(job.sessionId, "Mesura dictation is unavailable");
+                return;
+            }
+            return;
+        }
+
+        _activatePreparedJob(job, "recording");
+    }
+
+    function _activatePreparedJob(job: SttJob, initialState: string): void {
+        if (!RecordingSessionManager.acquire("stt")) {
+            if (job._mesuraIntegrated)
+                MesuraDictation.sendControl("cancel");
+            if (_pendingMesuraJob === job) {
+                MesuraDictation.cancelReservation(job.sessionId);
+                _pendingMesuraJob = null;
+            }
+            job.destroy();
+            return;
+        }
+
         _activeRecording = job;
-        job._state = "recording";
+        job._state = initialState;
 
         // Assign _job AFTER state is "recording" so the bar embed
         // (which binds to _activeJob via job) sees the correct state immediately.
@@ -222,17 +278,106 @@ Singleton {
         }
 
         // Ensure temp dir exists, then start recording
-        if (_tempDirReady) {
+        if (initialState === "recording" && _tempDirReady) {
             job._startRecording();
-        } else {
+        } else if (!_tempDirReady && (initialState === "recording" || initialState === "paused")) {
             tempDirProcess.running = true;
         }
+    }
+
+    function _prepareRecordingDirectory(): void {
+        if (!_tempDirReady && !tempDirProcess.running)
+            tempDirProcess.running = true;
+    }
+
+    function _failMesuraReservation(sessionId: string, detail: string): void {
+        const pending = _pendingMesuraJob;
+        if (pending === null || pending.sessionId !== sessionId)
+            return;
+        _pendingMesuraJob = null;
+        if (_job === pending) {
+            pending._manualClipboardFallback = true;
+            pending.setDeliveryChoice("clipboard");
+            if (pending.state === "transcribed")
+                pending._beginDeliveryAfterTranscription();
+        } else {
+            pending.destroy();
+        }
+        Toaster.toast(qsTr("STT: Mesura unavailable"), qsTr("%1. Recording continues; paste the result manually.").arg(detail), "error", Toast.Error);
+    }
+
+    function _acceptMesuraSession(peerPid: int, session: var, pendingJob: SttJob): void {
+        if (session.phase !== "recording" && session.phase !== "paused") {
+            if (_pendingMesuraJob === pendingJob) {
+                const terminalPhase = session.phase === "completed" || session.phase === "failed" || session.phase === "cancelled";
+                if (!terminalPhase)
+                    MesuraDictation.sendControlTo(peerPid, session, "cancel");
+                _failMesuraReservation(pendingJob.sessionId, `Mesura returned unsupported phase: ${session.phase}`);
+            } else {
+                MesuraDictation.sendControlTo(peerPid, session, "cancel");
+                pendingJob.destroy();
+            }
+            return;
+        }
+        const alreadyActive = _job === pendingJob;
+        MesuraDictation.acceptSession(peerPid, session);
+        pendingJob._mesuraIntegrated = true;
+        pendingJob._mesuraPeerPid = peerPid;
+        pendingJob._mesuraTarget = session.target;
+        pendingJob._mesuraProjectName = session.projectName ?? "Mesura Code";
+        if (!alreadyActive) {
+            pendingJob._applyingMesuraSnapshot = true;
+            pendingJob._activeDeliveryChoice = session.mode;
+            pendingJob._applyingMesuraSnapshot = false;
+        }
+        _pendingMesuraJob = null;
+        if (session.phase === "recording" || session.phase === "paused") {
+            if (alreadyActive) {
+                if (pendingJob.activeDeliveryChoice !== session.mode)
+                    MesuraDictation.setMode(pendingJob.activeDeliveryChoice);
+                if (pendingJob.state === "transcribed") {
+                    pendingJob._beginDeliveryAfterTranscription();
+                    return;
+                }
+                MesuraDictation.updateState(pendingJob);
+                return;
+            }
+            _activatePreparedJob(pendingJob, session.phase);
+            MesuraDictation.updateState(pendingJob);
+            return;
+        }
+        if (!RecordingSessionManager.acquire("stt")) {
+            MesuraDictation.sendControl("cancel");
+            pendingJob.destroy();
+            return;
+        }
+        _job = pendingJob;
+        pendingJob._setErrorState("mesura", "The Shell cannot resume this dictation phase", "Start a new recording", true);
+    }
+
+    function _startExternalMesuraSession(peerPid: int, session: var): void {
+        if (_job !== null || _activeRecording !== null || _pendingMesuraJob !== null) {
+            MesuraDictation.sendControlTo(peerPid, session, "cancel");
+            Toaster.toast(qsTr("STT is busy"), qsTr("Wait for the current job to finish"), "", Toast.Warning);
+            return;
+        }
+        const job = _createJob(session.sessionId, session.mode);
+        if (job._resolvedApiKey === "") {
+            MesuraDictation.sendControlTo(peerPid, session, "cancel");
+            job.destroy();
+            Toaster.toast(qsTr("STT: API key not configured"), qsTr("Set OPENAI_API_KEY or stt.apiKey"), "error", Toast.Error);
+            return;
+        }
+        job._targetWindowPid = peerPid;
+        job._targetWindowClass = "mesura-code";
+        _acceptMesuraSession(peerPid, session, job);
     }
 
     /// Stop the active recording and submit for transcription.
     function stop(): void {
         if (!_activeRecording)
             return;
+        const mesuraControlId = _activeRecording._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("stop") : "";
         actionTriggered(_activeRecording.sessionId, "stop");
         // Snapshot session hints onto the job before clearing service-level state.
         // The recording→stop path is async (recordProcess.onExited calls
@@ -240,6 +385,8 @@ Singleton {
         // by the time transcription starts without this snapshot.
         _activeRecording._snapshotVocabHints = _sessionVocabHints.slice();
         _activeRecording.stop();
+        if (mesuraControlId !== "")
+            MesuraDictation.acknowledgeAction("control", mesuraControlId);
         _activeRecording = null;
         _sessionVocabHints = [];
         vocabHintsVisible = false;
@@ -250,16 +397,38 @@ Singleton {
         if (!_activeRecording)
             return;
         if (_activeRecording._state === "recording") {
+            const mesuraControlId = _activeRecording._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("pause") : "";
             actionTriggered(_activeRecording.sessionId, "pause");
             _activeRecording.pause();
+            if (mesuraControlId !== "")
+                MesuraDictation.acknowledgeAction("control", mesuraControlId);
         } else if (_activeRecording._state === "paused") {
+            const mesuraControlId = _activeRecording._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("resume") : "";
             actionTriggered(_activeRecording.sessionId, "resume");
             _activeRecording.resume();
+            if (mesuraControlId !== "")
+                MesuraDictation.acknowledgeAction("control", mesuraControlId);
         }
     }
 
     /// Cancel the active recording (discard audio).
     function cancel(): void {
+        if (_pendingMesuraJob) {
+            const pendingReservation = _pendingMesuraJob;
+            _pendingMesuraJob = null;
+            MesuraDictation.cancelReservation(pendingReservation.sessionId);
+            if (_activeRecording === pendingReservation)
+                _activeRecording = null;
+            _sessionVocabHints = [];
+            vocabHintsVisible = false;
+            if (_job === pendingReservation) {
+                actionTriggered(pendingReservation.sessionId, "cancel");
+                pendingReservation.cancel();
+            } else {
+                pendingReservation.destroy();
+            }
+            return;
+        }
         // A restart is mid-flight if _pendingOldJob is set and the
         // restartDelayTimer hasn't fired _startInternal yet. In that window
         // _activeRecording is already null, so the normal branch below would
@@ -296,6 +465,9 @@ Singleton {
         const target = _activeRecording ?? (_job?.state === "error" ? _job : null);
         if (!target)
             return;
+        const mesuraControlId = target._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("cancel") : "";
+        if (target._mesuraIntegrated)
+            target._closeMesuraToasts();
         actionTriggered(target.sessionId, "cancel");
         // target === _activeRecording only when a live recording exists; on the
         // error-dismissal path target is _job and _activeRecording is already null.
@@ -305,6 +477,8 @@ Singleton {
             vocabHintsVisible = false;
         }
         target.cancel();
+        if (mesuraControlId !== "")
+            MesuraDictation.acknowledgeAction("control", mesuraControlId);
     }
 
     /// Restart: cancel active recording + start a new one.
@@ -326,6 +500,23 @@ Singleton {
     function restart(): void {
         if (!_activeRecording)
             return;
+        if (_pendingMesuraJob === _activeRecording) {
+            const pendingJob = _activeRecording;
+            actionTriggered(pendingJob.sessionId, "restart");
+            const replacement = _createJob(pendingJob.sessionId, pendingJob.activeDeliveryChoice);
+            replacement._targetWindowAddress = pendingJob._targetWindowAddress;
+            replacement._targetWindowClass = pendingJob._targetWindowClass;
+            replacement._targetWindowPid = pendingJob._targetWindowPid;
+            pendingJob.cancelForRestart(true);
+            _activeRecording = null;
+            _sessionVocabHints = [];
+            vocabHintsVisible = false;
+            _pendingMesuraJob = replacement;
+            _activatePreparedJob(replacement, "recording");
+            pendingJob.destroy();
+            return;
+        }
+        const mesuraControlId = _activeRecording._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("restart") : "";
         actionTriggered(_activeRecording.sessionId, "restart");
         restartDelayTimer.stop();
         const job = _activeRecording;
@@ -352,14 +543,48 @@ Singleton {
         _pendingOldJob = job;
 
         restartDelayTimer.start();
+        if (mesuraControlId !== "")
+            MesuraDictation.acknowledgeAction("control", mesuraControlId);
     }
 
     /// Retry the most recent errored job.
     function retry(): void {
         if (!_job || _job.state !== "error" || _job.errorSource === "config")
             return;
+        if (_job._mesuraIntegrated && (_job.errorSource === "mesura" || _job.errorSource === "clipboard")) {
+            if (!_job._mesuraRetryAvailable)
+                return;
+            const deliveryControlId = !_applyingMesuraControl ? MesuraDictation.sendControl("retry") : "";
+            actionTriggered(_job.sessionId, "retry");
+            _job.retryMesuraDelivery();
+            if (deliveryControlId !== "")
+                MesuraDictation.acknowledgeAction("control", deliveryControlId);
+            return;
+        }
+        const mesuraControlId = _job._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("retry") : "";
         actionTriggered(_job.sessionId, "retry");
+        if (_job._mesuraIntegrated) {
+            _job._mesuraToastDedupeKey = "";
+            _job._mesuraFailureCode = "";
+            _job._mesuraFailureDetail = "";
+        }
         _job.retry();
+        if (mesuraControlId !== "")
+            MesuraDictation.acknowledgeAction("control", mesuraControlId);
+    }
+
+    function showMesuraRecoveryToast(sessionId: string, commandId: string, text: string): void {
+        Toaster.toast("Dictation target unavailable", "Transcript copied to clipboard. Click to copy again.", "content_copy", Toast.Error, 10000, "", `stt-mesura-${sessionId}-recovery-${commandId}`, function () {
+            root.copyMesuraRecovery(text);
+        });
+    }
+
+    function copyMesuraRecovery(text: string): void {
+        if (text === "" || mesuraRecoveryClipboardProcess.running)
+            return;
+        _mesuraRecoveryClipboardText = text;
+        mesuraRecoveryClipboardProcess.command = ["wl-copy", text];
+        mesuraRecoveryClipboardProcess.running = true;
     }
 
     /// Switch the current job's delivery choice (one-shot — the next job
@@ -381,8 +606,20 @@ Singleton {
         }
         if (_job._activeDeliveryChoice === mode)
             return;
-        _job._activeDeliveryChoice = mode;
+        _job.setDeliveryChoice(mode);
+        if (_job._activeDeliveryChoice !== mode)
+            return;
         actionTriggered(_job.sessionId, "mode-" + mode);
+    }
+
+    function sendNow(): void {
+        if (!_job || _job.state !== "grace")
+            return;
+        const mesuraControlId = _job._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("send-now") : "";
+        _job.sendNow();
+        if (mesuraControlId !== "")
+            MesuraDictation.acknowledgeAction("control", mesuraControlId);
+        actionTriggered(_job.sessionId, "send-now");
     }
 
     /// Add a per-session vocabulary hint (shown as chip in the widget).
@@ -424,7 +661,7 @@ Singleton {
 
     // [key, stt IPC function] pairs. Kept in sync with the comment block in
     // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
-    readonly property var _sessionBinds: [["R", "restart"], ["S", "mode clipboard"]   // S = Save to clipboard (not submit — that's Return)
+    readonly property var _sessionBinds: [["X", "cancel"], ["R", "restart"], ["space", "pause"], ["S", "mode clipboard"]   // S = Save to clipboard (not submit — that's Return)
         , ["I", "mode inject"], ["Return", "mode submit"], ["W", "hints"]]
 
     onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
@@ -433,16 +670,25 @@ Singleton {
         return `keyword unbind ALT,${bind[0]}`;
     }
 
+    function _ipcCommand(target: string): string {
+        return `qs ipc --pid ${Quickshell.processId} call ${target}`;
+    }
+
     function _registerSessionBinds(): void {
         // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
         // binds on the same combo (which would double-fire the IPC command),
         // so a leftover bind from a crashed shell must be cleared first.
-        const cmds = _sessionBinds.map(b => `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
+        const ipcCommand = _ipcCommand("stt");
+        const cmds = _sessionBinds.map(b => `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,${ipcCommand} ${b[1]}`);
         Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
     }
 
     function _unregisterSessionBinds(): void {
-        Quickshell.execDetached(["hyprctl", "--batch", _sessionBinds.map(_unbindCmd).join(" ; ")]);
+        const recorderIpcCommand = _ipcCommand("recorder");
+        const commands = _sessionBinds.map(_unbindCmd);
+        commands.push(`keyword bindd ALT,space,Pause/Resume recording,exec,${recorderIpcCommand} pause`);
+        commands.push(`keyword bindd ALT,X,Cancel recording,exec,${recorderIpcCommand} cancel`);
+        Quickshell.execDetached(["hyprctl", "--batch", commands.join(" ; ")]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -454,18 +700,132 @@ Singleton {
         SttJob {}
     }
 
-    function _createJob(): SttJob {
+    function _createJob(sessionIdOverride: string, deliveryMode: string): SttJob {
         const job = jobComponent.createObject(root, {
-            sessionId: Date.now().toString(),
-            _activeDeliveryChoice: _deliveryMode
+            sessionId: sessionIdOverride !== "" ? sessionIdOverride : Date.now().toString(),
+            _activeDeliveryChoice: deliveryMode
         });
 
         job.finished.connect(() => _onJobFinished(job));
-        job.readyForDelivery.connect(() => job._startDeliveryChain());
+        job.readyForDelivery.connect(() => job._beginDeliveryAfterTranscription());
 
         // Caller must assign _job AFTER setting job state, so that
         // UI consumers binding to job see the correct state immediately.
         return job;
+    }
+
+    Connections {
+        target: MesuraDictation
+
+        function onReservationConfirmed(peerPid: int, session: var): void {
+            const pending = root._pendingMesuraJob;
+            if (pending !== null && pending.sessionId === session.sessionId)
+                root._acceptMesuraSession(peerPid, session, pending);
+        }
+
+        function onReservationFailed(sessionId: string, detail: string): void {
+            root._failMesuraReservation(sessionId, detail);
+        }
+
+        function onExternalSessionRequested(peerPid: int, session: var): void {
+            root._startExternalMesuraSession(peerPid, session);
+        }
+
+        function onControlRequested(sessionId: string, commandId: string, action: string): void {
+            if (root._job?.sessionId !== sessionId)
+                return;
+            let handled = false;
+            root._applyingMesuraControl = true;
+            if (action === "pause") {
+                handled = root._activeRecording?._state === "paused";
+                if (root._activeRecording?._state === "recording") {
+                    root.pause();
+                    handled = true;
+                }
+            } else if (action === "resume") {
+                handled = root._activeRecording?._state === "recording";
+                if (root._activeRecording?._state === "paused") {
+                    root.pause();
+                    handled = true;
+                }
+            } else if (action === "stop") {
+                handled = root._job.state === "processing" || root._job.state === "grace" || root._job.state === "delivering" || root._job.state === "confirming";
+                if (root._activeRecording !== null) {
+                    root.stop();
+                    handled = true;
+                }
+            } else if (action === "cancel") {
+                handled = root._activeRecording !== null || root._job.state === "error";
+                if (handled)
+                    root.cancel();
+            } else if (action === "restart") {
+                handled = root._activeRecording !== null;
+                if (handled)
+                    root.restart();
+            } else if (action === "retry") {
+                handled = root._job.state === "processing" || root._job.state === "delivering" || root._job.state === "confirming";
+                if (root._job.state === "error" && root._job.errorSource !== "config") {
+                    root.retry();
+                    handled = true;
+                }
+            } else if (action === "send-now") {
+                handled = root._job.state === "delivering" || root._job.state === "confirming";
+                if (root._job.state === "grace") {
+                    root.sendNow();
+                    handled = true;
+                }
+            } else if (action === "start") {
+                handled = root._job.state !== "idle";
+            }
+            root._applyingMesuraControl = false;
+            if (handled)
+                MesuraDictation.acknowledgeAction("control", commandId);
+        }
+
+        function onVocabularyRequested(sessionId: string, commandId: string, action: string, word: string, index: int): void {
+            if (root._job?.sessionId !== sessionId)
+                return;
+            let handled = false;
+            if (action === "add" && word.trim() !== "") {
+                root.addSessionHint(word);
+                handled = root._sessionVocabHints.some(hint => hint.toLowerCase() === word.trim().toLowerCase());
+            } else if (action === "remove" && index >= 0 && index < root._sessionVocabHints.length) {
+                root.removeSessionHint(index);
+                handled = true;
+            } else if (action === "toggle" && root._activeRecording !== null) {
+                root.toggleVocabHints();
+                handled = true;
+            }
+            if (handled)
+                MesuraDictation.acknowledgeAction("vocabulary", commandId);
+        }
+
+        function onReceiptReceived(peerPid: int, receipt: var): void {
+            if (root._job?._mesuraPeerPid === peerPid)
+                root._job._handleMesuraReceipt(receipt);
+        }
+
+        function onSessionChangedForPeer(peerPid: int, session: var): void {
+            if (session === null || root._job?.sessionId !== session.sessionId || root._job._mesuraPeerPid !== peerPid)
+                return;
+            if (root._job.activeDeliveryChoice !== session.mode) {
+                root._job._applyingMesuraSnapshot = true;
+                root._job.setDeliveryChoice(session.mode);
+                root._job._applyingMesuraSnapshot = false;
+            }
+        }
+
+        function onPeerConnected(peerPid: int): void {
+            if (root._job?._mesuraPeerPid !== peerPid || root._job._mesuraDeliveryCommandId === "")
+                return;
+            if (root._job.state === "delivering" || root._job.state === "confirming")
+                root._job._sendMesuraDelivery();
+        }
+
+        function onPeerDisconnected(peerPid: int, detail: string): void {
+            if (root._job?._mesuraPeerPid === peerPid)
+                root._job.handleMesuraPeerDisconnected(detail);
+        }
     }
 
     function _removeJob(job: SttJob): void {
@@ -514,6 +874,15 @@ Singleton {
             root._tempDirReady = true;
             if (root._activeRecording && root._activeRecording._state === "recording")
                 root._activeRecording._startRecording();
+        }
+    }
+
+    Process {
+        id: mesuraRecoveryClipboardProcess
+        onExited: (code, status) => {
+            if (code !== 0)
+                Toaster.toast("Clipboard copy failed", "The transcript remains in Transcriptions.", "error", Toast.Error);
+            root._mesuraRecoveryClipboardText = "";
         }
     }
 

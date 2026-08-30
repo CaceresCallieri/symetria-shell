@@ -49,7 +49,18 @@ Scope {
                 return;
 
             for (const [_, visibilities] of Visibilities.screens)
-                visibilities.recorder = SttService.active;
+                visibilities.recorder = SttService.active && RecordingSessionManager.shellOwnsSttPresentation;
+        }
+    }
+
+    Connections {
+        target: MesuraDictation
+
+        function onSessionChanged(): void {
+            if (!Config.stt.enabled || !SttService.active || AgentService.mergeActive)
+                return;
+            for (const [_, visibilities] of Visibilities.screens)
+                visibilities.recorder = RecordingSessionManager.shellOwnsSttPresentation;
         }
     }
 
@@ -65,7 +76,7 @@ Scope {
                 return;
 
             for (const [_, visibilities] of Visibilities.screens)
-                visibilities.recorder = !AgentService.mergeActive;
+                visibilities.recorder = !AgentService.mergeActive && (RecordingSessionManager.activeMode !== "stt" || RecordingSessionManager.shellOwnsSttPresentation);
         }
     }
 
@@ -105,19 +116,19 @@ Scope {
         target: "stt"
 
         function toggle(): void {
-            if (!RecordingSessionManager.acquire("stt"))
-                return;
             SttService.toggle();
         }
 
         function start(): void {
-            if (!RecordingSessionManager.acquire("stt"))
-                return;
             SttService.start();
         }
 
         function stop(): void {
             SttService.stop();
+        }
+
+        function sendNow(): void {
+            SttService.sendNow();
         }
 
         function pause(): void {

@@ -455,7 +455,7 @@ Item {
         // flip it" failure mode. The close/open animations still play
         // correctly because the Behavior on the embed's scale animates
         // whenever the bound value changes.
-        readonly property bool _showEmbed: RecordingSessionManager.active && !(_activeJob?.closing ?? false)
+        readonly property bool _showEmbed: RecordingSessionManager.active && (RecordingSessionManager.activeMode !== "stt" || RecordingSessionManager.shellOwnsSttPresentation) && !(_activeJob?.closing ?? false)
 
         readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 
@@ -514,6 +514,15 @@ Item {
                 } else if (root.popouts.currentName === "recording") {
                     root.popouts.hasCurrent = false;
                 }
+            }
+        }
+
+        Connections {
+            target: RecordingSessionManager
+
+            function onShellOwnsSttPresentationChanged(): void {
+                if (!RecordingSessionManager.shellOwnsSttPresentation && root.popouts.currentName === "recording")
+                    root.popouts.hasCurrent = false;
             }
         }
     }

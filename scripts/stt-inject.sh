@@ -42,10 +42,6 @@ NVIM_ACTIVE_BUF="${STT_NVIM_ACTIVE_BUF:--1}"
 # Mutually exclusive with NVIM_SOCKET by construction (SttJob resolves one
 # or the other from the agent's inject_via capability).
 IDE_PID="${STT_IDE_PID:-}"
-# Mesura Code target pid, for dictation into its composer. Separate from
-# IDE_PID because Mesura has no agent panes and no buf to address — the
-# conversation on screen is the whole target.
-MESURA_PID="${STT_MESURA_PID:-}"
 IDE_BUF="${STT_IDE_BUF:--1}"
 DOWNGRADED=""
 # Must be literal "true" or "false" — embedded as JSON boolean by emit_result()
@@ -335,97 +331,6 @@ if [ -n "${STT_RPC_ONLY:-}" ]; then
     notify_failure "STT Inject Failed" "Voice → buffer (RPC) failed. Use Alt+V to paste from Transcriptions."
     emit_result "rpc" "false"
     exit 0
-fi
-
-# ── Mesura Code: dictation into the composer ────────────────────────────────
-# Mesura binds its own per-process socket and answers one receipt line, the
-# same shape the IDE path uses.
-#
-# ⚠ Deliberately NOT part of is_terminal_class, and deliberately below the
-# wl-copy that has already run. The window class (`mesura-code`) says which
-# application is on screen, not whether that build binds a dictation socket —
-# an older Mesura, or one already shutting down, has none. Marking the class
-# RPC-eligible would skip wl-copy, and those dictations would be lost outright.
-# Here a missing socket simply falls through to the Ctrl+V paste below, which
-# is what the user already gets for any non-terminal window.
-try_mesura_inject() {
-    local submit_bool
-    case "$SUBMIT" in
-        submit) submit_bool="true" ;;
-        *)      submit_bool="false" ;;
-    esac
-
-    local runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-    local sock="${runtime}/symmetria-mesura-${MESURA_PID}.sock"
-    if [ ! -S "$sock" ]; then
-        echo "[STT:INJ-MESURA] no Mesura socket at $sock — not a Mesura window" >&2
-        return 1
-    fi
-
-    stt_log "inject" "mesura-attempt | pid=$MESURA_PID"
-    local result
-    if ! result=$(STT_MESURA_SOCK="$sock" STT_INJECT_SUBMIT="$submit_bool" python3 - <<'PYEOF'
-import json, os, socket, sys
-
-request = {
-    "type": "stt_inject",
-    "text": os.environ.get("STT_EXPECTED_TEXT", ""),
-    "submit": os.environ["STT_INJECT_SUBMIT"] == "true",
-}
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-# Must exceed Mesura's own 5s window deadline so its structured answer wins
-# over this socket timing out with a bare exception.
-sock.settimeout(6.0)
-try:
-    sock.connect(os.environ["STT_MESURA_SOCK"])
-    sock.sendall((json.dumps(request) + "\n").encode())
-    buf = b""
-    while b"\n" not in buf:
-        chunk = sock.recv(4096)
-        if not chunk:
-            break
-        buf += chunk
-    print(buf.decode("utf-8", "replace").strip())
-except Exception as exc:  # noqa: BLE001 — any failure is a fall-through
-    print(json.dumps({"ok": False, "outcome": "client-error", "detail": str(exc)}))
-    sys.exit(1)
-finally:
-    sock.close()
-PYEOF
-    ); then
-        echo "[STT:INJ-MESURA] client failed" >&2
-        return 1
-    fi
-
-    echo "[STT:INJ-MESURA] response: $result" >&2
-    local ok outcome
-    ok=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("ok"))' 2>/dev/null)
-    outcome=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("outcome",""))' 2>/dev/null)
-
-    # `placed-not-submitted` is a partial success: the words ARE in the
-    # composer, so falling through to a Ctrl+V paste would duplicate them.
-    # Treat it as delivered and let the submit flag report the truth.
-    if [ "$ok" = "True" ] || [ "$outcome" = "placed-not-submitted" ]; then
-        case "$outcome" in
-            placed-and-submitted) RPC_SUBMITTED="true" ;;
-            *)                    RPC_SUBMITTED="false" ;;
-        esac
-        stt_log "inject" "mesura-success | outcome=$outcome"
-        return 0
-    fi
-
-    stt_log "inject" "mesura-failed | outcome=$outcome"
-    return 1
-}
-
-if [ -n "$MESURA_PID" ] && [ -n "$EXPECTED_TEXT" ]; then
-    echo "[STT:INJ-MESURA] Mesura target detected — attempting composer delivery" >&2
-    if try_mesura_inject; then
-        echo "[STT:INJ-MESURA] delivered to the composer — skipping sendshortcut" >&2
-        emit_result "mesura" "true"
-        exit 0
-    fi
-    echo "[STT:INJ-MESURA] falling back to sendshortcut paste" >&2
 fi
 
 # ── Try Neovim RPC injection for terminal windows ───────────────────────────

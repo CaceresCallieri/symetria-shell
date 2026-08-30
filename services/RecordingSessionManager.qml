@@ -25,6 +25,10 @@ Singleton {
     /// Whether any recording mode is active
     readonly property bool active: _activeMode !== ""
 
+    /// Mesura owns only the presentation lease. The Shell still owns the job,
+    /// recording lock, and controls while its widget is hidden.
+    readonly property bool shellOwnsSttPresentation: !(SttService.job?._mesuraIntegrated === true && MesuraDictation.session?.sessionId === SttService.job?.sessionId && MesuraDictation.session?.presentation?.mesuraOwnsPresentation === true)
+
     // ── Internal state ─────────────────────────────────────────────
 
     property string _activeMode: ""
@@ -44,6 +48,7 @@ Singleton {
 
     /// The current recording job (from whichever service is active), or null.
     /// Centralizes mode→service→job resolution so consumers don't duplicate it.
+    /// Presentation ownership must not hide state from shared controls.
     // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
     readonly property var currentJob: {
         if (_activeMode === "stt")
@@ -72,7 +77,7 @@ Singleton {
         if (!job || _activeMode !== "stt")
             return;
         const idx = _deliveryModes.indexOf(job.activeDeliveryChoice ?? "clipboard");
-        job.setDeliveryChoice(_deliveryModes[(idx + 1) % _deliveryModes.length]);
+        SttService.setDeliveryChoice(_deliveryModes[(idx + 1) % _deliveryModes.length]);
     }
 
     // ── Public methods ─────────────────────────────────────────────

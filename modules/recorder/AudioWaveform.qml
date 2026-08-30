@@ -7,10 +7,9 @@ import QtQuick
 
 /// Reusable audio waveform visualization for recording sessions.
 ///
-/// Renders animated vertical bars that respond to live audio level
-/// during recording, show a sine wave pattern during processing,
-/// and dim to gold during pause. Used by both the drawer Content
-/// and the bar-embedded RecordingBarEmbed.
+/// New samples enter at the center and move symmetrically toward both edges.
+/// Pause freezes the history, processing uses a deterministic wave, and hidden
+/// or terminal surfaces stop every animation loop.
 Item {
     id: root
 
@@ -28,6 +27,9 @@ Item {
 
     /// Controls whether the animation loop runs.
     property bool active: true
+    property string sessionId: ""
+
+    onSessionIdChanged: amplitudeHistory = []
 
     implicitWidth: barRow.implicitWidth
     implicitHeight: containerHeight
@@ -37,9 +39,6 @@ Item {
         readonly property real noiseFloor: 0.025  // just below ambient (~0.03), silence ≈ 0
         readonly property real gain: 15.0         // clips at ~0.09 RMS (speech ceiling)
         readonly property real powerCurve: 0.5    // sqrt curve: boosts mids
-        readonly property real waveVariation: 0.30
-        readonly property real waveSpeed: 0.08
-        readonly property real waveFrequency: 0.8
         readonly property real minBarHeight: 2
         readonly property real maxBarHeight: 20
         readonly property real smoothingFactor: 0.25  // per-frame decay at 60fps (framerate-independent via FrameAnimation.frameTime)
@@ -48,6 +47,9 @@ Item {
     // Paused state visual configuration
     readonly property color pausedBarColor: "#C9B458"
     readonly property real pausedDimOpacity: 0.55
+
+    readonly property int historyLength: Math.ceil(barCount / 2)
+    property list<real> amplitudeHistory: []
 
     // Processing wave effect configuration
     readonly property QtObject processingConfig: QtObject {
@@ -62,11 +64,31 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: (root.displayState === "recording" || root.displayState === "processing") && root.active
+        running: (root.displayState === "processing" || root.displayState === "grace") && root.active
         from: 0
         to: 6000
         duration: 100000
         loops: Animation.Infinite
+    }
+
+    function normalizedAmplitude(): real {
+        const cfg = audioConfig;
+        if (audioLevel <= cfg.noiseFloor)
+            return 0;
+        const scaled = Math.min(1, ((audioLevel - cfg.noiseFloor) / (1 - cfg.noiseFloor)) * cfg.gain);
+        return Math.pow(scaled, cfg.powerCurve);
+    }
+
+    function pushCenterSample(): void {
+        const history = [normalizedAmplitude(), ...amplitudeHistory];
+        amplitudeHistory = history.slice(0, historyLength);
+    }
+
+    Timer {
+        interval: 80
+        repeat: true
+        running: root.active && root.displayState === "recording"
+        onTriggered: root.pushCenterSample()
     }
 
     // ── Cached bar gradient colors ──────────────────────────────
@@ -93,22 +115,9 @@ Item {
         }
     }
 
-    // ── Pre-calculated wave offsets (recording mode) ────────────
-    readonly property var waveOffsets: {
-        if (root.displayState !== "recording" || !root.active)
-            return [];
-        const cfg = audioConfig;
-        const offsets = [];
-        for (let i = 0; i < barCount; i++) {
-            const baseline = 1 - cfg.waveVariation;
-            offsets.push(Math.sin(i * cfg.waveFrequency + animationTime * cfg.waveSpeed) * cfg.waveVariation + baseline);
-        }
-        return offsets;
-    }
-
     // ── Processing wave data (offsets + opacities) ──────────────
     readonly property var processingWaveData: {
-        if (root.displayState !== "processing" || !root.active)
+        if ((root.displayState !== "processing" && root.displayState !== "grace") || !root.active)
             return {
                 offsets: [],
                 opacities: []
@@ -117,7 +126,8 @@ Item {
         const offsets = [];
         const opacities = [];
         for (let i = 0; i < barCount; i++) {
-            const spatialPhase = (i / (barCount - 1)) * 2 * Math.PI;
+            const centerDistance = Math.floor(Math.abs(i - (barCount - 1) / 2));
+            const spatialPhase = (centerDistance / Math.max(1, historyLength - 1)) * Math.PI;
             const wavePos = spatialPhase - animationTime * cfg.waveSpeed;
             const primaryWave = 0.5 + 0.5 * Math.sin(wavePos);
             const harmonic = cfg.harmonicStrength * Math.sin(wavePos * 2);
@@ -149,15 +159,17 @@ Item {
                 required property int index
 
                 readonly property real positionFactor: {
-                    const center = root.barCount / 2;
-                    const distance = Math.abs(index - center) / center;
+                    const center = (root.barCount - 1) / 2;
+                    const distance = Math.abs(index - center) / Math.max(1, center);
                     return 1 - distance * 0.5;
                 }
+
+                readonly property int historyIndex: Math.floor(Math.abs(index - (root.barCount - 1) / 2))
 
                 readonly property real targetHeight: {
                     const cfg = root.audioConfig;
 
-                    if (root.displayState === "processing") {
+                    if (root.displayState === "processing" || root.displayState === "grace") {
                         const procCfg = root.processingConfig;
                         const waveMultiplier = root.processingWaveOffsets[index] ?? 1.0;
                         const boostedHeight = procCfg.baseHeightBoost * (cfg.maxBarHeight - cfg.minBarHeight);
@@ -165,20 +177,12 @@ Item {
                         return Math.max(cfg.minBarHeight, Math.min(cfg.maxBarHeight, rawHeight));
                     }
 
-                    const rawLevel = root.audioLevel;
-                    let effectiveLevel = 0;
-                    if (rawLevel > cfg.noiseFloor) {
-                        effectiveLevel = (rawLevel - cfg.noiseFloor) / (1.0 - cfg.noiseFloor);
-                        effectiveLevel = Math.min(1.0, effectiveLevel * cfg.gain);
-                        effectiveLevel = Math.pow(effectiveLevel, cfg.powerCurve);
-                    }
-
-                    const waveOffset = root.waveOffsets[index] ?? 1.0;
-                    return cfg.minBarHeight + effectiveLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor * waveOffset;
+                    const historicalLevel = root.amplitudeHistory[historyIndex] ?? 0;
+                    return cfg.minBarHeight + historicalLevel * (cfg.maxBarHeight - cfg.minBarHeight) * positionFactor;
                 }
 
                 readonly property real waveOpacity: {
-                    if (root.displayState === "processing") {
+                    if (root.displayState === "processing" || root.displayState === "grace") {
                         const opacity = root.processingWaveOpacities[index];
                         if (opacity !== undefined)
                             return opacity;
@@ -202,7 +206,7 @@ Item {
                 // That only fires on data arrival (~10Hz), leaving 90ms static
                 // gaps between updates — bars snap instead of gliding.
                 FrameAnimation {
-                    running: root.active && root.displayState !== "paused"
+                    running: root.active && (root.displayState === "recording" || root.displayState === "processing" || root.displayState === "grace")
                     onTriggered: {
                         const delta = bar.targetHeight - bar.smoothedHeight;
                         if (Math.abs(delta) > 0.1)
