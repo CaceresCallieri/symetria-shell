@@ -48,7 +48,6 @@ Item {
 
     readonly property real audioLevel: job?.audioLevel ?? 0
     readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
-    readonly property string projectName: mode === "stt" ? (job?.projectName ?? "") : ""
     property real confirmationPulse: 1
 
     // Live partial transcript (STT streaming mode). "" for non-STT jobs.
@@ -222,23 +221,6 @@ Item {
                     id: compactRow
 
                     spacing: Appearance.spacing.small
-
-                    StyledText {
-                        visible: root.projectName !== ""
-                        text: root.projectName
-                        font.pointSize: Appearance.font.size.small * 0.88
-                        font.weight: Font.DemiBold
-                        color: Colours.palette.m3onSurfaceVariant
-                        Layout.maximumWidth: 180
-                        elide: Text.ElideRight
-                    }
-
-                    StyledText {
-                        visible: root.projectName !== ""
-                        text: "·"
-                        font.pointSize: Appearance.font.size.small
-                        color: Colours.palette.m3outlineVariant
-                    }
 
                     // Elapsed timer
                     StyledText {

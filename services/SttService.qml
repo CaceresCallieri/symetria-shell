@@ -180,6 +180,10 @@ Singleton {
         _startInternal();
     }
 
+    function mesuraReservationPending(sessionId: string): bool {
+        return _pendingMesuraJob?.sessionId === sessionId;
+    }
+
     /// Internal start — bypasses the single-job guard.
     /// Used by restartDelayTimer where the old job may still be animating out.
     function _startInternal(): void {
@@ -221,8 +225,20 @@ Singleton {
 
         if (job._isMesuraClass(job._targetWindowClass) && job._targetWindowPid > 0) {
             _pendingMesuraJob = job;
-            if (!MesuraDictation.reserve(job._targetWindowPid, job.sessionId, "shell"))
+            // Start immediately under Shell ownership. The exact Mesura target
+            // is already captured; failure downgrades only to manual clipboard,
+            // so the keybind stays useful without risking wrong-chat delivery.
+            _activatePreparedJob(job, "recording");
+            if (_job !== job)
+                return;
+            // Activate before reserve(): an unavailable peer can reject the
+            // reservation synchronously, and the failure handler must see the
+            // live job to install the manual clipboard fallback.
+            const reservationStarted = MesuraDictation.reserve(job._targetWindowPid, job.sessionId, "shell");
+            if (!reservationStarted) {
                 _failMesuraReservation(job.sessionId, "Mesura dictation is unavailable");
+                return;
+            }
             return;
         }
 
@@ -233,8 +249,10 @@ Singleton {
         if (!RecordingSessionManager.acquire("stt")) {
             if (job._mesuraIntegrated)
                 MesuraDictation.sendControl("cancel");
-            if (_pendingMesuraJob === job)
+            if (_pendingMesuraJob === job) {
+                MesuraDictation.cancelReservation(job.sessionId);
                 _pendingMesuraJob = null;
+            }
             job.destroy();
             return;
         }
@@ -277,21 +295,39 @@ Singleton {
         if (pending === null || pending.sessionId !== sessionId)
             return;
         _pendingMesuraJob = null;
-        pending.destroy();
-        Toaster.toast(qsTr("STT: Mesura unavailable"), detail, "error", Toast.Error);
+        if (_job === pending) {
+            pending._manualClipboardFallback = true;
+            pending.setDeliveryChoice("clipboard");
+            if (pending.state === "transcribed")
+                pending._beginDeliveryAfterTranscription();
+        } else {
+            pending.destroy();
+        }
+        Toaster.toast(qsTr("STT: Mesura unavailable"), qsTr("%1. Recording continues; paste the result manually.").arg(detail), "error", Toast.Error);
     }
 
     function _acceptMesuraSession(peerPid: int, session: var, pendingJob: SttJob): void {
+        const alreadyActive = _job === pendingJob;
         MesuraDictation.acceptSession(peerPid, session);
         pendingJob._mesuraIntegrated = true;
         pendingJob._mesuraPeerPid = peerPid;
         pendingJob._mesuraTarget = session.target;
         pendingJob._mesuraProjectName = session.projectName ?? "Mesura Code";
-        pendingJob._applyingMesuraSnapshot = true;
-        pendingJob._activeDeliveryChoice = session.mode;
-        pendingJob._applyingMesuraSnapshot = false;
+        if (!alreadyActive) {
+            pendingJob._applyingMesuraSnapshot = true;
+            pendingJob._activeDeliveryChoice = session.mode;
+            pendingJob._applyingMesuraSnapshot = false;
+        }
         _pendingMesuraJob = null;
         if (session.phase === "recording" || session.phase === "paused") {
+            if (alreadyActive) {
+                if (pendingJob.activeDeliveryChoice !== session.mode)
+                    MesuraDictation.setMode(pendingJob.activeDeliveryChoice);
+                MesuraDictation.updateState(pendingJob);
+                if (pendingJob.state === "transcribed")
+                    pendingJob._beginDeliveryAfterTranscription();
+                return;
+            }
             _activatePreparedJob(pendingJob, session.phase);
             MesuraDictation.updateState(pendingJob);
             return;
@@ -367,7 +403,14 @@ Singleton {
             const pendingReservation = _pendingMesuraJob;
             _pendingMesuraJob = null;
             MesuraDictation.cancelReservation(pendingReservation.sessionId);
-            pendingReservation.destroy();
+            if (_activeRecording === pendingReservation)
+                _activeRecording = null;
+            if (_job === pendingReservation) {
+                actionTriggered(pendingReservation.sessionId, "cancel");
+                pendingReservation.cancel();
+            } else {
+                pendingReservation.destroy();
+            }
             return;
         }
         // A restart is mid-flight if _pendingOldJob is set and the
@@ -441,6 +484,22 @@ Singleton {
     function restart(): void {
         if (!_activeRecording)
             return;
+        if (_pendingMesuraJob === _activeRecording) {
+            const pendingJob = _activeRecording;
+            actionTriggered(pendingJob.sessionId, "restart");
+            const replacement = _createJob(pendingJob.sessionId, pendingJob.activeDeliveryChoice);
+            replacement._targetWindowAddress = pendingJob._targetWindowAddress;
+            replacement._targetWindowClass = pendingJob._targetWindowClass;
+            replacement._targetWindowPid = pendingJob._targetWindowPid;
+            pendingJob.cancelForRestart(true);
+            _activeRecording = null;
+            _sessionVocabHints = [];
+            vocabHintsVisible = false;
+            _pendingMesuraJob = replacement;
+            _activatePreparedJob(replacement, "recording");
+            pendingJob.destroy();
+            return;
+        }
         const mesuraControlId = _activeRecording._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("restart") : "";
         actionTriggered(_activeRecording.sessionId, "restart");
         restartDelayTimer.stop();
@@ -586,7 +645,7 @@ Singleton {
 
     // [key, stt IPC function] pairs. Kept in sync with the comment block in
     // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
-    readonly property var _sessionBinds: [["R", "restart"], ["S", "mode clipboard"]   // S = Save to clipboard (not submit — that's Return)
+    readonly property var _sessionBinds: [["X", "cancel"], ["R", "restart"], ["space", "pause"], ["S", "mode clipboard"]   // S = Save to clipboard (not submit — that's Return)
         , ["I", "mode inject"], ["Return", "mode submit"], ["W", "hints"]]
 
     onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
@@ -595,16 +654,25 @@ Singleton {
         return `keyword unbind ALT,${bind[0]}`;
     }
 
+    function _ipcCommand(target: string): string {
+        return `qs ipc --pid ${Quickshell.processId} call ${target}`;
+    }
+
     function _registerSessionBinds(): void {
         // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
         // binds on the same combo (which would double-fire the IPC command),
         // so a leftover bind from a crashed shell must be cleared first.
-        const cmds = _sessionBinds.map(b => `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,qs -c symmetria ipc call stt ${b[1]}`);
+        const ipcCommand = _ipcCommand("stt");
+        const cmds = _sessionBinds.map(b => `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,${ipcCommand} ${b[1]}`);
         Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
     }
 
     function _unregisterSessionBinds(): void {
-        Quickshell.execDetached(["hyprctl", "--batch", _sessionBinds.map(_unbindCmd).join(" ; ")]);
+        const recorderIpcCommand = _ipcCommand("recorder");
+        const commands = _sessionBinds.map(_unbindCmd);
+        commands.push(`keyword bindd ALT,space,Pause/Resume recording,exec,${recorderIpcCommand} pause`);
+        commands.push(`keyword bindd ALT,X,Cancel recording,exec,${recorderIpcCommand} cancel`);
+        Quickshell.execDetached(["hyprctl", "--batch", commands.join(" ; ")]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

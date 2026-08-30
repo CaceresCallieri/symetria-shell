@@ -38,10 +38,18 @@ These document WHY certain code patterns exist:
 
 ## Mesura Reserved Sessions
 
-Mesura Code delivery never uses `stt-inject.sh`. The Shell reserves an exact Mesura target before it
-publishes recording state. The target remains immutable through transcription, grace, delivery, and
-confirmation. If reservation fails, Shell does not start audio and does not fall back to the focused
-window.
+Mesura Code delivery never uses `stt-inject.sh`. The Shell captures the exact Mesura process, sends
+the reservation, and starts audio immediately under Shell presentation ownership. This keeps the
+keybind responsive while the broker round trip runs. Mesura receives recording state only after it
+confirms the exact target. The target remains immutable through transcription, grace, delivery, and
+confirmation. If reservation fails, Shell reports the failure and continues ordinary transcription
+in manual-clipboard mode. It never falls back to automatic paste or send against the focused window.
+
+If transcription finishes while reservation is still pending, the job holds the transcript and does
+not enter any generic delivery path. Confirmation starts the normal grace period. Reservation
+failure copies the completed transcript without running `stt-inject.sh`, so the user can paste it
+manually. Restart replaces the active capture inside the same pending reservation, and mode changes
+made during the wait win over the reservation snapshot.
 
 The helper connects only to `symmetria-mesura-dictation-<pid>.sock`. The old
 `symmetria-mesura-<pid>.sock` request carried no thread identity and is not discovered. Mesura keeps a
@@ -53,7 +61,8 @@ transcript. `provider_turn_failed` does not permit retry because the provider tu
 
 Mesura owns the visible recorder only while it renews the focused exact-target presentation lease.
 Shell shows the same job after route change, window blur, disconnect, or lease expiry. Presentation
-ownership never changes the recording or delivery target.
+ownership never changes the recording or delivery target. Shared controls always keep the Shell job;
+only the Shell surfaces use the lease to decide whether to render it.
 
 If Mesura disconnects during recording, processing, or grace, Shell finishes the transcript and then
 uses the normal unavailable-target recovery. A disconnect during delivery or confirmation fails

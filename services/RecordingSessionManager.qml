@@ -48,10 +48,11 @@ Singleton {
 
     /// The current recording job (from whichever service is active), or null.
     /// Centralizes mode→service→job resolution so consumers don't duplicate it.
+    /// Presentation ownership must not hide state from shared controls.
     // intentional var: polymorphic (SttJob | AudioRecorderJob | null)
     readonly property var currentJob: {
         if (_activeMode === "stt")
-            return shellOwnsSttPresentation ? SttService.job : null;
+            return SttService.job;
         if (_activeMode === "audio")
             return AudioRecorderService.job;
         return null;

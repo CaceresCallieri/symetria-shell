@@ -23,13 +23,18 @@ class MesuraDictationProtocolTests(unittest.TestCase):
     def test_discovers_only_pid_scoped_dictation_sockets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             runtime_dir = Path(directory)
+            process_root = runtime_dir / "proc"
+            (process_root / "41").mkdir(parents=True)
             valid = runtime_dir / "symmetria-mesura-dictation-41.sock"
+            stale = runtime_dir / "symmetria-mesura-dictation-42.sock"
             other = runtime_dir / "symmetria-mesura-41.sock"
             malformed = runtime_dir / "symmetria-mesura-dictation-nope.sock"
-            for path in (valid, other, malformed):
+            for path in (valid, stale, other, malformed):
                 path.touch()
 
-            self.assertEqual(CLIENT.discover_socket_paths(runtime_dir), {41: valid})
+            self.assertEqual(
+                CLIENT.discover_socket_paths(runtime_dir, process_root), {41: valid}
+            )
 
     def test_destinationless_mesura_injection_is_retired(self) -> None:
         inject_source = (REPOSITORY_ROOT / "scripts/stt-inject.sh").read_text()
@@ -44,6 +49,99 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertNotIn("STT_MESURA_PID", job_source)
         self.assertNotIn("minor: 4", transport_source)
         self.assertEqual(transport_source.count("minor: 5"), 1)
+
+    def test_shell_starts_while_reservation_is_pending_and_only_hands_off_ui(
+        self,
+    ) -> None:
+        service_source = (REPOSITORY_ROOT / "services/SttService.qml").read_text()
+        manager_source = (
+            REPOSITORY_ROOT / "services/RecordingSessionManager.qml"
+        ).read_text()
+        bar_source = (REPOSITORY_ROOT / "modules/bar/Bar.qml").read_text()
+        mesura_start = service_source.split(
+            "if (job._isMesuraClass(job._targetWindowClass)", maxsplit=1
+        )[1].split("return;\n        }", maxsplit=1)[0]
+
+        self.assertIn("MesuraDictation.reserve", mesura_start)
+        self.assertIn('_activatePreparedJob(job, "recording");', mesura_start)
+        self.assertLess(
+            mesura_start.index('_activatePreparedJob(job, "recording");'),
+            mesura_start.index("MesuraDictation.reserve"),
+        )
+        self.assertIn("return SttService.job;", manager_source)
+        self.assertNotIn(
+            "return shellOwnsSttPresentation ? SttService.job : null;",
+            manager_source,
+        )
+        self.assertIn("RecordingSessionManager.shellOwnsSttPresentation", bar_source)
+
+        job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
+        delivery_gate = job_source.split(
+            "function _beginDeliveryAfterTranscription", maxsplit=1
+        )[1].split("function sendNow", maxsplit=1)[0]
+        restart_gate = service_source.split("function restart", maxsplit=1)[1].split(
+            "function retry", maxsplit=1
+        )[0]
+        accept_handler = service_source.split(
+            "function _acceptMesuraSession", maxsplit=1
+        )[1].split("function _startExternalMesuraSession", maxsplit=1)[0]
+        failure_handler = service_source.split(
+            "function _failMesuraReservation", maxsplit=1
+        )[1].split("function _acceptMesuraSession", maxsplit=1)[0]
+        clipboard_handler = job_source.split(
+            "readonly property Process clipboardProcess", maxsplit=1
+        )[1].split(
+            "readonly property Process mesuraRecoveryClipboardProcess", maxsplit=1
+        )[0]
+
+        self.assertIn("mesuraReservationPending(sessionId)", delivery_gate)
+        self.assertLess(
+            delivery_gate.index("mesuraReservationPending(sessionId)"),
+            delivery_gate.index("if (!_mesuraIntegrated)"),
+        )
+        self.assertIn("_pendingMesuraJob === _activeRecording", restart_gate)
+        self.assertIn(
+            "_createJob(pendingJob.sessionId, pendingJob.activeDeliveryChoice)",
+            restart_gate,
+        )
+        self.assertIn("if (!alreadyActive)", accept_handler)
+        self.assertIn(
+            "MesuraDictation.setMode(pendingJob.activeDeliveryChoice)", accept_handler
+        )
+        self.assertIn("pending._manualClipboardFallback = true", failure_handler)
+        self.assertIn('pending.setDeliveryChoice("clipboard")', failure_handler)
+        self.assertNotIn("pending.cancel()", failure_handler)
+        self.assertIn("job._manualClipboardFallback", clipboard_handler)
+        self.assertIn("TranscriptionStore.add(job._transcribedText)", clipboard_handler)
+
+    def test_shell_session_controls_target_the_running_instance(self) -> None:
+        service_source = (REPOSITORY_ROOT / "services/SttService.qml").read_text()
+        bar_embed_source = (
+            REPOSITORY_ROOT / "modules/recorder/RecordingBarEmbed.qml"
+        ).read_text()
+        drawer_source = (REPOSITORY_ROOT / "modules/recorder/Content.qml").read_text()
+
+        session_bind_block = service_source.split(
+            "readonly property var _sessionBinds", maxsplit=1
+        )[1].split("onActiveChanged", maxsplit=1)[0]
+        registration_block = service_source.split(
+            "function _registerSessionBinds", maxsplit=1
+        )[1].split("function _unregisterSessionBinds", maxsplit=1)[0]
+
+        self.assertIn('["X", "cancel"]', session_bind_block)
+        self.assertIn('["R", "restart"]', session_bind_block)
+        self.assertIn('["space", "pause"]', session_bind_block)
+        self.assertIn("Quickshell.processId", service_source)
+        self.assertIn("qs ipc --pid", service_source)
+        self.assertNotIn("qs -c symmetria", registration_block)
+        unregister_block = service_source.split(
+            "function _unregisterSessionBinds", maxsplit=1
+        )[1].split("// ── Job lifecycle", maxsplit=1)[0]
+        self.assertIn("Pause/Resume recording", unregister_block)
+        self.assertIn("Cancel recording", unregister_block)
+        self.assertIn('_ipcCommand("recorder")', unregister_block)
+        self.assertNotIn("projectName", bar_embed_source)
+        self.assertNotIn("projectName", drawer_source)
 
     def test_disconnect_interrupts_only_delivery_and_confirmation(self) -> None:
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
