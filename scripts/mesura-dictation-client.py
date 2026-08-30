@@ -23,9 +23,6 @@ from typing import Any, TextIO
 PROTOCOL_VERSION = {"major": 1, "minor": 5}
 SOCKET_NAME = re.compile(r"^symmetria-mesura-dictation-(\d+)\.sock$")
 DISCOVERY_INTERVAL_SECONDS = 0.25
-RETRYABLE_FAILURE_CODES = frozenset(
-    {"provider_start_failed", "persistence_failed", "deadline_exceeded"}
-)
 
 
 def discover_socket_paths(
@@ -124,15 +121,10 @@ def parse_server_message(peer_pid: int, line: str) -> dict[str, Any]:
                 "code": "malformed_input",
                 "detail": "Mesura sent an invalid dictation receipt",
             }
-        normalized_receipt = dict(receipt)
-        normalized_receipt["retryable"] = (
-            receipt.get("outcome") == "failed"
-            and receipt.get("code") in RETRYABLE_FAILURE_CODES
-        )
         return {
             "type": "receipt",
             "peerPid": peer_pid,
-            "receipt": normalized_receipt,
+            "receipt": receipt,
         }
     if message_type == "dictation.error":
         return {
