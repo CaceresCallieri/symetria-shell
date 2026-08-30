@@ -455,7 +455,7 @@ Item {
         // flip it" failure mode. The close/open animations still play
         // correctly because the Behavior on the embed's scale animates
         // whenever the bound value changes.
-        readonly property bool _showEmbed: RecordingSessionManager.active && !(_activeJob?.closing ?? false)
+        readonly property bool _showEmbed: RecordingSessionManager.active && (RecordingSessionManager.activeMode !== "stt" || RecordingSessionManager.shellOwnsSttPresentation) && !(_activeJob?.closing ?? false)
 
         readonly property bool _shouldBeActive: AgentService.mergeActive && _showEmbed
 

@@ -28,14 +28,19 @@ RETRYABLE_FAILURE_CODES = frozenset(
 )
 
 
-def discover_socket_paths(runtime_dir: Path) -> dict[int, Path]:
+def discover_socket_paths(
+    runtime_dir: Path, process_root: Path = Path("/proc")
+) -> dict[int, Path]:
     """Return exact PID-scoped Mesura dictation socket candidates."""
     discovered: dict[int, Path] = {}
     with contextlib.suppress(OSError):
         for path in runtime_dir.iterdir():
             match = SOCKET_NAME.fullmatch(path.name)
-            if match is not None:
-                discovered[int(match.group(1))] = path
+            if match is None:
+                continue
+            peer_pid = int(match.group(1))
+            if (process_root / str(peer_pid)).is_dir():
+                discovered[peer_pid] = path
     return discovered
 
 

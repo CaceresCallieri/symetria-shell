@@ -203,6 +203,11 @@ QtObject {
     // _spawnInjectProcess() for the sendshortcut Ctrl+V on a target window.
     property bool _clipboardModeOnly: false
 
+    // Reservation failure keeps ordinary STT useful without risking delivery
+    // to whichever Mesura chat happens to be focused later. The transcript is
+    // copied once and remains in the clipboard for an explicit manual paste.
+    property bool _manualClipboardFallback: false
+
     // Text payload pending cliphist delete-query (after a small delay to let
     // the wl-paste --watch daemon write the entry to its db before we try
     // to remove it). Cleared once the timer fires.
@@ -368,6 +373,8 @@ QtObject {
     function setDeliveryChoice(mode: string): void {
         if (mode !== "clipboard" && mode !== "inject" && mode !== "submit")
             return;
+        if (_manualClipboardFallback && mode !== "clipboard")
+            return;
         if (_mesuraIntegrated && _state !== "recording" && _state !== "paused" && _state !== "processing" && _state !== "transcribed" && _state !== "grace")
             return;
         if (_activeDeliveryChoice === mode)
@@ -388,6 +395,16 @@ QtObject {
     }
 
     function _beginDeliveryAfterTranscription(): void {
+        if (_manualClipboardFallback) {
+            _startDeliveryChain();
+            return;
+        }
+        if (_isMesuraClass(_targetWindowClass) && !_mesuraIntegrated) {
+            if (SttService.mesuraReservationPending(sessionId))
+                return;
+            _setErrorState("mesura", "Mesura target unavailable", "The transcript was not redirected", false);
+            return;
+        }
         if (!_mesuraIntegrated) {
             _startDeliveryChain();
             return;
@@ -839,6 +856,19 @@ QtObject {
     ///   mode but the script is allowed to attempt RPC if a socket happens
     ///   to be available.
     function _startDeliveryChain(): void {
+        if (_manualClipboardFallback) {
+            _state = "delivering";
+            _ranWlCopy = true;
+            _clipboardModeOnly = true;
+            clipboardProcess.command = ["wl-copy", _transcribedText];
+            clipboardProcess.running = true;
+            return;
+        }
+        if (_isMesuraClass(_targetWindowClass) && !_mesuraIntegrated) {
+            _state = "transcribed";
+            _beginDeliveryAfterTranscription();
+            return;
+        }
         _state = "delivering";
 
         const effectiveMode = _activeDeliveryChoice;
@@ -1507,6 +1537,8 @@ QtObject {
                     job._mesuraRetryAvailable = true;
                     job._showMesuraFailureToast();
                     job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", true);
+                } else if (job._manualClipboardFallback) {
+                    job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", false);
                 } else {
                     job._state = "success";
                 }
@@ -1514,6 +1546,11 @@ QtObject {
             }
             if (job._mesuraIntegrated) {
                 job._sendMesuraDelivery();
+                return;
+            }
+            if (job._manualClipboardFallback) {
+                TranscriptionStore.add(job._transcribedText);
+                job._state = "success";
                 return;
             }
             // forceSendshortcut === _clipboardModeOnly: clipboard mode forces

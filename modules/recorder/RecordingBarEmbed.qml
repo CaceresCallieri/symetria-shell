@@ -46,7 +46,6 @@ Item {
     }
 
     readonly property bool isRecordingPhase: displayState === "recording" || displayState === "paused" || displayState === "processing" || displayState === "grace" || displayState === "confirming"
-    readonly property string projectName: mode === "stt" ? (job?.projectName ?? "") : ""
     property real confirmationPulse: 1
 
     // Live streaming partial transcript (STT streaming mode). "" otherwise.
@@ -122,23 +121,6 @@ Item {
         opacity: visible ? 1 : 0
         anchors.centerIn: parent
         spacing: Appearance.spacing.small
-
-        StyledText {
-            visible: root.projectName !== ""
-            text: root.projectName
-            font.pointSize: Appearance.font.size.small * 0.88
-            font.weight: Font.DemiBold
-            color: Colours.palette.m3onSurfaceVariant
-            elide: Text.ElideRight
-            Layout.maximumWidth: 140
-        }
-
-        StyledText {
-            visible: root.projectName !== ""
-            text: "\u00b7"
-            font.pointSize: Appearance.font.size.small
-            color: Colours.palette.m3outlineVariant
-        }
 
         Behavior on opacity {
             Anim {}
