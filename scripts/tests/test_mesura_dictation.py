@@ -4,6 +4,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import socket
 import tempfile
 import threading
@@ -295,6 +296,30 @@ class MesuraDictationProtocolTests(unittest.TestCase):
 
         self.assertEqual(event["type"], "client.error")
         self.assertEqual(event["code"], "malformed_input")
+
+    def test_qml_logs_only_correlated_receipt_metadata(self) -> None:
+        transport_source = (
+            REPOSITORY_ROOT / "services/MesuraDictation.qml"
+        ).read_text()
+        receipt_handler = transport_source.split(
+            '} else if (event.type === "receipt") {', maxsplit=1
+        )[1].split('} else if (event.type === "client.error"', maxsplit=1)[0]
+
+        self.assertIn("mesura-receipt | peer=", receipt_handler)
+        for field in ("session=", "command=", "outcome=", "code=", "retryable="):
+            self.assertIn(field, receipt_handler)
+        self.assertNotIn("JSON.stringify(event.receipt)", receipt_handler)
+        self.assertNotIn("event.receipt.text", receipt_handler)
+        log_statement = next(
+            line for line in receipt_handler.splitlines() if "Logger.log" in line
+        )
+        self.assertEqual(
+            set(re.findall(r"receipt\.([A-Za-z]+)", log_statement)),
+            {"sessionId", "commandId", "outcome", "code", "retryable"},
+        )
+        self.assertNotIn("JSON.stringify(receipt)", log_statement)
+        for field in ("text", "transcript", "detail", "prompt", "attachments"):
+            self.assertNotIn(f"receipt.{field}", log_statement)
 
     def test_peer_sends_handshake_and_forwards_the_opening_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
