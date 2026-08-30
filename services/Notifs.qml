@@ -74,7 +74,7 @@ Singleton {
         return validExts.some(ext => lower.endsWith(ext));
     }
 
-    // Read the self-supersede tag out of a notification's hints, "" when absent.
+    // The hint names that carry a self-supersede tag, in precedence order.
     //
     // A client that emits one notification per keypress — a volume or brightness
     // script, a progress bar — wants only the newest on screen. `replaces_id`
@@ -84,13 +84,28 @@ Singleton {
     // hint moves that bookkeeping to the server, where it belongs.
     //
     // Three spellings are in circulation and clients pick one without probing:
-    // libnotify's `--hint string:synchronous:`, GNOME's legacy
-    // `x-canonical-private-synchronous`, and dunst's `x-dunst-stack-tag`. Accept
-    // all three so a client already working under dunst or mako works here
-    // unchanged. Keep this list in step with `server.extraHints`, which is what
-    // GetCapabilities advertises over D-Bus.
+    // libnotify's `synchronous`, GNOME's legacy `x-canonical-private-synchronous`,
+    // and dunst's `x-dunst-stack-tag`. Accept all three so a client already
+    // working under dunst or mako works here unchanged.
+    //
+    // ONE list, read by both _syncTag() and server.extraHints — the latter is what
+    // GetCapabilities advertises over D-Bus. They were briefly two literals held
+    // together by a comment, which is the same drift trap _isValidImageExt() above
+    // already exists to avoid.
+    readonly property list<string> _syncHintKeys: ["synchronous", "x-canonical-private-synchronous", "x-dunst-stack-tag"]
+
+    // Read the self-supersede tag out of a notification's hints, "" when absent.
+    //
+    // An empty value counts as absent, so a client that sends a bare
+    // `--hint string:synchronous:` does not shadow a populated tag under one of
+    // the other spellings. `??` alone would stop at the empty string.
     function _syncTag(hints: var): string {
-        return hints["synchronous"] ?? hints["x-canonical-private-synchronous"] ?? hints["x-dunst-stack-tag"] ?? "";
+        for (const key of root._syncHintKeys) {
+            const value = hints[key];
+            if (value !== undefined && value !== null && value !== "")
+                return value;
+        }
+        return "";
     }
 
     // Close the notification that an incoming one supersedes, if any.
@@ -108,9 +123,13 @@ Singleton {
     function _supersedeSynchronous(tag: string, appName: string): void {
         if (!tag)
             return;
-        // At most one live notification per (tag, appName) exists by construction,
-        // so the first match is the only match.
-        root.list.find(n => !n.closed && n.syncTag === tag && n.appName === appName)?.close();
+        // Closes EVERY match rather than the first. This function is what keeps
+        // the one-per-(tag, appName) invariant true, so it must not assume it:
+        // entries restored from a notifs.json written before syncTag was
+        // persisted all carry "" and are correctly skipped, but a find() would
+        // silently strand any second match in history forever.
+        for (const n of root.list.filter(m => !m.closed && m.syncTag === tag && m.appName === appName))
+            n.close();
     }
 
     NotificationServer {
@@ -125,9 +144,9 @@ Singleton {
         persistenceSupported: true
 
         // Advertised through GetCapabilities so a client can discover the
-        // self-supersede support instead of assuming it. Keep in step with the
-        // spellings root._syncTag() accepts.
-        extraHints: ["synchronous", "x-canonical-private-synchronous", "x-dunst-stack-tag"]
+        // self-supersede support instead of assuming it. Same list _syncTag()
+        // reads, by construction.
+        extraHints: root._syncHintKeys
 
         onNotification: notif => {
             notif.tracked = true;
@@ -156,7 +175,8 @@ Singleton {
 
             const comp = notifComp.createObject(root, {
                 popup: !props.dnd && ![...Visibilities.screens.values()].some(v => v.sidebar),
-                notification: notif
+                notification: notif,
+                syncTag
             });
 
             const max = Config.notifs.maxStored;
@@ -165,6 +185,10 @@ Singleton {
             const base = root.list.length >= max ? root.list.slice(0, max - 1) : root.list;
             const evicted = root.list.slice(base.length);
             root.list = [comp, ...base];
+            // Eviction deliberately bypasses `locks`, unlike closeGroup()/clearAll().
+            // It is safe because an evicted entry is always among the OLDEST (index
+            // >= max - 1) while anything a delegate still holds is among the newest,
+            // so the two sets cannot overlap in practice.
             for (const n of evicted) {
                 n.notification?.dismiss();
                 n.destroy();
@@ -323,10 +347,14 @@ Singleton {
         property list<var> actions
 
         // Self-supersede tag from the `synchronous` hint family, "" when the
-        // client sent none. Persisted alongside the rest so a tag still matches
-        // across a shell restart: without it a "Volume: 70%" entry restored from
-        // disk would sit in history forever beside every later volume step,
-        // because the incoming one would find nothing to supersede.
+        // client sent none. Seeded through createObject's initial properties on
+        // BOTH paths — live arrivals from _syncTag(hints), restored entries from
+        // notifs.json — and kept fresh afterwards by onHintsChanged below.
+        //
+        // Persisted alongside the rest so a tag still matches across a shell
+        // restart: without it a "Volume: 70%" entry restored from disk would sit
+        // in history forever beside every later volume step, because the incoming
+        // one would find nothing to supersede.
         property string syncTag
 
         readonly property Timer timer: Timer {
@@ -442,6 +470,15 @@ Singleton {
                 notif.hasActionIcons = notif.notification.hasActionIcons;
             }
 
+            // Quickshell updates a tracked Notification IN PLACE when a client
+            // reuses it via replaces_id, so a mirrored property that is only read
+            // once at construction goes stale. Without this, a client that changes
+            // its tag on replace would leave syncTag frozen and the next arrival
+            // would supersede the wrong entry, or none.
+            function onHintsChanged(): void {
+                notif.syncTag = root._syncTag(notif.notification.hints);
+            }
+
             function onActionsChanged(): void {
                 notif.actions = notif.notification.actions.map(a => ({
                             identifier: a.identifier,
@@ -498,10 +535,6 @@ Singleton {
             urgency = notification.urgency;
             resident = notification.resident;
             hasActionIcons = notification.hasActionIcons;
-            // Restored-from-disk notifications never reach here (the guard above
-            // returns when `notification` is unset), so their syncTag keeps the
-            // value createObject seeded from notifs.json.
-            syncTag = root._syncTag(notification.hints);
             actions = notification.actions.map(a => ({
                         identifier: a.identifier,
                         text: a.text,
