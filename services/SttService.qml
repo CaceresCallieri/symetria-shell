@@ -307,6 +307,18 @@ Singleton {
     }
 
     function _acceptMesuraSession(peerPid: int, session: var, pendingJob: SttJob): void {
+        if (session.phase !== "recording" && session.phase !== "paused") {
+            if (_pendingMesuraJob === pendingJob) {
+                const terminalPhase = session.phase === "completed" || session.phase === "failed" || session.phase === "cancelled";
+                if (!terminalPhase)
+                    MesuraDictation.sendControlTo(peerPid, session, "cancel");
+                _failMesuraReservation(pendingJob.sessionId, `Mesura returned unsupported phase: ${session.phase}`);
+            } else {
+                MesuraDictation.sendControlTo(peerPid, session, "cancel");
+                pendingJob.destroy();
+            }
+            return;
+        }
         const alreadyActive = _job === pendingJob;
         MesuraDictation.acceptSession(peerPid, session);
         pendingJob._mesuraIntegrated = true;
@@ -323,9 +335,11 @@ Singleton {
             if (alreadyActive) {
                 if (pendingJob.activeDeliveryChoice !== session.mode)
                     MesuraDictation.setMode(pendingJob.activeDeliveryChoice);
-                MesuraDictation.updateState(pendingJob);
-                if (pendingJob.state === "transcribed")
+                if (pendingJob.state === "transcribed") {
                     pendingJob._beginDeliveryAfterTranscription();
+                    return;
+                }
+                MesuraDictation.updateState(pendingJob);
                 return;
             }
             _activatePreparedJob(pendingJob, session.phase);
@@ -405,6 +419,8 @@ Singleton {
             MesuraDictation.cancelReservation(pendingReservation.sessionId);
             if (_activeRecording === pendingReservation)
                 _activeRecording = null;
+            _sessionVocabHints = [];
+            vocabHintsVisible = false;
             if (_job === pendingReservation) {
                 actionTriggered(pendingReservation.sessionId, "cancel");
                 pendingReservation.cancel();

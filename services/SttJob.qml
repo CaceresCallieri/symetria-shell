@@ -55,6 +55,9 @@ QtObject {
     /// The user's runtime delivery choice for this job
     readonly property string activeDeliveryChoice: _activeDeliveryChoice
 
+    /// Whether Mesura reservation failed and delivery is locked to clipboard.
+    readonly property bool manualClipboardFallback: _manualClipboardFallback
+
     /// Injection delivery path
     readonly property string injectionPath: _injectionPath
 
@@ -145,6 +148,8 @@ QtObject {
     property int _segmentCounter: 0
     property list<string> _segmentFiles: []
     property string _currentAudioFile: ""
+    readonly property string _fileToken: `${Date.now()}_${Math.floor(Math.random() * 1000000000)}`
+    readonly property string _tempFilePrefix: sessionId === "" ? "" : `session_${sessionId}_${_fileToken}`
     // Model actually used for the last transcription attempt (may differ from
     // Config.stt.model when long-audio routing kicked in). Recorded in the
     // history sidecar so a recovered recording shows which model produced it.
@@ -197,10 +202,10 @@ QtObject {
     // that bypass the clipboard entirely.
     property bool _ranWlCopy: false
 
-    // Whether this delivery is clipboard-mode only (no inject chain). When
-    // true, clipboardProcess.onExited finalizes the delivery directly:
-    // record + scrub + state=success. When false, it chains to
-    // _spawnInjectProcess() for the sendshortcut Ctrl+V on a target window.
+    // Whether this delivery is clipboard-mode only (no inject chain). Normal
+    // clipboard delivery records, scrubs, and succeeds here. Manual fallback
+    // has an earlier branch that records and succeeds without scrubbing. When
+    // false, completion chains to _spawnInjectProcess() for target paste.
     property bool _clipboardModeOnly: false
 
     // Reservation failure keeps ordinary STT useful without risking delivery
@@ -223,7 +228,7 @@ QtObject {
     readonly property string _currentSegmentPath: {
         if (sessionId === "")
             return "";
-        return `${SttService._tempDir}/session_${sessionId}_segment_${_segmentCounter}.wav`;
+        return `${SttService._tempDir}/${_tempFilePrefix}_segment_${_segmentCounter}.wav`;
     }
 
     // ── Public methods ─────────────────────────────────────────────────
@@ -783,7 +788,7 @@ QtObject {
             _startTranscription(_currentAudioFile);
         } else {
             console.log("[STT:D06] multi-segment → ffmpeg concat, count:", _segmentFiles.length);
-            const outputPath = `${SttService._tempDir}/session_${sessionId}_combined.wav`;
+            const outputPath = `${SttService._tempDir}/${_tempFilePrefix}_combined.wav`;
             _currentAudioFile = outputPath;
 
             const n = _segmentFiles.length;
@@ -835,8 +840,10 @@ QtObject {
         transcribeProcess.running = true;
     }
 
-    /// Start the delivery chain. Three paths, all routed through
-    /// stt-inject.sh except RPC-only (which talks directly to nvim):
+    /// Start the delivery chain. Four paths:
+    ///
+    /// - Manual Mesura fallback → wl-copy only. The transcript stays in the
+    ///   clipboard for explicit paste, with no injection or cliphist scrub.
     ///
     /// - "clipboard" mode → wl-copy + stt-inject.sh sendshortcut Ctrl+V on
     ///   the captured target window. Always sendshortcut, never RPC, even
@@ -1014,8 +1021,10 @@ QtObject {
 
     /// Delete temp files for this session.
     function _cleanupTempFiles(): void {
-        if (sessionId !== "") {
-            Quickshell.execDetached(["find", SttService._tempDir, "-maxdepth", "1", "-name", `session_${sessionId}_*`, "-delete"]);
+        if (_tempFilePrefix !== "") {
+            // Each job has a unique prefix even when restart reuses the broker
+            // session ID. Old-job cleanup can never delete replacement audio.
+            Quickshell.execDetached(["find", SttService._tempDir, "-maxdepth", "1", "-name", `${_tempFilePrefix}_*`, "-delete"]);
         }
     }
 
@@ -1515,11 +1524,10 @@ QtObject {
         }
     }
 
-    // wl-copy delivery for clipboard mode and inject/submit non-RPC fallback.
-    // Both paths chain to _spawnInjectProcess() afterwards; the difference is
-    // the forceSendshortcut flag — clipboard mode forces sendshortcut Ctrl+V
-    // (no RPC), inject/submit lets the script attempt RPC if a socket is set.
-    // injectProcess.onExited handles record + scrub + state. RPC-eligible
+    // wl-copy delivery for manual recovery, clipboard mode, and non-RPC
+    // inject/submit. Manual recovery finalizes here and intentionally leaves
+    // the clipboard untouched. The other paths either finalize clipboard-only
+    // delivery or continue through _spawnInjectProcess(); RPC-eligible
     // inject/submit deliveries bypass this Process entirely.
     readonly property Process clipboardProcess: Process {
         onExited: (code, status) => {
