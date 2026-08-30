@@ -9,7 +9,8 @@ import Quickshell.Hyprland
 import Quickshell.Widgets
 import QtQuick
 
-/// Shared app icon for Hyprland clients — used by both workspace bar and agentbar.
+/// App icon for Hyprland clients, used by the workspace bar. It was shared with
+/// the agentbar's merged layout, which went out with Symmetria IDE.
 /// Shows the actual app icon (or Material category fallback) with click-to-focus and tooltip.
 Item {
     id: root

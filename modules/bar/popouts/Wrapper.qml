@@ -140,15 +140,12 @@ Item {
         }
     }
 
-    // Grab is active for detached panels (controlcenter, winfo) and also for
-    // the STT recording popout while vocab hints are visible — the vocab-hints
-    // TextField lives in THIS window, so the grab must live here too to avoid
-    // a focus tug-of-war with the drawer window's grab.
-    readonly property bool _vocabHintsActive: root.hasCurrent
-        && root.currentName === "recording"
-        && SttService.vocabHintsVisible
-
-    // The updates popout's sudo password field lives in THIS window too, so it
+    // Grab is active for detached panels (controlcenter, winfo). It used to
+    // cover the STT recording popout too, whose vocab-hints TextField lived in
+    // THIS window; that popout went out with the merged agent bar, and the
+    // drawer's own vocab-hints surface has the drawer window's grab.
+    //
+    // The updates popout's sudo password field lives in THIS window, so it
     // needs the same grab treatment as the vocab hints input: without the grab
     // the compositor never routes keys here until the user clicks the field.
     readonly property bool _updatesPasswordActive: root.hasCurrent
@@ -156,13 +153,10 @@ Item {
         && UpdateRunner.phase === "password"
 
     HyprlandFocusGrab {
-        active: root.isDetached || (root.keyboardNavigationActive && root.hasCurrent) || root._vocabHintsActive || root._updatesPasswordActive
+        active: root.isDetached || (root.keyboardNavigationActive && root.hasCurrent) || root._updatesPasswordActive
         windows: [QsWindow.window]
         onCleared: {
-            if (root._vocabHintsActive)
-                // Popout intentionally stays open — only the hints input closes on click-outside.
-                SttService.vocabHintsVisible = false;
-            else if (root._updatesPasswordActive) {
+            if (root._updatesPasswordActive) {
                 // Click-outside during password entry abandons the pending run —
                 // the process is blocked on stdin and must not linger.
                 UpdateRunner.cancel();
@@ -191,14 +185,6 @@ Item {
     // Keyboard focus for the updates popout while it shows the sudo password field.
     Binding {
         when: root._updatesPasswordActive
-
-        target: QsWindow.window
-        property: "WlrLayershell.keyboardFocus"
-        value: WlrKeyboardFocus.OnDemand
-    }
-
-    Binding {
-        when: root._vocabHintsActive
 
         target: QsWindow.window
         property: "WlrLayershell.keyboardFocus"

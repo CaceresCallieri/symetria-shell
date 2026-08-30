@@ -11,8 +11,9 @@ import qs.config
 ///
 /// `sttIsTranscribing` is deliberately left at the module default. It used to
 /// track `AgentService.sttIsTranscribing`, but the chip only ever animated on
-/// it while `isSttTarget` was true, and no row this bar draws can be an STT
-/// target any more — see AgentChipFor.
+/// it while `isSttTarget` was true, and AgentChipFor now pins that to `false`
+/// because no row this bar draws can be an STT target. Restore BOTH together —
+/// either one alone leaves the shared chip's STT branch unreachable. Issue #64.
 AgentsUI.AgentChip {
     size: Appearance.font.size.small * 1.4
     crossfadeDuration: Appearance.anim.durations.normal

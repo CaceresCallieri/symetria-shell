@@ -333,12 +333,12 @@ Item {
             // user can re-dictate mishearings on the fly. Preview only — the
             // delivered text still comes from the batch path.
             //
-            // CONTRACT — this is ONE of TWO partial-preview surfaces; the other
-            // is the bar embed (RecordingBarEmbed.qml), which is the primary one
-            // in daily use (merge mode). Keep both in sync: a streaming-partial
-            // change here must be mirrored there, or the preview disappears for
-            // whichever surface the user is in. The treatments differ on purpose
-            // (wrapped block here; grow-with-cap + ElideLeft pill there).
+            // This is now the ONLY partial-preview surface. It used to be one of
+            // two: the merged agent bar's embed was the primary one, and the two
+            // had to be kept in sync. That embed went out with Symmetria IDE, so
+            // there is nothing to mirror any more — but restore the sync contract
+            // if a second surface returns, because a drifted pair silently loses
+            // the preview for whichever surface the user is in.
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
                 show: root.mode === "stt" && root.partialTranscript !== "" && (root.displayState === "recording" || root.displayState === "processing")

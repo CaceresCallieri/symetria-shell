@@ -14,7 +14,12 @@ import Symmetria
 /// every join onto a local Hyprland window went with the IDE.
 ///
 /// AgentService still exists, reduced to dictation plumbing on its way out.
-/// Nothing here reads it and nothing in it reads this — keep it that way.
+/// Nothing here reads it, and the only thing in it that reads this is the
+/// `agentbar` IpcHandler — `status` reports the bar's project names and
+/// `toggle` guards on them. That handler stayed in AgentService because
+/// Quickshell discards a second handler registered for one target, so the verbs
+/// cannot be split across two files; the read moves out with it under issue #64.
+/// Keep it to that one exception: the rendering path must read nothing there.
 ///
 /// ## The socket is discovered, not addressed
 ///
@@ -75,7 +80,15 @@ Singleton {
                 byProject[name] = [];
             byProject[name].push(root._asAgent(thread, name));
         }
-        return Object.keys(byProject).map(name => ({
+        // Sorted, because `Object.keys` follows insertion order — which here is
+        // the arrival order of thread ids on the socket, and that is not a
+        // stable pill order. It changes when a project's first-seen thread ends
+        // and another takes its place, and again on every reconnect. This used
+        // to be masked: the bridge branch supplied a deterministically sorted
+        // prefix and these rows only appended after it. That branch is gone, so
+        // this is now the ONLY order the bar has, and without the sort the pills
+        // visibly reshuffle whenever an unrelated thread updates.
+        return Object.keys(byProject).sort((a, b) => a.localeCompare(b)).map(name => ({
                     project: name,
                     agents: byProject[name]
                 }));
@@ -93,12 +106,15 @@ Singleton {
     function _asAgent(thread: var, projectName: string): var {
         const running = thread.session?.status === "running";
         return {
-            // Namespaced, because bridge agents and these threads are
-            // concatenated into ONE ScriptModel keyed on `id`. The two id
-            // spaces are defined by different systems and nothing guarantees
-            // they stay disjoint; a collision would silently make one row
-            // render the other's data. A prefix makes it structurally
-            // impossible rather than merely unlikely.
+            // Namespaced. The prefix was added when bridge agents and these
+            // threads were concatenated into ONE ScriptModel keyed on `id`, so
+            // that a collision between two id spaces defined by different
+            // systems could not silently make one row render the other's data.
+            // That concatenation went out with Symmetria IDE, so the collision
+            // it guarded cannot happen now — the prefix stays as namespace
+            // hygiene for a wire identifier the shell does not control, and
+            // because it IS the `objectProp: "id"` key: changing it would force
+            // a full delegate reset across the whole bar.
             id: "mesura:" + thread.threadId,
             project: projectName,
             title: thread.title ?? "",

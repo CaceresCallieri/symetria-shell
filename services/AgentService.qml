@@ -77,6 +77,7 @@ Singleton {
     // intentional var: heterogeneous JS objects from bridge JSON
     property var _agents: []
     // intentional var: JS array of project names — read by diagnosticSnapshot
+    // and by the agentbar IPC status verb
     property var _projects: []
     property int _restartCount: 0
     readonly property int _maxRestartDelay: 30000
@@ -97,13 +98,7 @@ Singleton {
     // the bridge-snapshot `stt` field). See _pushSttRecording.
     readonly property string _sttRecordingScript: Qt.resolvedUrl("../scripts/stt-recording.py").toString().replace(/^file:\/\//, "")
 
-    // ── Workspace detection ──────────────────────────────────────────
-    // Maps terminal_pid → {id, name} by scanning Hypr.toplevels.
-    // Rebuilt on Hyprland window events and when _agents changes.
-    //
-    // Its only consumer left is _handleNotification, which tags an agent
-    // notification with the workspace its terminal sits on. Every rendering
-    // consumer went out with the bar.
+    // ── STT target state ─────────────────────────────────────────────
 
     property int _sttTargetTerminalPid: -1
     property int _sttTargetBufId: -1
@@ -111,6 +106,14 @@ Singleton {
     // recording dot can be pushed and later cleared on that IDE's socket
     // directly. -1 = no target, or a non-IDE (plain nvim / remote) target.
     property int _sttTargetIdePid: -1
+
+    // ── Workspace detection ──────────────────────────────────────────
+    // Maps terminal_pid → {id, name} by scanning Hypr.toplevels.
+    // Rebuilt on Hyprland window events and when _agents changes.
+    //
+    // Its only consumer left is _handleNotification, which tags an agent
+    // notification with the workspace its terminal sits on. Every rendering
+    // consumer went out with the bar.
 
     /// terminal_pid → {id: int, name: string}
     // intentional var: JS object used as hash map (pid → workspace info)
@@ -145,7 +148,9 @@ Singleton {
     }
 
     /// Returns the active agent in a group, or the first agent if none is active.
-    function representativeAgent(agents: var): var {
+    /// Underscore-prefixed since the bar's retirement left `activeAgentForTerminal`
+    /// as its only caller — it is no longer part of this service's public surface.
+    function _representativeAgent(agents: var): var {
         if (!agents || agents.length === 0)
             return null;
         return agents.find(a => a.active) ?? agents[0];
@@ -257,14 +262,14 @@ Singleton {
     }
 
     /// Find the currently active agent for a terminal PID. Returns the agent that is
-    /// currently active (via representativeAgent) among those matching the PID, or null.
+    /// currently active (via _representativeAgent) among those matching the PID, or null.
     function activeAgentForTerminal(terminalPid: int): var {
         if (terminalPid <= 0)
             return null;
         const matching = _agents.filter(a => a.terminal_pid === terminalPid);
         if (matching.length === 0)
             return null;
-        return representativeAgent(matching);
+        return _representativeAgent(matching);
     }
 
     /// Resolve the agent's Neovim RPC socket path.
@@ -306,12 +311,15 @@ Singleton {
     }
 
     Component.onCompleted: {
-        // Gated on dictation, not on the agent bar. The bar stopped reading this
-        // service when Symmetria IDE was retired from it, so gating the bridge
-        // on `Config.agentbar.enabled` would have meant switching off the bar to
-        // switch off dictation's socket resolution.
-        Logger.log("qml", "agent", `init | stt=${Config.stt.enabled}`);
-        if (Config.stt.enabled)
+        // The bridge serves dictation OR notifications, so EITHER flag keeps it
+        // alive. It used to be gated on `Config.agentbar.enabled` alone, back
+        // when it also fed the bar; leaving it there would have meant switching
+        // off the bar to switch off dictation's socket resolution, and gating it
+        // on `Config.stt.enabled` alone would have silently killed every agent
+        // notification for anyone who turns dictation off. Neither responsibility
+        // owns the other, and neither owns the bar.
+        Logger.log("qml", "agent", `init | stt=${Config.stt.enabled} agentbar=${Config.agentbar.enabled}`);
+        if (Config.stt.enabled || Config.agentbar.enabled)
             _startBridge();
     }
 
@@ -507,8 +515,8 @@ Singleton {
             bridgeThrottle.stop();
             backoffResetTimer.stop();
 
-            if (!Config.stt.enabled) {
-                Logger.log("qml", "agent", "bridge-exit | stt disabled, not restarting");
+            if (!Config.stt.enabled && !Config.agentbar.enabled) {
+                Logger.log("qml", "agent", "bridge-exit | stt+agentbar disabled, not restarting");
                 return;
             }
 
@@ -602,9 +610,12 @@ Singleton {
         }
 
         function toggle(): void {
-            // Guarded so hiding an already-empty bar cannot latch the flag on
-            // and leave the next arriving project invisible.
-            if (SymmetriaThreads.projectGroups.length === 0)
+            // Guarded in the HIDE direction only. Hiding an already-empty bar
+            // would latch the flag on and leave the next arriving project
+            // invisible; unhiding an empty bar is harmless, and guarding both
+            // directions would strand the flag on whenever Mesura disconnected
+            // while the bar was hidden.
+            if (!Visibilities.agentBarHidden && SymmetriaThreads.projectGroups.length === 0)
                 return;
             Visibilities.agentBarHidden = !Visibilities.agentBarHidden;
         }

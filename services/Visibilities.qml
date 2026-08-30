@@ -23,6 +23,13 @@ Singleton {
     // Reactive counter - increments when agentBars map changes.
     property int agentBarsVersion: 0
 
+    // Reactive counter - increments when popouts map changes.
+    // Read this inside bindings on popouts.get() so they re-evaluate on register/unregister.
+    property int popoutsVersion: 0
+
+    // Reactive counter - increments when utilitiesPanels map changes.
+    property int utilitiesPanelsVersion: 0
+
     /// Session-only agent bar visibility toggle (not persisted to shell.json).
     /// When true, the agent bar is hidden regardless of how many projects the
     /// bar's source reports. Mutated only via the "agentbar" IpcHandler.
@@ -33,13 +40,6 @@ Singleton {
     /// with a scheduled retirement, and a flag the surviving bar reads on every
     /// frame has no business inside it.
     property bool agentBarHidden: false
-
-    // Reactive counter - increments when popouts map changes.
-    // Read this inside bindings on popouts.get() so they re-evaluate on register/unregister.
-    property int popoutsVersion: 0
-
-    // Reactive counter - increments when utilitiesPanels map changes.
-    property int utilitiesPanelsVersion: 0
 
     function load(screen: ShellScreen, visibilities: var): void {
         screens.set(Hypr.monitorFor(screen), visibilities);

@@ -7,7 +7,8 @@ import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 
-/// Shared workspace app icons for bar and agentbar.
+/// Workspace app icons for the top bar. They were shared with the agentbar's
+/// merged layout, which went out with Symmetria IDE.
 /// The window model (grouping, sorting, event-driven refresh) is provided by the shared
 /// headless WorkspaceWindowModel; this component owns only the visual row + animations.
 Row {

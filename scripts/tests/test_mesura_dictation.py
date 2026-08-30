@@ -57,7 +57,9 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         manager_source = (
             REPOSITORY_ROOT / "services/RecordingSessionManager.qml"
         ).read_text()
-        bar_source = (REPOSITORY_ROOT / "modules/bar/Bar.qml").read_text()
+        recorder_root_source = (
+            REPOSITORY_ROOT / "modules/recorder/RecorderRoot.qml"
+        ).read_text()
         mesura_start = service_source.split(
             "if (job._isMesuraClass(job._targetWindowClass)", maxsplit=1
         )[1].split("return;\n        }", maxsplit=1)[0]
@@ -73,7 +75,11 @@ class MesuraDictationProtocolTests(unittest.TestCase):
             "return shellOwnsSttPresentation ? SttService.job : null;",
             manager_source,
         )
-        self.assertIn("RecordingSessionManager.shellOwnsSttPresentation", bar_source)
+        # The drawer is the only recorder surface. The bar embed that used to
+        # carry this handoff went out with the merged agent bar.
+        self.assertIn(
+            "RecordingSessionManager.shellOwnsSttPresentation", recorder_root_source
+        )
 
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
         delivery_gate = job_source.split(
@@ -134,11 +140,10 @@ class MesuraDictationProtocolTests(unittest.TestCase):
 
     def test_shell_session_controls_target_the_running_instance(self) -> None:
         service_source = (REPOSITORY_ROOT / "services/SttService.qml").read_text()
-        bar_embed_source = (
-            REPOSITORY_ROOT / "modules/recorder/RecordingBarEmbed.qml"
-        ).read_text()
         drawer_source = (REPOSITORY_ROOT / "modules/recorder/Content.qml").read_text()
-        bar_source = (REPOSITORY_ROOT / "modules/bar/Bar.qml").read_text()
+        recorder_root_source = (
+            REPOSITORY_ROOT / "modules/recorder/RecorderRoot.qml"
+        ).read_text()
 
         session_bind_block = service_source.split(
             "readonly property var _sessionBinds", maxsplit=1
@@ -159,11 +164,11 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertIn("Pause/Resume recording", unregister_block)
         self.assertIn("Cancel recording", unregister_block)
         self.assertIn('_ipcCommand("recorder")', unregister_block)
-        self.assertNotIn("projectName", bar_embed_source)
+        # Asserted on the drawer alone. These ran against the bar embed too until
+        # that surface went out with the merged agent bar; the drawer is now the
+        # only recorder presentation.
         self.assertNotIn("projectName", drawer_source)
-        self.assertIn("mesuraReservationPending", bar_embed_source)
         self.assertIn("mesuraReservationPending", drawer_source)
-        self.assertIn("manualClipboardFallback", bar_embed_source)
         self.assertIn("manualClipboardFallback", drawer_source)
 
         cancel_handler = service_source.split("function cancel", maxsplit=1)[1].split(
@@ -172,7 +177,15 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertIn("_sessionVocabHints = [];", cancel_handler)
         self.assertIn("vocabHintsVisible = false;", cancel_handler)
 
-        self.assertIn("onShellOwnsSttPresentationChanged", bar_source)
+        # The shell drops its own recorder surface when Mesura takes presentation.
+        # Bar.qml carried an onShellOwnsSttPresentationChanged handler for the bar
+        # embed; with that surface gone, RecorderRoot reacts through the Mesura
+        # session change that shellOwnsSttPresentation itself derives from.
+        self.assertIn("function onSessionChanged", recorder_root_source)
+        self.assertIn(
+            "visibilities.recorder = RecordingSessionManager.shellOwnsSttPresentation",
+            recorder_root_source,
+        )
 
     def test_disconnect_interrupts_only_delivery_and_confirmation(self) -> None:
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()

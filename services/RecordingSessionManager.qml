@@ -38,7 +38,9 @@ Singleton {
             "audio": qsTr("Audio Recorder")
         })
 
-    /// Shared icon names for STT delivery modes. Used by Content.qml and RecordingBarEmbed.qml.
+    /// Shared icon names for STT delivery modes. Read by the recorder drawer's
+    /// Content.qml; extracted when the bar embed shared them, and kept here
+    /// because a delivery mode is session state rather than drawer state.
     // intentional var: JS string→string map (no QML typed map)
     readonly property var deliveryModeIcons: ({
             "clipboard": "content_copy",

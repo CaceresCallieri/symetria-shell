@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import qs.components
 import qs.services
 import qs.config
 import Quickshell
@@ -25,10 +24,6 @@ Item {
     implicitHeight: Config.agentbar.sizes.innerHeight
     implicitWidth: layout.implicitWidth
 
-    /// `[{ project, agents }]`, keyed by project NAME — Mesura names a project
-    /// by its own project title, and the pill prints that name.
-    readonly property var projectGroups: SymmetriaThreads.projectGroups
-
     RowLayout {
         id: layout
 
@@ -36,15 +31,17 @@ Item {
         spacing: Appearance.spacing.small
 
         Repeater {
-            // ScriptModel keyed on the project NAME, for the reason
-            // `docs/qml-pitfalls.md` records under "Repeater over a
-            // freshly-rebuilt JS array resets ALL delegates every update" — and
+            // Keyed on the project NAME — the only identifier the rows carry,
+            // since Mesura names a project by its own project title and the pill
+            // prints that name. A ScriptModel rather than a plain array for the
+            // reason `docs/qml-pitfalls.md` records under "Repeater over a
+            // freshly-rebuilt JS array resets ALL delegates every update", and
             // which `ProjectGroup`'s own chip Repeater already answers the same
             // way. Mesura emits a delta per thread update, so a plain array
             // would tear down every pill in the bar whenever one unrelated
             // thread moved.
             model: ScriptModel {
-                values: root.projectGroups
+                values: SymmetriaThreads.projectGroups
                 objectProp: "project"
             }
 

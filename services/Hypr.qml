@@ -52,19 +52,15 @@ Singleton {
     //
     // Single source of truth for the .find() lookups that previously lived
     // duplicated across Workspace.qml and the merged agentbar layout that went
-    // out with Symmetria IDE. The Hyprland workspace
-    // proxy returned by .find() is identity-unstable (a fresh object may
-    // appear after refresh), so callers must continue to dereference it
-    // each time rather than caching the object across frames.
+    // out with Symmetria IDE. The Hyprland workspace proxy returned by .find()
+    // is identity-unstable (a fresh object may appear after refresh), so callers
+    // must continue to dereference it each time rather than caching the object
+    // across frames.
     //
     // intentional var return: Hyprland workspace proxy is nullable and
     // identity-unstable, so it does not fit a stable QML type alias.
     function workspaceById(id: int): var {
         return Hyprland.workspaces.values.find(w => w.id === id) ?? null;
-    }
-
-    function workspaceByName(name: string): var {
-        return Hyprland.workspaces.values.find(w => w.name === name) ?? null;
     }
 
     // Build the { [wsId]: hasWindows } occupancy map. Workspaces.qml needs it;

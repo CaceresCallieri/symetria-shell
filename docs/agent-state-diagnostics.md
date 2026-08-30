@@ -18,11 +18,39 @@ Claude Code hooks ──► symmetria-agent-hook.py ──► agent-bridge.py �
 
 When a state goes stale ("stuck on working" being the canonical complaint), the failure can be in any of the four hops. This document describes the diagnostic instrumentation built into each layer and how to use it.
 
+## Remote agents over SSH
+
+The bar no longer renders remote agents — the cloud badge and the cloud-icon slot went out with
+Symmetria IDE. Detection, notifications and dictation socket resolution still work, so the tunnel
+setup below is current. It lived in `CLAUDE.md` until the bar stopped drawing it.
+
+An agent on a remote machine reaches this bridge by tunnelling the orchestrator socket over SSH.
+Detection is automatic: `scripts/agent-bridge.py` checks whether each connecting client's
+`nvim_pid` exists in the local `/proc`. If it does not, the agent is marked `remote: true` — which
+now only reaches `AgentService.diagnosticSnapshot()`.
+
+**Setup on the remote machine:**
+
+1. Forward the bridge socket over SSH:
+   ```bash
+   ssh -R /run/user/$UID/symmetria-agents-remote.sock:/run/user/$UID/symmetria-agents.sock user@host
+   ```
+   Or add to `~/.ssh/config` as `RemoteForward`.
+
+2. Set `SYMMETRIA_AGENT_SOCKET` in the remote shell environment so hook scripts find the forwarded socket:
+   ```bash
+   export SYMMETRIA_AGENT_SOCKET=/run/user/$UID/symmetria-agents-remote.sock
+   ```
+
+**Known limitation:** If a remote client's `nvim_pid` coincidentally matches a running local
+process, the bridge treats it as a local agent (false-negative). This is negligible in practice
+given the large Linux PID space.
+
 ## TL;DR — Investigating a "stuck" symptom
 
 1. Reproduce the symptom. Note the wall-clock time and which agent is stuck.
 2. Capture the bridge's view: `pkill -USR1 -f agent-bridge.py` writes a full snapshot to `~/.local/state/symmetria/agent-bridge-diagnostic.json`.
-3. Capture QML's view: `symmetria shell agentbar diagnose` returns a JSON snapshot of what the rendering layer believes.
+3. Capture QML's view: `symmetria shell agentbar diagnose` returns a JSON snapshot of what the consuming layer believes.
 4. Diff the two snapshots:
    - If the **bridge** has the agent in `working` and QML matches → the hook layer never sent a `Stop`. Check `~/.local/state/symmetria/agent-hooks-raw.jsonl` if `SYMMETRIA_AGENT_DEBUG_HOOKS=1` was set, or grep `[py:hook]` in the unified log around the failure time.
    - If the **bridge** has the agent in `idle`/cleared but QML still shows `working` → it's a QML rendering bug. The QML stuck watchdog will log `STUCK WORKING | <id>` to `qml,agent` after 120s.

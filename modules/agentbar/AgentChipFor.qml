@@ -1,7 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import QtQuick
-
 /// AgentChip bound to a single agent object. Maps the agent's fields onto the
 /// chip's required properties in ONE place, so every callsite wires the chip
 /// identically and can't drift.
@@ -25,5 +23,9 @@ AgentChip {
     // return false while holding the surviving bar to a service that exists
     // solely to feed dictation. Dictation is unaffected; only its indicator
     // here is gone, and it returns when Mesura reports a dictation target.
+    //
+    // Paired with AgentChip.qml, which correspondingly stopped forwarding
+    // `sttIsTranscribing`. Restore BOTH together — either one alone leaves the
+    // shared chip's STT branch unreachable. Issue #64.
     isSttTarget: false
 }
