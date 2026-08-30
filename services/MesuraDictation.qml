@@ -364,7 +364,7 @@ Singleton {
                 vocabularyRequested(event.sessionId ?? "", event.commandId ?? "", event.action ?? "", event.word ?? "", Number(event.index ?? -1));
         } else if (event.type === "receipt") {
             const receipt = event.receipt ?? {};
-            Logger.log("qml", "stt", `mesura-receipt | peer=${peer} | session=${receipt.sessionId ?? ""} | command=${receipt.commandId ?? ""} | outcome=${receipt.outcome ?? ""} | code=${receipt.code ?? ""} | retryable=${receipt.retryable === true}`);
+            Logger.log("qml", "stt", `mesura-receipt | peer=${peer} | session=${receipt.sessionId ?? ""} | command=${receipt.commandId ?? ""} | outcome=${receipt.outcome ?? ""} | code=${receipt.code ?? ""}`);
             receiptReceived(peer, event.receipt);
         } else if (event.type === "client.error" && _pendingReservation !== null && (event.requestId === _pendingReservation.commandId || peer === _pendingReservation.peerPid)) {
             _failPendingReservation(event.detail ?? "Mesura dictation is unavailable");

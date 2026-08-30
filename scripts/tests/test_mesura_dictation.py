@@ -188,7 +188,7 @@ class MesuraDictationProtocolTests(unittest.TestCase):
             recorder_root_source,
         )
 
-    def test_disconnect_interrupts_only_delivery_and_confirmation(self) -> None:
+    def test_disconnect_falls_back_only_during_delivery_and_confirmation(self) -> None:
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
         service_source = (REPOSITORY_ROOT / "services/SttService.qml").read_text()
         handler = job_source.split("function handleMesuraPeerDisconnected", maxsplit=1)[
@@ -197,7 +197,8 @@ class MesuraDictationProtocolTests(unittest.TestCase):
 
         self.assertIn('_state !== "delivering"', handler)
         self.assertIn('_state !== "confirming"', handler)
-        self.assertIn("_failMesuraTargetUnavailable", handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", handler)
+        self.assertNotIn("_setErrorState", handler)
         self.assertIn("function onPeerDisconnected", service_source)
 
     def test_builds_a_stable_reservation_request(self) -> None:
@@ -278,28 +279,55 @@ class MesuraDictationProtocolTests(unittest.TestCase):
             [event["type"] for event in replay], ["snapshot", "vocabulary"]
         )
 
-    def test_normalizes_retryability_without_retrying_a_dispatched_failed_turn(
-        self,
-    ) -> None:
-        for code, expected in (
-            ("provider_start_failed", True),
-            ("persistence_failed", True),
-            ("deadline_exceeded", True),
-            ("provider_turn_failed", False),
-            ("renderer_lost", False),
+    def test_forwards_failed_receipts_without_retry_classification(self) -> None:
+        for code in (
+            "provider_start_failed",
+            "persistence_failed",
+            "deadline_exceeded",
+            "provider_turn_failed",
+            "renderer_lost",
         ):
+            receipt = {"outcome": "failed", "code": code}
             event = CLIENT.parse_server_message(
                 41,
                 json.dumps(
                     {
                         "type": "dictation.receipt",
-                        "receipt": {"outcome": "failed", "code": code},
+                        "receipt": receipt,
                     }
                 ),
             )
 
             self.assertEqual(event["type"], "receipt")
-            self.assertEqual(event["receipt"]["retryable"], expected)
+            self.assertEqual(event["receipt"], receipt)
+            self.assertNotIn("retryable", event["receipt"])
+
+    def test_delivery_failures_finish_through_one_clipboard_fallback(self) -> None:
+        job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
+        receipt_handler = job_source.split("function _handleMesuraReceipt", maxsplit=1)[
+            1
+        ].split("function _showMesuraSuccessToast", maxsplit=1)[0]
+        fallback_handler = job_source.split(
+            "function _finishMesuraWithClipboardFallback", maxsplit=1
+        )[1].split("function _sendMesuraDelivery", maxsplit=1)[0]
+        timeout_handler = job_source.split(
+            "readonly property Timer mesuraDeliveryTimer", maxsplit=1
+        )[1].split("// Auto-hide after success state", maxsplit=1)[0]
+
+        for outcome in (
+            'receipt.outcome === "confirmation-pending"',
+            'receipt.outcome === "turn-running"',
+        ):
+            self.assertIn(outcome, receipt_handler)
+        self.assertIn('_state === "success"', receipt_handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", receipt_handler)
+        self.assertNotIn("_setErrorState", receipt_handler)
+        self.assertIn("_mesuraClipboardFallbackStarted", fallback_handler)
+        self.assertIn("_storeMesuraTranscriptOnce", fallback_handler)
+        self.assertIn('["wl-copy", _transcribedText]', fallback_handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", timeout_handler)
+        self.assertNotIn("_showMesuraFailureToast", job_source)
+        self.assertNotIn("retryMesuraDelivery", job_source)
 
     def test_rejects_a_malformed_receipt(self) -> None:
         event = CLIENT.parse_server_message(
@@ -319,7 +347,7 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         )[1].split('} else if (event.type === "client.error"', maxsplit=1)[0]
 
         self.assertIn("mesura-receipt | peer=", receipt_handler)
-        for field in ("session=", "command=", "outcome=", "code=", "retryable="):
+        for field in ("session=", "command=", "outcome=", "code="):
             self.assertIn(field, receipt_handler)
         self.assertNotIn("JSON.stringify(event.receipt)", receipt_handler)
         self.assertNotIn("event.receipt.text", receipt_handler)
@@ -328,7 +356,7 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         )
         self.assertEqual(
             set(re.findall(r"receipt\.([A-Za-z]+)", log_statement)),
-            {"sessionId", "commandId", "outcome", "code", "retryable"},
+            {"sessionId", "commandId", "outcome", "code"},
         )
         self.assertNotIn("JSON.stringify(receipt)", log_statement)
         for field in ("text", "transcript", "detail", "prompt", "attachments"):
