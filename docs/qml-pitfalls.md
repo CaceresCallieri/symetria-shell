@@ -410,7 +410,7 @@ With `objectProp`, ScriptModel treats two different object instances sharing the
 
 **Rule of thumb:** any `Repeater`/delegate model bound to an array that is *rebuilt* (not mutated in place) on updates should use `ScriptModel { values; objectProp }` keyed on a stable id — especially if the delegate animates. Plain-array models are fine only for build-once / rarely-changing lists.
 
-Found in: agent bar — idle Claude chips animated as "thinking" while an OpenCode sibling worked. Fixed by keying `AgentChipGroup`, `ProjectGroup`, and the orphan-agent Repeater (`MergedBarContent`) on `objectProp: "id"`.
+Found in: agent bar — idle Claude chips animated as "thinking" while an OpenCode sibling worked. Fixed by keying `AgentChipGroup`, `ProjectGroup`, and the orphan-agent Repeater (`MergedBarContent`) on `objectProp: "id"`. Of those three only `ProjectGroup` still exists; the other two went out with Symmetria IDE. The surviving `AgentBarContent` outer Repeater is keyed the same way, on `objectProp: "project"`.
 
 ## `readonly property` blocks ALL assignment, including same-file handlers
 
@@ -561,8 +561,9 @@ already has its parent assigned when its own bindings run, so `parent.<prop>` is
 correct there and adding `?.` is noise. The distinguishing question is not "am I
 in a Repeater?" but "am I the item the Repeater instantiates?".
 
-Found in: `modules/agentbar/AgentChipGroup.qml`,
-`modules/agentbar/MergedWindowAgentRow.qml`.
+Found in: `modules/agentbar/AgentChipGroup.qml` and
+`modules/agentbar/MergedWindowAgentRow.qml`, both since deleted with Symmetria
+IDE. The pitfall is unchanged; only the evidence is gone from the tree.
 
 ## Quickshell drops the SECOND IpcHandler registered for a target
 

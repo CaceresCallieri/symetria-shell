@@ -1,13 +1,22 @@
 # Agent State Diagnostics
 
-Symmetria's agent bar reflects every Claude Code agent's lifecycle (idle / thinking / working / needs_permission / etc.) by chaining three independent processes:
+> **This pipeline no longer draws anything.** Symmetria IDE was retired from the shell:
+> the bottom agent bar is fed by Mesura Code through `services/SymmetriaThreads.qml`, and
+> reads nothing described below. What remains of the chain serves two things — dictation
+> (`SttJob` resolves an agent's Neovim RPC socket through `AgentService`) and the desktop
+> notifications the bridge forwards. The whole chain is scheduled for deletion once
+> dictation stops addressing a Neovim socket; the instrumentation below is kept because
+> until then a stuck agent still breaks dictation targeting.
+
+The Symmetria IDE pipeline tracks every Claude Code agent's lifecycle (idle / thinking /
+working / needs_permission / etc.) by chaining three independent processes:
 
 ```
 Claude Code hooks ──► symmetria-agent-hook.py ──► agent-bridge.py ──► QML AgentService
        (per event)        (per agent fork)          (singleton)         (singleton)
 ```
 
-When the bar shows a stale state ("stuck on working" being the canonical complaint), the failure can be in any of the four hops. This document describes the diagnostic instrumentation built into each layer and how to use it.
+When a state goes stale ("stuck on working" being the canonical complaint), the failure can be in any of the four hops. This document describes the diagnostic instrumentation built into each layer and how to use it.
 
 ## TL;DR — Investigating a "stuck" symptom
 

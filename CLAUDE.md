@@ -163,24 +163,27 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar, surface)
 
 
-## Remote Agents (SSH Tunnel)
+## The Agent Bar Has One Source
 
-Symmetria can display agents from remote machines that tunnel their orchestrator socket over SSH. Detection is automatic: the bridge (`scripts/agent-bridge.py`) checks whether each connecting client's `nvim_pid` exists in local `/proc`. If it doesn't, the agent is marked `remote: true` and routed to a separate cloud-icon slot in the merged bar (or shown with a cloud badge in the non-merged bar).
+The bottom agent bar (`modules/agentbar/`) is fed by **Mesura Code alone**, through
+`services/SymmetriaThreads.qml` and Mesura's own Unix socket. Symmetria IDE and the
+`agent-bridge.py` hub used to be a second source and were removed from the bar.
 
-**Setup on the remote machine:**
+Two consequences an agent has to hold before editing anything in that module:
 
-1. Forward the bridge socket over SSH:
-   ```bash
-   ssh -R /run/user/$UID/symmetria-agents-remote.sock:/run/user/$UID/symmetria-agents.sock user@host
-   ```
-   Or add to `~/.ssh/config` as `RemoteForward`.
+- **`services/AgentService.qml` is not the bar's service any more.** It survives only
+  because `SttJob` resolves an agent's Neovim RPC socket through it for dictation
+  injection, and because it turns bridge notification lines into `notify-send` calls.
+  It is scheduled for deletion. Do not make the bar read it again.
+- **A bar row has no window.** A Mesura thread reports `terminal_pid: 0` by design, so
+  a workspace badge, a focused-pill highlight, click-to-focus and the STT target sweep
+  are all unreachable and were deleted rather than left as bindings that cannot fire.
+  Anything needing a workspace join has to go through the broker contract first — see
+  `~/projects/mesura-code/docs/mesura/shell-bar/intent.md`, which records why the
+  workspace mapping is deferred.
 
-2. Set `SYMMETRIA_AGENT_SOCKET` in the remote shell environment so hook scripts find the forwarded socket:
-   ```bash
-   export SYMMETRIA_AGENT_SOCKET=/run/user/$UID/symmetria-agents-remote.sock
-   ```
-
-**Known limitation:** If a remote client's `nvim_pid` coincidentally matches a running local process, the bridge will treat it as a local agent (false-negative). This is negligible in practice given the large Linux PID space, but means the remote cloud badge won't appear for that agent.
+The merged workspace layout (`Config.agentbar.mergeWorkspaces`) is gone with the same
+reasoning: it was organised by Hyprland workspace, and these rows have none.
 
 ## Configuration
 

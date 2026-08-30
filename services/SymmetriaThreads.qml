@@ -7,11 +7,14 @@ import Symmetria
 
 /// Mesura Code's projects and threads, read from its own Unix socket.
 ///
-/// A SIBLING of AgentService, not a feeder into it. Symmetria IDE and its
-/// `agent-bridge.py` hub are deliberately temporary — once Mesura Code is
-/// established the IDE and that whole pipeline get deleted — so this path is
-/// kept independent all the way up to `AgentBarContent`, which unions the two.
-/// Nothing here reads AgentService and nothing in AgentService reads this.
+/// The bar's only source. It was built as a SIBLING of AgentService rather than
+/// a feeder into it, because Symmetria IDE and its `agent-bridge.py` hub were
+/// always meant to be temporary and the seam had to survive their deletion. That
+/// deletion has happened: `AgentBarContent` no longer unions two sources, and
+/// every join onto a local Hyprland window went with the IDE.
+///
+/// AgentService still exists, reduced to dictation plumbing on its way out.
+/// Nothing here reads it and nothing in it reads this — keep it that way.
 ///
 /// ## The socket is discovered, not addressed
 ///
@@ -107,9 +110,11 @@ Singleton {
             agent_type: "",
             active: false,
             remote: false,
-            // No local window, so no workspace. AgentService.workspaceForAgents
-            // looks this up by pid and yields null, which is what makes
-            // ProjectGroup draw no workspace badge for these rows.
+            // No local window, and therefore no workspace and no terminal to
+            // focus. The bar used to join on this pid for a workspace badge, a
+            // focused-pill highlight and click-to-focus; all three went out with
+            // Symmetria IDE, because a Mesura thread could never satisfy them.
+            // The field stays because it is part of the row shape the chips read.
             terminal_pid: 0
         };
     }

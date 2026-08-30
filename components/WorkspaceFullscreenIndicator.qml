@@ -9,8 +9,9 @@ import QtQuick.Layouts
 /// AND the workspace is currently active. True fullscreen (mode 2) is excluded
 /// because those windows typically hide the bar entirely.
 ///
-/// Shared between the top-bar Workspace.qml and the merged agentbar's
-/// MergedWorkspacePill.qml so the indicator stays consistent across both pills.
+/// Used by the top-bar Workspace.qml. It was extracted to keep this consistent
+/// with the merged agentbar's own workspace pill, which went out with Symmetria
+/// IDE; the one consumer left keeps it here rather than inlining it back.
 MaterialIcon {
     id: root
 

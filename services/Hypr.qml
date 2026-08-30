@@ -51,8 +51,8 @@ Singleton {
     // ── Workspace lookup helpers ─────────────────────────────────────
     //
     // Single source of truth for the .find() lookups that previously lived
-    // duplicated across Workspace.qml, MergedWorkspacePill.qml,
-    // MergedBarContent.qml, and AgentService.qml. The Hyprland workspace
+    // duplicated across Workspace.qml and the merged agentbar layout that went
+    // out with Symmetria IDE. The Hyprland workspace
     // proxy returned by .find() is identity-unstable (a fresh object may
     // appear after refresh), so callers must continue to dereference it
     // each time rather than caching the object across frames.
@@ -67,9 +67,9 @@ Singleton {
         return Hyprland.workspaces.values.find(w => w.name === name) ?? null;
     }
 
-    // Build the { [wsId]: hasWindows } occupancy map. Both the top-bar and
-    // merged-bar parents (Workspaces.qml, MergedBarContent.qml) need this,
-    // so it lives here to keep the .reduce() out of two places.
+    // Build the { [wsId]: hasWindows } occupancy map. Workspaces.qml needs it;
+    // it lives here because the merged agentbar needed it too, and it stays here
+    // rather than moving back into its one caller.
     function occupiedMap(): var {
         return Hyprland.workspaces.values.reduce((acc, w) => {
             acc[w.id] = w.lastIpcObject.windows > 0;

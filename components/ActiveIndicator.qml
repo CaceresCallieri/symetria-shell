@@ -35,8 +35,8 @@ StyledRect {
     // reaches the screen.
     //
     // Left in place rather than deleted: SpecialWorkspaces sets it explicitly
-    // (to m3onTertiary) while Workspaces and MergedBarContent take this default,
-    // so it is live public API on all three paths. Removing it along with the
+    // (to m3onTertiary) while Workspaces takes this default, so it is live
+    // public API on both paths. Removing it along with the
     // Colouriser is a separate change that deserves its own verification pass
     // rather than riding along with a colour tweak.
     property color textColor: Colours.palette.m3onPrimary

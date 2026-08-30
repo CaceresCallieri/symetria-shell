@@ -1,5 +1,4 @@
 import Symmetria.Agents.UI as AgentsUI
-import qs.services
 import qs.config
 
 /// Thin adapter over the shared Symmetria.Agents.UI AgentChip (the canonical
@@ -9,8 +8,12 @@ import qs.config
 /// users) keep the exact pre-extraction API: the required props
 /// (active/activityState/activityTool/isSttTarget/agentType) stay required on
 /// the derived type and pass through unchanged.
+///
+/// `sttIsTranscribing` is deliberately left at the module default. It used to
+/// track `AgentService.sttIsTranscribing`, but the chip only ever animated on
+/// it while `isSttTarget` was true, and no row this bar draws can be an STT
+/// target any more — see AgentChipFor.
 AgentsUI.AgentChip {
     size: Appearance.font.size.small * 1.4
-    sttIsTranscribing: AgentService.sttIsTranscribing
     crossfadeDuration: Appearance.anim.durations.normal
 }
