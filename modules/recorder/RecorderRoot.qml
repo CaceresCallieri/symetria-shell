@@ -127,10 +127,6 @@ Scope {
             SttService.stop();
         }
 
-        function sendNow(): void {
-            SttService.sendNow();
-        }
-
         function pause(): void {
             SttService.pause();
         }

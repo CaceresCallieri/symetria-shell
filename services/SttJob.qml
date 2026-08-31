@@ -25,7 +25,7 @@ QtObject {
     // ── Public properties ──────────────────────────────────────────────
 
     /// Current state: "idle", "recording", "paused", "processing", "transcribed",
-    ///   "grace", "delivering", "confirming", "error", "success"
+    ///   "delivering", "confirming", "error", "success"
     readonly property string state: _state
 
     /// Audio level (0.0-1.0) during recording
@@ -36,7 +36,6 @@ QtObject {
 
     /// Elapsed recording time in seconds
     readonly property real elapsedSeconds: _currentElapsed
-    readonly property int graceRemainingMs: _graceRemainingMs
     readonly property string projectName: _mesuraProjectName
 
     /// Error detail properties
@@ -84,11 +83,10 @@ QtObject {
     property string _mesuraProjectName: ""
     property string _mesuraDeliveryCommandId: ""
     property string _mesuraToastDedupeKey: ""
-    property bool _mesuraTranscriptStored: false
-    property bool _mesuraClipboardFallbackStarted: false
+    property bool _transcriptStored: false
+    property bool _mesuraTerminalHandled: false
+    property bool _mesuraRecoveredToClipboard: false
     property bool _applyingMesuraSnapshot: false
-    property int _graceRemainingMs: 0
-    property real _graceDeadlineMs: 0
 
     // ── Signals ───────────────────────────────────��────────────────────
 
@@ -378,7 +376,7 @@ QtObject {
             return;
         if (_manualClipboardFallback && mode !== "clipboard")
             return;
-        if (_mesuraIntegrated && _state !== "recording" && _state !== "paused" && _state !== "processing" && _state !== "transcribed" && _state !== "grace")
+        if (_mesuraIntegrated && _state !== "recording" && _state !== "paused" && _state !== "processing" && _state !== "transcribed")
             return;
         if (_activeDeliveryChoice === mode)
             return;
@@ -387,9 +385,9 @@ QtObject {
 
     function _canonicalMesuraPhase(): string {
         if (_state === "transcribed")
-            return "grace";
+            return "processing";
         if (_state === "success")
-            return "completed";
+            return _mesuraRecoveredToClipboard ? "failed" : "completed";
         if (_state === "error")
             return "failed";
         if (_state === "idle")
@@ -408,62 +406,42 @@ QtObject {
             _finishMesuraWithClipboardFallback();
             return;
         }
-        if (!_mesuraIntegrated) {
-            _startDeliveryChain();
-            return;
-        }
-        _graceDeadlineMs = Date.now() + 3000;
-        _graceRemainingMs = 3000;
-        _state = "grace";
-        graceTimer.start();
-    }
-
-    function sendNow(): void {
-        if (_state !== "grace")
-            return;
-        graceTimer.stop();
-        _graceRemainingMs = 0;
         _startDeliveryChain();
     }
 
-    function _handleMesuraReceipt(receipt: var): void {
-        if (!_mesuraIntegrated || receipt?.sessionId !== sessionId || receipt?.commandId !== _mesuraDeliveryCommandId)
+    function _handleMesuraSessionSnapshot(session: var): void {
+        if (!_mesuraIntegrated || session?.sessionId !== sessionId || _mesuraTerminalHandled)
             return;
-        if (_state === "success" || _mesuraClipboardFallbackStarted)
+        if (_state !== "delivering" && _state !== "confirming")
             return;
-        mesuraDeliveryTimer.stop();
-        if (receipt.outcome === "copied" || receipt.outcome === "inserted" || receipt.outcome === "confirmation-pending" || receipt.outcome === "turn-running") {
-            _storeMesuraTranscriptOnce();
-            if (_ranWlCopy) {
-                _pendingCliphistDelete = _transcribedText;
-                cliphistDeleteTimer.restart();
-            }
-            _showMesuraSuccessToast(receipt);
+        if (session.phase === "completed") {
+            _mesuraTerminalHandled = true;
+            deliveryRecoveryTimer.stop();
+            _showMesuraSuccessToast();
             _state = "success";
             return;
         }
-        _finishMesuraWithClipboardFallback();
+        if (session.phase === "failed")
+            _finishMesuraWithClipboardFallback();
     }
 
-    function _showMesuraSuccessToast(receipt: var): void {
-        const dedupeKey = `${receipt.commandId}:${receipt.outcome}:${receipt.action ?? ""}`;
+    function _showMesuraSuccessToast(): void {
+        const deliveryKey = _mesuraDeliveryCommandId !== "" ? _mesuraDeliveryCommandId : "clipboard";
+        const dedupeKey = `${deliveryKey}:success:${_activeDeliveryChoice}`;
         if (_mesuraToastDedupeKey === dedupeKey)
             return;
         _closeMesuraToasts();
         _mesuraToastDedupeKey = dedupeKey;
         let title = "Inserted into chat";
         let icon = "input";
-        if (receipt.outcome === "copied") {
+        if (_activeDeliveryChoice === "clipboard") {
             title = "Copied to clipboard";
             icon = "content_copy";
-        } else if (receipt.outcome === "confirmation-pending" || receipt.outcome === "turn-running" || (receipt.outcome === "inserted" && receipt.action === "submit")) {
+        } else if (_activeDeliveryChoice === "submit") {
             title = "Message sent successfully";
             icon = "send";
-        } else if (receipt.action === "answer") {
-            title = "Answer submitted";
-            icon = "check_circle";
         }
-        Toaster.toast(title, _mesuraProjectName, icon, Toast.Success, 5000, "", `stt-mesura-${sessionId}-success-${receipt.commandId}`);
+        Toaster.toast(title, _mesuraProjectName, icon, Toast.Success, 5000, "", `stt-mesura-${sessionId}-success-${deliveryKey}`);
     }
 
     function _closeMesuraToasts(): void {
@@ -474,19 +452,20 @@ QtObject {
         }
     }
 
-    function _storeMesuraTranscriptOnce(): void {
-        if (_mesuraTranscriptStored || _transcribedText === "")
+    function _storeTranscriptOnce(): void {
+        if (_transcriptStored || _transcribedText === "")
             return;
-        _mesuraTranscriptStored = true;
+        _transcriptStored = true;
         TranscriptionStore.add(_transcribedText);
     }
 
     function _finishMesuraWithClipboardFallback(): void {
-        mesuraDeliveryTimer.stop();
-        _storeMesuraTranscriptOnce();
-        if (_mesuraClipboardFallbackStarted)
+        deliveryRecoveryTimer.stop();
+        _storeTranscriptOnce();
+        if (_mesuraTerminalHandled)
             return;
-        _mesuraClipboardFallbackStarted = true;
+        _mesuraTerminalHandled = true;
+        _mesuraRecoveredToClipboard = true;
         if (_transcribedText === "") {
             _state = "success";
             return;
@@ -496,12 +475,12 @@ QtObject {
     }
 
     function _sendMesuraDelivery(): void {
-        if (_state !== "delivering" && _state !== "confirming")
+        if ((_state !== "delivering" && _state !== "confirming") || _mesuraTerminalHandled)
             return;
-        if (MesuraDictation.deliver(job)) {
-            mesuraDeliveryTimer.start();
+        deliveryRecoveryTimer.restart();
+        if (MesuraDictation.deliver(job))
             return;
-        }
+        deliveryRecoveryTimer.stop();
         _finishMesuraWithClipboardFallback();
     }
 
@@ -838,13 +817,13 @@ QtObject {
         Logger.log("qml", "stt", "delivery-start | id=" + sessionId + " mode=" + effectiveMode + " textLen=" + _transcribedText.length);
 
         if (_mesuraIntegrated) {
-            MesuraDictation.ensureDeliveryCommandId(job);
             if (effectiveMode === "clipboard") {
                 _ranWlCopy = true;
                 _clipboardModeOnly = true;
                 clipboardProcess.command = ["wl-copy", _transcribedText];
                 clipboardProcess.running = true;
             } else {
+                MesuraDictation.ensureDeliveryCommandId(job);
                 _ranWlCopy = false;
                 _clipboardModeOnly = false;
                 _sendMesuraDelivery();
@@ -934,7 +913,7 @@ QtObject {
             console.log("[STT:D14] inject SKIPPED — no target | id:", sessionId);
             // Still record the transcription so it's reachable via the Transcriptions
             // tab and Alt+V, even though we couldn't deliver to a target window.
-            TranscriptionStore.add(job._transcribedText);
+            _storeTranscriptOnce();
             _injectionPath = "";
             _injectionDowngraded = false;
             _injectionSubmitted = false;
@@ -1094,9 +1073,8 @@ QtObject {
         successTimer.stop();
         processingTimeoutTimer.stop();
         autoRetryTimer.stop();
-        graceTimer.stop();
         mesuraProgressTimer.stop();
-        mesuraDeliveryTimer.stop();
+        deliveryRecoveryTimer.stop();
         _removalTimer.stop();
         cliphistDeleteTimer.stop();
     }
@@ -1165,9 +1143,9 @@ QtObject {
         } else {
             successTimer.stop();
         }
-        // `transcribed` is an internal bridge state. The next synchronous
-        // readyForDelivery handler initializes the full three-second grace
-        // snapshot, so publishing here would flash a false zero countdown.
+        // `transcribed` is an internal bridge state used only while an exact
+        // Mesura reservation is still pending. Delivery starts synchronously
+        // once that reservation is accepted.
         if (_mesuraIntegrated && _state !== "transcribed")
             MesuraDictation.updateState(job);
     }
@@ -1205,19 +1183,6 @@ QtObject {
         }
     }
 
-    readonly property Timer graceTimer: Timer {
-        interval: 100
-        repeat: true
-        onTriggered: {
-            job._graceRemainingMs = Math.max(0, Math.round(job._graceDeadlineMs - Date.now()));
-            MesuraDictation.updateState(job);
-            if (job._graceRemainingMs <= 0) {
-                stop();
-                job._startDeliveryChain();
-            }
-        }
-    }
-
     readonly property Timer mesuraProgressTimer: Timer {
         interval: 250
         repeat: true
@@ -1225,8 +1190,8 @@ QtObject {
         onTriggered: MesuraDictation.updateState(job)
     }
 
-    readonly property Timer mesuraDeliveryTimer: Timer {
-        interval: 17000
+    readonly property Timer deliveryRecoveryTimer: Timer {
+        interval: 6500
         onTriggered: job._finishMesuraWithClipboardFallback()
     }
 
@@ -1436,6 +1401,7 @@ QtObject {
                 // the user clearly didn't need it. Safe even if nothing was
                 // persisted (rm -f swallows missing-file errors).
                 job._cleanupRecovery();
+                job._storeTranscriptOnce();
                 job.readyForDelivery();
             } else {
                 if (code === 0 && job._transcribedText === "") {
@@ -1488,25 +1454,30 @@ QtObject {
                 // _injectionPath/_Down/_Submitted keep their defaults — this job
                 // is freshly created and no inject step ran.
                 if (job._mesuraIntegrated) {
-                    job._storeMesuraTranscriptOnce();
-                    job._mesuraClipboardFallbackStarted = true;
+                    job._storeTranscriptOnce();
+                    job._mesuraTerminalHandled = true;
+                    job._mesuraRecoveredToClipboard = true;
                     Toaster.toast("Clipboard copy failed", "The transcript remains in Transcriptions.", "error", Toast.Error);
                     job._state = "success";
                 } else if (job._manualClipboardFallback) {
-                    TranscriptionStore.add(job._transcribedText);
+                    job._storeTranscriptOnce();
                     job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", false);
                 } else {
-                    TranscriptionStore.add(job._transcribedText);
+                    job._storeTranscriptOnce();
                     job._state = "success";
                 }
                 return;
             }
             if (job._mesuraIntegrated) {
-                job._sendMesuraDelivery();
+                job._pendingCliphistDelete = job._transcribedText;
+                job.cliphistDeleteTimer.restart();
+                job._mesuraTerminalHandled = true;
+                job._showMesuraSuccessToast();
+                job._state = "success";
                 return;
             }
             if (job._manualClipboardFallback) {
-                TranscriptionStore.add(job._transcribedText);
+                job._storeTranscriptOnce();
                 job._state = "success";
                 return;
             }
@@ -1629,7 +1600,7 @@ QtObject {
             //      lets the wl-paste --watch daemon write the entry to
             //      cliphist's db before we try to remove it. The
             //      Transcriptions tab is unaffected — different store.
-            TranscriptionStore.add(job._transcribedText);
+            job._storeTranscriptOnce();
             if (job._ranWlCopy) {
                 job._pendingCliphistDelete = job._transcribedText;
                 job.cliphistDeleteTimer.restart();

@@ -20,6 +20,10 @@ CLIENT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CLIENT)
 
 
+def read_source(relative_path: str) -> str:
+    return (REPOSITORY_ROOT / relative_path).read_text()
+
+
 class MesuraDictationProtocolTests(unittest.TestCase):
     def test_discovers_only_pid_scoped_dictation_sockets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -79,7 +83,7 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
         delivery_gate = job_source.split(
             "function _beginDeliveryAfterTranscription", maxsplit=1
-        )[1].split("function sendNow", maxsplit=1)[0]
+        )[1].split("function _handleMesuraSessionSnapshot", maxsplit=1)[0]
         restart_gate = service_source.split("function restart", maxsplit=1)[1].split(
             "function retry", maxsplit=1
         )[0]
@@ -96,10 +100,11 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         )[0]
 
         self.assertIn("mesuraReservationPending(sessionId)", delivery_gate)
-        self.assertLess(
-            delivery_gate.index("mesuraReservationPending(sessionId)"),
-            delivery_gate.index("if (!_mesuraIntegrated)"),
-        )
+        reservation_gate = delivery_gate.split(
+            "if (_isMesuraClass(_targetWindowClass)", maxsplit=1
+        )[1].split("_startDeliveryChain();", maxsplit=1)[0]
+        self.assertIn("mesuraReservationPending(sessionId)", reservation_gate)
+        self.assertIn("_finishMesuraWithClipboardFallback", reservation_gate)
         self.assertIn("_pendingMesuraJob === _activeRecording", restart_gate)
         self.assertIn(
             "_createJob(pendingJob.sessionId, pendingJob.activeDeliveryChoice)",
@@ -113,7 +118,7 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertIn('pending.setDeliveryChoice("clipboard")', failure_handler)
         self.assertNotIn("pending.cancel()", failure_handler)
         self.assertIn("job._manualClipboardFallback", clipboard_handler)
-        self.assertIn("TranscriptionStore.add(job._transcribedText)", clipboard_handler)
+        self.assertIn("job._storeTranscriptOnce()", clipboard_handler)
         self.assertIn('session.phase !== "recording"', accept_handler)
         self.assertLess(
             accept_handler.index('session.phase !== "recording"'),
@@ -162,8 +167,13 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertIn('_ipcCommand("recorder")', unregister_block)
         self.assertNotIn("projectName", bar_embed_source)
         self.assertNotIn("projectName", drawer_source)
-        self.assertIn("mesuraReservationPending", bar_embed_source)
-        self.assertIn("mesuraReservationPending", drawer_source)
+        for source in (bar_embed_source, drawer_source):
+            display_state = source.split(
+                "readonly property string displayState", maxsplit=1
+            )[1].split("readonly property", maxsplit=1)[0]
+            self.assertIn('s === "transcribed"', display_state)
+            self.assertIn('return "processing";', display_state)
+            self.assertNotIn("mesuraReservationPending", display_state)
         self.assertIn("manualClipboardFallback", bar_embed_source)
         self.assertIn("manualClipboardFallback", drawer_source)
 
@@ -289,30 +299,28 @@ class MesuraDictationProtocolTests(unittest.TestCase):
             self.assertEqual(event["receipt"], receipt)
             self.assertNotIn("retryable", event["receipt"])
 
-    def test_delivery_failures_finish_through_one_clipboard_fallback(self) -> None:
+    def test_terminal_snapshots_finish_through_one_delivery_result(self) -> None:
         job_source = (REPOSITORY_ROOT / "services/SttJob.qml").read_text()
-        receipt_handler = job_source.split("function _handleMesuraReceipt", maxsplit=1)[
-            1
-        ].split("function _showMesuraSuccessToast", maxsplit=1)[0]
+        snapshot_handler = job_source.split(
+            "function _handleMesuraSessionSnapshot", maxsplit=1
+        )[1].split("function _showMesuraSuccessToast", maxsplit=1)[0]
         fallback_handler = job_source.split(
             "function _finishMesuraWithClipboardFallback", maxsplit=1
         )[1].split("function _sendMesuraDelivery", maxsplit=1)[0]
-        timeout_handler = job_source.split(
-            "readonly property Timer mesuraDeliveryTimer", maxsplit=1
+        watchdog_handler = job_source.split(
+            "readonly property Timer deliveryRecoveryTimer", maxsplit=1
         )[1].split("// Auto-hide after success state", maxsplit=1)[0]
 
-        for outcome in (
-            'receipt.outcome === "confirmation-pending"',
-            'receipt.outcome === "turn-running"',
-        ):
-            self.assertIn(outcome, receipt_handler)
-        self.assertIn('_state === "success"', receipt_handler)
-        self.assertIn("_finishMesuraWithClipboardFallback", receipt_handler)
-        self.assertNotIn("_setErrorState", receipt_handler)
-        self.assertIn("_mesuraClipboardFallbackStarted", fallback_handler)
-        self.assertIn("_storeMesuraTranscriptOnce", fallback_handler)
+        self.assertIn('session.phase === "completed"', snapshot_handler)
+        self.assertIn('session.phase === "failed"', snapshot_handler)
+        self.assertIn("_showMesuraSuccessToast", snapshot_handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", snapshot_handler)
+        self.assertNotIn("_setErrorState", snapshot_handler)
+        self.assertIn("_mesuraTerminalHandled", fallback_handler)
+        self.assertIn("_storeTranscriptOnce", fallback_handler)
         self.assertIn('["wl-copy", _transcribedText]', fallback_handler)
-        self.assertIn("_finishMesuraWithClipboardFallback", timeout_handler)
+        self.assertIn("interval: 6500", watchdog_handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", watchdog_handler)
         self.assertNotIn("_showMesuraFailureToast", job_source)
         self.assertNotIn("retryMesuraDelivery", job_source)
 
@@ -348,6 +356,158 @@ class MesuraDictationProtocolTests(unittest.TestCase):
         self.assertNotIn("JSON.stringify(receipt)", log_statement)
         for field in ("text", "transcript", "detail", "prompt", "attachments"):
             self.assertNotIn(f"receipt.{field}", log_statement)
+
+    def test_successful_transcription_stores_then_dispatches_without_grace(
+        self,
+    ) -> None:
+        job_source = read_source("services/SttJob.qml")
+        transcription_result = job_source.split(
+            'Logger.log("qml", "stt", "transcribe-result', maxsplit=1
+        )[1].split("} else {", maxsplit=1)[0]
+        delivery_gate = job_source.split(
+            "function _beginDeliveryAfterTranscription", maxsplit=1
+        )[1].split("function _handleMesuraSessionSnapshot", maxsplit=1)[0]
+
+        self.assertIn("job._storeTranscriptOnce();", transcription_result)
+        self.assertIn("job.readyForDelivery();", transcription_result)
+        self.assertLess(
+            transcription_result.index("job._storeTranscriptOnce();"),
+            transcription_result.index("job.readyForDelivery();"),
+        )
+        self.assertIn("_startDeliveryChain();", delivery_gate)
+        self.assertNotIn('_state = "grace"', delivery_gate)
+        self.assertNotIn("_graceDeadlineMs", job_source)
+        self.assertNotIn("readonly property Timer graceTimer", job_source)
+
+    def test_delivery_mode_freezes_when_processing_dispatches(self) -> None:
+        job_source = read_source("services/SttJob.qml")
+        mode_gate = job_source.split("function setDeliveryChoice", maxsplit=1)[1].split(
+            "function _canonicalMesuraPhase", maxsplit=1
+        )[0]
+        delivery_start = job_source.split("function _startDeliveryChain", maxsplit=1)[
+            1
+        ].split("function _spawnInjectProcess", maxsplit=1)[0]
+
+        self.assertIn('_state !== "processing"', mode_gate)
+        self.assertNotIn('"grace"', mode_gate)
+        self.assertLess(
+            delivery_start.index('_state = "delivering"'),
+            delivery_start.index("const effectiveMode = _activeDeliveryChoice"),
+        )
+        self.assertNotIn("function sendNow", job_source)
+
+    def test_completed_snapshot_is_the_single_success_confirmation(self) -> None:
+        job_source = read_source("services/SttJob.qml")
+        service_source = read_source("services/SttService.qml")
+        snapshot_route = service_source.split(
+            "function onSessionChangedForPeer", maxsplit=1
+        )[1].split("function onPeerConnected", maxsplit=1)[0]
+        snapshot_handler = job_source.split(
+            "function _handleMesuraSessionSnapshot", maxsplit=1
+        )[1].split("function", maxsplit=1)[0]
+
+        self.assertIn("_handleMesuraSessionSnapshot(session)", snapshot_route)
+        self.assertIn('session.phase === "completed"', snapshot_handler)
+        self.assertIn("deliveryRecoveryTimer.stop()", snapshot_handler)
+        self.assertIn("_showMesuraSuccessToast", snapshot_handler)
+        self.assertIn('_state = "success"', snapshot_handler)
+        self.assertEqual(snapshot_handler.count("_showMesuraSuccessToast();"), 1)
+        self.assertLess(
+            snapshot_handler.index("_mesuraTerminalHandled = true"),
+            snapshot_handler.index("_showMesuraSuccessToast();"),
+        )
+        self.assertLess(
+            snapshot_handler.index("_showMesuraSuccessToast();"),
+            snapshot_handler.index('_state = "success"'),
+        )
+
+    def test_failed_snapshot_disconnect_and_watchdog_share_one_recovery(self) -> None:
+        job_source = read_source("services/SttJob.qml")
+        snapshot_handler = job_source.split(
+            "function _handleMesuraSessionSnapshot", maxsplit=1
+        )[1].split("function", maxsplit=1)[0]
+        disconnect_handler = job_source.split(
+            "function handleMesuraPeerDisconnected", maxsplit=1
+        )[1].split("function", maxsplit=1)[0]
+        watchdog = job_source.split(
+            "readonly property Timer deliveryRecoveryTimer", maxsplit=1
+        )[1].split("// Auto-hide after success state", maxsplit=1)[0]
+
+        self.assertIn('session.phase === "failed"', snapshot_handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", snapshot_handler)
+        self.assertIn("_finishMesuraWithClipboardFallback", disconnect_handler)
+        self.assertIn("interval: 6500", watchdog)
+        self.assertIn("_finishMesuraWithClipboardFallback", watchdog)
+
+        fallback_handler = job_source.split(
+            "function _finishMesuraWithClipboardFallback", maxsplit=1
+        )[1].split("function _sendMesuraDelivery", maxsplit=1)[0]
+        self.assertLess(
+            fallback_handler.index("_mesuraTerminalHandled = true"),
+            fallback_handler.index("mesuraRecoveryClipboardProcess.running = true"),
+        )
+
+    def test_receipts_and_nonmatching_terminal_snapshots_cannot_change_ui(self) -> None:
+        job_source = read_source("services/SttJob.qml")
+        service_source = read_source("services/SttService.qml")
+        snapshot_route = service_source.split(
+            "function onSessionChangedForPeer", maxsplit=1
+        )[1].split("function onPeerConnected", maxsplit=1)[0]
+        snapshot_handler = job_source.split(
+            "function _handleMesuraSessionSnapshot", maxsplit=1
+        )[1].split("function", maxsplit=1)[0]
+
+        self.assertNotIn("function onReceiptReceived", service_source)
+        self.assertIn("root._job?.sessionId !== session.sessionId", snapshot_route)
+        self.assertIn("root._job._mesuraPeerPid !== peerPid", snapshot_route)
+        self.assertIn("_mesuraTerminalHandled", snapshot_handler)
+        self.assertNotIn('session.phase === "cancelled"', snapshot_handler)
+
+    def test_integrated_clipboard_mode_stays_local(self) -> None:
+        job_source = read_source("services/SttJob.qml")
+        integrated_delivery = job_source.split("if (_mesuraIntegrated) {", maxsplit=1)[
+            1
+        ].split("return;", maxsplit=1)[0]
+        clipboard_delivery = integrated_delivery.split(
+            'if (effectiveMode === "clipboard") {', maxsplit=1
+        )[1].split("} else {", maxsplit=1)[0]
+
+        self.assertIn('effectiveMode === "clipboard"', integrated_delivery)
+        self.assertIn(
+            'clipboardProcess.command = ["wl-copy", _transcribedText]',
+            clipboard_delivery,
+        )
+        self.assertNotIn("_sendMesuraDelivery", clipboard_delivery)
+
+    def test_non_mesura_delivery_and_cancel_contracts_remain_available(self) -> None:
+        job_source = read_source("services/SttJob.qml")
+        service_source = read_source("services/SttService.qml")
+        cancel_handler = service_source.split("function cancel", maxsplit=1)[1].split(
+            "function restart", maxsplit=1
+        )[0]
+
+        self.assertIn("function _spawnInjectProcess", job_source)
+        self.assertIn("function _startDeliveryChain", job_source)
+        self.assertIn("_manualClipboardFallback", job_source)
+        self.assertIn("target.cancel();", cancel_handler)
+        self.assertNotIn('_state = "success"', cancel_handler)
+
+    def test_recording_surfaces_have_no_grace_or_send_now_ui(self) -> None:
+        surface_paths = (
+            "modules/recorder/RecordingBarEmbed.qml",
+            "modules/recorder/Content.qml",
+            "modules/recorder/AudioWaveform.qml",
+            "modules/bar/popouts/RecordingActions.qml",
+            "modules/recorder/RecorderRoot.qml",
+        )
+        for relative_path in surface_paths:
+            source = read_source(relative_path)
+            self.assertNotIn('"grace"', source, relative_path)
+            self.assertNotIn("sendNow", source, relative_path)
+
+        decisions = read_source("docs/stt-design-decisions.md")
+        self.assertNotIn("grace period", decisions)
+        self.assertNotIn("through transcription, grace, delivery", decisions)
 
     def test_peer_sends_handshake_and_forwards_the_opening_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

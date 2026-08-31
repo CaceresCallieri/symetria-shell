@@ -39,13 +39,13 @@ Item {
         if (mode === "audio" && s === "saving")
             return "processing";
         if (mode === "stt" && s === "transcribed")
-            return SttService.mesuraReservationPending(job?.sessionId ?? "") ? "processing" : "grace";
+            return "processing";
         if (mode === "stt" && (s === "delivering" || s === "confirming"))
             return "confirming";
         return s;
     }
 
-    readonly property bool isRecordingPhase: displayState === "recording" || displayState === "paused" || displayState === "processing" || displayState === "grace" || displayState === "confirming"
+    readonly property bool isRecordingPhase: displayState === "recording" || displayState === "paused" || displayState === "processing" || displayState === "confirming"
     property real confirmationPulse: 1
 
     // Live streaming partial transcript (STT streaming mode). "" otherwise.
@@ -129,7 +129,7 @@ Item {
         // Elapsed timer
         StyledText {
             opacity: root.displayState === "paused" ? 0.55 : 1.0
-            text: root.displayState === "grace" ? "0:" + Math.ceil((root.job?.graceRemainingMs ?? 0) / 1000).toString().padStart(2, "0") : (root.job ? RecordingSessionManager.formatElapsedTime(root.job.elapsedSeconds) : "00:00")
+            text: root.job ? RecordingSessionManager.formatElapsedTime(root.job.elapsedSeconds) : "00:00"
             font.pointSize: Appearance.font.size.small * 0.88
             font.family: Appearance.font.family.mono
             color: Colours.palette.m3outline
@@ -221,19 +221,6 @@ Item {
             Accessible.role: Accessible.Button
             Accessible.name: (root.job?.manualClipboardFallback ?? false) ? "Clipboard fallback is locked" : (root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode")
             onClicked: RecordingSessionManager.cycleDeliveryMode()
-        }
-
-        IconButton {
-            visible: root.mode === "stt" && root.displayState === "grace"
-            icon: "send"
-            type: IconButton.Tonal
-            toggle: false
-            raised: true
-            inactiveOnColour: Colours.palette.m3confirm
-            font.pointSize: Appearance.font.size.normal
-            Accessible.role: Accessible.Button
-            Accessible.name: "Send now"
-            onClicked: SttService.sendNow()
         }
 
         // Inline vocab-hint count, placed after the delivery pill.

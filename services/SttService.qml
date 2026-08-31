@@ -559,8 +559,8 @@ Singleton {
 
     /// Switch the current job's delivery choice (one-shot — the next job
     /// re-seeds from Config.stt.deliveryMode). Targets _job rather than
-    /// _activeRecording so mode keys keep working during processing/
-    /// delivering/error: the choice is read at delivery time.
+    /// _activeRecording so mode keys keep working through processing. The job
+    /// rejects changes after delivery starts.
     /// This is the IPC entry point — emits actionTriggered for UI feedback.
     /// For direct UI interaction, use SttJob.setDeliveryChoice (no signal).
     function setDeliveryChoice(mode: string): void {
@@ -580,16 +580,6 @@ Singleton {
         if (_job._activeDeliveryChoice !== mode)
             return;
         actionTriggered(_job.sessionId, "mode-" + mode);
-    }
-
-    function sendNow(): void {
-        if (!_job || _job.state !== "grace")
-            return;
-        const mesuraControlId = _job._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("send-now") : "";
-        _job.sendNow();
-        if (mesuraControlId !== "")
-            MesuraDictation.acknowledgeAction("control", mesuraControlId);
-        actionTriggered(_job.sessionId, "send-now");
     }
 
     /// Add a per-session vocabulary hint (shown as chip in the widget).
@@ -719,7 +709,7 @@ Singleton {
                     handled = true;
                 }
             } else if (action === "stop") {
-                handled = root._job.state === "processing" || root._job.state === "grace" || root._job.state === "delivering" || root._job.state === "confirming";
+                handled = root._job.state === "processing" || root._job.state === "delivering" || root._job.state === "confirming";
                 if (root._activeRecording !== null) {
                     root.stop();
                     handled = true;
@@ -739,11 +729,9 @@ Singleton {
                     handled = true;
                 }
             } else if (action === "send-now") {
-                handled = root._job.state === "delivering" || root._job.state === "confirming";
-                if (root._job.state === "grace") {
-                    root.sendNow();
-                    handled = true;
-                }
+                // Compatibility acknowledgement for Mesura clients that still
+                // expose the retired action. Delivery is already immediate.
+                handled = root._job.state !== "idle";
             } else if (action === "start") {
                 handled = root._job.state !== "idle";
             }
@@ -770,11 +758,6 @@ Singleton {
                 MesuraDictation.acknowledgeAction("vocabulary", commandId);
         }
 
-        function onReceiptReceived(peerPid: int, receipt: var): void {
-            if (root._job?._mesuraPeerPid === peerPid)
-                root._job._handleMesuraReceipt(receipt);
-        }
-
         function onSessionChangedForPeer(peerPid: int, session: var): void {
             if (session === null || root._job?.sessionId !== session.sessionId || root._job._mesuraPeerPid !== peerPid)
                 return;
@@ -783,6 +766,7 @@ Singleton {
                 root._job.setDeliveryChoice(session.mode);
                 root._job._applyingMesuraSnapshot = false;
             }
+            root._job._handleMesuraSessionSnapshot(session);
         }
 
         function onPeerConnected(peerPid: int): void {

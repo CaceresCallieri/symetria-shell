@@ -40,7 +40,7 @@ Item {
         if (mode === "audio" && s === "saving")
             return "processing";
         if (mode === "stt" && s === "transcribed")
-            return SttService.mesuraReservationPending(job?.sessionId ?? "") ? "processing" : "grace";
+            return "processing";
         if (mode === "stt" && (s === "delivering" || s === "confirming"))
             return "confirming";
         return s;
@@ -91,10 +91,6 @@ Item {
             "processing": {
                 icon: "hourglass_top",
                 iconColor: Colours.palette.m3secondary
-            },
-            "grace": {
-                icon: "timer",
-                iconColor: Colours.palette.m3primary
             },
             "confirming": {
                 icon: "send",
@@ -216,7 +212,7 @@ Item {
             // ── Compact row: [timer] · [waveform] · [mode icon] ───
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing" || root.displayState === "grace" || root.displayState === "confirming"
+                show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing" || root.displayState === "confirming"
 
                 RowLayout {
                     id: compactRow
@@ -226,7 +222,7 @@ Item {
                     // Elapsed timer
                     StyledText {
                         opacity: root.displayState === "paused" ? 0.55 : 1.0
-                        text: root.displayState === "grace" ? "0:" + Math.ceil((root.job?.graceRemainingMs ?? 0) / 1000).toString().padStart(2, "0") : RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
+                        text: RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
                         font.pointSize: Appearance.font.size.small * 0.88
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
@@ -298,18 +294,6 @@ Item {
                         Accessible.role: Accessible.Button
                         Accessible.name: root.serviceManualClipboardFallback ? "Clipboard fallback is locked" : (root.displayState === "confirming" ? "Confirming message delivery" : "Change dictation delivery mode")
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
-                    }
-
-                    IconButton {
-                        visible: root.mode === "stt" && root.displayState === "grace"
-                        icon: "send"
-                        type: IconButton.Tonal
-                        toggle: false
-                        raised: true
-                        inactiveOnColour: Colours.palette.m3confirm
-                        Accessible.role: Accessible.Button
-                        Accessible.name: "Send now"
-                        onClicked: SttService.sendNow()
                     }
 
                     // Inline vocab-hint count sibling — placed after the

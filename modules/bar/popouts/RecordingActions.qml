@@ -103,22 +103,6 @@ ColumnLayout {
         }
     }
 
-    FadeTransition {
-        Layout.alignment: Qt.AlignHCenter
-        show: root.mode === "stt" && root.job?.state === "grace"
-
-        IconButton {
-            icon: "send"
-            type: IconButton.Tonal
-            toggle: false
-            raised: true
-            inactiveOnColour: Colours.palette.m3confirm
-            Accessible.role: Accessible.Button
-            Accessible.name: "Send now"
-            onClicked: SttService.sendNow()
-        }
-    }
-
     // ── Vocabulary hint chips (STT only) ──────────────────────────
     FadeTransition {
         Layout.alignment: Qt.AlignHCenter
