@@ -72,5 +72,33 @@ JsonObject {
         // How long the wipe takes. Longer than any Appearance.anim token on
         // purpose — this is a deliberate dramatic beat, not a UI micro-interaction.
         property int revealDuration: 1400
+
+        // CONTRACT: the canonical material map BeamsBackground's ShaderEffect
+        // consumes (uniform names are a by-name contract with the shader's buf
+        // block). Every BeamsBackground consumer must derive its cfg from THIS
+        // map — spelling the keys out a second time re-creates the silent-
+        // undefined failure class (untyped cfg + renamed/added key = uniform
+        // silently zero or NaN). Deliberately excludes revealDuration, which is
+        // reveal timing, not material.
+        readonly property var material: ({
+                speed: speed,
+                noiseScale: noiseScale,
+                grain: grain,
+                beamWidth: beamWidth,
+                rotation: rotation,
+                roughness: roughness,
+                lightIntensity: lightIntensity,
+                ambient: ambient,
+                edgeDarken: edgeDarken,
+                stagger: stagger,
+                growSpan: growSpan,
+                beamQuantise: beamQuantise,
+                feather: feather,
+                frontGlow: frontGlow,
+                growFlip: growFlip,
+                sheenRoughness: sheenRoughness,
+                sheenStrength: sheenStrength,
+                fresnel: fresnel
+            })
     }
 }
