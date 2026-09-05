@@ -60,7 +60,12 @@ Item {
         // QML properties to uniforms BY NAME. Renaming one here silently drops
         // it (the uniform keeps its zero-initialised value) rather than erroring,
         // so treat these names as a contract with assets/shaders/beams.frag.
-        property real time: root.time
+        //
+        // time is clamped: it is reachable from shell.json (focusBackdrop.time)
+        // and unbounded input loses float32 precision in the shader's noise
+        // lookup, rendering garbage. 86400 matches the animation's own upper
+        // ramp, so the lock screen never notices the clamp.
+        property real time: Math.min(Math.max(root.time, 0), 86400)
         property real uSpeed: root.cfg.speed
         property real uScale: root.cfg.noiseScale
         property real uNoiseIntensity: root.cfg.grain

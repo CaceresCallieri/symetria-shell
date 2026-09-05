@@ -63,10 +63,12 @@ Searcher {
             return;
         if (!Config.utilities.toasts.focusModeChanged)
             return;
+        // One shared key for both states: rapid toggles UPDATE the existing
+        // toast in place instead of stacking one toast per toggle.
         if (focusMode)
-            Toaster.toast(qsTr("Focus mode"), qsTr("Wallpaper hidden for distraction-free work"), "visibility_off");
+            Toaster.toast(qsTr("Focus mode"), qsTr("Wallpaper hidden"), "visibility_off", Toast.Info, 0, "", "focus-mode");
         else
-            Toaster.toast(qsTr("Focus mode off"), qsTr("Wallpaper restored"), "visibility");
+            Toaster.toast(qsTr("Focus mode off"), qsTr("Wallpaper restored"), "visibility", Toast.Info, 0, "", "focus-mode");
     }
 
     // Debounced save to avoid hammering disk if the user toggles rapidly.

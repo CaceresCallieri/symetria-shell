@@ -95,6 +95,9 @@
   },
   "background": {
     "enabled": true,
+    "focusBackdrop": {
+      "enabled": true
+    },
     "desktopClock": {
       "enabled": false
     },
