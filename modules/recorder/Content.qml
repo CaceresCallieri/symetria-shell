@@ -298,13 +298,11 @@ Item {
 
                     // Inline vocab-hint count sibling — placed after the
                     // delivery pill. Previously tried as an anchored child
-                    // floating above-right of the pill; that works in the
-                    // drawer but gets clipped in the bar embed because
-                    // recordingCenterContainer in Bar.qml uses clip: true
-                    // (needed for the horizontal reveal animation) and the
-                    // bar's layer-shell surface caps the vertical extent.
-                    // Keeping the two surfaces consistent is more valuable
-                    // than optimizing the drawer placement separately.
+                    // floating above-right of the pill; the bar's layer-shell
+                    // surface caps the vertical extent, so the drawer keeps
+                    // the same inline placement for consistency across
+                    // recorder surfaces rather than optimizing this one
+                    // placement separately.
                     VocabHintBadge {
                         id: vocabBadge
                         Layout.alignment: Qt.AlignTop

@@ -25,7 +25,9 @@ QtObject {
     // ── Public properties ──────────────────────────────────────────────
 
     /// Current state: "idle", "recording", "paused", "processing", "transcribed",
-    ///   "delivering", "confirming", "error", "success"
+    ///   "delivering", "error", "success".
+    ///   NOTE: "confirming" is display-only — Content.qml maps "delivering"
+    ///   to a confirming label; no code path ever assigns it as a raw state.
     readonly property string state: _state
 
     /// Audio level (0.0-1.0) during recording
@@ -307,11 +309,11 @@ QtObject {
     /// restart() relies on the no-animation behaviour: it wants a seamless
     /// atomic swap, so _job is kept alive (and closing stays false) until the
     /// new job is ready, at which point _startInternal reassigns _job and
-    /// destroys this old job directly. Setting closing=true here would
-    /// prematurely trigger Bar.qml's declarative _showEmbed binding (which is
-    /// true when !closing), collapsing the embed without a subsequent re-raise
-    /// because the binding only re-evaluates when _job or its closing flag
-    /// changes — and _job never transitions back through null in the restart flow.
+    /// destroys this old job directly. Setting closing=true here would drop
+    /// the service into wind-down mode mid-swap: setDeliveryChoice ignores a
+    /// closing job, so the new job's early mode traffic would be lost — and
+    /// nothing would recover it, because _job never transitions back through
+    /// null in the restart flow.
     /// @param dropRecovery  When true, also delete the on-disk recovery copy —
     ///   a hard discard, used by a live-recording cancel and by restart(). When
     ///   false, the recovery copy is left in place so a failed transcription
@@ -1079,9 +1081,10 @@ QtObject {
         cliphistDeleteTimer.stop();
     }
 
-    /// Trigger animated removal — called by SttService orchestrator.
-    /// Starts the per-job removal timer so the bar-embed close animation
-    /// (via _activeJob.closing in Bar.qml) completes before the job is destroyed.
+    /// Trigger delayed removal — called by SttService orchestrator.
+    /// Starts the per-job removal timer so destruction is not synchronous
+    /// with finished(): bindings reacting to the job's final state change
+    /// get one frame to settle before the object is destroyed.
     function startRemoval(): void {
         _removalTimer.start();
     }
@@ -1209,7 +1212,8 @@ QtObject {
         }
     }
 
-    // Animated removal delay — outlasts the bar-embed close animation in Bar.qml
+    // Animated removal delay — paces destruction one beat past the job's
+    // final state change so reacting bindings settle first
     readonly property Timer _removalTimer: Timer {
         interval: Appearance.anim.durations.normal + 50
         onTriggered: SttService._finalizeRemoval(job)

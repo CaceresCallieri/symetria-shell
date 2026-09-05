@@ -74,25 +74,17 @@ Singleton {
     }
 
     // Compute the sorted workspace ID list rendered in dynamic mode.
-    // - includeSpecial: when true, appends special workspaces and sorts them last
-    //   (used by the merged agentbar); when false, omits them entirely (top bar).
+    // Special workspaces ("special:*") are excluded entirely — the top bar
+    // renders them via the SpecialWorkspaces.qml overlay, not inline slots.
     // - activeWsId: ensured to appear even if empty, so the active slot never
     //   collapses out of the pill.
     //
-    // Sort order: named (negative, non-special) → regular (positive) → special.
-    // This matches both consumers; the simple ascending sort the top bar used
-    // before is preserved because named (negative) IDs naturally precede
-    // positive ones, and excludeSpecial keeps category-2 out.
-    function displayedWorkspaceIds(includeSpecial: bool, activeWsId: int): var {
+    // Sort order: named (negative) → regular (positive). The simple ascending
+    // sort the top bar originally used is preserved because named (negative)
+    // IDs naturally precede positive ones.
+    function displayedWorkspaceIds(activeWsId: int): var {
         const all = Hyprland.workspaces.values;
-        const regularAndNamed = [];
-        const specialWs = [];
-        for (const w of all) {
-            if (w.name.startsWith("special:"))
-                specialWs.push(w);
-            else
-                regularAndNamed.push(w);
-        }
+        const regularAndNamed = all.filter(w => !w.name.startsWith("special:"));
 
         const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0);
         const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name);
@@ -102,12 +94,6 @@ Singleton {
 
         if (!ids.includes(activeWsId))
             ids.push(activeWsId);
-
-        if (includeSpecial) {
-            for (const sw of specialWs)
-                ids.push(sw.id);
-            ids = [...new Set(ids)];
-        }
 
         const nameById = {};
         for (const w of all)
@@ -123,8 +109,6 @@ Singleton {
     }
 
     function _wsSortCategory(wsId: int, wsName: string): int {
-        if (wsName.startsWith("special:"))
-            return 2;
         if (wsId < 0)
             return 0;
         return 1;

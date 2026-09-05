@@ -5,7 +5,11 @@ import qs.config
 import QtQuick
 
 // Unified active workspace indicator supporting both Repeater and ListView modes.
-// Shared by both the top bar workspace pill and the merged agentbar workspace strip.
+// Consumers: the top bar workspace pill (Workspaces.qml, Repeater mode) and the
+// special-workspace overlay (SpecialWorkspaces.qml, ListView mode). A third
+// consumer — the merged agentbar workspace strip — went out with Symmetria IDE;
+// the multiRow plumbing below (default false, never set) served only that
+// strip and is scheduled for removal in its own verified cleanup.
 // - Repeater mode: Used by numbered/named workspaces (searches by activeWsId)
 //   Item requirements: ws, x, indicatorSize, indicatorOffset
 // - ListView mode: Used by special workspaces (uses currentItem directly)
@@ -27,8 +31,9 @@ StyledRect {
     property color indicatorColor: Colours.palette.m3primary
 
     // MEASURED INERT — do not tune this expecting to see a result. A screen
-    // capture of the merged bar with a workspace active shows the label over
-    // this indicator rendering LIGHT, not in this dark m3onPrimary tint. Every
+    // capture (taken while the merged agentbar strip still existed) shows the
+    // label over this indicator rendering LIGHT, not in this dark m3onPrimary
+    // tint. Every
     // consumer puts the indicator in a Loader at `z: -1`, i.e. below its own
     // mask, and Colouriser is a MultiEffect that does not hide its source — so
     // the real workspace labels paint over the tinted copy and this never

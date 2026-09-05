@@ -95,7 +95,7 @@ python3 -m pytest scripts/tests -q  # whole suite, never scoped — see below
 **Three ways to silently break these lines.**
 1. Never rewrite `/usr/lib/qt6/bin/qmllint` as a bare `qmllint`. On Arch that resolves to Qt 5.15's tool, which exits 255 with no output on ~93% of this repo. The same trap applies to `qmlformat`.
 2. Never drop `xargs -r`. `run-qmlformat.sh` sweeps *every* tracked file when called with no arguments, so without `-r` a docs-only change turns the change gate into a full-repo sweep that still reads as change-scoped.
-3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the recorder's bar embed broke two of its tests while every other check stayed green.
+3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the dictation recorder's embed in the bar (the waveform pill it used to render) broke two of its tests while every other check stayed green.
 
 Suppressions live in `.qmllint.ini` (QML categories, each with its reason), `pyproject.toml` (`per-file-ignores`), and inline `# type: ignore[rule]` comments. Keep an inline suppression's marker short and put its explanation on the line *above* — `ruff format` rewraps long lines and will silently carry a trailing marker onto a different line, voiding it.
 
@@ -120,7 +120,7 @@ The repository gate starts clean for blocking findings: every one must be fixed,
 
 **`run-qmlformat.sh` is local-only — CI does not run it.** qmlformat's output is version-coupled, and the two sides disagree: nixpkgs pins Qt 6.10.1 while Arch ships 6.11.1. On a tree formatted with 6.11.1, 6.10.1 reported 18 files as unformatted and a *different* set as unprocessable. Neither is a defect. The gate therefore lives in the pre-commit hook, where exactly one Qt version is ever in play. Anything that reformats QML must run on the same machine that commits it.
 
-**`pytest` guards QML, not Python.** `scripts/tests/test_mesura_dictation.py` is the only suite (14 tests, ~0.05s). Most of it reads `.qml` files and asserts over their **source text** — that a handler exists, that two statements appear in a given order, that a removed field is absent. It is the repository's only automated check on QML behaviour, since `qmltestrunner` cannot load Quickshell's statically-linked plugins. Two consequences: it belongs in every gate despite living under `scripts/`, and its assertions go stale silently when a QML file is renamed or deleted, so treat a failure as "the assertion's subject moved" before treating it as a regression.
+**`pytest` guards QML, not Python.** `scripts/tests/test_mesura_dictation.py` is the only suite, and it runs in a fraction of a second. Most of it reads `.qml` files and asserts over their **source text** — that a handler exists, that two statements appear in a given order, that a removed field is absent. It is the repository's only automated check on QML behaviour, since `qmltestrunner` cannot load Quickshell's statically-linked plugins. Two consequences: it belongs in every gate despite living under `scripts/`, and its assertions go stale silently when a QML file is renamed or deleted, so treat a failure as "the assertion's subject moved" before treating it as a regression.
 
 **Not adopted, with reasons.** `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. QuickShell configs also have no viable test runner at all: `qmltestrunner` cannot load Quickshell's statically-linked plugins. → `docs/qmllint-setup.md`
 
@@ -169,10 +169,10 @@ git fetch upstream           # Update base (tracks upstream/main)
   the socket of Mesura Code (the separate agent app at `~/projects/mesura-code`). Symmetria IDE
   was the second source and no longer feeds it. `services/AgentService.qml` is therefore NOT the
   bar's service: it is dictation plumbing plus agent notifications, it still spawns
-  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 lands — do not delete it, and
+  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 ("Delete the Symmetria IDE agent pipeline once dictation stops needing a Neovim socket") lands — do not delete it, and
   do not let the bar read it. The bar's session visibility flag is `Visibilities.agentBarHidden`,
   though the `agentbar` IPC verbs that mutate it still live in `AgentService`. Why a bar row can
-  carry no workspace, and what that deleted, is in the file headers of `AgentBarContent.qml`,
+  carry no workspace, and what that deletion removed, is in the file headers of `AgentBarContent.qml`,
   `ProjectGroup.qml` and `SymmetriaThreads.qml`.
 
 ## Configuration
@@ -280,7 +280,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Investigations:**
 - `*.investigation.md` files — Debug session logs for past issues
-- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH. Feeds dictation and notifications only — NOT the agent bar
+- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH (bar rendering removed with the IDE; the doc keeps the bridge's tunnel setup and detection). Feeds dictation and notifications only — NOT the agent bar
 
 ## Updating from Upstream
 

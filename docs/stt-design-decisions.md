@@ -14,7 +14,7 @@ Design rationale for the Speech-to-Text pipeline that isn't obvious from reading
 
 `AgentService.activeAgentForTerminal(pid)` resolves identity through *current state* — it calls `representativeAgent()` which returns `agents.find(a => a.active) ?? agents[0]`. When multiple agents share a terminal PID (same Neovim instance), calling this function at different times returns different agents depending on which one is currently focused.
 
-**Rule:** Never call `activeAgentForTerminal()` after `start()`. The function `_refreshAgentTarget()` exists but must NOT be called — it would re-resolve and potentially change the delivery target.
+**Rule:** Never call `activeAgentForTerminal()` after `start()`, and never re-add a target refresh — the historical `_refreshAgentTarget()` was removed for exactly this reason (see Historical Bugs below). Re-resolving at stop-time or delivery-time would change the delivery target mid-flight.
 
 ## Historical Bugs (Now Fixed)
 

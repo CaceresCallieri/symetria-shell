@@ -35,7 +35,7 @@ Item {
                 length: Config.bar.workspaces.shown
             }, (_, i) => groupOffset + i + 1);
         }
-        return Hypr.displayedWorkspaceIds(false, root.activeWsId);
+        return Hypr.displayedWorkspaceIds(root.activeWsId);
     }
 
     property real blur: onSpecial ? 1 : 0

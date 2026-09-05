@@ -86,9 +86,12 @@ Item {
     }
 
     // Click to focus the window (when enabled)
+    // visible needs the same guard as enabled: a visible-but-disabled MouseArea
+    // at this z still shadows every cursorShape below it (docs/qml-pitfalls.md).
     MouseArea {
         anchors.fill: parent
         enabled: Config.bar.workspaces.appIconsClickToFocus
+        visible: Config.bar.workspaces.appIconsClickToFocus
         cursorShape: Config.bar.workspaces.appIconsClickToFocus ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: {
             const addr = root.client?.lastIpcObject?.address;
