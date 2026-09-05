@@ -7,7 +7,8 @@ import Quickshell
 import Quickshell.Hyprland
 import QtQuick
 
-/// Shared workspace app icons for bar and agentbar.
+/// Workspace app icons for the top bar. They were shared with the agentbar's
+/// merged layout, which went out with Symmetria IDE.
 /// The window model (grouping, sorting, event-driven refresh) is provided by the shared
 /// headless WorkspaceWindowModel; this component owns only the visual row + animations.
 Row {
@@ -16,13 +17,14 @@ Row {
     required property int workspaceId
 
     /// Whether grouped-window pill containers animate their own implicitWidth.
-    /// Set false when an outer container already animates the total width (e.g.,
-    /// agentbar's MergedBarContent Layout.preferredWidth Behavior), to avoid double-easing.
+    /// Set false when an outer container already animates the total width, to
+    /// avoid double-easing. The only caller that ever set it false was the merged
+    /// agentbar layout, which went out with Symmetria IDE; the property stays
+    /// because the double-easing trap returns with the next nesting container.
     property bool animateGroupWidth: true
 
     // Shared headless provider: AppIconsProcessor call + debounced event-driven refresh
-    // + modelsEqual churn-gate. Single source of truth, also consumed by the agentbar's
-    // MergedWindowAgentRow.
+    // + modelsEqual churn-gate. Single source of truth.
     readonly property WorkspaceWindowModel windowModel: WorkspaceWindowModel {
         workspaceId: root.workspaceId
     }
@@ -85,8 +87,7 @@ Row {
                     border.color: glassStyle.border
 
                     // Smooth width animation when icons are added/removed.
-                    // Disabled when the outer container already animates width
-                    // (e.g., agentbar's MergedBarContent Layout.preferredWidth Behavior).
+                    // Disabled when the outer container already animates width.
                     Behavior on implicitWidth {
                         enabled: root.animateGroupWidth
                         Anim {}

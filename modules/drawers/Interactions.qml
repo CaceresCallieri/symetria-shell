@@ -129,15 +129,12 @@ CustomMouseArea {
     }
 
     function inTopPanelExpanded(panel: Item, x: real, y: real): bool {
-        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin
-            && withinPanelWidthExpanded(panel, x, y);
+        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inBottomPanelExpanded(panel: Item, x: real, y: real): bool {
         const panelBottomEdge = root.height - agentBar.implicitHeight;
-        return y < panelBottomEdge
-            && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin
-            && withinPanelWidthExpanded(panel, x, y);
+        return y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inAgentBarForPanelExpanded(panel: Item, x: real, y: real): bool {
@@ -188,8 +185,7 @@ CustomMouseArea {
 
     onPressed: event => {
         dragStart = Qt.point(event.x, event.y);
-        if (popouts.keyboardNavigationActive
-                && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
+        if (popouts.keyboardNavigationActive && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
             popouts.close();
         }
     }
@@ -198,10 +194,7 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if (!popouts.keyboardNavigationActive
-                    && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                    && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
-                    && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
+            if (!popouts.keyboardNavigationActive && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
                 _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -283,8 +276,7 @@ CustomMouseArea {
                     visibilities.utilities = true;
             } else {
                 // Keep alive: use expanded full-panel zone so content is usable
-                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y)
-                    || inAgentBarForPanelExpanded(panels.utilities, x, y);
+                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y) || inAgentBarForPanelExpanded(panels.utilities, x, y);
                 if (!inKeepAlive)
                     visibilities.utilities = false;
             }
@@ -298,10 +290,7 @@ CustomMouseArea {
             _pendingPopoutX = x;
             if (!_popoutThrottleTimer.running)
                 _popoutThrottleTimer.start();
-        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                   && !inTopPanelExpanded(panels.popouts, x, y)
-                   && !(popouts.currentName === "recording" && SttService.vocabHintsVisible)
-                   && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
+        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !inTopPanelExpanded(panels.popouts, x, y) && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();

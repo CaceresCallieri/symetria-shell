@@ -35,8 +35,8 @@ Item {
     readonly property bool hasWindows: isOccupied && Config.bar.workspaces.showWindows && isActive
 
     // Cached workspace reference to avoid repeated find() lookups.
-    // Hypr.workspaceById() centralizes the .find() pattern shared with the
-    // merged agentbar pill and AgentService.
+    // Hypr.workspaceById() centralizes the .find() pattern; it was shared with
+    // the merged agentbar pill, which went out with Symmetria IDE.
     // intentional var: Hyprland workspace proxy from .find() — nullable, identity-unstable
     readonly property var currentWorkspace: Hypr.workspaceById(root.ws)
 
@@ -113,7 +113,8 @@ Item {
             animateWindowsWidth: false  // Root RowLayout animates width; inner animation would double-ease
         }
 
-        // Fullscreen/Maximize indicator - shared with the merged agentbar pill.
+        // Fullscreen/Maximize indicator — extracted when the merged agentbar
+        // pill shared it; this is the only consumer since that pill was removed.
         WorkspaceFullscreenIndicator {
             wsId: root.ws
             isActive: root.isActive

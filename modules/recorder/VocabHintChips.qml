@@ -10,7 +10,8 @@ import QtQuick
 ///
 /// Renders deletable chip pills for each entry in SttService.sessionVocabHints.
 /// Hovering a chip reveals a delete icon; clicking removes the hint.
-/// Used by both the drawer Content card and the bar-embed RecordingActions popout.
+/// Used by the drawer Content card. It was shared with the bar-embed
+/// RecordingActions popout, which went out with the merged agent bar.
 Row {
     id: root
 

@@ -9,8 +9,8 @@ import QtQuick
 /// Headless provider of the position-sorted app-icon model for one workspace.
 /// Owns the AppIconsProcessor call, the event-driven debounced refresh, and the
 /// modelsEqual churn-gate — the single source of truth for "which windows, grouped
-/// and sorted, are on this workspace". Consumed by both the top-bar WorkspaceAppIcons
-/// and the agentbar MergedWindowAgentRow so this plumbing exists in exactly one place.
+/// and sorted, are on this workspace". Consumed by the top-bar WorkspaceAppIcons;
+/// the agentbar's own consumer went out with Symmetria IDE.
 ///
 /// Non-visual (QtObject): it must never participate in a Row/Layout — it only computes
 /// `model`. Callers bind a Repeater to `windowModel.model`.

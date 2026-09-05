@@ -9,60 +9,56 @@ import Quickshell.Io
 import QtQuick
 import Symmetria
 
-/// AgentService — bridges orchestrator.nvim agent state into QML.
+/// AgentService — what is left of the Symmetria IDE agent pipeline.
 ///
-/// Spawns agent-bridge.py (a Unix socket server) and reads its stdout
-/// for consolidated JSON lines describing all active Claude Code agents
-/// across all connected Neovim instances.
+/// Spawns agent-bridge.py (a Unix socket server) and reads its stdout for
+/// consolidated JSON lines describing the Claude Code agents running across all
+/// connected Neovim instances.
 ///
-/// Usage:
-///   AgentService.agents    → array of agent objects
-///   AgentService.projects  → sorted unique project names
-///   AgentService.agentCount → total active agents
+/// ## This service no longer draws anything
+///
+/// It used to feed the bottom agent bar: project pills, workspace badges, a
+/// merged workspace layout, click-to-focus, the STT target sweep. All of that
+/// was deleted when Symmetria IDE was retired from the shell — the bar is now
+/// fed by `SymmetriaThreads` from Mesura Code's own socket, and reads nothing
+/// here.
+///
+/// Two consumers keep it alive, and they are the whole remaining reason it
+/// exists:
+///
+///   - `SttJob` resolves an agent's Neovim RPC socket for dictation injection
+///     (`bridgeRunning`, `activeAgentForTerminal`, `nvimSocketForAgent`,
+///     `setSttTarget` / `clearSttTarget`).
+///   - Desktop notifications: the bridge forwards agent events pre-enriched
+///     with project and terminal_pid, and this service tags them with a
+///     workspace and spawns notify-send.
+///
+/// The whole file is scheduled for deletion once dictation stops addressing a
+/// Neovim socket — issue #64. Do not grow it, and do not let the bar read it
+/// again.
 Singleton {
     id: root
-
-    // Public read-only state
-    // intentional var: agents are heterogeneous JS objects from bridge JSON
-    readonly property var agents: _agents
-    // intentional var: JS array — used with .filter()/.sort()/.find() in _sortProjectsByWorkspace
-    readonly property var projects: _projects
-    readonly property int agentCount: _agents.length
-
-    // Private mutable backing for userHidden
-    property bool _userHidden: false
-
-    /// Session-only visibility toggle (not persisted to shell.json).
-    /// When true, the agent bar is hidden regardless of agent count.
-    /// Mutated only via IpcHandler functions toggle/show/hide.
-    readonly property bool userHidden: _userHidden
-
-    /// Whether the merged workspace+agent bar mode is active.
-    /// True when the config flag is on AND agents are visible.
-    readonly property bool mergeActive: Config.agentbar.mergeWorkspaces && Config.agentbar.enabled && _agents.length > 0 && !_userHidden
-
-    /// Projects sorted by workspace: named (left) → normal 1-10 (middle) → special (right).
-    /// Depends on _projects, _agents, _workspaceMap so it re-sorts when any change.
-    // intentional var: JS array from [...projects].sort() — spread + sort requires JS array semantics
-    readonly property var sortedProjects: _sortProjectsByWorkspace(_projects, _agents, _workspaceMap)
 
     /// Whether the bridge process is alive (does NOT mean the socket is ready —
     /// there is a ~50-100ms startup window before the asyncio server binds).
     readonly property bool bridgeRunning: bridgeProcess.running
 
     // ── STT target tracking ────────────────────────────────────────────
-    // Set by SttService at recording start; cleared on idle/cancel.
-    // AgentChip reads these to show a sound wave badge on the targeted agent.
+    // Set by SttJob at recording start; cleared on idle/cancel. The shell's own
+    // bar no longer renders these — a Mesura thread carries no terminal_pid to
+    // match — but the owning IDE mirrors them on its own chips via
+    // _pushSttRecording, and SttJob reads them back to decide whether a clear
+    // belongs to it.
     readonly property int sttTargetTerminalPid: _sttTargetTerminalPid
     readonly property int sttTargetBufId: _sttTargetBufId  // -1 = representative agent
 
     // True while the active STT job is in any post-recording phase
     // (processing / transcribed / delivering), per the SttJob state machine
-    // (SttJob.qml:18). AgentChip uses this to swap the looping center-pulse
+    // (SttJob.qml:18). The IDE uses this to swap the looping center-pulse
     // sprite for the left-to-right traveling wave during the transcribing window.
     // "success" and "error" are intentionally excluded — the chip stops showing
     // the STT animation before the job reaches those terminal states (clearSttTarget
-    // fires on success/error, which sets isSttTarget = false → _sttWaving = false).
+    // fires on success/error).
     // NOTE: This creates a circular singleton read: AgentService → SttService,
     // while SttJob (owned by SttService) already calls back into AgentService
     // (setSttTarget / clearSttTarget). QML resolves all qs.services singletons
@@ -77,10 +73,11 @@ Singleton {
     }
 
     // Internal state — always reassigned (never mutated in-place) so QML
-    // bindings on agents/agentCount fire correctly. Do not use .push()/.splice().
+    // bindings fire correctly. Do not use .push()/.splice().
     // intentional var: heterogeneous JS objects from bridge JSON
     property var _agents: []
-    // intentional var: JS array — used with .filter()/.sort()/.find() downstream
+    // intentional var: JS array of project names — read by diagnosticSnapshot
+    // and by the agentbar IPC status verb
     property var _projects: []
     property int _restartCount: 0
     readonly property int _maxRestartDelay: 30000
@@ -101,16 +98,7 @@ Singleton {
     // the bridge-snapshot `stt` field). See _pushSttRecording.
     readonly property string _sttRecordingScript: Qt.resolvedUrl("../scripts/stt-recording.py").toString().replace(/^file:\/\//, "")
 
-    // M3 palette for agent dot colors (8 colors matching orchestrator's palette)
-    readonly property list<color> palette: [Colours.palette.m3primary, Colours.palette.m3secondary, Colours.palette.m3tertiary, Colours.palette.m3error, Colours.palette.m3primaryContainer, Colours.palette.m3secondaryContainer, Colours.palette.m3tertiaryContainer, Colours.palette.m3errorContainer,]
-
-    function colorForIndex(idx: int): color {
-        return palette[idx % palette.length];
-    }
-
-    // ── Workspace detection ──────────────────────────────────────────
-    // Maps terminal_pid → {id, name} by scanning Hypr.toplevels.
-    // Rebuilt on Hyprland window events and when _agents changes.
+    // ── STT target state ─────────────────────────────────────────────
 
     property int _sttTargetTerminalPid: -1
     property int _sttTargetBufId: -1
@@ -119,12 +107,15 @@ Singleton {
     // directly. -1 = no target, or a non-IDE (plain nvim / remote) target.
     property int _sttTargetIdePid: -1
 
+    // ── Workspace detection ──────────────────────────────────────────
+    // Maps terminal_pid → {id, name} by scanning Hypr.toplevels.
+    // Rebuilt on Hyprland window events and when _agents changes.
+    //
+    // Its only consumer left is _handleNotification, which tags an agent
+    // notification with the workspace its terminal sits on. Every rendering
+    // consumer went out with the bar.
+
     /// terminal_pid → {id: int, name: string}
-    // CONTRACT: despite the "_" prefix, modules/agentbar/MergedBarContent.qml
-    // reads this cross-module as a binding dependency. The public `workspaceMap`
-    // alias that used to front it went away with the agent overview, its only
-    // consumer. Grep _workspaceMap before changing its shape or how it is
-    // reassigned — see CLAUDE.md, "Property contract drift across containers".
     // intentional var: JS object used as hash map (pid → workspace info)
     property var _workspaceMap: ({})
 
@@ -156,156 +147,18 @@ Singleton {
         root._workspaceMap = newMap;
     }
 
-    /// Get workspace {id, name} for a single agent, or null.
-    function workspaceForAgent(agent: var): var {
-        if (!agent || !agent.terminal_pid)
-            return null;
-        return root._workspaceMap[agent.terminal_pid] ?? null;
-    }
-
-    /// Focus the terminal window hosting a given agent (switches workspace if needed).
-    /// No-ops silently if the window is not found in Hypr.toplevels (e.g., within
-    /// the ~100ms debounce window after a window open event).
-    function focusTerminal(terminalPid: int): void {
-        if (terminalPid <= 0)
-            return;
-        for (const toplevel of Hypr.toplevels.values) {
-            const ipc = toplevel.lastIpcObject;
-            if (ipc && ipc.pid === terminalPid) {
-                Hypr.dispatch(`focuswindow address:${ipc.address}`);
-                return;
-            }
-        }
-    }
-
     /// Returns the active agent in a group, or the first agent if none is active.
-    function representativeAgent(agents: var): var {
+    /// Underscore-prefixed since the bar's retirement left `activeAgentForTerminal`
+    /// as its only caller — it is no longer part of this service's public surface.
+    function _representativeAgent(agents: var): var {
         if (!agents || agents.length === 0)
             return null;
         return agents.find(a => a.active) ?? agents[0];
     }
 
-    /// Pick representative workspace for a group of agents:
-    /// active agent's workspace, or first agent's workspace.
-    function workspaceForAgents(agents: var): var {
-        return root.workspaceForAgent(root.representativeAgent(agents));
-    }
-
-    /// Group agents by workspace ID for the merged bar.
-    /// Returns { byWorkspace: { [wsId]: agent[] }, orphans: agent[], remote: agent[] }
-    /// Remote agents (tunneled via SSH) are separated from orphans for distinct display.
-    /// Depends on _agents and _workspaceMap so callers get reactive updates.
-    function agentsByWorkspace(): var {
-        const byWs = {};
-        const orphans = [];
-        const remote = [];
-        for (const agent of root._agents) {
-            if (agent.remote) {
-                remote.push(agent);
-            } else {
-                const ws = root._workspaceMap[agent.terminal_pid];
-                if (ws) {
-                    const id = ws.id;
-                    if (!byWs[id])
-                        byWs[id] = [];
-                    byWs[id].push(agent);
-                } else {
-                    orphans.push(agent);
-                }
-            }
-        }
-        return {
-            byWorkspace: byWs,
-            orphans,
-            remote
-        };
-    }
-
-    /// Resolve workspace to display icon, matching the workspace bar's chain:
-    /// special ws → getSpecialWsIcon, named ws → getNamedWsIcon, numbered → romanize
-    function workspaceIconForWsId(wsId: int): string {
-        // Look up workspace object from Hyprland for name-based resolution
-        const ws = Hypr.workspaceById(wsId);
-
-        if (ws) {
-            // Special workspaces (negative ID, name starts with "special:")
-            if (wsId < 0 && ws.name.startsWith("special:"))
-                return Icons.getSpecialWsIcon(ws.name);
-            // Named workspaces — try config icon, fall back to first letter
-            const namedIcon = Icons.getNamedWsIcon(ws.name);
-            if (namedIcon && namedIcon !== Icons.materialIconPrefix)
-                return namedIcon;
-            if (wsId < 0 && ws.name)
-                return ws.name[0].toUpperCase();
-        }
-        // Regular numbered workspace → Roman numeral
-        return Icons.romanize(wsId);
-    }
-
-    // ── Project sorting by workspace ─────────────────────────────────
-
-    /// Workspace sort category:
-    ///   0 = persistent named workspace (negative ID, no "special:" prefix) → leftmost
-    ///   1 = normal workspace (ID >= 1) → middle
-    ///   2 = special workspace (negative ID, "special:" prefix) → rightmost
-    ///   3 = no workspace detected → far right
-    function _wsSortKey(wsInfo: var): var {
-        if (!wsInfo)
-            return {
-                category: 3,
-                order: 0
-            };
-
-        const id = wsInfo.id;
-        const name = wsInfo.name ?? "";
-
-        if (id < 0 && name.startsWith("special:"))
-            return {
-                category: 2,
-                order: id
-            };
-        if (id < 0)
-            return {
-                category: 0,
-                order: id
-            };
-        return {
-            category: 1,
-            order: id
-        };
-    }
-
-    // wsMap: intentionally unused in the body — included so QML tracks _workspaceMap
-    // as a dependency of the sortedProjects binding and re-sorts on workspace changes.
-    function _sortProjectsByWorkspace(projects: var, agents: var, wsMap: var): var {
-        // Precompute per-project workspace keys once, O(A) total
-        const projectKey = {};
-        for (const project of projects) {
-            const projectAgents = agents.filter(ag => ag.project === project);
-            projectKey[project] = root._wsSortKey(root.workspaceForAgents(projectAgents));
-        }
-
-        return [...projects].sort((a, b) => {
-            const keyA = projectKey[a];
-            const keyB = projectKey[b];
-
-            // Primary: by category
-            if (keyA.category !== keyB.category)
-                return keyA.category - keyB.category;
-
-            // Within any category: ascending by workspace ID
-            // (named: most-negative first; normal: 1→10; special: by ID)
-            if (keyA.order !== keyB.order)
-                return keyA.order - keyB.order;
-
-            // Fallback: alphabetical by project name
-            return a.localeCompare(b);
-        });
-    }
-
     // ── STT integration ────────────────────────────────────────────────
 
-    /// Set the STT injection target. Called by SttService.start().
+    /// Set the STT injection target. Called by SttJob at start.
     function setSttTarget(terminalPid: int, bufId: int): void {
         _sttTargetTerminalPid = terminalPid;
         _sttTargetBufId = bufId;
@@ -315,7 +168,7 @@ Singleton {
         _pushSttRecording(_sttTargetIdePid, bufId, sttIsTranscribing);
     }
 
-    /// Clear the STT target highlight. Called by SttService on cancel/idle.
+    /// Clear the STT target highlight. Called by SttJob on cancel/idle.
     function clearSttTarget(): void {
         // Tell the owning IDE to clear its chip dot (buf 0) BEFORE forgetting
         // which IDE it was — the direct channel has no implicit "no target"
@@ -342,9 +195,7 @@ Singleton {
     /// reads {buf, transcribing}: buf = agent slot, -1 = focused agent, 0 (or
     /// any unknown slot) = clear (AppController._on_stt_recording). Best-effort
     /// fire-and-forget — a missing/dead IDE socket is a silent no-op (matching
-    /// the old "write to a dead hub is a no-op" semantics). The shell's OWN
-    /// agentbar dot reads local _sttTarget* state (isAgentSttTarget) and is
-    /// unaffected by this push; only the cross-process IDE mirror moves here.
+    /// the old "write to a dead hub is a no-op" semantics).
     function _pushSttRecording(idePid: int, buf: int, transcribing: bool): void {
         if (idePid <= 0)
             return;  // non-IDE / remote agent — no direct socket
@@ -359,27 +210,15 @@ Singleton {
             _pushSttRecording(_sttTargetIdePid, _sttTargetBufId, sttIsTranscribing);
     }
 
-    /// Check if a single agent matches the current STT injection target.
-    /// Used by ProjectGroup.hasSttTarget and AgentChip.isSttTarget to avoid duplication.
-    function isAgentSttTarget(agent: var): bool {
-        if (sttTargetTerminalPid <= 0)
-            return false;
-        if ((agent.terminal_pid ?? 0) !== sttTargetTerminalPid)
-            return false;
-        if (sttTargetBufId === -1)
-            return agent.active ?? false;
-        return (agent.buf ?? -1) === sttTargetBufId;
-    }
-
     // ── Desktop notifications ────────────────────────────────────────
     // Notification messages arrive from the bridge pre-enriched with project
     // and terminal_pid. We add workspace info from _workspaceMap and spawn
     // notify-send. This replaces the old claude-notify.sh shell script.
 
-    // Backend-specific notification icons — mirror the agentbar identities
-    // (Claude sparkle vs OpenCode 3×3 grid) so a glance at a popup says which
-    // agent it came from. _notifIconFor() picks by agent_type; absent/"" → Claude
-    // (backward-compatible: pre-agent_type notifications and Claude agents).
+    // Backend-specific notification icons — Claude sparkle vs OpenCode 3×3 grid,
+    // so a glance at a popup says which agent it came from. _notifIconFor()
+    // picks by agent_type; absent/"" → Claude (backward-compatible:
+    // pre-agent_type notifications and Claude agents).
     readonly property string _claudeNotifIcon: `${Paths.home}/.dotfiles/scripts/claude-icon.svg`
     readonly property string _openCodeNotifIcon: `${Paths.home}/.dotfiles/scripts/opencode-icon.svg`
 
@@ -392,8 +231,7 @@ Singleton {
         const terminalPid = notif.terminal_pid ?? 0;
         const ws = _workspaceMap[terminalPid] ?? null;
 
-        // Format workspace display (uses ws.name directly — O(1) dict lookup
-        // vs workspaceIconForWsId's O(N) linear search through Hypr.workspaces)
+        // Format workspace display (uses ws.name directly — O(1) dict lookup)
         let wsDisplay = "";
         if (ws) {
             wsDisplay = ws.name.startsWith("special:") ? `[${ws.name.slice(8)}]` : `[WS ${ws.name}]`;
@@ -423,18 +261,15 @@ Singleton {
         Quickshell.execDetached(["notify-send", `--app-name=${appName}`, `--urgency=${urgency}`, `--icon=${root._notifIconFor(agentType)}`, "--expire-time=15000", title, message,]);
     }
 
-    // TODO: Add activityText(agent) for future tooltip in ProjectGroup / agent dashboard.
-    // Would map activity_state + activity_tool to human-readable strings.
-
     /// Find the currently active agent for a terminal PID. Returns the agent that is
-    /// currently active (via representativeAgent) among those matching the PID, or null.
+    /// currently active (via _representativeAgent) among those matching the PID, or null.
     function activeAgentForTerminal(terminalPid: int): var {
         if (terminalPid <= 0)
             return null;
         const matching = _agents.filter(a => a.terminal_pid === terminalPid);
         if (matching.length === 0)
             return null;
-        return representativeAgent(matching);
+        return _representativeAgent(matching);
     }
 
     /// Resolve the agent's Neovim RPC socket path.
@@ -453,13 +288,6 @@ Singleton {
         const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/run/user/1000";
         return `${runtimeDir}/nvim.${agent.nvim_pid}.0`;
     }
-
-    // TODO [Level 2]: Add injectText(text: string, submit: bool) method that:
-    // 1. Uses nvimSocketForAgent() to resolve socket
-    // 2. Calls orchestrator.stt_inject() via Neovim RPC
-    // 3. Falls back to sendshortcut paste if no agent match
-    // This would make AgentService the injection middleman, replacing
-    // SttService's direct stt-inject.sh calls.
 
     // Debounce timer for workspace map rebuilds (100ms)
     Timer {
@@ -483,8 +311,15 @@ Singleton {
     }
 
     Component.onCompleted: {
-        Logger.log("qml", "agent", `init | enabled=${Config.agentbar.enabled}`);
-        if (Config.agentbar.enabled)
+        // The bridge serves dictation OR notifications, so EITHER flag keeps it
+        // alive. It used to be gated on `Config.agentbar.enabled` alone, back
+        // when it also fed the bar; leaving it there would have meant switching
+        // off the bar to switch off dictation's socket resolution, and gating it
+        // on `Config.stt.enabled` alone would have silently killed every agent
+        // notification for anyone who turns dictation off. Neither responsibility
+        // owns the other, and neither owns the bar.
+        Logger.log("qml", "agent", `init | stt=${Config.stt.enabled} agentbar=${Config.agentbar.enabled}`);
+        if (Config.stt.enabled || Config.agentbar.enabled)
             _startBridge();
     }
 
@@ -513,7 +348,7 @@ Singleton {
     }
 
     /// Log per-agent activity_state changes between prevAgents and nextAgents.
-    /// Pairs with bridge's "activity |" line to confirm UI-side propagation.
+    /// Pairs with bridge's "activity |" line to confirm QML-side propagation.
     /// Also updates _stateEnteredAt so the QML-side stuck watchdog can
     /// detect any agent that has held a non-idle state for too long even
     /// when the bridge process is silent.
@@ -560,9 +395,8 @@ Singleton {
 
     // ── Stuck-state watchdog (QML side) ─────────────────────────────────
     // Mirrors the bridge-side check_stuck_working() but observes from the
-    // rendering layer. Catches the case where the bridge has up-to-date
-    // state but QML missed an emission, AND surfaces the symptom directly
-    // in the QML log so it interleaves with rendering events.
+    // consuming layer. Catches the case where the bridge has up-to-date
+    // state but QML missed an emission.
 
     // {agent_id: ms-since-epoch when this agent's current state began}
     // intentional var: JS object used as hash map (string → number)
@@ -576,7 +410,7 @@ Singleton {
     Timer {
         id: stuckWatchdog
         interval: 30 * 1000  // Check every 30s
-        running: Config.agentbar.enabled
+        running: root.bridgeRunning
         repeat: true
 
         onTriggered: {
@@ -599,15 +433,13 @@ Singleton {
 
     /// Build a JSON-serializable snapshot of QML-side agent state for
     /// diagnostic dumps. Mirrors the bridge's diagnostic dump but from the
-    /// rendering layer's perspective so we can compare and find drift.
+    /// consuming layer's perspective so we can compare and find drift.
     function diagnosticSnapshot(): var {
         const now = Date.now();
         return {
             ts: new Date().toISOString(),
             agentCount: root._agents.length,
             projects: root._projects,
-            mergeActive: root.mergeActive,
-            userHidden: root.userHidden,
             bridgeRunning: root.bridgeRunning,
             agents: root._agents.map(a => ({
                         id: a.id,
@@ -683,8 +515,8 @@ Singleton {
             bridgeThrottle.stop();
             backoffResetTimer.stop();
 
-            if (!Config.agentbar.enabled) {
-                Logger.log("qml", "agent", "bridge-exit | agentbar disabled, not restarting");
+            if (!Config.stt.enabled && !Config.agentbar.enabled) {
+                Logger.log("qml", "agent", "bridge-exit | stt+agentbar disabled, not restarting");
                 return;
             }
 
@@ -733,16 +565,21 @@ Singleton {
         }
     }
 
+    // The last bar-facing thing left in this file. The visibility verbs act on
+    // `Visibilities.agentBarHidden`, which is where the flag itself lives — this
+    // handler only keeps the `symmetria shell agentbar ...` command surface in
+    // one place while the bridge diagnostics beside it still have a subject.
+    // When the bridge goes, rehome toggle/show/hide rather than deleting them.
     IpcHandler {
         target: "agentbar"
 
         function status(): string {
             return JSON.stringify({
-                agents: root.agentCount,
-                projects: root.sortedProjects,
+                bridgeAgents: root._agents.length,
+                bridgeProjects: root._projects,
                 bridgeRunning: root.bridgeRunning,
-                userHidden: root.userHidden,
-                mergeActive: root.mergeActive
+                barProjects: SymmetriaThreads.projectGroups.map(g => g.project),
+                hidden: Visibilities.agentBarHidden
             });
         }
 
@@ -773,29 +610,22 @@ Singleton {
         }
 
         function toggle(): void {
-            if (root.agentCount === 0)
+            // Guarded in the HIDE direction only. Hiding an already-empty bar
+            // would latch the flag on and leave the next arriving project
+            // invisible; unhiding an empty bar is harmless, and guarding both
+            // directions would strand the flag on whenever Mesura disconnected
+            // while the bar was hidden.
+            if (!Visibilities.agentBarHidden && SymmetriaThreads.projectGroups.length === 0)
                 return;
-            root._userHidden = !root._userHidden;
+            Visibilities.agentBarHidden = !Visibilities.agentBarHidden;
         }
 
         function show(): void {
-            root._userHidden = false;
+            Visibilities.agentBarHidden = false;
         }
 
         function hide(): void {
-            root._userHidden = true;
-        }
-
-        function merge(): void {
-            Config.agentbar.mergeWorkspaces = true;
-        }
-
-        function unmerge(): void {
-            Config.agentbar.mergeWorkspaces = false;
-        }
-
-        function togglemerge(): void {
-            Config.agentbar.mergeWorkspaces = !Config.agentbar.mergeWorkspaces;
+            Visibilities.agentBarHidden = true;
         }
     }
 }

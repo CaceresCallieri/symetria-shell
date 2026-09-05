@@ -87,6 +87,7 @@ git diff -z --name-only --diff-filter=ACMR <base> -- '*.py' | xargs -0 -r ruff c
 git diff -z --name-only --diff-filter=ACMR <base> -- '*.py' | xargs -0 -r ruff format --check
 pyrefly check --baseline pyrefly-baseline.json  # types — whole project, new errors only
 git diff -z --name-only --diff-filter=ACMR <base> -- '*.sh' | xargs -0 -r shellcheck -e SC2317,SC2329
+python3 -m pytest scripts/tests -q  # whole suite, never scoped — see below
 ```
 
 **Exit-code and output semantics.** `qmllint` exits 0 on warnings by design since Qt 6.9, so its verdict comes from the categories `.qmllint.ini` promotes to `error`; a syntax error exits 255. `run-qmlformat.sh` exits 1 when a file differs from its formatted form, and reports a file qmlformat cannot process as a *tooling failure* rather than a finding — 10 files currently land there. `ruff check` and `ruff format --check` exit 1 on findings and 2 on a tool error; a 2 is a tooling failure, not a code finding. `pyrefly check` exits non-zero only for errors that survive the committed baseline. A blocking finding prevents completion until it is fixed or suppressed narrowly with a reason. A command that cannot execute is a tooling failure: report it and continue the review.
@@ -94,7 +95,7 @@ git diff -z --name-only --diff-filter=ACMR <base> -- '*.sh' | xargs -0 -r shellc
 **Three ways to silently break these lines.**
 1. Never rewrite `/usr/lib/qt6/bin/qmllint` as a bare `qmllint`. On Arch that resolves to Qt 5.15's tool, which exits 255 with no output on ~93% of this repo. The same trap applies to `qmlformat`.
 2. Never drop `xargs -r`. `run-qmlformat.sh` sweeps *every* tracked file when called with no arguments, so without `-r` a docs-only change turns the change gate into a full-repo sweep that still reads as change-scoped.
-3. Never scope `pyrefly` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows it to new errors.
+3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the recorder's bar embed broke two of its tests while every other check stayed green.
 
 Suppressions live in `.qmllint.ini` (QML categories, each with its reason), `pyproject.toml` (`per-file-ignores`), and inline `# type: ignore[rule]` comments. Keep an inline suppression's marker short and put its explanation on the line *above* — `ruff format` rewraps long lines and will silently carry a trailing marker onto a different line, voiding it.
 
@@ -112,13 +113,16 @@ ruff format --check .
 pyrefly check
 vulture scripts/ --min-confidence 80
 .github/scripts/run-shellcheck.sh
+python3 -m pytest scripts/tests -q
 ```
 
 The repository gate starts clean for blocking findings: every one must be fixed, or suppressed narrowly with a reason, before setup is complete. The `pyrefly` line here deliberately omits the review baseline so an audit sees the true total. `vulture` is scoped to `scripts/` because that directory holds every tracked `.py` file. Note that `vulture` exits 0 on a file it cannot parse, so treat a suspiciously empty result as unverified rather than clean.
 
 **`run-qmlformat.sh` is local-only — CI does not run it.** qmlformat's output is version-coupled, and the two sides disagree: nixpkgs pins Qt 6.10.1 while Arch ships 6.11.1. On a tree formatted with 6.11.1, 6.10.1 reported 18 files as unformatted and a *different* set as unprocessable. Neither is a defect. The gate therefore lives in the pre-commit hook, where exactly one Qt version is ever in play. Anything that reformats QML must run on the same machine that commits it.
 
-**Not adopted, with reasons.** `pytest` — there is no Python test suite to run. `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. QuickShell configs also have no viable test runner at all: `qmltestrunner` cannot load Quickshell's statically-linked plugins. → `docs/qmllint-setup.md`
+**`pytest` guards QML, not Python.** `scripts/tests/test_mesura_dictation.py` is the only suite (14 tests, ~0.05s). Most of it reads `.qml` files and asserts over their **source text** — that a handler exists, that two statements appear in a given order, that a removed field is absent. It is the repository's only automated check on QML behaviour, since `qmltestrunner` cannot load Quickshell's statically-linked plugins. Two consequences: it belongs in every gate despite living under `scripts/`, and its assertions go stale silently when a QML file is renamed or deleted, so treat a failure as "the assertion's subject moved" before treating it as a regression.
+
+**Not adopted, with reasons.** `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. QuickShell configs also have no viable test runner at all: `qmltestrunner` cannot load Quickshell's statically-linked plugins. → `docs/qmllint-setup.md`
 
 ## Branch Structure
 
@@ -161,26 +165,15 @@ git fetch upstream           # Update base (tracks upstream/main)
   every primitive. Switching is live (`symmetria shell surface material|form <name>`), but is
   **runtime-only — not persisted**; the shipped default lives in the property initialisers.
 - **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar, surface)
-
-
-## Remote Agents (SSH Tunnel)
-
-Symmetria can display agents from remote machines that tunnel their orchestrator socket over SSH. Detection is automatic: the bridge (`scripts/agent-bridge.py`) checks whether each connecting client's `nvim_pid` exists in local `/proc`. If it doesn't, the agent is marked `remote: true` and routed to a separate cloud-icon slot in the merged bar (or shown with a cloud badge in the non-merged bar).
-
-**Setup on the remote machine:**
-
-1. Forward the bridge socket over SSH:
-   ```bash
-   ssh -R /run/user/$UID/symmetria-agents-remote.sock:/run/user/$UID/symmetria-agents.sock user@host
-   ```
-   Or add to `~/.ssh/config` as `RemoteForward`.
-
-2. Set `SYMMETRIA_AGENT_SOCKET` in the remote shell environment so hook scripts find the forwarded socket:
-   ```bash
-   export SYMMETRIA_AGENT_SOCKET=/run/user/$UID/symmetria-agents-remote.sock
-   ```
-
-**Known limitation:** If a remote client's `nvim_pid` coincidentally matches a running local process, the bridge will treat it as a local agent (false-negative). This is negligible in practice given the large Linux PID space, but means the remote cloud badge won't appear for that agent.
+- **Agent bar** — `modules/agentbar/` is fed by `services/SymmetriaThreads.qml` alone, reading
+  the socket of Mesura Code (the separate agent app at `~/projects/mesura-code`). Symmetria IDE
+  was the second source and no longer feeds it. `services/AgentService.qml` is therefore NOT the
+  bar's service: it is dictation plumbing plus agent notifications, it still spawns
+  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 lands — do not delete it, and
+  do not let the bar read it. The bar's session visibility flag is `Visibilities.agentBarHidden`,
+  though the `agentbar` IPC verbs that mutate it still live in `AgentService`. Why a bar row can
+  carry no workspace, and what that deleted, is in the file headers of `AgentBarContent.qml`,
+  `ProjectGroup.qml` and `SymmetriaThreads.qml`.
 
 ## Configuration
 
@@ -287,7 +280,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Investigations:**
 - `*.investigation.md` files — Debug session logs for past issues
-- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Hook → bridge → QML pipeline, stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC
+- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH. Feeds dictation and notifications only — NOT the agent bar
 
 ## Updating from Upstream
 

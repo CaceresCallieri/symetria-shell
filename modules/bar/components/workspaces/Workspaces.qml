@@ -21,7 +21,8 @@ Item {
     readonly property bool isMonitorFocused: multiMonitor && (Hypr.monitorFor(screen)?.focused ?? false)
 
     // intentional var: JS object used as hash map ({ [wsId]: bool }).
-    // Computation centralized in Hypr.occupiedMap() — shared with merged agentbar.
+    // Computation centralized in Hypr.occupiedMap() — it was shared with the
+    // merged agentbar, which went out with Symmetria IDE.
     readonly property var occupied: Hypr.occupiedMap()
     readonly property int groupOffset: Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown
 

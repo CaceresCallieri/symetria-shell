@@ -584,7 +584,6 @@ Singleton {
     function serializeAgentBar(): var {
         return {
             enabled: agentbar.enabled,
-            mergeWorkspaces: agentbar.mergeWorkspaces,
             sizes: {
                 innerHeight: agentbar.sizes.innerHeight
             }
