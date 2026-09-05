@@ -7,6 +7,28 @@ A 2D port of [React Bits `<Beams />`](https://reactbits.dev/backgrounds/beams).
 Used as the lock screen background, where it also plays the reveal animation that
 covers the desktop.
 
+## Second consumer: the focus-mode backdrop
+
+`modules/background/MetalWallpaper.qml` reuses the same shader and component as a
+FROZEN backdrop shown while focus mode is active (`Config.background.focusBackdrop`).
+It sits UNDER the image wallpaper stack in the background window and fades in only
+when focus mode fades the images out — normal wallpapers are untouched. What is
+different there:
+
+- `animating: false` — the GPU renders one frame and idles. `time` in the config
+  section selects the frozen moment; it is the composition seed.
+- One beam wide enough to cover the screen (`beamWidth: 40`), so the bands read
+  as a single draped sheet. **The diagonal seam across the frame is the band
+  boundary at q.x = 0 and is deliberate** — the picked composition includes it.
+  Any beamWidth that covers the screen puts a boundary on screen; the parameters
+  cannot avoid it, only choose where it sits.
+- Material knobs come from `Config.lock.beams.material` — the canonical cfg
+  map — so lock and wallpaper stay one metal family; the wallpaper overrides
+  only `beamWidth`, `noiseScale`, and `frontGlow` (0 — no reveal plays, the
+  frame is fully opaque). Because the material is shared, lock-screen material
+  tuning in shell.json changes the wallpaper too. That is intended; split the
+  override object if it ever stops being wanted.
+
 **The lock screen deliberately shows nothing but the beams and a password
 field.** The upstream six-panel grid — clock, date, avatar, weather, fetch,
 media, resources, notifications — was removed because the panels competed with
