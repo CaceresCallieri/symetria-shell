@@ -103,8 +103,12 @@ Singleton {
                 `hint.image-data=${idHint !== undefined}`,
                 `hint.icon_data=${legacyIconData !== undefined}`);
 
+            // Critical notifications describe conditions that need immediate
+            // action, including memory pressure that can close applications.
+            // They bypass Do Not Disturb but remain suppressed when the user
+            // already has the notification sidebar open.
             const comp = notifComp.createObject(root, {
-                popup: !props.dnd && ![...Visibilities.screens.values()].some(v => v.sidebar),
+                popup: (!props.dnd || notif.urgency === NotificationUrgency.Critical) && ![...Visibilities.screens.values()].some(v => v.sidebar),
                 notification: notif
             });
 
