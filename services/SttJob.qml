@@ -36,6 +36,12 @@ QtObject {
     /// Whether currently recording
     readonly property bool recording: _state === "recording"
 
+    /// Recording, but the microphone has not delivered a single non-zero
+    /// sample for the current segment yet. A Bluetooth headset mic returns
+    /// digital zeros for ~1-3 s while WirePlumber flips it from A2DP to HFP;
+    /// words spoken in that window are lost, so the UI tells the user to wait.
+    readonly property bool waitingForMicrophone: _state === "recording" && !_segmentHasAudio
+
     /// Elapsed recording time in seconds
     readonly property real elapsedSeconds: _currentElapsed
     readonly property string projectName: _mesuraProjectName
@@ -123,6 +129,20 @@ QtObject {
 
     property string _state: "idle"
     property real _audioLevel: 0.0
+
+    // Microphone liveness, fed by levelMonitorProcess. Digital silence (every
+    // sample exactly 0) is what a dead capture delivers — e.g. the PipeWire
+    // bluez5 HFP bug that kills every other headset mic session, leaving a
+    // ~0.5 s WAV of zeros. A real mic, even in a quiet room, never reads 0.0000
+    // RMS for a whole recording. _segmentHasAudio drives the UI hint and resets
+    // per segment (a resume can flip the headset profile again); the session
+    // pair gates transcription in _submitForTranscription(). The monitor is a
+    // second pw-record on the same source, so it can die while the real
+    // capture keeps going; _levelMonitorDied makes its verdict inconclusive.
+    property bool _segmentHasAudio: false
+    property bool _sessionHasAudio: false
+    property int _sessionLevelReadings: 0
+    property bool _levelMonitorDied: false
     property string _transcribedText: ""
     property string _partialTranscript: ""
 
@@ -674,6 +694,7 @@ QtObject {
         args.push(segmentPath);
         recordProcess.command = args;
         recordProcess.running = true;
+        _segmentHasAudio = false;
         // The level monitor records from the same node so the meter reflects
         // what the transcriber actually hears (script treats "" as default).
         levelMonitorProcess.command = [job._levelMonitorScript, captureSource];
@@ -714,6 +735,20 @@ QtObject {
         if (_segmentFiles.length === 0) {
             console.error("[STT:D05] NO segments — aborting");
             _setErrorState("internal", "No audio segments", "Recording may have failed", false);
+            return;
+        }
+
+        // Digital silence for the whole session means the capture was dead,
+        // not quiet. Sending it anyway makes gpt-4o-transcribe hallucinate a
+        // short plausible sentence ("¿De dónde son los vecinos?") that then
+        // gets delivered as if the user had said it. Gated on at least one
+        // reading, and on the monitor surviving, so a monitor that never ran
+        // or died early cannot block a good take. A STALLED monitor (the HFP
+        // bug freezes both streams) does not exit, so it still counts.
+        if (_sessionLevelReadings > 0 && !_sessionHasAudio && !_levelMonitorDied) {
+            Logger.log("qml", "stt", "no-audio | id=" + sessionId + " readings=" + _sessionLevelReadings + " — mic delivered only digital silence, not transcribing");
+            _cleanupTempFiles();
+            _setErrorState("silence", "No audio from microphone", "The mic sent only silence — record again", true);
             return;
         }
 
@@ -1293,11 +1328,27 @@ QtObject {
     // Audio level monitor. command is assigned in _startRecording() so the
     // monitor targets the same PipeWire source as the actual capture.
     readonly property Process levelMonitorProcess: Process {
+        // stop()/pause()/cancel set _pendingRecordAction BEFORE stopping the
+        // monitor, so an exit with no pending action while recording is a
+        // death, not a teardown.
+        onExited: (code, status) => {
+            if (job._state === "recording" && job._pendingRecordAction === "") {
+                job._levelMonitorDied = true;
+                Logger.log("qml", "stt", "level-monitor-died | id=" + job.sessionId + " code=" + code + " — silence gate disabled for this session");
+            }
+        }
         stdout: SplitParser {
             onRead: data => {
                 const level = parseFloat(data.trim());
-                if (!isNaN(level) && isFinite(level))
+                if (!isNaN(level) && isFinite(level)) {
                     job._audioLevel = Math.min(1.0, Math.max(0.0, level));
+                    job._sessionLevelReadings++;
+                    if (level > 0 && !job._segmentHasAudio) {
+                        job._segmentHasAudio = true;
+                        job._sessionHasAudio = true;
+                        Logger.log("qml", "stt", "mic-live | id=" + job.sessionId + " after=" + ((Date.now() - job._recordingStartTime) / 1000).toFixed(1) + "s");
+                    }
+                }
             }
         }
     }

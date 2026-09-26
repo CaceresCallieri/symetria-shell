@@ -47,6 +47,10 @@ Item {
     }
 
     readonly property real audioLevel: job?.audioLevel ?? 0
+    // STT only: the mic is open but has delivered nothing but zeros so far
+    // (a Bluetooth headset switching to HFP). AudioRecorderJob lacks the
+    // property, so audio mode reads false.
+    readonly property bool waitingForMicrophone: mode === "stt" && (job?.waitingForMicrophone ?? false)
     readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
     property real confirmationPulse: 1
 
@@ -249,6 +253,15 @@ Item {
                         containerHeight: root.audioBarContainerHeight
                         active: root.visible && root.visibilities.recorder && RecordingSessionManager.shellOwnsSttPresentation
                         sessionId: root.job?.sessionId ?? ""
+                    }
+
+                    // Words spoken before this disappears are lost — the
+                    // capture is still digital silence.
+                    StyledText {
+                        visible: root.waitingForMicrophone
+                        text: "Mic starting…"
+                        font.pointSize: Appearance.font.size.small * 0.88
+                        color: Colours.palette.m3tertiary
                     }
 
                     StyledText {
