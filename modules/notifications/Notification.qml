@@ -458,7 +458,7 @@ PillCard {
                 }
             }
 
-            StyledText {
+            NotificationBodyText {
                 id: bodyPreview
 
                 anchors.left: summary.left
@@ -467,8 +467,7 @@ PillCard {
                 anchors.rightMargin: Appearance.spacing.small
 
                 animate: true
-                textFormat: Text.MarkdownText
-                text: bodyPreviewMetrics.elidedText
+                bodyText: bodyPreviewMetrics.elidedText
                 color: Colours.palette.m3onSurfaceVariant
                 font.pointSize: Appearance.font.size.small
 
@@ -489,7 +488,7 @@ PillCard {
                 elideWidth: bodyPreview.width
             }
 
-            StyledText {
+            NotificationBodyText {
                 id: body
 
                 anchors.left: summary.left
@@ -498,8 +497,7 @@ PillCard {
                 anchors.rightMargin: Appearance.spacing.small
 
                 animate: true
-                textFormat: Text.MarkdownText
-                text: root.modelData.body
+                bodyText: root.modelData.body
                 color: Colours.palette.m3onSurfaceVariant
                 font.pointSize: Appearance.font.size.small
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere

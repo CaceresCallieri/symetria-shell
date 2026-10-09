@@ -7,6 +7,9 @@
 #include <qfileinfo.h>
 #include <qfuturewatcher.h>
 #include <qqmlengine.h>
+#include <qtextcursor.h>
+#include <qtextdocument.h>
+#include <qtextobject.h>
 
 namespace symmetria {
 
@@ -117,6 +120,33 @@ bool CUtils::deleteFile(const QUrl& path) const {
     }
 
     return QFile::remove(path.toLocalFile());
+}
+
+QString CUtils::notificationBodyHtml(const QString& markdown, const QColor& linkColor, const QFont& font) const {
+    if (markdown.isEmpty()) {
+        return QString();
+    }
+
+    // Qt ignores Text.linkColor for MarkdownText. Keep Qt's Markdown parser,
+    // then set the anchor foreground in the document before exporting HTML.
+    QTextDocument document;
+    document.setDefaultFont(font);
+    document.setMarkdown(markdown);
+    for (auto block = document.begin(); block.isValid(); block = block.next()) {
+        for (auto fragmentIterator = block.begin(); !fragmentIterator.atEnd(); ++fragmentIterator) {
+            const auto fragment = fragmentIterator.fragment();
+            if (!fragment.isValid() || !fragment.charFormat().isAnchor()) {
+                continue;
+            }
+            QTextCursor cursor(&document);
+            cursor.setPosition(fragment.position());
+            cursor.setPosition(fragment.position() + fragment.length(), QTextCursor::KeepAnchor);
+            QTextCharFormat format;
+            format.setForeground(linkColor);
+            cursor.mergeCharFormat(format);
+        }
+    }
+    return document.toHtml();
 }
 
 QString CUtils::toLocalFile(const QUrl& url) const {
