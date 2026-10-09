@@ -110,35 +110,15 @@ PillCardSection {
                 // from `connected`, so mid-transition the button showed a
                 // seated socket with an unplugged icon. One source now.
                 ConnectToggleButton {
-                    id: connectBtn
-
                     connected: device.modelData.connected
                     loading: device.loading
 
                     onClicked: device.modelData.connected = !device.modelData.connected
                 }
 
-                Loader {
-                    asynchronous: true
-                    active: device.modelData.bonded
-                    sourceComponent: Item {
-                        implicitWidth: connectBtn.implicitWidth
-                        implicitHeight: connectBtn.implicitHeight
-
-                        StateLayer {
-                            radius: Appearance.rounding.full
-
-                            function onClicked(): void {
-                                device.modelData.forget();
-                            }
-                        }
-
-                        MaterialIcon {
-                            anchors.centerIn: parent
-                            text: "delete"
-                        }
-                    }
-                }
+                // No forget button here: a one-click, unconfirmed unpair sat
+                // beside the connect toggle and was easy to hit by mistake.
+                // Forgetting a device lives in the control center's details.
             }
         }
 
