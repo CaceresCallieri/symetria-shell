@@ -458,7 +458,7 @@ PillCard {
                 }
             }
 
-            NotificationBodyText {
+            StyledText {
                 id: bodyPreview
 
                 anchors.left: summary.left
@@ -467,25 +467,17 @@ PillCard {
                 anchors.rightMargin: Appearance.spacing.small
 
                 animate: true
-                bodyText: bodyPreviewMetrics.elidedText
+                text: root.modelData.body.replace(/\n/g, " ")
                 color: Colours.palette.m3onSurfaceVariant
                 font.pointSize: Appearance.font.size.small
+                elide: Text.ElideRight
+                maximumLineCount: 1
 
                 opacity: root.expanded ? 0 : 1
 
                 Behavior on opacity {
                     Anim {}
                 }
-            }
-
-            TextMetrics {
-                id: bodyPreviewMetrics
-
-                text: root.modelData.body
-                font.family: bodyPreview.font.family
-                font.pointSize: bodyPreview.font.pointSize
-                elide: Text.ElideRight
-                elideWidth: bodyPreview.width
             }
 
             NotificationBodyText {
@@ -496,7 +488,8 @@ PillCard {
                 anchors.top: summary.bottom
                 anchors.rightMargin: Appearance.spacing.small
 
-                animate: true
+                // Theme and font updates also change the exported HTML.
+                // Keep those updates from replaying the message text animation.
                 bodyText: root.modelData.body
                 color: Colours.palette.m3onSurfaceVariant
                 font.pointSize: Appearance.font.size.small
