@@ -8,9 +8,9 @@ import os
 import shlex
 import shutil
 import subprocess
+import tempfile
+import unittest
 from pathlib import Path
-
-import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 QT_MODULES = ["Qt6Quick", "Qt6Qml", "Qt6Concurrent"]
@@ -21,23 +21,32 @@ def qt_flags(package_config: str, option: str) -> list[str]:
     return shlex.split(output)
 
 
-def test_notification_body_preserves_text_and_themes_links(tmp_path: Path) -> None:
+def run_notification_body_test() -> None:
     compiler = shutil.which("c++")
     package_config = shutil.which("pkg-config")
     if compiler is None or package_config is None:
-        pytest.skip("The native notification test needs c++ and pkg-config")
+        raise unittest.SkipTest("The native notification test needs c++ and pkg-config")
 
     available = subprocess.run([package_config, "--exists", *QT_MODULES], check=False)
     if available.returncode != 0:
-        pytest.skip("The native notification test needs the Qt6 development modules")
+        raise unittest.SkipTest(
+            "The native notification test needs the Qt6 development modules"
+        )
 
     library_tools = subprocess.check_output(
         [package_config, "--variable=libexecdir", "Qt6Core"], text=True
     ).strip()
     moc = Path(library_tools) / "moc"
     if not moc.is_file():
-        pytest.skip("The native notification test needs Qt6 moc")
+        raise unittest.SkipTest("The native notification test needs Qt6 moc")
 
+    with tempfile.TemporaryDirectory() as directory:
+        verify_native_body(compiler, package_config, moc, Path(directory))
+
+
+def verify_native_body(
+    compiler: str, package_config: str, moc: Path, tmp_path: Path
+) -> None:
     native_source = REPOSITORY_ROOT / "plugin/src/Symmetria"
     generated_source = tmp_path / "moc_cutils.cpp"
     executable = tmp_path / "verify-notification-body"
@@ -77,3 +86,10 @@ def test_notification_body_preserves_text_and_themes_links(tmp_path: Path) -> No
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# The pytest fixture passed locally but failed CI: its type checker has no pytest.
+# Keep this wrapper in unittest so both environments use the standard library.
+class NotificationBodyTests(unittest.TestCase):
+    def test_preserves_text_and_themes_links(self) -> None:
+        run_notification_body_test()
