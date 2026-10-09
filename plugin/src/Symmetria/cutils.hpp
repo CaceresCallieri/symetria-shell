@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QtQuick/qquickitem.h>
+#include <qcolor.h>
+#include <qfont.h>
 #include <qobject.h>
 #include <qqmlintegration.h>
 
@@ -24,6 +26,7 @@ public:
     Q_INVOKABLE bool copyFile(const QUrl& source, const QUrl& target, bool overwrite = true) const;
     Q_INVOKABLE bool deleteFile(const QUrl& path) const;
     Q_INVOKABLE QString toLocalFile(const QUrl& url) const;
+    Q_INVOKABLE QString notificationBodyHtml(const QString& markdown, const QColor& linkColor, const QFont& font) const;
 };
 
 } // namespace symmetria

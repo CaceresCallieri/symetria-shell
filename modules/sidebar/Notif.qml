@@ -123,12 +123,11 @@ StyledRect {
 
             spacing: Appearance.spacing.smaller
 
-            StyledText {
+            NotificationBodyText {
                 id: body
 
                 Layout.fillWidth: true
-                textFormat: Text.MarkdownText
-                text: root.modelData.body.replace(/(.)\n(?!\n)/g, "$1\n\n") || qsTr("No body here! :/")
+                bodyText: root.modelData.body.replace(/(.)\n(?!\n)/g, "$1\n\n") || qsTr("No body here! :/")
                 color: root.modelData.urgency === "critical" ? Colours.palette.m3secondary : Colours.palette.m3outline
                 wrapMode: Text.WordWrap
 

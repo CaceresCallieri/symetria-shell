@@ -2,6 +2,24 @@
 
 Hard-won lessons from past bugs. Each section documents a non-obvious behavior that has caused real issues in this codebase.
 
+## Markdown notification links ignore linkColor
+
+Qt's Markdown importer sets an anchor foreground before the QML text renderer
+applies `Text.linkColor`. Setting `linkColor` changes the property but leaves the
+rendered Markdown link blue. Check the rendered pixels, not only the property.
+
+NotificationBodyText deliberately uses `Text.RichText` for Qt-exported HTML.
+This is an exception to the usual preference for `Text.PlainText` and
+`Text.StyledText`. Qt's HTML export preserves Markdown formatting and the themed
+anchor foreground. `Text.StyledText` does not support all of the exported CSS.
+
+HTML import also adds default anchor underlines. The export includes an anchor
+stylesheet to preserve the original Markdown underline policy. The native test
+checks the exported document's formatting and its background.
+
+Keep the collapsed preview as plain text. Elide the rendered text directly;
+eliding Markdown syntax can break a link and measure a different glyph width.
+
 ## Required Property Shadowing in Delegates
 
 In QML delegates with `pragma ComponentBehavior: Bound`, there are **two syntaxes** for required properties that behave completely differently:
