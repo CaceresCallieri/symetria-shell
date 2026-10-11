@@ -1,5 +1,6 @@
 pragma Singleton
 
+import qs.services
 import Quickshell
 
 /// Shared window grouping and sorting logic for bar/agentbar app icons.
@@ -15,7 +16,7 @@ Singleton {
     /// Returns: Array<{ isGroup: bool, clients: HyprlandToplevel[] }>
     function processClients(workspaceId: int, toplevels: var): var {
         try {
-            const clients = toplevels.filter(c => c.workspace?.id === workspaceId);
+            const clients = toplevels.filter(c => c.workspace?.id === workspaceId && Hypr.isLiveToplevel(c));
 
             // Build set of swallowed window addresses to filter out
             const swallowedAddresses = new Set();
