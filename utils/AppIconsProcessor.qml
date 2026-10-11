@@ -12,11 +12,16 @@ Singleton {
     // intentional var: JS Map<int, string[]> — per-workspace address order from last tiled sort
     property var _tiledOrderCache: new Map()
 
+    /// Hyprland window tag that keeps a window out of the app icons. Set it from a
+    /// window rule (`windowrule = tag +no-bar-icon, match:…`) for helper windows that
+    /// are not apps, such as an overlay pinned to every workspace.
+    readonly property string hiddenWindowTag: "no-bar-icon"
+
     /// Process toplevels for a workspace and return a structured model.
     /// Returns: Array<{ isGroup: bool, clients: HyprlandToplevel[] }>
     function processClients(workspaceId: int, toplevels: var): var {
         try {
-            const clients = toplevels.filter(c => c.workspace?.id === workspaceId && Hypr.isLiveToplevel(c));
+            const clients = toplevels.filter(c => c.workspace?.id === workspaceId && Hypr.isLiveToplevel(c) && !root._hasHiddenWindowTag(c));
 
             // Build set of swallowed window addresses to filter out
             const swallowedAddresses = new Set();
@@ -136,6 +141,13 @@ Singleton {
             console.error("AppIconsProcessor: Failed to process clients:", e);
             return [];
         }
+    }
+
+    // Hyprland lists a tag applied by a window rule with a trailing "*" (a dynamic
+    // tag), and one applied with `tagwindow` without it, so both spellings match.
+    function _hasHiddenWindowTag(client: var): bool {
+        const tags = client.lastIpcObject?.tags ?? [];
+        return tags.some(tag => tag.replace(/\*$/, "") === root.hiddenWindowTag);
     }
 
     /// Shallow-compare two cached models to avoid unnecessary Repeater churn.
