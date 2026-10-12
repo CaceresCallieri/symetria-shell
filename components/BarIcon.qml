@@ -29,10 +29,11 @@ StyledText {
     color: Qt.alpha(tint, tintAlpha)
     font.family: drawsPhosphor ? BarGlyphs.family : Appearance.font.family.material
     font.pointSize: Appearance.font.size.larger
-    // The fallback matches Phosphor Light's stroke: thin, outlined, low grade.
+    // The fallback matches Phosphor Light's stroke: thin and outlined. Its grade
+    // follows the theme the way MaterialIcon's does.
     font.variableAxes: drawsPhosphor ? ({}) : ({
             FILL: fill.toFixed(1),
-            GRAD: -25,
+            GRAD: Colours.light ? 0 : -25,
             opsz: fontInfo.pixelSize,
             wght: 300
         })

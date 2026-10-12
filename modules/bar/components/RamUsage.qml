@@ -43,8 +43,8 @@ MouseArea {
             tintAlpha: BarGlyphs.secondaryAlpha
         }
 
-        // "17.5G": the unit's first letter is enough beside a figure that
-        // never leaves the G range in practice; the tooltip spells it out.
+        // "17.5G": every unit formatKib returns (KiB, MiB, GiB, TiB) reads by
+        // its first letter; the tooltip spells it out.
         BarReadout {
             anchors.verticalCenter: parent.verticalCenter
 
