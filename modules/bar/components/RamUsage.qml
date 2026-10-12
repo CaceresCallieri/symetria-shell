@@ -12,9 +12,6 @@ MouseArea {
 
     property color colour: Colours.palette.m3tertiary
 
-    // Scale factor for unit suffix text (2/3 size relative to value)
-    readonly property real unitFontScale: 0.67
-
     // Computed values for display and tooltip (avoids duplicate calculations)
     // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
     readonly property var memUsedFormatted: SystemUsage.formatKib(SystemUsage.memUsed)
@@ -41,31 +38,17 @@ MouseArea {
             anchors.verticalCenter: parent.verticalCenter
 
             text: "memory_alt"
-            color: root.colour
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
 
-        Row {
+        // "17.5G": every unit formatKib returns (KiB, MiB, GiB, TiB) reads by
+        // its first letter; the tooltip spells it out.
+        BarReadout {
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 0
 
-            StyledText {
-                id: valueText
-                // Parent Row handles vertical centering
-
-                text: root.memUsedFormatted.value.toFixed(1)
-                font.pointSize: Appearance.font.size.smaller
-                font.family: Appearance.font.family.mono
-                color: root.colour
-            }
-
-            StyledText {
-                anchors.baseline: valueText.baseline
-
-                text: root.memUsedFormatted.unit
-                font.pointSize: Appearance.font.size.smaller * root.unitFontScale
-                font.family: Appearance.font.family.mono
-                color: root.colour
-            }
+            value: root.memUsedFormatted.value.toFixed(1)
+            unit: root.memUsedFormatted.unit.charAt(0)
+            colour: root.colour
         }
     }
 

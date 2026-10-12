@@ -377,7 +377,9 @@ Singleton {
     // DesktopEntries.heuristicLookup, which the active icon theme owns.
     //
     // Resolution order:
-    //   1. User overrides from Config.bar.tray.iconSubs
+    //   1. User overrides from Config.bar.tray.iconSubs (traySubFor). A `glyph`
+    //      override is drawn by TrayItem itself and never reaches this function
+    //      while the active glyph family covers it.
     //   2. Theme lookup by SNI id (e.g. "com.discordapp.Discord" → theme SVG)
     //   3. DesktopEntries heuristic lookup on the id (same path workspaces use)
     //   4. Theme lookup on the raw icon name (if not a file path / pixmap / data URI)
@@ -389,10 +391,21 @@ Singleton {
     // (no file path), so steps 2-5 all miss. They will always fall through
     // to the raw pixmap unless the user adds an explicit iconSubs override.
     // See docs/tray-icon-theming.md for the full analysis and future paths.
-    function getTrayIcon(id: string, icon: string): string {
+    // The bar.tray.iconSubs entry for a tray item, or null. Matched on the SNI
+    // `id`, or on `title` for apps that generate their id per session — LocalSend
+    // registers a fresh random id every launch but a stable title.
+    // intentional var: a heterogeneous JS object from shell.json, or null
+    function traySubFor(id: string, title: string): var {
         for (const sub of Config.bar.tray.iconSubs)
-            if (sub.id === id)
-                return sub.image ? Qt.resolvedUrl(sub.image) : Quickshell.iconPath(sub.icon);
+            if ((sub.id && sub.id === id) || (sub.title && sub.title === title))
+                return sub;
+        return null;
+    }
+
+    function getTrayIcon(id: string, title: string, icon: string): string {
+        const sub = traySubFor(id, title);
+        if (sub?.image || sub?.icon)
+            return sub.image ? Qt.resolvedUrl(sub.image) : Quickshell.iconPath(sub.icon);
 
         const themed = resolveThemedTrayIcon(id, icon);
         if (themed)

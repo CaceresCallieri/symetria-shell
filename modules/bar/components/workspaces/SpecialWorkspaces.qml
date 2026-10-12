@@ -230,6 +230,7 @@ Item {
         sourceComponent: ActiveIndicator {
             listView: view
             mask: view
+            outlined: true
             indicatorColor: Colours.palette.m3tertiary
             textColor: Colours.palette.m3onTertiary
         }

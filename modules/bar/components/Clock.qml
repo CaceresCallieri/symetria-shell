@@ -21,19 +21,14 @@ Row {
 
         sourceComponent: MaterialIcon {
             text: "schedule"
-            color: root.colour
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
     }
 
-    StyledText {
-        id: text
-
+    BarReadout {
         anchors.verticalCenter: parent.verticalCenter
 
-        horizontalAlignment: StyledText.AlignHCenter
-        text: Time.format(Config.services.useTwelveHourClock ? "hh:mm A" : "hh:mm")
-        font.pointSize: Appearance.font.size.smaller
-        font.family: Appearance.font.family.mono
-        color: root.colour
+        value: Time.format(Config.services.useTwelveHourClock ? "hh:mm A" : "hh:mm")
+        colour: root.colour
     }
 }

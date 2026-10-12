@@ -80,7 +80,7 @@ Item {
                     text: "select_window"
                     color: Colours.palette.m3onSurface
                     font.pointSize: Appearance.font.size.large
-                    fill: 1
+                    solid: true
                 }
 
                 StyledText {

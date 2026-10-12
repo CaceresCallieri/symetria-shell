@@ -69,8 +69,7 @@ PillContainer {
 
             sourceComponent: MaterialIcon {
                 text: Weather.icon
-                color: root.colour
-                font.pointSize: Appearance.font.size.normal
+                color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
             }
         }
 
@@ -79,10 +78,10 @@ PillContainer {
             name: "weather"
             active: root.weatherAvailable
 
-            sourceComponent: StyledText {
-                text: Weather.temp
-                color: root.colour
-                font.family: Appearance.font.family.mono
+            sourceComponent: BarReadout {
+                value: Weather.tempDegrees.toString()
+                unit: "°"
+                colour: root.colour
             }
         }
 

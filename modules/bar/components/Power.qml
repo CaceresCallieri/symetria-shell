@@ -9,15 +9,15 @@ Item {
 
     required property PersistentProperties visibilities
 
-    implicitWidth: icon.implicitHeight + Appearance.padding.small * 2
-    implicitHeight: icon.implicitHeight
+    implicitWidth: powerGlyph.implicitHeight + Appearance.padding.small * 2
+    implicitHeight: powerGlyph.implicitHeight
 
     StateLayer {
         // Cursed workaround to make the height larger than the parent
         anchors.fill: undefined
         anchors.centerIn: parent
         implicitWidth: implicitHeight
-        implicitHeight: icon.implicitHeight + Appearance.padding.small * 2
+        implicitHeight: powerGlyph.implicitHeight + Appearance.padding.small * 2
 
         radius: Appearance.rounding.full
 
@@ -26,15 +26,16 @@ Item {
         }
     }
 
+    // Bar-icon size, not the old `normal` + bold: Phosphor Light has one
+    // weight, and at `normal` its hairline reads smaller than the status
+    // glyphs beside it. The old -1 offset centred Material's glyph; Phosphor's
+    // power glyph is drawn centred. The hit area follows from implicitHeight.
     MaterialIcon {
-        id: icon
+        id: powerGlyph
 
         anchors.centerIn: parent
-        anchors.horizontalCenterOffset: -1
 
         text: "power_settings_new"
         color: Colours.palette.m3powerButton
-        font.bold: true
-        font.pointSize: Appearance.font.size.normal
     }
 }

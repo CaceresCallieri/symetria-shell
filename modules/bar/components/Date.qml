@@ -21,17 +21,18 @@ Row {
 
         sourceComponent: MaterialIcon {
             text: "calendar_month"
-            color: root.colour
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
     }
 
-    StyledText {
+    // "Sun 11 Oct": the day of the month is the figure, the weekday and the
+    // month recede around it.
+    BarReadout {
         anchors.verticalCenter: parent.verticalCenter
 
-        horizontalAlignment: StyledText.AlignHCenter
-        text: Time.format("dd·MM")
-        font.pointSize: Appearance.font.size.smaller
-        font.family: Appearance.font.family.mono
-        color: root.colour
+        prefix: `${Time.format("ddd")} `
+        value: Time.format("d")
+        unit: ` ${Time.format("MMM")}`
+        colour: root.colour
     }
 }

@@ -35,16 +35,26 @@ MouseArea {
             anchors.verticalCenter: parent.verticalCenter
 
             text: "developer_board"
-            color: root.colour
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
 
-        StyledText {
+        BarReadout {
             anchors.verticalCenter: parent.verticalCenter
 
-            text: `${root.cpuUsagePercent}%${root.hasTemperature ? `|${root.cpuTemperature}°` : ""}`
-            font.pointSize: Appearance.font.size.smaller
-            font.family: Appearance.font.family.mono
-            color: root.colour
+            value: root.cpuUsagePercent.toString()
+            unit: "%"
+            colour: root.colour
+        }
+
+        // Usage and temperature are two figures, so a quiet dot separates them.
+        BarReadout {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.hasTemperature
+
+            prefix: "· "
+            value: root.cpuTemperature.toString()
+            unit: "°"
+            colour: root.colour
         }
     }
 

@@ -98,6 +98,12 @@ JsonObject {
         ]
         property list<var> namedWorkspaceIcons: [
             {
+                // The Electron file manager's windows open here (Hyprland
+                // windowrule `workspace name:files`).
+                name: "files",
+                icon: "mat:folder"
+            },
+            {
                 name: "gaming",
                 icon: "mat:sports_esports"
             },
@@ -156,6 +162,13 @@ JsonObject {
         // Rationale for flattening tray icons is on TrayItem.qml's layer.enabled.
         property bool recolour: true
         property bool compact: false
+        // Each entry matches a tray item on `id` or, for apps whose id changes
+        // every session, on `title`, and replaces its icon with one of:
+        //   glyph: a name the shell's glyph fonts cover (assets/glyphs, e.g.
+        //          "brand_discord"), drawn like the status glyphs; falls back
+        //          to the app's icon when the active glyph family lacks it
+        //   icon:  an icon-theme name
+        //   image: a file path
         property list<var> iconSubs: []
     }
 
