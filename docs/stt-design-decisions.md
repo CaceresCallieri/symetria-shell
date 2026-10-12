@@ -14,7 +14,7 @@ Design rationale for the Speech-to-Text pipeline that isn't obvious from reading
 
 `AgentService.activeAgentForTerminal(pid)` resolves identity through *current state* — it calls `representativeAgent()` which returns `agents.find(a => a.active) ?? agents[0]`. When multiple agents share a terminal PID (same Neovim instance), calling this function at different times returns different agents depending on which one is currently focused.
 
-**Rule:** Never call `activeAgentForTerminal()` after `start()`. The function `_refreshAgentTarget()` exists but must NOT be called — it would re-resolve and potentially change the delivery target.
+**Rule:** Never call `activeAgentForTerminal()` after `start()`, and never re-add a target refresh — the historical `_refreshAgentTarget()` was removed for exactly this reason (see Historical Bugs below). Re-resolving at stop-time or delivery-time would change the delivery target mid-flight.
 
 ## Historical Bugs (Now Fixed)
 
@@ -41,35 +41,36 @@ These document WHY certain code patterns exist:
 Mesura Code delivery never uses `stt-inject.sh`. The Shell captures the exact Mesura process, sends
 the reservation, and starts audio immediately under Shell presentation ownership. This keeps the
 keybind responsive while the broker round trip runs. Mesura receives recording state only after it
-confirms the exact target. The target remains immutable through transcription, grace, delivery, and
+confirms the exact target. The target remains immutable through transcription, delivery, and
 confirmation. If reservation fails, Shell reports the failure and continues ordinary transcription
 in manual-clipboard mode. It never falls back to automatic paste or send against the focused window.
 
 If transcription finishes while reservation is still pending, the job holds the transcript and does
-not enter any generic delivery path. Confirmation starts the normal grace period. Reservation
-failure copies the completed transcript without running `stt-inject.sh`, so the user can paste it
-manually. Restart replaces the active capture inside the same pending reservation, and mode changes
-made during the wait win over the reservation snapshot.
+not enter any generic delivery path. An accepted reservation dispatches the transcript immediately
+with the mode selected at that instant. Reservation failure copies the completed transcript without
+running `stt-inject.sh`, so the user can paste it manually. Restart replaces the active capture inside
+the same pending reservation, and mode changes made during the wait win over the reservation snapshot.
 
 The helper connects only to `symmetria-mesura-dictation-<pid>.sock`. The old
 `symmetria-mesura-<pid>.sock` request carried no thread identity and is not discovered. Mesura keeps a
 refusal-only endpoint at that old path for old Shell builds, but current Shell never sends to it.
 
-Mesura receipts carry delivery outcomes and correlated metadata for observability. `inserted` with a
-submit action, `confirmation-pending`, and `turn-running` all mean Mesura accepted the send request.
-The Shell finishes the session at that boundary instead of waiting indefinitely for a later provider
-event. Delivery failures are never retried because a late provider event could otherwise duplicate a
-message.
+Mesura receipts carry correlated metadata for observability, but they do not control Shell state.
+The matching session snapshot is the user-facing source of truth: `completed` means Mesura accepted
+the reserved chat action, while `failed` starts clipboard recovery. The Shell does not wait for a
+provider response. Delivery failures are never retried because a late provider event could otherwise
+duplicate a message.
 
 Mesura owns the visible recorder only while it renews the focused exact-target presentation lease.
 Shell shows the same job after route change, window blur, disconnect, or lease expiry. Presentation
 ownership never changes the recording or delivery target. Shared controls always keep the Shell job;
 only the Shell surfaces use the lease to decide whether to render it.
 
-If Mesura disconnects during recording, processing, or grace, Shell finishes the transcript and then
-uses the normal unavailable-target recovery. A final refusal, failure, disconnect, or delivery timeout
-stores the transcript once and attempts one clipboard copy. The UI then closes as a completed session.
-Only a real clipboard write failure produces an error toast; the transcript remains in Transcriptions.
+If Mesura disconnects during recording or processing, Shell finishes the transcript and then uses the
+normal unavailable-target recovery. After dispatch, a matching failure, disconnect, or 6.5-second
+recovery watchdog attempts one clipboard copy. The transcript is already stored before delivery, and
+one terminal guard prevents competing success and recovery toasts. Only a real clipboard write failure
+produces an error toast; the transcript remains in Transcriptions.
 
 ## Model Selection & Long-Audio Truncation
 

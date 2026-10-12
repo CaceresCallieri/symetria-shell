@@ -84,7 +84,10 @@ Slider {
                     animate = !moving;
                     binding.when = moving;
                     font.pointSize = moving ? Appearance.font.size.small : Appearance.font.size.larger;
-                    font.family = moving ? Appearance.font.family.sans : Appearance.font.family.material;
+                    // Back to a BINDING on the icon's own family, not a fixed
+                    // name: a fixed name would pin the icon to one family and
+                    // ignore Theme.glyphs from then on (MaterialIcon header).
+                    font.family = moving ? Appearance.font.family.sans : Qt.binding(() => icon.iconFamily);
                 }
 
                 text: root.icon

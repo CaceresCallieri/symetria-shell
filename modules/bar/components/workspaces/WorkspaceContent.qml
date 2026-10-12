@@ -44,7 +44,7 @@ RowLayout {
             id: iconComp
 
             MaterialIcon {
-                fill: 1
+                solid: true
                 text: label.iconText
                 color: root.labelColor
                 horizontalAlignment: Qt.AlignHCenter

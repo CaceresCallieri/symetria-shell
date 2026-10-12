@@ -31,6 +31,11 @@ rm -rf ~/.cache/quickshell/qmlcache
   -o assets/shaders/NAME.frag.qsb assets/shaders/NAME.frag
 ```
 
+**Glyph font changes** (`assets/glyphs/glyph-map.json`) — a rebuild IS needed. The shell reads the generated `glyph-names.json` and fonts, never the map, so editing the map alone changes nothing on screen; `scripts/tests/test_glyph_fonts.py` fails until you run (needs `python-fonttools`):
+```bash
+python3 scripts/build-glyph-fonts.py
+```
+
 **C++ plugin changes** (`plugin/src/`):
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=$HOME/.config/quickshell/symmetria
@@ -95,7 +100,7 @@ python3 -m pytest scripts/tests -q  # whole suite, never scoped — see below
 **Three ways to silently break these lines.**
 1. Never rewrite `/usr/lib/qt6/bin/qmllint` as a bare `qmllint`. On Arch that resolves to Qt 5.15's tool, which exits 255 with no output on ~93% of this repo. The same trap applies to `qmlformat`.
 2. Never drop `xargs -r`. `run-qmlformat.sh` sweeps *every* tracked file when called with no arguments, so without `-r` a docs-only change turns the change gate into a full-repo sweep that still reads as change-scoped.
-3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the recorder's bar embed broke two of its tests while every other check stayed green.
+3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the dictation recorder's embed in the bar (the waveform pill it used to render) broke two of its tests while every other check stayed green.
 
 Suppressions live in `.qmllint.ini` (QML categories, each with its reason), `pyproject.toml` (`per-file-ignores`), and inline `# type: ignore[rule]` comments. Keep an inline suppression's marker short and put its explanation on the line *above* — `ruff format` rewraps long lines and will silently carry a trailing marker onto a different line, voiding it.
 
@@ -120,7 +125,7 @@ The repository gate starts clean for blocking findings: every one must be fixed,
 
 **`run-qmlformat.sh` is local-only — CI does not run it.** qmlformat's output is version-coupled, and the two sides disagree: nixpkgs pins Qt 6.10.1 while Arch ships 6.11.1. On a tree formatted with 6.11.1, 6.10.1 reported 18 files as unformatted and a *different* set as unprocessable. Neither is a defect. The gate therefore lives in the pre-commit hook, where exactly one Qt version is ever in play. Anything that reformats QML must run on the same machine that commits it.
 
-**`pytest` guards QML, not Python.** `scripts/tests/test_mesura_dictation.py` is the only suite (14 tests, ~0.05s). Most of it reads `.qml` files and asserts over their **source text** — that a handler exists, that two statements appear in a given order, that a removed field is absent. It is the repository's only automated check on QML behaviour, since `qmltestrunner` cannot load Quickshell's statically-linked plugins. Two consequences: it belongs in every gate despite living under `scripts/`, and its assertions go stale silently when a QML file is renamed or deleted, so treat a failure as "the assertion's subject moved" before treating it as a regression.
+**`pytest` guards QML, not Python.** `scripts/tests/test_mesura_dictation.py` is the only suite, and it runs in a fraction of a second. Most of it reads `.qml` files and asserts over their **source text** — that a handler exists, that two statements appear in a given order, that a removed field is absent. It is the repository's only automated check on QML behaviour, since `qmltestrunner` cannot load Quickshell's statically-linked plugins. Two consequences: it belongs in every gate despite living under `scripts/`, and its assertions go stale silently when a QML file is renamed or deleted, so treat a failure as "the assertion's subject moved" before treating it as a regression.
 
 **Not adopted, with reasons.** `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. QuickShell configs also have no viable test runner at all: `qmltestrunner` cannot load Quickshell's statically-linked plugins. → `docs/qmllint-setup.md`
 
@@ -158,21 +163,26 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **Module entry points** — Each major module exposes `Wrapper.qml` as its entry point, imported via qualified alias: `import "modules/x" as XModule` → `XModule.Wrapper {}`. This avoids the last-import-wins collision pitfall. Modules without collision risk (e.g., `Stt`, `Keycaster`) keep their own name.
 - **Drawer system** — `modules/drawers/` manages slide-out panels with unified visibility and gestures
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
-- **Theme** — `services/Theme.qml` selects the surface design language along TWO orthogonal axes:
-  `material` (clay | metal — how one surface looks, consumed by the surface primitives) and
-  `form` (islands | panel — how surfaces are arranged, consumed by the bar geometry). Recipes are
+- **Theme** — `services/Theme.qml` selects the surface design language along THREE orthogonal axes:
+  `material` (clay | metal — how one surface looks, consumed by the surface primitives),
+  `form` (islands | panel — how surfaces are arranged, consumed by the bar geometry) and
+  `glyphs` (phosphor | material — which font draws every icon, consumed by `MaterialIcon` alone). Recipes are
   plain data tables, so a new material is a data block rather than a parallel implementation of
-  every primitive. Switching is live (`symmetria shell surface material|form <name>`), but is
+  every primitive. Switching is live (`symmetria shell surface material|form|glyphs <name>`), but is
   **runtime-only — not persisted**; the shipped default lives in the property initialisers.
+- **Icons** — every icon is a `MaterialIcon` whose `text` is a Material Symbols name, whichever
+  family draws it: the Phosphor fonts in `assets/glyphs` answer to those names through ligatures.
+  Never set `font.family` on an icon to pick a family. A name the Phosphor fonts lack falls back to
+  Material Symbols and logs `Glyphs: no Phosphor glyph for "<name>"` once.
 - **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar, surface)
 - **Agent bar** — `modules/agentbar/` is fed by `services/SymmetriaThreads.qml` alone, reading
   the socket of Mesura Code (the separate agent app at `~/projects/mesura-code`). Symmetria IDE
   was the second source and no longer feeds it. `services/AgentService.qml` is therefore NOT the
   bar's service: it is dictation plumbing plus agent notifications, it still spawns
-  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 lands — do not delete it, and
+  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 ("Delete the Symmetria IDE agent pipeline once dictation stops needing a Neovim socket") lands — do not delete it, and
   do not let the bar read it. The bar's session visibility flag is `Visibilities.agentBarHidden`,
   though the `agentbar` IPC verbs that mutate it still live in `AgentService`. Why a bar row can
-  carry no workspace, and what that deleted, is in the file headers of `AgentBarContent.qml`,
+  carry no workspace, and what that deletion removed, is in the file headers of `AgentBarContent.qml`,
   `ProjectGroup.qml` and `SymmetriaThreads.qml`.
 
 ## Configuration
@@ -218,7 +228,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Transparency compensation** — Components outside the unified `Backgrounds` system appear darker (50% vs 22.5% black). Must manually compute `generalBackgroundAlpha × transparency.base`. → `docs/qml-pitfalls.md`
 
-**XOR mask inversion** — The drawers window input region uses XOR. Expanding `mainRect` SHRINKS the clickable area. The bar must stay OUTSIDE `mainRect` to receive input. → `docs/qml-pitfalls.md`
+**XOR mask inversion** — The drawers window input region uses XOR. Expanding `mainRect` SHRINKS the clickable area. The bar must stay OUTSIDE `mainRect` to receive input. Corollary: every `Panels` child is turned into a `Subtract` Region, so a child whose width OR height reaches 0 carves nothing and the pointer is never delivered there — with no error. Invisible hover zones must floor both dimensions while they are live. → `docs/qml-pitfalls.md`
 
 **Cursor shadowing** — A `visible: true` MouseArea at highest z-order shadows ALL `cursorShape` settings below it, even when `enabled: false`. Overlay MouseAreas need both `enabled` and `visible` guards. → `docs/qml-pitfalls.md`
 
@@ -236,7 +246,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Layer-shell focus restoration race** — A layer-shell window with `WlrKeyboardFocus.Exclusive` triggers focus restoration on unmap (wlroots restores whoever held focus before the layer mapped). Synchronous `focuswindow` dispatches lose to the restoration. Always `hide()` first, then `Qt.callLater(() => Hypr.dispatch(...))`. Dispatchers that don't require an active focus target (e.g. `killwindow`) are unaffected. → `docs/qml-pitfalls.md`
 
-**Electron tray icons are unthemeable from QML** — Discord, Heroic, Altus, and other Electron apps all register with SNI id `chrome_status_icon_1` and ship embedded pixmap bytes (no file path). They are indistinguishable from each other at the QML layer because `SystemTrayItem` exposes neither bus name nor PID. Do NOT attempt to auto-theme them via id heuristics — it cannot work. Users must override via `iconSubs` or live with the raw pixmap. → `docs/tray-icon-theming.md`
+**Electron tray icons ship pixmap bytes, and older builds share one id** — Electron apps register an embedded pixmap (no file path), and older Electron builds all use SNI id `chrome_status_icon_1`, which `SystemTrayItem` cannot tell apart (it exposes neither bus name nor PID). Current Discord registers `discord_status_icon_1` (verified 2026-10-12); Heroic and Altus are unverified. Do NOT auto-theme them via id heuristics. Override per app with `bar.tray.iconSubs`, matched on `id` or `title`. → `docs/tray-icon-theming.md`
 
 **Property contract drift across containers** — If a child exposes a property whose value a parent reads in layout calculations (e.g. `Notification.nonAnimHeight` read by `Content.qml` to size the popup stack), that property has an external contract. Refactoring its semantics inside the child (e.g. "moving margins out for cleaner math") silently under-allocates the parent — visible as last-in-stack body clipping. Grep the whole codebase for that property name to find all consumers before changing its semantics; add a comment on or immediately above the property declaration stating the contract, e.g. `// CONTRACT: nonAnimHeight = full card height including margins (read by Content.qml stack)`. → `docs/qml-pitfalls.md`
 
@@ -280,7 +290,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Investigations:**
 - `*.investigation.md` files — Debug session logs for past issues
-- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH. Feeds dictation and notifications only — NOT the agent bar
+- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH (bar rendering removed with the IDE; the doc keeps the bridge's tunnel setup and detection). Feeds dictation and notifications only — NOT the agent bar
 
 ## Updating from Upstream
 

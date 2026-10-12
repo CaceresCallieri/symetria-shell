@@ -135,6 +135,16 @@
         {
           "icon": "mat:lightbulb",
           "name": "special"
+        }
+      ],
+      "namedWorkspaceIcons": [
+        {
+          "icon": "mat:public",
+          "name": "browser"
+        },
+        {
+          "icon": "mat:deployed_code",
+          "name": "agents"
         },
         {
           "icon": "mat:phone",
@@ -143,6 +153,54 @@
         {
           "icon": "mat:auto_stories",
           "name": "note-taking"
+        },
+        {
+          "icon": "mat:sports_esports",
+          "name": "gaming"
+        },
+        {
+          "icon": "mat:library_music",
+          "name": "music"
+        },
+        {
+          "icon": "mat:theater_comedy",
+          "name": "theater"
+        },
+        {
+          "icon": "mat:balance",
+          "name": "symmetria"
+        },
+        {
+          "icon": "mat:chat",
+          "name": "symmetria-whatsapp"
+        },
+        {
+          "icon": "mat:palette",
+          "name": "netcolor"
+        },
+        {
+          "icon": "mat:format_paint",
+          "name": "bambin"
+        },
+        {
+          "icon": "mat:target",
+          "name": "fps-game"
+        },
+        {
+          "icon": "mat:settings",
+          "name": ".dotfiles"
+        },
+        {
+          "icon": "mat:tune",
+          "name": ".hyprdots"
+        },
+        {
+          "icon": "mat:rocket_launch",
+          "name": "kosmos"
+        },
+        {
+          "icon": "mat:edit",
+          "name": "nvim"
         }
       ]
     },
@@ -530,7 +588,7 @@
     }
   },
   "agentbar": {
-    "enabled": true,
+    "enabled": false,
     "sizes": {
       "innerHeight": 18
     }

@@ -172,7 +172,7 @@ Column {
                         anchors.centerIn: parent
                         visible: UpdateRunner.phase === "done" || UpdateRunner.phase === "error"
                         text: UpdateRunner.phase === "error" ? "error" : "check_circle"
-                        fill: 1
+                        solid: true
                         color: UpdateRunner.phase === "error" ? Colours.palette.m3error : Colours.palette.m3primary
                     }
                 }

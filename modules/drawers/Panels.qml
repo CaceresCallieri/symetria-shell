@@ -34,6 +34,7 @@ Item {
     readonly property alias launcher: launcher
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
+    readonly property alias utilitiesTrigger: utilitiesTrigger
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
@@ -239,6 +240,55 @@ Item {
                 Visibilities.utilitiesPanelsVersion++;
             }
         }
+    }
+
+    /// Invisible hover strip that summons the utilities drawer, in the same
+    /// spirit as OsdTriggerZone above: its size is what carves it out of the
+    /// drawers input mask, so it is the thing that makes the corner reachable
+    /// at all.
+    ///
+    /// The drawer used to have no zone of its own. The mask is an Xor region, so
+    /// the pointer only reaches Interactions through the strips OUTSIDE it — the
+    /// bar on top, the agent bar at the bottom, and whatever a Panels child
+    /// subtracts back in. A closed utilities drawer is 0 px tall and subtracts
+    /// nothing, and `dragMaskPadding` drops to 0 as soon as one window is open,
+    /// so the whole bottom strip was exactly `agentBar.implicitHeight` tall.
+    /// Hide the agent bar and it became 0: the hit test in
+    /// inUtilitiesTriggerZone was correct and simply never ran.
+    ///
+    /// Height is what the agent bar does NOT already provide, floored at 0, so
+    /// the zone costs the window underneath nothing while the agent bar is up.
+    /// The inner Math.max(1) enforces the "must be greater than zero" that
+    /// UtilitiesConfig documents and nothing else checks — a triggerHeight of 0
+    /// in shell.json would otherwise reproduce the exact unhoverable corner this
+    /// zone exists to repair, silently. OsdTriggerZone floors its own dimension
+    /// for the same reason.
+    ///
+    /// Width is the rightmost quarter of the drawer, and this line is its SOLE
+    /// definition: inUtilitiesTriggerZone reads the edge back from here rather
+    /// than recomputing it, so the mask and the hit test cannot drift apart.
+    ///
+    /// The zone stays carved over FULLSCREEN clients, deliberately. The bottom
+    /// strip already belongs to the drawers window whenever the agent bar is
+    /// up — including over a fullscreen surface — so gating this zone on
+    /// hasFullscreen would make the corner work or not work depending on
+    /// whether the agent bar happens to be visible. One consistent rule beats a
+    /// state-dependent one. Note that Wrapper.qml's onHasFullscreenChanged does
+    /// not clear `visibilities.utilities` either, which matches.
+    Item {
+        id: utilitiesTrigger
+
+        /// Fraction of the drawer's width, measured in from its right edge,
+        /// that accepts the opening hover. A quarter keeps the target a corner
+        /// rather than the whole bottom edge, which the launcher already owns.
+        readonly property real widthFraction: 0.25
+        readonly property bool zoneEnabled: Config.utilities.enabled
+
+        implicitWidth: zoneEnabled ? Math.max(1, Math.round(utilities.width * widthFraction)) : 0
+        implicitHeight: zoneEnabled ? Math.max(0, Math.max(1, Config.utilities.sizes.triggerHeight) - root.agentBar.implicitHeight) : 0
+
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
     }
 
     Utilities.RecordingIndicator {

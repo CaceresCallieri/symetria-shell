@@ -11,17 +11,18 @@ render through the active Freedesktop icon theme (e.g. `Symmetria` →
 
 ## Current pipeline (`utils/Icons.qml`)
 
-`getTrayIcon(id, icon)` is called by `modules/bar/components/TrayItem.qml`
-with two strings sourced from the StatusNotifierItem D-Bus protocol:
+`getTrayIcon(id, title, icon)` is called by `modules/bar/components/TrayItem.qml`
+with three strings sourced from the StatusNotifierItem D-Bus protocol:
 
 - `id` — the app's advertised SNI id string (e.g. `"steam"`, `"discord"`,
   `"chrome_status_icon_1"`, or a random slug)
+- `title` — the SNI `Title`, used only to match `iconSubs` entries
 - `icon` — either a theme icon name, an absolute pixmap file path, a
   `name?path=...` SNI pixmap encoding, or a `data:` URI
 
 Resolution order:
 
-1. **User override** — `Config.bar.tray.iconSubs[]` matches on `id`
+1. **User override** — `Config.bar.tray.iconSubs[]` matches on `id` or `title` (`traySubFor`)
 2. **Theme by id** — `Quickshell.iconPath(id, true)` against the active theme
 3. **DesktopEntries by id** — `DesktopEntries.heuristicLookup(id).icon` →
    `Quickshell.iconPath(entry.icon, true)`
@@ -65,6 +66,12 @@ registers with SNI using Chromium's generic tray code. At the D-Bus level
 | Heroic | `chrome_status_icon_1` | *(empty)* | *(empty)* | *(pixmap bytes)* |
 | Altus | `chrome_status_icon_1` | *(empty)* | *(empty)* | *(pixmap bytes)* |
 
+**Update, 2026-10-12:** current Discord no longer matches this table. Its
+item reports SNI id `discord_status_icon_1` and the tooltip title
+`Discord`, so an `id` override reaches it alone. Heroic and Altus were not
+re-checked. The table below records the older Electron behaviour, which an
+app on an older Electron still shows.
+
 **All three Electron apps are indistinguishable from each other** at the
 QML layer. They share an identical SNI id, carry no title or tooltip,
 and ship their tray icon as embedded pixmap bytes via the SNI
@@ -92,7 +99,22 @@ etc.) — not something Symmetria can solve cleanly from its side.
 
 ### A. Manual `iconSubs` override
 
-Add to `~/.config/symmetria/shell.json`:
+Each entry matches a tray item on its SNI `id`, or on its `title` for an
+app that generates its id per session (LocalSend: a random id every
+launch, title `org.localsend.localsend_app`). It then replaces the icon
+with one of:
+
+- `glyph` — a name the shell's glyph fonts cover (`assets/glyphs`, e.g.
+  `brand_discord`). Drawn by `TrayItem` as a shell glyph in the status
+  pill's tone, so the tray matches the hairline status glyphs. Falls back
+  to the app's own icon while the active glyph family lacks the name
+  (`Theme.glyphs` set to `material`). Brand marks are added to
+  `assets/glyphs/glyph-map.json` as `brand_*` keys.
+- `icon` — an icon-theme name.
+- `image` — a file path.
+
+The shipped `config/shell.json` carries glyph entries for Discord, Steam
+and LocalSend. The theme-name form looks like this:
 
 ```json
 {
@@ -106,8 +128,8 @@ Add to `~/.config/symmetria/shell.json`:
 }
 ```
 
-Caveat: because all Electron apps share `chrome_status_icon_1`, this
-override forces the same icon on every Electron tray app. Only useful
+Caveat: an app on an older Electron shares `chrome_status_icon_1`, and
+this override forces the same icon on every such tray app. Only useful
 if one Electron app is dominant (or the others are rarely visible).
 
 The `image` field accepts an absolute path if you want a custom file

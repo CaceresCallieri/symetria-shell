@@ -61,7 +61,10 @@ Item {
             queuedMode = mode;
         }
         focus = true;
-        Qt.callLater(() => { if (_suppressGeneration === gen) _suppressAnim = false; });
+        Qt.callLater(() => {
+            if (_suppressGeneration === gen)
+                _suppressAnim = false;
+        });
     }
 
     function close(): void {
@@ -85,7 +88,10 @@ Item {
         queuedMode = "";
         animCurve = Appearance.anim.curves.emphasized;
         if (wasDetached) {
-            Qt.callLater(() => { if (_suppressGeneration === gen) _suppressAnim = false; });
+            Qt.callLater(() => {
+                if (_suppressGeneration === gen)
+                    _suppressAnim = false;
+            });
         }
     }
 
@@ -100,7 +106,10 @@ Item {
             const gen = root._suppressGeneration;
             root._suppressAnim = true;
             root._closingFromDetached = false;
-            Qt.callLater(() => { if (root._suppressGeneration === gen) root._suppressAnim = false; });
+            Qt.callLater(() => {
+                if (root._suppressGeneration === gen)
+                    root._suppressAnim = false;
+            });
         }
     }
 
@@ -148,9 +157,7 @@ Item {
     // The updates popout's sudo password field lives in THIS window, so it
     // needs the same grab treatment as the vocab hints input: without the grab
     // the compositor never routes keys here until the user clicks the field.
-    readonly property bool _updatesPasswordActive: root.hasCurrent
-        && root.currentName === "updates"
-        && UpdateRunner.phase === "password"
+    readonly property bool _updatesPasswordActive: root.hasCurrent && root.currentName === "updates" && UpdateRunner.phase === "password"
 
     HyprlandFocusGrab {
         active: root.isDetached || (root.keyboardNavigationActive && root.hasCurrent) || root._updatesPasswordActive

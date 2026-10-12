@@ -82,10 +82,27 @@ JsonObject {
         property bool useActualAppIcons: true      // Use .desktop file icons instead of Material category icons
         property bool terminalAppDetection: true   // Detect apps running in terminals (nvim, yazi, etc.)
         property bool appIconsClickToFocus: true   // Click on icon to focus that window
+        // Only the general scratchpad is a special workspace now. The browser,
+        // agents, communications, and note-taking entries moved to
+        // namedWorkspaceIcons below when those workspaces stopped being special.
         property list<var> specialWorkspaceIcons: [
             {
                 name: "special",
                 icon: "mat:lightbulb"
+            }
+        ]
+        property list<var> namedWorkspaceIcons: [
+            // App-owned workspaces. Listing them here does double duty:
+            // displayedWorkspaceIds() in Hypr.qml shows a named workspace when
+            // it is occupied OR when its name appears in this list, so these
+            // four keep a permanent slot in the bar even while empty.
+            {
+                name: "browser",
+                icon: "mat:public"
+            },
+            {
+                name: "agents",
+                icon: "mat:deployed_code"
             },
             {
                 name: "communications",
@@ -94,9 +111,13 @@ JsonObject {
             {
                 name: "note-taking",
                 icon: "mat:auto_stories"
-            }
-        ]
-        property list<var> namedWorkspaceIcons: [
+            },
+            {
+                // The Electron file manager's windows open here (Hyprland
+                // windowrule `workspace name:files`).
+                name: "files",
+                icon: "mat:folder"
+            },
             {
                 name: "gaming",
                 icon: "mat:sports_esports"
@@ -156,6 +177,13 @@ JsonObject {
         // Rationale for flattening tray icons is on TrayItem.qml's layer.enabled.
         property bool recolour: true
         property bool compact: false
+        // Each entry matches a tray item on `id` or, for apps whose id changes
+        // every session, on `title`, and replaces its icon with one of:
+        //   glyph: a name the shell's glyph fonts cover (assets/glyphs, e.g.
+        //          "brand_discord"), drawn like the status glyphs; falls back
+        //          to the app's icon when the active glyph family lacks it
+        //   icon:  an icon-theme name
+        //   image: a file path
         property list<var> iconSubs: []
     }
 

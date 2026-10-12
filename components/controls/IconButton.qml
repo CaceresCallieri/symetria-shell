@@ -134,7 +134,10 @@ PillToggleSurface {
 
             anchors.centerIn: parent
             color: root.disabled ? root.disabledOnColour : root.internalChecked ? root.activeOnColour : root.inactiveOnColour
-            fill: !root.toggle || root.internalChecked ? 1 : 0
+            // `fill` is the toggle's state cue; a plain button's solid look is
+            // style, which only Material draws (MaterialIcon header).
+            fill: root.toggle && root.internalChecked ? 1 : 0
+            solid: !root.toggle
             opacity: root.loading ? 0 : 1
 
             Behavior on fill {

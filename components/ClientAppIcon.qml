@@ -8,10 +8,11 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Widgets
 import QtQuick
+import QtQuick.Effects
 
 /// App icon for Hyprland clients, used by the workspace bar. It was shared with
 /// the agentbar's merged layout, which went out with Symmetria IDE.
-/// Shows the actual app icon (or Material category fallback) with click-to-focus and tooltip.
+/// Shows the actual app icon (or a category glyph fallback) with click-to-focus and tooltip.
 Item {
     id: root
 
@@ -55,6 +56,15 @@ Item {
         // Minimum 16px to prevent invalid icon requests during initialization
         implicitSize: Math.max(Config.bar.sizes.iconSize, 16)
         source: Icons.resolveWindowIcon(root.client?.lastIpcObject?.class ?? "", Config.bar.workspaces.terminalAppDetection ? (root.client?.lastIpcObject?.title ?? "") : "")
+
+        // Greyscale, for the reason the tray is flattened (TrayItem.qml): the
+        // bar carries one chromatic accent, the power glyph. Desaturated rather
+        // than recoloured like the tray, because an app icon is a full-colour
+        // picture, not a silhouette — flattened to one colour it reads as a blob.
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            saturation: -1
+        }
     }
 
     // Fallback: Material category icon (when useActualAppIcons is false)
@@ -63,7 +73,6 @@ Item {
 
         visible: !Config.bar.workspaces.useActualAppIcons
         anchors.centerIn: parent
-        grade: 0
         text: Icons.getAppCategoryIcon(root.client?.lastIpcObject?.class ?? "", "terminal")
         color: Colours.palette.m3onSurfaceVariant
     }
@@ -86,9 +95,12 @@ Item {
     }
 
     // Click to focus the window (when enabled)
+    // visible needs the same guard as enabled: a visible-but-disabled MouseArea
+    // at this z still shadows every cursorShape below it (docs/qml-pitfalls.md).
     MouseArea {
         anchors.fill: parent
         enabled: Config.bar.workspaces.appIconsClickToFocus
+        visible: Config.bar.workspaces.appIconsClickToFocus
         cursorShape: Config.bar.workspaces.appIconsClickToFocus ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: {
             const addr = root.client?.lastIpcObject?.address;

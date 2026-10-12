@@ -36,7 +36,6 @@ Singleton {
     signal externalSessionRequested(int peerPid, var session)
     signal controlRequested(string sessionId, string commandId, string action)
     signal vocabularyRequested(string sessionId, string commandId, string action, string word, int index)
-    signal receiptReceived(int peerPid, var receipt)
     signal sessionChangedForPeer(int peerPid, var session)
     signal peerConnected(int peerPid)
     signal peerDisconnected(int peerPid, string detail)
@@ -235,7 +234,7 @@ Singleton {
             phase: phase,
             elapsedMs: Math.max(0, Math.round(job.elapsedSeconds * 1000)),
             audioLevel: phase === "recording" ? Math.max(0, Math.min(1, job.audioLevel)) : null,
-            graceRemainingMs: phase === "grace" ? job._graceRemainingMs : null
+            graceRemainingMs: null
         }, "");
     }
 
@@ -365,7 +364,6 @@ Singleton {
         } else if (event.type === "receipt") {
             const receipt = event.receipt ?? {};
             Logger.log("qml", "stt", `mesura-receipt | peer=${peer} | session=${receipt.sessionId ?? ""} | command=${receipt.commandId ?? ""} | outcome=${receipt.outcome ?? ""} | code=${receipt.code ?? ""}`);
-            receiptReceived(peer, event.receipt);
         } else if (event.type === "client.error" && _pendingReservation !== null && (event.requestId === _pendingReservation.commandId || peer === _pendingReservation.peerPid)) {
             _failPendingReservation(event.detail ?? "Mesura dictation is unavailable");
         }

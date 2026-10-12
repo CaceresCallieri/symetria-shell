@@ -259,10 +259,10 @@ Singleton {
         _activeRecording = job;
         job._state = initialState;
 
-        // Assign _job AFTER state is "recording" so the bar embed
-        // (which binds to _activeJob via job) sees the correct state immediately.
+        // Assign _job AFTER state is "recording" so the recorder surfaces
+        // (which bind to _activeJob via job) see the correct state immediately.
         // When called from the restart path, _job transitions directly from
-        // the parked old job to this new job — the bar embed's binding on
+        // the parked old job to this new job — the drawer's binding on
         // RecordingSessionManager.currentJob re-evaluates, swapping content
         // seamlessly without any close/open animation.
         _job = job;
@@ -326,7 +326,12 @@ Singleton {
         pendingJob._mesuraProjectName = session.projectName ?? "Mesura Code";
         if (!alreadyActive) {
             pendingJob._applyingMesuraSnapshot = true;
-            pendingJob._activeDeliveryChoice = session.mode;
+            // session.mode is peer-supplied; only the three known delivery
+            // modes may drive _activeDeliveryChoice (same gate as
+            // SttJob.setDeliveryChoice). Anything else keeps the job's own
+            // mode, which the reservation request seeded.
+            if (session.mode === "clipboard" || session.mode === "inject" || session.mode === "submit")
+                pendingJob._activeDeliveryChoice = session.mode;
             pendingJob._applyingMesuraSnapshot = false;
         }
         _pendingMesuraJob = null;
@@ -483,14 +488,14 @@ Singleton {
     /// Restart: cancel active recording + start a new one.
     /// No-op if there is no active recording.
     ///
-    /// Plays a close → open animation sequence:
-    ///   T=0          close animation starts (closing=true on old job causes
-    ///                Bar.qml's declarative _showEmbed binding to evaluate
-    ///                false → implicitWidth animates to 0 → shrink)
-    ///   T=500ms      _startInternal fires: _job swaps to new job atomically,
-    ///                old job is destroyed, Bar.qml's _showEmbed re-evaluates
-    ///                true (new job has closing=false) → open animation,
-    ///                pw-record spawns, recording begins.
+    /// Plays a timed swap sequence:
+    ///   T=0          closing=true on the old job — no surface binds to the
+    ///                flag for visuals any more; it marks the job as winding
+    ///                down so late delivery/control traffic is ignored
+    ///   T=500ms      _startInternal fires: _job swaps to the new job
+    ///                atomically, the old job is destroyed, pw-record spawns,
+    ///                recording begins. The drawer re-opens through
+    ///                visibilities, not through the job flag.
     ///
     /// The lock-release bug the old 500ms delay suffered from is prevented by
     /// parking the old job in _pendingOldJob so _job stays non-null across
@@ -523,11 +528,11 @@ Singleton {
         _sessionVocabHints = [];
         vocabHintsVisible = false;
         job.cancelForRestart(true);
-        // Trigger the bar embed's close animation. job.closing=true causes the
-        // declarative _showEmbed binding in Bar.qml to evaluate false, which
-        // animates implicitWidth to 0 (shrink). _job is NOT cleared here —
-        // _pendingOldJob keeps it alive so the lock stays held; the swap
-        // happens in _startInternal.
+        // Mark the old job as winding down. No visual binding remains on the
+        // closing flag (the drawer hides through visibilities); it now only
+        // gates setDeliveryChoice against a dying job. _job is NOT cleared
+        // here — _pendingOldJob keeps it alive so the lock stays held; the
+        // swap happens in _startInternal.
         job.closing = true;
 
         // Defense-in-depth: clean up any leftover pending job that wasn't consumed
@@ -559,8 +564,8 @@ Singleton {
 
     /// Switch the current job's delivery choice (one-shot — the next job
     /// re-seeds from Config.stt.deliveryMode). Targets _job rather than
-    /// _activeRecording so mode keys keep working during processing/
-    /// delivering/error: the choice is read at delivery time.
+    /// _activeRecording so mode keys keep working through processing. The job
+    /// rejects changes after delivery starts.
     /// This is the IPC entry point — emits actionTriggered for UI feedback.
     /// For direct UI interaction, use SttJob.setDeliveryChoice (no signal).
     function setDeliveryChoice(mode: string): void {
@@ -580,16 +585,6 @@ Singleton {
         if (_job._activeDeliveryChoice !== mode)
             return;
         actionTriggered(_job.sessionId, "mode-" + mode);
-    }
-
-    function sendNow(): void {
-        if (!_job || _job.state !== "grace")
-            return;
-        const mesuraControlId = _job._mesuraIntegrated && !_applyingMesuraControl ? MesuraDictation.sendControl("send-now") : "";
-        _job.sendNow();
-        if (mesuraControlId !== "")
-            MesuraDictation.acknowledgeAction("control", mesuraControlId);
-        actionTriggered(_job.sessionId, "send-now");
     }
 
     /// Add a per-session vocabulary hint (shown as chip in the widget).
@@ -719,7 +714,7 @@ Singleton {
                     handled = true;
                 }
             } else if (action === "stop") {
-                handled = root._job.state === "processing" || root._job.state === "grace" || root._job.state === "delivering" || root._job.state === "confirming";
+                handled = root._job.state === "processing" || root._job.state === "delivering" || root._job.state === "confirming";
                 if (root._activeRecording !== null) {
                     root.stop();
                     handled = true;
@@ -739,11 +734,9 @@ Singleton {
                     handled = true;
                 }
             } else if (action === "send-now") {
-                handled = root._job.state === "delivering" || root._job.state === "confirming";
-                if (root._job.state === "grace") {
-                    root.sendNow();
-                    handled = true;
-                }
+                // Compatibility acknowledgement for Mesura clients that still
+                // expose the retired action. Delivery is already immediate.
+                handled = root._job.state !== "idle";
             } else if (action === "start") {
                 handled = root._job.state !== "idle";
             }
@@ -770,11 +763,6 @@ Singleton {
                 MesuraDictation.acknowledgeAction("vocabulary", commandId);
         }
 
-        function onReceiptReceived(peerPid: int, receipt: var): void {
-            if (root._job?._mesuraPeerPid === peerPid)
-                root._job._handleMesuraReceipt(receipt);
-        }
-
         function onSessionChangedForPeer(peerPid: int, session: var): void {
             if (session === null || root._job?.sessionId !== session.sessionId || root._job._mesuraPeerPid !== peerPid)
                 return;
@@ -783,6 +771,7 @@ Singleton {
                 root._job.setDeliveryChoice(session.mode);
                 root._job._applyingMesuraSnapshot = false;
             }
+            root._job._handleMesuraSessionSnapshot(session);
         }
 
         function onPeerConnected(peerPid: int): void {
@@ -799,7 +788,7 @@ Singleton {
     }
 
     function _removeJob(job: SttJob): void {
-        job.closing = true;  // closes embed via _showEmbed declarative binding in Bar.qml
+        job.closing = true;  // wind-down flag: gates further delivery/control
         job.startRemoval();  // per-job timer, avoids overwrite race
     }
 
@@ -819,11 +808,11 @@ Singleton {
     // ─────────────────────────────────────────────────────────────────────────
 
     // Delay between setting closing=true on the old job and swapping in the
-    // new job. Matched to the bar embed's scale Behavior duration
-    // (expressiveDefaultSpatial = 500ms) so the close (scale → 0) animation
-    // has fully played out before the new job triggers the open (scale → 1)
-    // animation. The lock isn't released during this window because
-    // _pendingOldJob keeps _job non-null (see restart()).
+    // new job. Keeps the wind-down window (during which setDeliveryChoice
+    // ignores the dying job) finite and gives the drawer's own hide
+    // transition time to play before the new job starts. The lock isn't
+    // released during this window because _pendingOldJob keeps _job
+    // non-null (see restart()).
     Timer {
         id: restartDelayTimer
         interval: Appearance.anim.durations.expressiveDefaultSpatial

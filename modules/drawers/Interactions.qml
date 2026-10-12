@@ -84,15 +84,34 @@ CustomMouseArea {
         return y < bar.implicitHeight + panel.y + panel.height && withinPanelWidth(panel, x, y);
     }
 
-    function inBottomPanel(panel: Item, x: real, y: real): bool {
+    /// The bottom edge carries two stacked bands, and three call sites used to
+    /// respell their arithmetic independently. One copy drifting is precisely
+    /// the defect this file was last repaired for, so each band now comes from
+    /// ONE expression that every consumer reads.
+    function withinBottomPanelHeight(panel: Item, y: real): bool {
         const panelBottomEdge = root.height - agentBar.implicitHeight;
-        return y < panelBottomEdge
-            && y > panelBottomEdge - panel.height - Config.border.rounding
-            && withinPanelWidth(panel, x, y);
+        return y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding;
+    }
+
+    /// The strip along the very bottom of the screen, measured upward.
+    ///
+    /// `extraDepth` extends it PAST the agent bar. It is not decoration: a
+    /// trigger zone carved into the mask sits ABOVE the agent bar, so the strip
+    /// the pointer can actually be delivered in is deeper than the agent bar
+    /// alone. Pass 0 to ask about the agent bar by itself. Deriving the depth
+    /// from Config.border.rounding instead — as this test did before — makes
+    /// the band independent of the zone that carves it, so a zone that grows
+    /// gains nothing and a `rounding` of 0 empties the band entirely.
+    function withinBottomStripHeight(y: real, extraDepth: real): bool {
+        return y >= root.height - agentBar.implicitHeight - extraDepth - Config.border.rounding;
+    }
+
+    function inBottomPanel(panel: Item, x: real, y: real): bool {
+        return withinBottomPanelHeight(panel, y) && withinPanelWidth(panel, x, y);
     }
 
     function inAgentBarForPanel(panel: Item, x: real, y: real): bool {
-        return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidth(panel, x, y);
+        return withinBottomStripHeight(y, 0) && withinPanelWidth(panel, x, y);
     }
 
     // --- Keep-alive hysteresis helpers ---
@@ -101,39 +120,58 @@ CustomMouseArea {
 
     function withinPanelWidthExpanded(panel: Item, x: real, y: real): bool {
         const margin = Config.border.rounding + Config.border.keepAliveMargin;
-        const panelX = Config.border.sideThickness + panel.x;
+        // Map through the live container, exactly as withinPanelWidth does. The
+        // two forms agree only because Panels' leftMargin IS sideThickness —
+        // the coincidence named above as what let one axis drift out of step
+        // with the input mask unnoticed.
+        const panelX = panels.x + panel.x;
         return x >= panelX - margin && x <= panelX + panel.width + margin;
     }
 
     function inTopPanelExpanded(panel: Item, x: real, y: real): bool {
-        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin
-            && withinPanelWidthExpanded(panel, x, y);
+        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inBottomPanelExpanded(panel: Item, x: real, y: real): bool {
         const panelBottomEdge = root.height - agentBar.implicitHeight;
-        return y < panelBottomEdge
-            && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin
-            && withinPanelWidthExpanded(panel, x, y);
+        return y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inAgentBarForPanelExpanded(panel: Item, x: real, y: real): bool {
         return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidthExpanded(panel, x, y);
     }
 
-    // Narrower trigger zone for the utilities drawer — only the rightmost 1/4 of the panel width
-    // activates on hover, so the user must move to the very bottom-right corner to trigger it.
-    function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
-        const triggerWidth = panel.width / 4;
-        const panelRight = Config.border.sideThickness + panel.x + panel.width + Config.border.rounding;
-        const triggerLeft = panelRight - triggerWidth;
-        const inTriggerX = x >= triggerLeft && x <= panelRight;
+    /// Corner-only hover trigger for the utilities drawer: the bottom-right
+    /// quarter of the drawer's width opens it, so the pointer has to arrive at
+    /// the corner rather than merely cross the bottom edge.
+    ///
+    /// Both axes read panels.utilitiesTrigger rather than respelling its
+    /// geometry. That zone is what carves the corner out of the drawers input
+    /// mask, so a test computed independently would accept coordinates the
+    /// pointer is never delivered at — which is exactly how this trigger died
+    /// once the agent bar could be hidden.
+    ///
+    /// The vertical test stays deliberately DEEPER than the carved zone: it
+    /// spans the whole open panel as well, so the drawer keeps reacting across
+    /// its full height once open instead of only in the few pixels that opened
+    /// it.
+    function inUtilitiesTriggerZone(x: real, y: real): bool {
+        const zone = panels.utilitiesTrigger;
+        if (zone.width <= 0)
+            return false;
 
-        const panelBottomEdge = root.height - agentBar.implicitHeight;
-        const inPanel = y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding;
-        const inAgentBar = y >= root.height - agentBar.implicitHeight - Config.border.rounding;
+        // The accepted band IS the carved zone, exactly — no forgiveness margin
+        // on either side. Padding the right edge is dead arithmetic, because
+        // that edge is the screen edge and no pointer can hold an x past it.
+        // Padding the left would accept x values the mask does not deliver
+        // while the drawer is closed. One rectangle, one meaning.
+        const zoneLeft = panels.x + zone.x;
+        if (x < zoneLeft || x > zoneLeft + zone.width)
+            return false;
 
-        return inTriggerX && (inPanel || inAgentBar);
+        // zone.height is what the agent bar does NOT already cover, so this
+        // strip is max(agentBarHeight, triggerHeight) deep in either state.
+        return withinBottomPanelHeight(panels.utilities, y) || withinBottomStripHeight(y, zone.height);
     }
 
     function onWheel(event: WheelEvent): void {
@@ -147,8 +185,7 @@ CustomMouseArea {
 
     onPressed: event => {
         dragStart = Qt.point(event.x, event.y);
-        if (popouts.keyboardNavigationActive
-                && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
+        if (popouts.keyboardNavigationActive && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
             popouts.close();
         }
     }
@@ -157,9 +194,7 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if (!popouts.keyboardNavigationActive
-                    && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                    && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
+            if (!popouts.keyboardNavigationActive && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
                 _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -232,7 +267,7 @@ CustomMouseArea {
         }
 
         // Show utilities on hover (corner-only trigger to open, full panel to keep alive)
-        const showUtilities = inUtilitiesTriggerZone(panels.utilities, x, y);
+        const showUtilities = inUtilitiesTriggerZone(x, y);
 
         if (!utilitiesShortcutActive) {
             if (!visibilities.utilities) {
@@ -241,8 +276,7 @@ CustomMouseArea {
                     visibilities.utilities = true;
             } else {
                 // Keep alive: use expanded full-panel zone so content is usable
-                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y)
-                    || inAgentBarForPanelExpanded(panels.utilities, x, y);
+                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y) || inAgentBarForPanelExpanded(panels.utilities, x, y);
                 if (!inKeepAlive)
                     visibilities.utilities = false;
             }
@@ -256,9 +290,7 @@ CustomMouseArea {
             _pendingPopoutX = x;
             if (!_popoutThrottleTimer.running)
                 _popoutThrottleTimer.start();
-        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                   && !inTopPanelExpanded(panels.popouts, x, y)
-                   && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
+        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !inTopPanelExpanded(panels.popouts, x, y) && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();
@@ -288,9 +320,13 @@ CustomMouseArea {
         }
 
         function onUtilitiesChanged() {
-            if (root.visibilities.utilities) {
+            // The Config gate matters: with utilities disabled the trigger zone
+            // has no width, so inUtilitiesTriggerZone always answers false and
+            // an IPC-opened drawer would latch utilitiesShortcutActive true with
+            // no path back. Nothing renders in that state anyway.
+            if (root.visibilities.utilities && Config.utilities.enabled) {
                 // Utilities became visible, immediately check if this should be shortcut mode
-                const inUtilitiesArea = root.inUtilitiesTriggerZone(root.panels.utilities, root.mouseX, root.mouseY);
+                const inUtilitiesArea = root.inUtilitiesTriggerZone(root.mouseX, root.mouseY);
                 if (!inUtilitiesArea) {
                     root.utilitiesShortcutActive = true;
                 }
