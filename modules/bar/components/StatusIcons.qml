@@ -13,9 +13,10 @@ import QtQuick.Layouts
 // Status icons pill - shows system status indicators (audio, network, bluetooth, battery, etc.).
 // Uses PillContainer base for consistent styling with other bar pills.
 //
-// Every glyph here is an outline (no `fill`). These are readouts, and a filled
-// glyph is the shell's cue for an engaged control; under Phosphor a fill also
-// switches to the solid Fill weight, which outweighs the hairlines beside it.
+// No glyph here sets `fill`: these are readouts, and `fill` is the shell's state
+// cue for an engaged control. The battery, power-profile and device glyphs are
+// `solid` instead, Material's always-filled style, which Phosphor leaves as a
+// hairline (MaterialIcon header).
 
 PillContainer {
     id: root
@@ -215,6 +216,7 @@ PillContainer {
                         animate: true
                         text: Icons.getBluetoothIcon(modelData?.icon)
                         color: root.glyphColour
+                        solid: true
 
                         SequentialAnimation on opacity {
                             running: device.modelData?.state !== BluetoothDeviceState.Connected
@@ -271,6 +273,7 @@ PillContainer {
                     // set, so a future mode brings its own icon for free).
                     text: PowerMode.activeMode.icon
                     color: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Qt.alpha(Colours.palette.m3powerButton, Appearance.emphasis.status) : root.glyphColour
+                    solid: true
                 }
             }
         }
@@ -298,6 +301,7 @@ PillContainer {
                     return charging ? `battery_charging_${(level + 3) * 10}` : `battery_${level}_bar`;
                 }
                 color: !UPower.onBattery || UPower.displayDevice.percentage > 0.2 ? root.glyphColour : Qt.alpha(Colours.palette.m3error, Appearance.emphasis.status)
+                solid: true
             }
         }
 
