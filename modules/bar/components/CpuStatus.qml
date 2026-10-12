@@ -4,6 +4,7 @@ import qs.components
 import qs.components.controls
 import qs.components.misc
 import qs.services
+import qs.utils
 import qs.config
 import QtQuick
 
@@ -31,20 +32,31 @@ MouseArea {
 
         spacing: Appearance.spacing.small
 
-        MaterialIcon {
+        BarIcon {
             anchors.verticalCenter: parent.verticalCenter
 
-            text: "developer_board"
-            color: root.colour
+            icon: "developer_board"
+            tint: root.colour
+            tintAlpha: BarGlyphs.secondaryAlpha
         }
 
-        StyledText {
+        BarReadout {
             anchors.verticalCenter: parent.verticalCenter
 
-            text: `${root.cpuUsagePercent}%${root.hasTemperature ? `|${root.cpuTemperature}°` : ""}`
-            font.pointSize: Appearance.font.size.smaller
-            font.family: Appearance.font.family.mono
-            color: root.colour
+            value: root.cpuUsagePercent.toString()
+            unit: "%"
+            colour: root.colour
+        }
+
+        // Usage and temperature are two figures, so a quiet dot separates them.
+        BarReadout {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.hasTemperature
+
+            prefix: "· "
+            value: root.cpuTemperature.toString()
+            unit: "°"
+            colour: root.colour
         }
     }
 

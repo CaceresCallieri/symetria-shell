@@ -52,12 +52,14 @@ Item {
         return Icons.romanize(root.ws);
     }
 
-    // Color varies by active/occupied state for visual hierarchy
+    // Color varies by active/occupied state for visual hierarchy: the active
+    // workspace is the one lit glyph, an occupied one recedes to the bar's
+    // secondary tone, an empty one fades further.
     readonly property color indicatorColor: {
         if (root.isActive)
             return Colours.palette.m3onSurface;
         if (Config.bar.workspaces.occupiedBg || root.isOccupied)
-            return Colours.palette.m3onSurface;
+            return Qt.alpha(Colours.palette.m3onSurface, BarGlyphs.secondaryAlpha);
         return Colours.layer(Colours.palette.m3outlineVariant, 2);
     }
 

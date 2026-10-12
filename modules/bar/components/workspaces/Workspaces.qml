@@ -149,6 +149,7 @@ Item {
                     activeWsId: root.activeWsId
                     workspaces: workspaces
                     mask: layout
+                    outlined: true
                 }
             }
 

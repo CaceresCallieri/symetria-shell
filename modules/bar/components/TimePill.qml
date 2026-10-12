@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
+import qs.utils
 import qs.config
 import QtQuick
 import QtQuick.Layouts
@@ -67,10 +68,10 @@ PillContainer {
             name: "weather"
             active: root.weatherAvailable
 
-            sourceComponent: MaterialIcon {
-                text: Weather.icon
-                color: root.colour
-                font.pointSize: Appearance.font.size.normal
+            sourceComponent: BarIcon {
+                icon: Weather.icon
+                tint: root.colour
+                tintAlpha: BarGlyphs.secondaryAlpha
             }
         }
 
@@ -79,10 +80,10 @@ PillContainer {
             name: "weather"
             active: root.weatherAvailable
 
-            sourceComponent: StyledText {
-                text: Weather.temp
-                color: root.colour
-                font.family: Appearance.font.family.mono
+            sourceComponent: BarReadout {
+                value: Weather.tempDegrees.toString()
+                unit: "°"
+                colour: root.colour
             }
         }
 

@@ -52,7 +52,7 @@ PillContainer {
                     implicitHeight: capslockIcon.implicitHeight
                     implicitWidth: Hypr.capsLock ? capslockIcon.implicitWidth : 0
 
-                    MaterialIcon {
+                    BarIcon {
                         id: capslockIcon
 
                         anchors.centerIn: parent
@@ -60,8 +60,9 @@ PillContainer {
                         scale: Hypr.capsLock ? 1 : 0.5
                         opacity: Hypr.capsLock ? 1 : 0
 
-                        text: "keyboard_capslock_badge"
-                        color: root.colour
+                        icon: "keyboard_capslock_badge"
+                        tint: root.colour
+                        tintAlpha: BarGlyphs.statusAlpha
 
                         Behavior on opacity {
                             Anim {}
@@ -83,7 +84,7 @@ PillContainer {
                     implicitHeight: numlockIcon.implicitHeight
                     implicitWidth: Hypr.numLock ? numlockIcon.implicitWidth : 0
 
-                    MaterialIcon {
+                    BarIcon {
                         id: numlockIcon
 
                         anchors.centerIn: parent
@@ -91,8 +92,9 @@ PillContainer {
                         scale: Hypr.numLock ? 1 : 0.5
                         opacity: Hypr.numLock ? 1 : 0
 
-                        text: "looks_one"
-                        color: root.colour
+                        icon: "looks_one"
+                        tint: root.colour
+                        tintAlpha: BarGlyphs.statusAlpha
 
                         Behavior on opacity {
                             Anim {}
@@ -115,10 +117,11 @@ PillContainer {
             name: "audio"
             active: Config.bar.status.showAudio
 
-            sourceComponent: MaterialIcon {
+            sourceComponent: BarIcon {
                 animate: true
-                text: Icons.getVolumeIcon(Audio.volume, Audio.muted)
-                color: root.colour
+                icon: Icons.getVolumeIcon(Audio.volume, Audio.muted)
+                tint: root.colour
+                tintAlpha: BarGlyphs.statusAlpha
             }
         }
 
@@ -127,10 +130,11 @@ PillContainer {
             name: "audio"
             active: Config.bar.status.showMicrophone
 
-            sourceComponent: MaterialIcon {
+            sourceComponent: BarIcon {
                 animate: true
-                text: Icons.getMicVolumeIcon(Audio.sourceVolume, Audio.sourceMuted)
-                color: root.colour
+                icon: Icons.getMicVolumeIcon(Audio.sourceVolume, Audio.sourceMuted)
+                tint: root.colour
+                tintAlpha: BarGlyphs.statusAlpha
             }
         }
 
@@ -152,10 +156,11 @@ PillContainer {
             name: "network"
             active: Config.bar.status.showNetwork
 
-            sourceComponent: MaterialIcon {
+            sourceComponent: BarIcon {
                 animate: true
-                text: NmcliWifi.active ? Icons.getNetworkIcon(NmcliWifi.active.strength ?? 0) : "wifi_off"
-                color: root.colour
+                icon: NmcliWifi.active ? Icons.getNetworkIcon(NmcliWifi.active.strength ?? 0) : "wifi_off"
+                tint: root.colour
+                tintAlpha: BarGlyphs.statusAlpha
             }
         }
 
@@ -164,10 +169,11 @@ PillContainer {
             name: "ethernet"
             active: Config.bar.status.showNetwork && NmcliEthernet.activeEthernet
 
-            sourceComponent: MaterialIcon {
+            sourceComponent: BarIcon {
                 animate: true
-                text: "cable"
-                color: root.colour
+                icon: "cable"
+                tint: root.colour
+                tintAlpha: BarGlyphs.statusAlpha
             }
         }
 
@@ -182,16 +188,17 @@ PillContainer {
                 spacing: Appearance.spacing.smaller / 2
 
                 // Bluetooth icon
-                MaterialIcon {
+                BarIcon {
                     animate: true
-                    text: {
+                    icon: {
                         if (!Bluetooth.defaultAdapter?.enabled)
                             return "bluetooth_disabled";
                         if (Bluetooth.devices.values.some(d => d.connected))
                             return "bluetooth_connected";
                         return "bluetooth";
                     }
-                    color: root.colour
+                    tint: root.colour
+                    tintAlpha: BarGlyphs.statusAlpha
                 }
 
                 // Connected bluetooth devices
@@ -200,14 +207,15 @@ PillContainer {
                         values: Bluetooth.devices.values.filter(d => d.state !== BluetoothDeviceState.Disconnected)
                     }
 
-                    MaterialIcon {
+                    BarIcon {
                         id: device
 
                         required property BluetoothDevice modelData
 
                         animate: true
-                        text: Icons.getBluetoothIcon(modelData?.icon)
-                        color: root.colour
+                        icon: Icons.getBluetoothIcon(modelData?.icon)
+                        tint: root.colour
+                        tintAlpha: BarGlyphs.statusAlpha
                         fill: 1
 
                         SequentialAnimation on opacity {
@@ -256,15 +264,16 @@ PillContainer {
 
                 onClicked: PowerMode.cycle()
 
-                MaterialIcon {
+                BarIcon {
                     id: profileIcon
 
                     anchors.centerIn: parent
                     animate: true
                     // Glyph follows the active mode (PowerMode owns the ordered
                     // set, so a future mode brings its own icon for free).
-                    text: PowerMode.activeMode.icon
-                    color: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Colours.palette.m3powerButton : root.colour
+                    icon: PowerMode.activeMode.icon
+                    tint: PowerProfiles.degradationReason !== PerformanceDegradationReason.None ? Colours.palette.m3powerButton : root.colour
+                    tintAlpha: BarGlyphs.statusAlpha
                     fill: 1
                 }
             }
@@ -277,9 +286,9 @@ PillContainer {
             // icons would otherwise display the same profile glyph simultaneously.
             active: Config.bar.status.showBattery && (UPower.displayDevice.isLaptopBattery || !Config.bar.status.showPowerProfile)
 
-            sourceComponent: MaterialIcon {
+            sourceComponent: BarIcon {
                 animate: true
-                text: {
+                icon: {
                     if (!UPower.displayDevice.isLaptopBattery)
                         return PowerMode.activeMode.icon;
 
@@ -292,7 +301,8 @@ PillContainer {
                         level--;
                     return charging ? `battery_charging_${(level + 3) * 10}` : `battery_${level}_bar`;
                 }
-                color: !UPower.onBattery || UPower.displayDevice.percentage > 0.2 ? root.colour : Colours.palette.m3error
+                tint: !UPower.onBattery || UPower.displayDevice.percentage > 0.2 ? root.colour : Colours.palette.m3error
+                tintAlpha: BarGlyphs.statusAlpha
                 fill: 1
             }
         }
@@ -303,10 +313,11 @@ PillContainer {
             name: "dictation"
             active: Config.bar.status.showDictationStatus && SttService.streamingActive
 
-            sourceComponent: MaterialIcon {
+            sourceComponent: BarIcon {
                 animate: true
-                text: "graphic_eq"
-                color: root.colour
+                icon: "graphic_eq"
+                tint: root.colour
+                tintAlpha: BarGlyphs.statusAlpha
             }
         }
 
