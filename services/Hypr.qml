@@ -38,7 +38,27 @@ Singleton {
     property real _lastUrgentTime: 0
     property list<string> _pendingUrgentRetries: []
 
+    // WORKAROUND: Quickshell resurrects closed windows. When a `j/clients` refresh is
+    // in flight as a window closes, Quickshell parses the stale response after the
+    // `closewindow` event and re-creates the toplevel, and refreshToplevels() never
+    // removes entries, so the ghost stays in Hyprland.toplevels until the shell
+    // restarts. Short-lived windows (the Mesura dictation overlay) leaked a ghost app
+    // icon on about every second close. Every closed address is tombstoned here, and
+    // an `openwindow` that reuses the address lifts it. Growth is one string per
+    // closed window, reset on restart. Remove once Quickshell stops re-creating
+    // toplevels from a stale refresh (https://github.com/quickshell-mirror/quickshell/issues/1268).
+    // intentional var: JS Set<string> of "0x…" addresses, matching lastIpcObject.address
+    property var _closedToplevelAddresses: new Set()
+
     signal configReloaded
+
+    /// False for a toplevel whose window Hyprland already closed — a ghost that
+    /// Quickshell re-created (see _closedToplevelAddresses). Filter Hyprland.toplevels
+    /// through this wherever a ghost would show up as a window that is not there.
+    function isLiveToplevel(toplevel: HyprlandToplevel): bool {
+        const address = toplevel?.lastIpcObject?.address;
+        return !address || !root._closedToplevelAddresses.has(address);
+    }
 
     function dispatch(request: string): void {
         Hyprland.dispatch(request);
@@ -241,6 +261,13 @@ Singleton {
             const n = event.name;
             if (n.endsWith("v2"))
                 return;
+
+            // Tombstone bookkeeping runs synchronously, before the stale refresh can
+            // land and before WorkspaceWindowModel's debounced update reads the model.
+            if (n === "closewindow")
+                root._closedToplevelAddresses.add(`0x${event.data}`);
+            else if (n === "openwindow")
+                root._closedToplevelAddresses.delete(`0x${event.data.split(",")[0]}`);
 
             if (n === "configreloaded") {
                 root.configReloaded();
