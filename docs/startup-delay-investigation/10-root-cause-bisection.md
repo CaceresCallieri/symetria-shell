@@ -92,12 +92,11 @@ git worktree add /tmp/qs-bisect-<name> <commit-hash>
 
 # Fix C++ plugin import paths (older commits use Caelestia.*, not Symmetria.*)
 find /tmp/qs-bisect-<name> -name "*.qml" -exec sed -i \
-    -e 's/import Caelestia\.Models/import Symmetria.FileManager.Models/g' \
+    -e 's/import Caelestia\.Models/import Symmetria.Models/g' \
     -e 's/import Caelestia\.Internal/import Symmetria.Internal/g' \
     -e 's/import Caelestia\.Services/import Symmetria.Services/g' \
     -e 's/import Caelestia$/import Symmetria/g' \
-    -e 's/import Symmetria\.Models/import Symmetria.FileManager.Models/g' \
-    -e 's/import YaziFM\.Models/import Symmetria.FileManager.Models/g' \
+    -e 's/import YaziFM\.Models/import Symmetria.Models/g' \
     {} \;
 
 # Add heartbeat profiler to shell.qml (inject after "ShellRoot {")
@@ -118,7 +117,7 @@ git worktree remove /tmp/qs-bisect-<name>
 ```
 
 **Plugin path compatibility:** Commits before `035397a` (position #53) use `Symmetria.Models`
-or `Caelestia.Models`. The installed plugin is at `Symmetria.FileManager.Models`. The sed
+or `Caelestia.Models`. The installed plugin is at `Symmetria.Models`. The sed
 command above fixes all known path variants.
 
 **Import "QtQuick":** Early commits don't import QtQuick in shell.qml (Caelestia didn't
@@ -199,7 +198,7 @@ statements:
 + import Symmetria.Services
 
 - import Caelestia.Models
-+ import Symmetria.Models  (later changed to Symmetria.FileManager.Models)
++ import Symmetria.Models
 ```
 
 The QML code is UNCHANGED. Only the C++ plugin namespace changes.
@@ -223,7 +222,7 @@ Both provide three QML modules:
 - Services (`Symmetria.Services` / `Caelestia.Services`): Audio-related C++ types
 
 Additionally, Symmetria has a fourth module from a separate project:
-- `Symmetria.FileManager.Models`: FileSystemModel (from symmetria-file-manager)
+- `Symmetria.Models`: FileSystemModel (owned by this shell)
 
 ### Hypothesis: Plugin initialization cost
 
@@ -422,11 +421,9 @@ perf report --stdio --no-children --percent-limit 1
 strace -T -e trace=network,ipc -f timeout 30 qs -c symmetria 2>&1 | head -100
 ```
 
-### 4. Check Symmetria.FileManager.Models plugin
+### 4. Check Symmetria.Models plugin
 
-The fourth module (`Symmetria.FileManager.Models`) is from the separate
-`symmetria-file-manager` project. It provides `FileSystemModel` which might do
-filesystem scanning at initialization. This module doesn't exist in Caelestia.
+The `Symmetria.Models` module belongs to the shell plugin. Its `FileSystemModel` scans directories asynchronously. Build it from `plugin/src/Symmetria/Models`; the file manager is not a runtime dependency.
 
 ### 5. Rebuild Symmetria plugin from scratch
 
