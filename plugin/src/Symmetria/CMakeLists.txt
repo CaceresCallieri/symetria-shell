@@ -55,5 +55,6 @@ qml_module(symmetria
         PkgConfig::Qalculate
 )
 
+add_subdirectory(Models)
 add_subdirectory(Internal)
 add_subdirectory(Services)
