@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
+import qs.utils
 import qs.config
 import QtQuick
 
@@ -19,21 +20,17 @@ Row {
         visible: active
         asynchronous: true
 
-        sourceComponent: MaterialIcon {
-            text: "schedule"
-            color: root.colour
+        sourceComponent: BarIcon {
+            icon: "schedule"
+            tint: root.colour
+            tintAlpha: BarGlyphs.secondaryAlpha
         }
     }
 
-    StyledText {
-        id: text
-
+    BarReadout {
         anchors.verticalCenter: parent.verticalCenter
 
-        horizontalAlignment: StyledText.AlignHCenter
-        text: Time.format(Config.services.useTwelveHourClock ? "hh:mm A" : "hh:mm")
-        font.pointSize: Appearance.font.size.smaller
-        font.family: Appearance.font.family.mono
-        color: root.colour
+        value: Time.format(Config.services.useTwelveHourClock ? "hh:mm A" : "hh:mm")
+        colour: root.colour
     }
 }

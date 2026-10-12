@@ -4,6 +4,7 @@ import qs.components
 import qs.components.controls
 import qs.components.misc
 import qs.services
+import qs.utils
 import qs.config
 import QtQuick
 
@@ -11,9 +12,6 @@ MouseArea {
     id: root
 
     property color colour: Colours.palette.m3tertiary
-
-    // Scale factor for unit suffix text (2/3 size relative to value)
-    readonly property real unitFontScale: 0.67
 
     // Computed values for display and tooltip (avoids duplicate calculations)
     // intentional var: JS object { value: real, unit: string } from SystemUsage.formatKib()
@@ -37,35 +35,22 @@ MouseArea {
 
         spacing: Appearance.spacing.small
 
-        MaterialIcon {
+        BarIcon {
             anchors.verticalCenter: parent.verticalCenter
 
-            text: "memory_alt"
-            color: root.colour
+            icon: "memory_alt"
+            tint: root.colour
+            tintAlpha: BarGlyphs.secondaryAlpha
         }
 
-        Row {
+        // "17.5G": the unit's first letter is enough beside a figure that
+        // never leaves the G range in practice; the tooltip spells it out.
+        BarReadout {
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 0
 
-            StyledText {
-                id: valueText
-                // Parent Row handles vertical centering
-
-                text: root.memUsedFormatted.value.toFixed(1)
-                font.pointSize: Appearance.font.size.smaller
-                font.family: Appearance.font.family.mono
-                color: root.colour
-            }
-
-            StyledText {
-                anchors.baseline: valueText.baseline
-
-                text: root.memUsedFormatted.unit
-                font.pointSize: Appearance.font.size.smaller * root.unitFontScale
-                font.family: Appearance.font.family.mono
-                color: root.colour
-            }
+            value: root.memUsedFormatted.value.toFixed(1)
+            unit: root.memUsedFormatted.unit.charAt(0)
+            colour: root.colour
         }
     }
 

@@ -98,6 +98,12 @@ JsonObject {
         ]
         property list<var> namedWorkspaceIcons: [
             {
+                // The Electron file manager's windows open here (Hyprland
+                // windowrule `workspace name:files`).
+                name: "files",
+                icon: "mat:folder"
+            },
+            {
                 name: "gaming",
                 icon: "mat:sports_esports"
             },

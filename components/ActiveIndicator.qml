@@ -23,6 +23,12 @@ StyledRect {
     // --- Common required property ---
     required property Item mask
 
+    // A hairline ring instead of the engaged, lit pill. The bar's two
+    // workspace strips set it: their glyphs are Phosphor Light hairlines, and a
+    // lit inset slab behind a hairline glyph outweighs the glyph it marks.
+    // The dashboard calendar keeps the engaged pill.
+    property bool outlined: false
+
     // --- Color customization (special workspaces use tertiary colors) ---
     property color indicatorColor: Colours.palette.m3primary
 
@@ -146,13 +152,13 @@ StyledRect {
     implicitHeight: Config.bar.sizes.indicatorHeight
     implicitWidth: size
     radius: Appearance.rounding.full
-    color: glassStyle.background
+    color: outlined ? "transparent" : glassStyle.background
     // Neumorphic recipe: zero border so a drawn outline doesn't compete with
     // the gradient-defined depression edges, matching PillToggleSurface's
-    // pressed-in look on the quick toggles. (border.color is omitted because
-    // width is hard-zero here — unlike PillToggleSurface, this indicator
-    // never animates the border up.)
-    border.width: 0
+    // pressed-in look on the quick toggles. The outlined form has no
+    // depression to compete with, so the ring IS its border.
+    border.width: outlined ? 1 : 0
+    border.color: Qt.alpha(Colours.palette.m3onSurface, 0.16)
 
     // Inset depression — shared with PillToggleSurface and the calendar's today
     // cell. These alphas used to be written here as literals (0.55 / 0.12 /
@@ -173,6 +179,7 @@ StyledRect {
     // primitives and silently wrong in others (docs/qml-pitfalls.md), so the
     // codebase should not train it.
     InsetDepression {
+        visible: !root.outlined
         anchors.fill: parent
         radius: root.radius
         darkAlpha: Theme.toggle.darkInsetAlpha
@@ -185,12 +192,17 @@ StyledRect {
     // inset AND lit, which is the same call the connected socket makes. Without
     // it the indicator is a flat swatch with no highlight.
     SurfaceFinish {
+        visible: !root.outlined
         anchors.fill: parent
         radius: root.radius
         recipe: Theme.engaged
     }
 
+    // Hidden in the outlined form: the labels paint over this tinted copy
+    // (see textColor), and with no slab behind them its dark copy would only
+    // show as a fringe on the semi-transparent edges of the app icons.
     Colouriser {
+        visible: !root.outlined
         source: root.mask
         sourceColor: Colours.palette.m3onSurface
         colorizationColor: root.textColor

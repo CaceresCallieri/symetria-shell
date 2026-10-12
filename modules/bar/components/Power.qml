@@ -9,15 +9,15 @@ Item {
 
     required property PersistentProperties visibilities
 
-    implicitWidth: icon.implicitHeight + Appearance.padding.small * 2
-    implicitHeight: icon.implicitHeight
+    implicitWidth: powerGlyph.implicitHeight + Appearance.padding.small * 2
+    implicitHeight: powerGlyph.implicitHeight
 
     StateLayer {
         // Cursed workaround to make the height larger than the parent
         anchors.fill: undefined
         anchors.centerIn: parent
         implicitWidth: implicitHeight
-        implicitHeight: icon.implicitHeight + Appearance.padding.small * 2
+        implicitHeight: powerGlyph.implicitHeight + Appearance.padding.small * 2
 
         radius: Appearance.rounding.full
 
@@ -26,15 +26,12 @@ Item {
         }
     }
 
-    MaterialIcon {
-        id: icon
+    BarIcon {
+        id: powerGlyph
 
         anchors.centerIn: parent
-        anchors.horizontalCenterOffset: -1
 
-        text: "power_settings_new"
-        color: Colours.palette.m3powerButton
-        font.bold: true
-        font.pointSize: Appearance.font.size.normal
+        icon: "power_settings_new"
+        tint: Colours.palette.m3powerButton
     }
 }
