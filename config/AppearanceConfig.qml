@@ -47,7 +47,11 @@ JsonObject {
     // knows how long. Verify with `fc-match -f '%{family[0]}\n' <family>`: if it
     // echoes back a different family, the font is not installed.
     component FontFamily: JsonObject {
-        property string sans: "JetBrainsMono Nerd Font Propo"
+        // IBM Plex Sans: the proportional face of the family the bar's figures
+        // use (`mono` below), so a popout's words and the bar's numbers read as
+        // one type family. It carries no Nerd Font private-use glyphs; text
+        // that needs them names `nerd` instead (see below).
+        property string sans: "IBM Plex Sans"
         // Monospaced on purpose: the bar's readouts are live numerals (bar
         // clock, CPU%, RAM, update count) and a proportional face makes them
         // jitter in width as digits change. The previous shell.json override
