@@ -30,12 +30,12 @@ Item {
     // weight, and at `normal` its hairline reads smaller than the status
     // glyphs beside it. The old -1 offset centred Material's glyph; Phosphor's
     // power glyph is drawn centred. The hit area follows from implicitHeight.
-    BarIcon {
+    MaterialIcon {
         id: powerGlyph
 
         anchors.centerIn: parent
 
-        icon: "power_settings_new"
-        tint: Colours.palette.m3powerButton
+        text: "power_settings_new"
+        color: Colours.palette.m3powerButton
     }
 }

@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
-import qs.utils
 import qs.config
 import QtQuick
 import QtQuick.Layouts
@@ -68,10 +67,9 @@ PillContainer {
             name: "weather"
             active: root.weatherAvailable
 
-            sourceComponent: BarIcon {
-                icon: Weather.icon
-                tint: root.colour
-                tintAlpha: BarGlyphs.secondaryAlpha
+            sourceComponent: MaterialIcon {
+                text: Weather.icon
+                color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
             }
         }
 

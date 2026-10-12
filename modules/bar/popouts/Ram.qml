@@ -40,7 +40,8 @@ Column {
     /// @param pid Process ID to search for
     /// @returns {id, name} object or null for background processes
     function getWorkspaceForPid(pid: int): var {
-        if (!pid) return null;
+        if (!pid)
+            return null;
         return _pidWorkspaceCache[pid] ?? null;
     }
 
@@ -71,7 +72,8 @@ Column {
     /// @param workspace Workspace object with id and name properties
     /// @returns Icon string - plain text or "mat:icon_name" format for Material icons
     function getWorkspaceIcon(workspace: var): string {
-        if (!workspace) return "";
+        if (!workspace)
+            return "";
 
         // Special workspaces (negative ID)
         if (workspace.id < 0) {
@@ -163,9 +165,7 @@ Column {
                     opacity: 0.8
                 }
                 StyledText {
-                    text: SystemUsage.fileSwapMib >= 1024
-                        ? `${(SystemUsage.fileSwapMib / 1024).toFixed(1)} GiB`
-                        : `${Math.round(SystemUsage.fileSwapMib)} MiB`
+                    text: SystemUsage.fileSwapMib >= 1024 ? `${(SystemUsage.fileSwapMib / 1024).toFixed(1)} GiB` : `${Math.round(SystemUsage.fileSwapMib)} MiB`
                     font.family: Appearance.font.family.mono
                     font.pointSize: Appearance.font.size.small
                 }
@@ -229,9 +229,7 @@ Column {
 
             Item {
                 width: parent.width
-                height: ProcessMemory.topProcesses.length > 0
-                    ? Math.min(processList.contentHeight, root.maxListHeight)
-                    : loadingText.implicitHeight
+                height: ProcessMemory.topProcesses.length > 0 ? Math.min(processList.contentHeight, root.maxListHeight) : loadingText.implicitHeight
 
                 StyledListView {
                     id: processList
@@ -286,9 +284,7 @@ Column {
         required property var memoryFormatted
 
         // --- Computed properties ---
-        readonly property real memPercent: SystemUsage.memTotal > 0
-            ? (memoryKib / SystemUsage.memTotal) * 100
-            : 0
+        readonly property real memPercent: SystemUsage.memTotal > 0 ? (memoryKib / SystemUsage.memTotal) * 100 : 0
 
         // Workspace lookup and icon resolution
         // intentional var: nullable JS object { id: int, name: string } from PID→workspace cache
@@ -310,7 +306,7 @@ Column {
                 anchors.centerIn: parent
                 visible: processRow.workspaceIcon.length > 0 && processRow.useMaterialIcon
                 text: processRow.parsedIcon.iconText
-                fill: 1
+                solid: true
                 font.pointSize: Appearance.font.size.smaller
                 color: Colours.palette.m3secondary
             }

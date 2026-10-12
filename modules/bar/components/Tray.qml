@@ -111,13 +111,13 @@ Item {
             implicitHeight: expandIconInner.implicitHeight
             implicitWidth: expandIconInner.implicitWidth - Appearance.padding.small * 2
 
-            BarIcon {
+            MaterialIcon {
                 id: expandIconInner
 
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: Appearance.padding.small
-                icon: "expand_less"
+                text: "expand_less"
                 font.pointSize: Appearance.font.size.large
                 rotation: root.expanded ? 90 : -90
 

@@ -9,10 +9,15 @@ import Quickshell
 // Singleton alone does not bring it into scope.
 import QtQuick
 
-// Design-language selector — TWO ORTHOGONAL AXES.
+// Design-language selector — THREE ORTHOGONAL AXES.
 //
 //   material : how an individual surface LOOKS   (clay | metal | …)
 //   form     : how surfaces are ARRANGED         (islands | panel)
+//   glyphs   : how every icon is DRAWN           (phosphor | material)
+//
+// `glyphs` is consumed by one file, components/MaterialIcon.qml, through
+// services/Glyphs.qml: every icon in the shell is a MaterialIcon addressed by a
+// Material Symbols name, and this axis picks the font that draws the name.
 //
 // They are separate because they have different scopes and touch different
 // files. `material` is per-surface and is consumed by the three surface
@@ -43,18 +48,19 @@ import QtQuick
 // it renders `undefined` — so blocks are written out in full, deliberately,
 // even where a value repeats.
 //
-// `material` and `form` are plain writable properties, NOT readonly: the IPC handler in
+// `material`, `form` and `glyphs` are plain writable properties, NOT readonly: the IPC handler in
 // modules/Shortcuts.qml assigns to them. Marking them readonly would make those
 // assignments silently no-op — see the `readonly property blocks ALL assignment`
 // pitfall in docs/qml-pitfalls.md.
 //
 // Switching is live and needs no reload: QML captures binding dependencies
 // dynamically, so every `Theme.pill.*` binding across the shell re-evaluates
-// the moment either changes.
+// the moment any axis changes.
 //
-// NOT PERSISTED YET. Both axes reset to the defaults above on every shell start;
+// NOT PERSISTED YET. Every axis resets to the defaults above on every shell start;
 // switch at runtime with `symmetria shell surface material clay` /
-// `symmetria shell surface form islands`. Changing the shipped default means
+// `symmetria shell surface form islands` /
+// `symmetria shell surface glyphs material`. Changing the shipped default means
 // editing the initialisers below — that is the intended knob until persistence
 // lands. Persistence was deliberately deferred:
 // the obvious home is ~/.config/symmetria/shell.json, but JSON overrides WIN
@@ -70,10 +76,13 @@ Singleton {
     // `list<string>` does not reliably expose it.
     readonly property var materials: ["clay", "metal"]
     readonly property var forms: ["islands", "panel"]
+    readonly property var glyphFamilies: ["phosphor", "material"]
 
     // Shipped default: rounded metal — metal plates in the islands form.
     property string material: "metal"
     property string form: "islands"
+    // Phosphor Light hairlines; "material" restores Material Symbols Sharp.
+    property string glyphs: "phosphor"
 
     // Theme owns its own semantics so callers (IPC, future UI) never have to
     // reimplement validation or ordering.
@@ -83,6 +92,10 @@ Singleton {
 
     function isValidForm(name: string): bool {
         return forms.includes(name);
+    }
+
+    function isValidGlyphs(name: string): bool {
+        return glyphFamilies.includes(name);
     }
 
     /// Advances to the next entry in `list`, wrapping around.
@@ -96,6 +109,10 @@ Singleton {
 
     function cycleForm(): void {
         form = _next(forms, form);
+    }
+
+    function cycleGlyphs(): void {
+        glyphs = _next(glyphFamilies, glyphs);
     }
 
     // --- Recipe vocabulary ---------------------------------------------------

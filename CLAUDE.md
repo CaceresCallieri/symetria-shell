@@ -31,6 +31,11 @@ rm -rf ~/.cache/quickshell/qmlcache
   -o assets/shaders/NAME.frag.qsb assets/shaders/NAME.frag
 ```
 
+**Glyph font changes** (`assets/glyphs/glyph-map.json`) — a rebuild IS needed. The shell reads the generated `glyph-names.json` and fonts, never the map, so editing the map alone changes nothing on screen; `scripts/tests/test_glyph_fonts.py` fails until you run (needs `python-fonttools`):
+```bash
+python3 scripts/build-glyph-fonts.py
+```
+
 **C++ plugin changes** (`plugin/src/`):
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/ -DINSTALL_QSCONFDIR=$HOME/.config/quickshell/symmetria
@@ -158,12 +163,17 @@ git fetch upstream           # Update base (tracks upstream/main)
 - **Module entry points** — Each major module exposes `Wrapper.qml` as its entry point, imported via qualified alias: `import "modules/x" as XModule` → `XModule.Wrapper {}`. This avoids the last-import-wins collision pitfall. Modules without collision risk (e.g., `Stt`, `Keycaster`) keep their own name.
 - **Drawer system** — `modules/drawers/` manages slide-out panels with unified visibility and gestures
 - **Colours** — `services/Colours.qml` provides M3 color palette with light/dark + transparency support
-- **Theme** — `services/Theme.qml` selects the surface design language along TWO orthogonal axes:
-  `material` (clay | metal — how one surface looks, consumed by the surface primitives) and
-  `form` (islands | panel — how surfaces are arranged, consumed by the bar geometry). Recipes are
+- **Theme** — `services/Theme.qml` selects the surface design language along THREE orthogonal axes:
+  `material` (clay | metal — how one surface looks, consumed by the surface primitives),
+  `form` (islands | panel — how surfaces are arranged, consumed by the bar geometry) and
+  `glyphs` (phosphor | material — which font draws every icon, consumed by `MaterialIcon` alone). Recipes are
   plain data tables, so a new material is a data block rather than a parallel implementation of
-  every primitive. Switching is live (`symmetria shell surface material|form <name>`), but is
+  every primitive. Switching is live (`symmetria shell surface material|form|glyphs <name>`), but is
   **runtime-only — not persisted**; the shipped default lives in the property initialisers.
+- **Icons** — every icon is a `MaterialIcon` whose `text` is a Material Symbols name, whichever
+  family draws it: the Phosphor fonts in `assets/glyphs` answer to those names through ligatures.
+  Never set `font.family` on an icon to pick a family. A name the Phosphor fonts lack falls back to
+  Material Symbols and logs `Glyphs: no Phosphor glyph for "<name>"` once.
 - **IPC** — `symmetria shell <target> <function>` (targets: drawers, notifs, lock, mpris, picker, wallpaper, askpass, stt, chords, agentbar, surface)
 - **Agent bar** — `modules/agentbar/` is fed by `services/SymmetriaThreads.qml` alone, reading
   the socket of Mesura Code (the separate agent app at `~/projects/mesura-code`). Symmetria IDE
@@ -236,7 +246,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Layer-shell focus restoration race** — A layer-shell window with `WlrKeyboardFocus.Exclusive` triggers focus restoration on unmap (wlroots restores whoever held focus before the layer mapped). Synchronous `focuswindow` dispatches lose to the restoration. Always `hide()` first, then `Qt.callLater(() => Hypr.dispatch(...))`. Dispatchers that don't require an active focus target (e.g. `killwindow`) are unaffected. → `docs/qml-pitfalls.md`
 
-**Electron tray icons are unthemeable from QML** — Discord, Heroic, Altus, and other Electron apps all register with SNI id `chrome_status_icon_1` and ship embedded pixmap bytes (no file path). They are indistinguishable from each other at the QML layer because `SystemTrayItem` exposes neither bus name nor PID. Do NOT attempt to auto-theme them via id heuristics — it cannot work. Users must override via `iconSubs` or live with the raw pixmap. → `docs/tray-icon-theming.md`
+**Electron tray icons ship pixmap bytes, and older builds share one id** — Electron apps register an embedded pixmap (no file path), and older Electron builds all use SNI id `chrome_status_icon_1`, which `SystemTrayItem` cannot tell apart (it exposes neither bus name nor PID). Current Discord registers `discord_status_icon_1` (verified 2026-10-12); Heroic and Altus are unverified. Do NOT auto-theme them via id heuristics. Override per app with `bar.tray.iconSubs`, matched on `id` or `title`. → `docs/tray-icon-theming.md`
 
 **Property contract drift across containers** — If a child exposes a property whose value a parent reads in layout calculations (e.g. `Notification.nonAnimHeight` read by `Content.qml` to size the popup stack), that property has an external contract. Refactoring its semantics inside the child (e.g. "moving margins out for cleaner math") silently under-allocates the parent — visible as last-in-stack body clipping. Grep the whole codebase for that property name to find all consumers before changing its semantics; add a comment on or immediately above the property declaration stating the contract, e.g. `// CONTRACT: nonAnimHeight = full card height including margins (read by Content.qml stack)`. → `docs/qml-pitfalls.md`
 

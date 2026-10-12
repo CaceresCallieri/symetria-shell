@@ -68,13 +68,13 @@ Item {
     }
 
     // Fallback: Material category icon (when useActualAppIcons is false)
-    BarIcon {
+    MaterialIcon {
         id: categoryIcon
 
         visible: !Config.bar.workspaces.useActualAppIcons
         anchors.centerIn: parent
-        icon: Icons.getAppCategoryIcon(root.client?.lastIpcObject?.class ?? "", "terminal")
-        tint: Colours.palette.m3onSurfaceVariant
+        text: Icons.getAppCategoryIcon(root.client?.lastIpcObject?.class ?? "", "terminal")
+        color: Colours.palette.m3onSurfaceVariant
     }
 
     // Active indicator dot at the bottom of the icon

@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
-import qs.utils
 import qs.config
 import QtQuick
 
@@ -20,10 +19,9 @@ Row {
         visible: active
         asynchronous: true
 
-        sourceComponent: BarIcon {
-            icon: "calendar_month"
-            tint: root.colour
-            tintAlpha: BarGlyphs.secondaryAlpha
+        sourceComponent: MaterialIcon {
+            text: "calendar_month"
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
     }
 
