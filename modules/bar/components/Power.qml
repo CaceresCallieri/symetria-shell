@@ -26,6 +26,10 @@ Item {
         }
     }
 
+    // Bar-icon size, not the old `normal` + bold: Phosphor Light has one
+    // weight, and at `normal` its hairline reads smaller than the status
+    // glyphs beside it. The old -1 offset centred Material's glyph; Phosphor's
+    // power glyph is drawn centred. The hit area follows from implicitHeight.
     BarIcon {
         id: powerGlyph
 
