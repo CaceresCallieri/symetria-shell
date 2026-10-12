@@ -4,7 +4,7 @@ import qs.config
 import QtQuick
 import QtQuick.Layouts
 
-/// Animated fullscreen/maximize badge for a workspace. Shows a bar glyph
+/// Animated fullscreen/maximize badge for a workspace. Shows a Material icon
 /// when the workspace contains a window in maximize mode (`fullscreen === 1`)
 /// AND the workspace is currently active. True fullscreen (mode 2) is excluded
 /// because those windows typically hide the bar entirely.
@@ -12,7 +12,7 @@ import QtQuick.Layouts
 /// Used by the top-bar Workspace.qml. It was extracted to keep this consistent
 /// with the merged agentbar's own workspace pill, which went out with Symmetria
 /// IDE; the one consumer left keeps it here rather than inlining it back.
-BarIcon {
+MaterialIcon {
     id: root
 
     required property int wsId
@@ -43,8 +43,8 @@ BarIcon {
     scale: shouldShow ? 1 : 0
     opacity: shouldShow ? 1 : 0
 
-    icon: "fullscreen"
-    tint: Colours.palette.m3onSurface
+    text: "fullscreen"
+    color: Colours.palette.m3onSurface
     font.pointSize: Appearance.font.size.small
 
     Behavior on opacity {

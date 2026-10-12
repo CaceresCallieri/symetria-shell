@@ -4,7 +4,6 @@ import qs.components
 import qs.components.controls
 import qs.components.misc
 import qs.services
-import qs.utils
 import qs.config
 import QtQuick
 
@@ -68,21 +67,20 @@ MouseArea {
 
         spacing: Appearance.spacing.small
 
-        BarIcon {
+        MaterialIcon {
             id: statusIcon
 
             anchors.verticalCenter: parent.verticalCenter
 
             // sync glyph while updating, error/check on finish, download otherwise.
-            icon: {
+            text: {
                 if (UpdateRunner.running)
                     return "sync";
                 if (UpdateRunner.phase === "error")
                     return "error";
                 return root.displayCount === 0 ? "check_box" : "download";
             }
-            tint: UpdateRunner.phase === "error" ? Colours.palette.m3error : root.colour
-            tintAlpha: UpdateRunner.phase === "error" ? 1 : BarGlyphs.secondaryAlpha
+            color: Qt.alpha(UpdateRunner.phase === "error" ? Colours.palette.m3error : root.colour, UpdateRunner.phase === "error" ? 1 : Appearance.emphasis.secondary)
 
             // Spin the sync glyph while a run is in progress.
             RotationAnimation {

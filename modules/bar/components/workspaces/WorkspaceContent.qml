@@ -43,9 +43,9 @@ RowLayout {
         Component {
             id: iconComp
 
-            BarIcon {
-                icon: label.iconText
-                tint: root.labelColor
+            MaterialIcon {
+                text: label.iconText
+                color: root.labelColor
                 horizontalAlignment: Qt.AlignHCenter
             }
         }

@@ -2,13 +2,12 @@ pragma ComponentBehavior: Bound
 
 import qs.components
 import qs.services
-import qs.utils
 import qs.config
 import QtQuick
 
 // A number in the bar with optional words around it: "Sun 11 Oct", "12%",
 // "17.5G", "13°". The number stays at full strength; the prefix and the unit
-// are smaller and recede (BarGlyphs.secondaryAlpha), so the eye lands on the
+// are smaller and recede (Appearance.emphasis.secondary), so the eye lands on the
 // figure. The parts are baseline-aligned and the caller writes any spacing
 // into them (" Oct" vs "%"), because only the caller knows whether the unit is
 // a word or a symbol.
@@ -53,6 +52,6 @@ Row {
         font.pointSize: Appearance.font.size.smaller * 0.8
         font.family: Appearance.font.family.mono
         font.weight: Font.Light
-        color: Qt.alpha(base, BarGlyphs.secondaryAlpha)
+        color: Qt.alpha(base, Appearance.emphasis.secondary)
     }
 }

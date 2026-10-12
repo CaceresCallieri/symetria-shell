@@ -101,7 +101,7 @@ Item {
                     animate: true
                     text: root.active?.activeIcon ?? root.fallbackIcon
                     color: root.disabled ? root.disabledTextColour : root.textColour
-                    fill: 1
+                    solid: true
                     opacity: root.loading ? 0 : 1
 
                     Behavior on opacity {

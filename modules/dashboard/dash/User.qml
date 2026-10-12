@@ -29,7 +29,7 @@ Row {
             anchors.centerIn: parent
 
             text: "person"
-            fill: 1
+            solid: true
             grade: 200
             font.pointSize: Math.floor(info.implicitHeight / 2) || 1
         }
@@ -174,7 +174,7 @@ Row {
             anchors.left: parent.left
             anchors.leftMargin: (Config.dashboard.sizes.infoIconSize - implicitWidth) / 2
 
-            fill: 1
+            solid: true
             text: line.icon
             color: line.colour
             font.pointSize: Appearance.font.size.normal

@@ -285,11 +285,13 @@ Scope {
         }
     }
 
-    // Surface design language — two orthogonal axes. Switching is live.
+    // Surface design language — three orthogonal axes. Switching is live.
     //   symmetria shell surface material metal    (clay | metal)
     //   symmetria shell surface form panel        (islands | panel)
+    //   symmetria shell surface glyphs material   (phosphor | material)
     //   symmetria shell surface toggleMaterial
     //   symmetria shell surface toggleForm
+    //   symmetria shell surface toggleGlyphs
     //   symmetria shell surface get
     //   symmetria shell surface list
     //
@@ -318,6 +320,14 @@ Scope {
             Theme.form = name;
         }
 
+        function glyphs(name: string): void {
+            if (!Theme.isValidGlyphs(name)) {
+                console.warn(`[IPC] Unknown glyph family "${name}". Available: ${Theme.glyphFamilies.join(", ")}`);
+                return;
+            }
+            Theme.glyphs = name;
+        }
+
         function toggleMaterial(): void {
             Theme.cycleMaterial();
         }
@@ -326,12 +336,16 @@ Scope {
             Theme.cycleForm();
         }
 
+        function toggleGlyphs(): void {
+            Theme.cycleGlyphs();
+        }
+
         function get(): string {
-            return `${Theme.material} / ${Theme.form}`;
+            return `${Theme.material} / ${Theme.form} / ${Theme.glyphs}`;
         }
 
         function list(): string {
-            return `materials: ${Theme.materials.join(", ")}\nforms: ${Theme.forms.join(", ")}`;
+            return `materials: ${Theme.materials.join(", ")}\nforms: ${Theme.forms.join(", ")}\nglyphs: ${Theme.glyphFamilies.join(", ")}`;
         }
     }
 }

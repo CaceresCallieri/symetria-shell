@@ -4,7 +4,6 @@ import qs.components
 import qs.components.controls
 import qs.components.misc
 import qs.services
-import qs.utils
 import qs.config
 import QtQuick
 
@@ -32,12 +31,11 @@ MouseArea {
 
         spacing: Appearance.spacing.small
 
-        BarIcon {
+        MaterialIcon {
             anchors.verticalCenter: parent.verticalCenter
 
-            icon: "developer_board"
-            tint: root.colour
-            tintAlpha: BarGlyphs.secondaryAlpha
+            text: "developer_board"
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
 
         BarReadout {

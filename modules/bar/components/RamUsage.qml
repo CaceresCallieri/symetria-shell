@@ -4,7 +4,6 @@ import qs.components
 import qs.components.controls
 import qs.components.misc
 import qs.services
-import qs.utils
 import qs.config
 import QtQuick
 
@@ -35,12 +34,11 @@ MouseArea {
 
         spacing: Appearance.spacing.small
 
-        BarIcon {
+        MaterialIcon {
             anchors.verticalCenter: parent.verticalCenter
 
-            icon: "memory_alt"
-            tint: root.colour
-            tintAlpha: BarGlyphs.secondaryAlpha
+            text: "memory_alt"
+            color: Qt.alpha(root.colour, Appearance.emphasis.secondary)
         }
 
         // "17.5G": every unit formatKib returns (KiB, MiB, GiB, TiB) reads by

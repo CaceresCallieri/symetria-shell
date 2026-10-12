@@ -150,7 +150,20 @@
       "background": false,
       "recolour": true,
       "compact": false,
-      "iconSubs": []
+      "iconSubs": [
+        {
+          "glyph": "brand_discord",
+          "id": "discord_status_icon_1"
+        },
+        {
+          "glyph": "brand_steam",
+          "id": "steam"
+        },
+        {
+          "glyph": "brand_localsend",
+          "title": "org.localsend.localsend_app"
+        }
+      ]
     },
     "status": {
       "showAudio": true,

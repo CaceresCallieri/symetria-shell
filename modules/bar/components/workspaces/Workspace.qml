@@ -59,7 +59,7 @@ Item {
         if (root.isActive)
             return Colours.palette.m3onSurface;
         if (Config.bar.workspaces.occupiedBg || root.isOccupied)
-            return Qt.alpha(Colours.palette.m3onSurface, BarGlyphs.secondaryAlpha);
+            return Qt.alpha(Colours.palette.m3onSurface, Appearance.emphasis.secondary);
         return Colours.layer(Colours.palette.m3outlineVariant, 2);
     }
 

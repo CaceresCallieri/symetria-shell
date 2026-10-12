@@ -114,7 +114,7 @@ StyledRect {
                                 sourceComponent: MaterialIcon {
                                     text: "home"
                                     color: root.dialog.cwd.length === 1 ? Colours.palette.m3onSurface : Colours.palette.m3onSurfaceVariant
-                                    fill: 1
+                                    solid: true
                                 }
                             }
 

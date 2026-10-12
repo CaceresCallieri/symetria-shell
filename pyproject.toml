@@ -86,4 +86,8 @@ python-version = "3.11"
 # deliberately not declared anywhere, so it is absent in CI and the import is
 # unresolvable there. Same treatment as faster_whisper, which is suppressed at
 # its import site.
-replace-imports-with-any = ["numpy", "numpy.*"]
+#
+# fontTools is a developer-only dependency of scripts/build-glyph-fonts.py,
+# which nothing at runtime or in CI executes; the fonts it builds are
+# committed. Absent in CI for the same reason as numpy.
+replace-imports-with-any = ["numpy", "numpy.*", "fontTools", "fontTools.*"]
