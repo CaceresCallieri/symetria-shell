@@ -3,7 +3,7 @@ pragma Singleton
 import qs.config
 import qs.utils
 import Symmetria
-import Symmetria.FileManager.Models
+import Symmetria.Models
 import Quickshell
 import Quickshell.Io
 import QtQuick
