@@ -34,6 +34,7 @@ Item {
     readonly property alias launcher: launcher
     readonly property alias popouts: popouts
     readonly property alias utilities: utilities
+    readonly property alias utilitiesTrigger: utilitiesTrigger
     readonly property alias sidebar: sidebar
     readonly property alias clipboard: clipboard
     readonly property alias askpass: askpass
@@ -217,6 +218,21 @@ Item {
                 Visibilities.popoutsVersion++;
             }
         }
+    }
+
+    // The closed drawer has zero height and contributes no input region. Keep
+    // the opening strip reachable even with no side border and no agent bar.
+    // Wrapper.qml builds its input mask from these children; Interactions.qml
+    // reads this same geometry so the opening test cannot outgrow the strip.
+    Item {
+        id: utilitiesTrigger
+
+        implicitWidth: Config.utilities.enabled ? 1 : 0
+        implicitHeight: utilities.height + Math.max(1, Config.border.rounding)
+
+        anchors.right: parent.right
+        anchors.rightMargin: -Config.border.sideThickness
+        anchors.bottom: parent.bottom
     }
 
     Utilities.Wrapper {
