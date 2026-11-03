@@ -86,9 +86,7 @@ CustomMouseArea {
 
     function inBottomPanel(panel: Item, x: real, y: real): bool {
         const panelBottomEdge = root.height - agentBar.implicitHeight;
-        return y < panelBottomEdge
-            && y > panelBottomEdge - panel.height - Config.border.rounding
-            && withinPanelWidth(panel, x, y);
+        return y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding && withinPanelWidth(panel, x, y);
     }
 
     function inAgentBarForPanel(panel: Item, x: real, y: real): bool {
@@ -106,28 +104,22 @@ CustomMouseArea {
     }
 
     function inTopPanelExpanded(panel: Item, x: real, y: real): bool {
-        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin
-            && withinPanelWidthExpanded(panel, x, y);
+        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inBottomPanelExpanded(panel: Item, x: real, y: real): bool {
         const panelBottomEdge = root.height - agentBar.implicitHeight;
-        return y < panelBottomEdge
-            && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin
-            && withinPanelWidthExpanded(panel, x, y);
+        return y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding - Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inAgentBarForPanelExpanded(panel: Item, x: real, y: real): bool {
         return y >= root.height - agentBar.implicitHeight - Config.border.rounding && withinPanelWidthExpanded(panel, x, y);
     }
 
-    // Narrower trigger zone for the utilities drawer — only the rightmost 1/4 of the panel width
-    // activates on hover, so the user must move to the very bottom-right corner to trigger it.
+    // Open only at the screen's rightmost logical pixel near the utilities corner.
+    // The panel and its rounding extend inward, so neither defines the opening edge.
     function inUtilitiesTriggerZone(panel: Item, x: real, y: real): bool {
-        const triggerWidth = panel.width / 4;
-        const panelRight = Config.border.sideThickness + panel.x + panel.width + Config.border.rounding;
-        const triggerLeft = panelRight - triggerWidth;
-        const inTriggerX = x >= triggerLeft && x <= panelRight;
+        const inTriggerX = x >= root.width - 1 && x < root.width;
 
         const panelBottomEdge = root.height - agentBar.implicitHeight;
         const inPanel = y < panelBottomEdge && y > panelBottomEdge - panel.height - Config.border.rounding;
@@ -147,8 +139,7 @@ CustomMouseArea {
 
     onPressed: event => {
         dragStart = Qt.point(event.x, event.y);
-        if (popouts.keyboardNavigationActive
-                && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
+        if (popouts.keyboardNavigationActive && !inTopPanelExpanded(panels.popouts, event.x, event.y)) {
             popouts.close();
         }
     }
@@ -157,9 +148,7 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 visibilities.utilities = false;
 
-            if (!popouts.keyboardNavigationActive
-                    && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                    && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
+            if (!popouts.keyboardNavigationActive && (!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
                 _popoutThrottleTimer.stop();
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -241,8 +230,7 @@ CustomMouseArea {
                     visibilities.utilities = true;
             } else {
                 // Keep alive: use expanded full-panel zone so content is usable
-                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y)
-                    || inAgentBarForPanelExpanded(panels.utilities, x, y);
+                const inKeepAlive = inBottomPanelExpanded(panels.utilities, x, y) || inAgentBarForPanelExpanded(panels.utilities, x, y);
                 if (!inKeepAlive)
                     visibilities.utilities = false;
             }
@@ -256,9 +244,7 @@ CustomMouseArea {
             _pendingPopoutX = x;
             if (!_popoutThrottleTimer.running)
                 _popoutThrottleTimer.start();
-        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1)
-                   && !inTopPanelExpanded(panels.popouts, x, y)
-                   && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
+        } else if ((!popouts.currentName.startsWith("traymenu") || (popouts.current?.depth ?? 0) <= 1) && !inTopPanelExpanded(panels.popouts, x, y) && !(popouts.currentName === "updates" && UpdateRunner.phase === "password")) {
             _popoutThrottleTimer.stop();
             popouts.hasCurrent = false;
             bar.closeTray();
