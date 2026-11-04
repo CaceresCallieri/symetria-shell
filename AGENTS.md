@@ -121,9 +121,9 @@ The repository gate starts clean for blocking findings: every one must be fixed,
 
 **`run-qmlformat.sh` is local-only — CI does not run it.** qmlformat's output is version-coupled, and the two sides disagree: nixpkgs pins Qt 6.10.1 while Arch ships 6.11.1. On a tree formatted with 6.11.1, 6.10.1 reported 18 files as unformatted and a *different* set as unprocessable. Neither is a defect. The gate therefore lives in the pre-commit hook, where exactly one Qt version is ever in play. Anything that reformats QML must run on the same machine that commits it.
 
-**`pytest` guards QML, not Python.** `scripts/tests/test_mesura_dictation.py` is the only suite (14 tests, ~0.05s). Most of it reads `.qml` files and asserts over their **source text** — that a handler exists, that two statements appear in a given order, that a removed field is absent. It is the repository's only automated check on QML behaviour, since `qmltestrunner` cannot load Quickshell's statically-linked plugins. Two consequences: it belongs in every gate despite living under `scripts/`, and its assertions go stale silently when a QML file is renamed or deleted, so treat a failure as "the assertion's subject moved" before treating it as a regression.
+**Qt Quick test boundary.** `qmltestrunner` cannot load Quickshell's statically-linked plugins. Plain Qt Quick fixtures can exercise extracted production bindings, but they do not verify Quickshell input masks or compositor integration. Verify those boundaries separately.
 
-**Not adopted, with reasons.** `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. QuickShell configs also have no viable test runner at all: `qmltestrunner` cannot load Quickshell's statically-linked plugins. → `docs/qmllint-setup.md`
+**Not adopted, with reasons.** `deptry` — it audits a dependency manifest, and `pyproject.toml` here carries tooling config only, with no `[project]` table by design. `jscpd` — duplication analysis across 11 standalone helper scripts is low value for a separate binary. → `docs/qmllint-setup.md`
 
 ## Branch Structure
 

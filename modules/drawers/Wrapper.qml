@@ -86,10 +86,10 @@ Variants {
             WlrLayershell.keyboardFocus: visibilities.launcher || visibilities.clipboard || visibilities.askpass || visibilities.calculator || visibilities.packages ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
             mask: Region {
-                x: Config.border.sideThickness + win.dragMaskPadding
-                y: bar.implicitHeight + win.dragMaskPadding
-                width: win.width - Config.border.sideThickness * 2 - win.dragMaskPadding * 2
-                height: win.height - bar.implicitHeight - agentBar.implicitHeight - win.dragMaskPadding * 2
+                x: panels.x + win.dragMaskPadding
+                y: panels.y + win.dragMaskPadding
+                width: panels.width - win.dragMaskPadding * 2
+                height: panels.height - win.dragMaskPadding * 2
                 intersection: Intersection.Xor
 
                 regions: regions.instances

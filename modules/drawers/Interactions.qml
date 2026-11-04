@@ -23,7 +23,7 @@ CustomMouseArea {
         // `panel` lives inside `panels`, which is inset from this MouseArea by the
         // bar, while `y` arrives in THIS item's coordinates. Map the panel across
         // before comparing. Wrapper.qml's Region template already does exactly
-        // this (`y: modelData.y + bar.implicitHeight`) when it carves the panel
+        // this (`y: panels.y + modelData.y`) when it carves the panel
         // out of the input mask; reading panel.y raw here put the hit test one
         // bar-height above the strip that actually receives the pointer.
         const panelY = panels.y + panel.y;
@@ -81,7 +81,7 @@ CustomMouseArea {
     }
 
     function inTopPanel(panel: Item, x: real, y: real): bool {
-        return y < bar.implicitHeight + panel.y + panel.height && withinPanelWidth(panel, x, y);
+        return y < panels.y + panel.y + panel.height && withinPanelWidth(panel, x, y);
     }
 
     function inBottomPanel(panel: Item, x: real, y: real): bool {
@@ -99,12 +99,12 @@ CustomMouseArea {
 
     function withinPanelWidthExpanded(panel: Item, x: real, y: real): bool {
         const margin = Config.border.rounding + Config.border.keepAliveMargin;
-        const panelX = Config.border.sideThickness + panel.x;
+        const panelX = panels.x + panel.x;
         return x >= panelX - margin && x <= panelX + panel.width + margin;
     }
 
     function inTopPanelExpanded(panel: Item, x: real, y: real): bool {
-        return y < bar.implicitHeight + panel.y + panel.height + Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
+        return y < panels.y + panel.y + panel.height + Config.border.keepAliveMargin && withinPanelWidthExpanded(panel, x, y);
     }
 
     function inBottomPanelExpanded(panel: Item, x: real, y: real): bool {

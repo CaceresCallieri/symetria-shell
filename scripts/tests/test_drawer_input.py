@@ -22,6 +22,13 @@ Item {
     property int interceptedClicks: 0
     property int passedClicks: 0
 
+    QtObject {
+        id: win
+        property int dragMaskPadding: 0
+    }
+
+    // PRODUCTION_MASK
+
     MouseArea {
         anchors.fill: parent
         onClicked: fixture.passedClicks++
@@ -66,6 +73,9 @@ Item {
             panels.visible = true;
             panels.x = 12;
             panels.y = 36;
+            panels.width = 700;
+            panels.height = 500;
+            win.dragMaskPadding = 0;
             indicator.visible = false;
             fixture.interceptedClicks = 0;
             fixture.passedClicks = 0;
@@ -105,6 +115,18 @@ Item {
             compare(fixture.interceptedClicks, 1);
         }
 
+        function test_maskTracksContainerRectangle() {
+            panels.x += 23;
+            panels.y += 17;
+            panels.width -= 30;
+            panels.height -= 20;
+            win.dragMaskPadding = 8;
+            compare(inputMask.x, panels.x + 8);
+            compare(inputMask.y, panels.y + 8);
+            compare(inputMask.width, panels.width - 16);
+            compare(inputMask.height, panels.height - 16);
+        }
+
         function test_invisibleParentPassesClicks() {
             indicator.visible = true;
             panels.visible = false;
@@ -142,6 +164,18 @@ def production_region_fixture() -> str:
     )
 
 
+def production_mask_fixture() -> str:
+    source = DRAWER_WRAPPER.read_text()
+    match = re.search(r"mask: Region \{[^{}]*\}", source)
+    if match is None:
+        raise AssertionError("The drawer mask moved; update the fixture")
+    mask = match.group().replace(
+        "mask: Region {", "Item { id: inputMask; visible: false;", 1
+    )
+    mask = mask.replace("intersection: Intersection.Xor", "")
+    return mask.replace("regions: regions.instances", "")
+
+
 class DrawerInputTests(unittest.TestCase):
     def test_panel_input_follows_visibility_and_geometry(self) -> None:
         qt6_runner = Path("/usr/lib/qt6/bin/qmltestrunner")
@@ -154,7 +188,9 @@ class DrawerInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Path(directory) / "tst_drawer_input.qml"
             fixture.write_text(
-                QML_TEST.replace("// PRODUCTION_REGION", production_region_fixture())
+                QML_TEST.replace(
+                    "// PRODUCTION_REGION", production_region_fixture()
+                ).replace("// PRODUCTION_MASK", production_mask_fixture())
             )
             result = subprocess.run(  # noqa: S603
                 [runner, "-input", str(fixture)],
