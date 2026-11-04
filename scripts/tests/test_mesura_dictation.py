@@ -1,3 +1,9 @@
+"""Test dictation and its QML source contracts.
+
+If a QML source assertion fails after a file move, locate its subject before
+diagnosing a behavior regression.
+"""
+
 from __future__ import annotations
 
 import contextlib

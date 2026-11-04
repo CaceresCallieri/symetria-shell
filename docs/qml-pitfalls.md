@@ -181,7 +181,7 @@ Since `mainRect` is inside the full window, XOR inverts it:
 
 **Current correct code:**
 ```qml
-y: bar.implicitHeight + win.dragMaskPadding  // Bar is OUTSIDE mainRect → receives input
+y: panels.y + win.dragMaskPadding  // Bar is OUTSIDE mainRect → receives input
 ```
 
 **If changed to `y: 0`:** Bar is INSIDE mainRect → XOR removes it → bar loses all input.
