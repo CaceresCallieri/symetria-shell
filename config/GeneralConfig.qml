@@ -22,8 +22,10 @@ JsonObject {
             },
             {
                 timeout: 300,
-                idleAction: "dpms off",
-                returnAction: "dpms on"
+                // A string action other than "lock"/"unlock" is a Hyprland Lua
+                // dispatcher expression (Hyprland 0.57+); see IdleMonitors.qml.
+                idleAction: 'hl.dsp.dpms({ action = "off" })',
+                returnAction: 'hl.dsp.dpms({ action = "on" })'
             },
             {
                 timeout: 600,

@@ -40,8 +40,107 @@ Singleton {
 
     signal configReloaded
 
-    function dispatch(request: string): void {
-        Hyprland.dispatch(request);
+    // ── Hyprland requests (Hyprland 0.57+) ──────────────────────────
+    //
+    // Hyprland 0.57 removed hyprlang. `dispatch <x>` evaluates `hl.dispatch(<x>)`,
+    // so <x> must be a Lua dispatcher expression; the old `dispatch workspace 1`
+    // is a Lua syntax error that fails without a trace in this shell's log.
+    // `keyword` is gone too; `eval <lua>` replaces it. Every request this shell
+    // sends is built by the helpers below, so call sites never write Lua by hand.
+    // Dispatcher argument shapes: Hyprland src/config/lua/bindings/
+    // LuaBindingsDispatchers.cpp; the API list: /usr/share/hypr/stubs/hl.meta.lua.
+
+    /// Quote `value` as a Lua string literal. Interpolate every value through
+    /// this — a raw quote or backslash in a window title or name breaks the
+    /// expression. Control characters become decimal escapes (`\ddd`), which
+    /// Lua reads without ambiguity because they are always three digits.
+    function luaString(value: var): string {
+        const escaped = String(value).replace(/[\\"]/g, "\\$&").replace(/[\x00-\x1f\x7f]/g, character => "\\" + character.charCodeAt(0).toString().padStart(3, "0"));
+        return `"${escaped}"`;
+    }
+
+    /// Run one Lua dispatcher expression, e.g. `hl.dsp.event("name")`.
+    /// Prefer the named helpers below; this is the escape hatch for config
+    /// strings (idle actions) that are already Lua.
+    function dispatch(luaDispatcher: string): void {
+        Hyprland.dispatch(luaDispatcher);
+    }
+
+    /// Run Lua code inside Hyprland — the replacement for `hyprctl keyword`.
+    /// Several statements may share one call; Lua needs no separator between
+    /// them. Do not use `[[BATCH]]` for Lua: it splits on every `;`.
+    function evalLua(luaCode: string): void {
+        extras.message(`eval ${luaCode}`);
+    }
+
+    /// The Hyprland selector of a window address, with or without `0x`.
+    function windowSelector(address: string): string {
+        return `address:${address.startsWith("0x") ? address : `0x${address}`}`;
+    }
+
+    /// The Hyprland selector of a workspace name. Numbered workspaces are
+    /// selected by number, special ones keep their `special:` prefix, and every
+    /// other name needs `name:`.
+    function workspaceSelector(workspaceName: string): string {
+        if (/^\d+$/.test(workspaceName) || workspaceName.startsWith("special:"))
+            return workspaceName;
+        return `name:${workspaceName}`;
+    }
+
+    /// Switch to a workspace selector (`3`, `name:music`, `r+1`, `e-1`).
+    function focusWorkspace(selector: string): void {
+        dispatch(`hl.dsp.focus({ workspace = ${luaString(selector)} })`);
+    }
+
+    /// Toggle a special workspace by its bare name. "" or "special" is
+    /// Hyprland's default special workspace.
+    function toggleSpecialWorkspace(name: string): void {
+        const bareName = name.startsWith("special:") ? name.slice(8) : name;
+        dispatch(bareName === "" || bareName === "special" ? "hl.dsp.workspace.toggle_special()" : `hl.dsp.workspace.toggle_special(${luaString(bareName)})`);
+    }
+
+    function focusWindow(address: string): void {
+        dispatch(`hl.dsp.focus({ window = ${luaString(windowSelector(address))} })`);
+    }
+
+    function moveWindowToWorkspace(address: string, workspace: string, follow: bool): void {
+        dispatch(`hl.dsp.window.move({ workspace = ${luaString(workspace)}, follow = ${follow}, window = ${luaString(windowSelector(address))} })`);
+    }
+
+    function toggleWindowFloating(address: string): void {
+        dispatch(`hl.dsp.window.float({ action = "toggle", window = ${luaString(windowSelector(address))} })`);
+    }
+
+    function toggleWindowPin(address: string): void {
+        dispatch(`hl.dsp.window.pin({ action = "toggle", window = ${luaString(windowSelector(address))} })`);
+    }
+
+    /// Kill the window's client (the old `killwindow`), not a polite close.
+    function killWindow(address: string): void {
+        dispatch(`hl.dsp.window.kill({ window = ${luaString(windowSelector(address))} })`);
+    }
+
+    /// Set the focused window's fullscreen state (the old `fullscreenstate
+    /// <internal> <client> set`). 0 none, 1 maximized, 2 fullscreen.
+    function setFocusedWindowFullscreenState(internalState: int, clientState: int): void {
+        dispatch(`hl.dsp.window.fullscreen_state({ internal = ${internalState}, client = ${clientState}, action = "set" })`);
+    }
+
+    /// Enter a submap by name; "reset" leaves every submap.
+    function setSubmap(name: string): void {
+        dispatch(`hl.dsp.submap(${luaString(name)})`);
+    }
+
+    /// Lua that binds `keys` (Hyprland form, e.g. "ALT + X") to a shell command,
+    /// after removing any bind already on that combo. Hyprland keeps duplicate
+    /// binds and fires them all, so the unbind keeps this idempotent. `options`
+    /// is a Lua table literal of HL.BindOptions, e.g. `{ description = "..." }`.
+    function rebindToCommandLua(keys: string, command: string, options: string): string {
+        return `hl.unbind(${luaString(keys)}) hl.bind(${luaString(keys)}, hl.dsp.exec_cmd(${luaString(command)})${options ? `, ${options}` : ""})`;
+    }
+
+    function unbindLua(keys: string): string {
+        return `hl.unbind(${luaString(keys)})`;
     }
 
     function monitorFor(screen: ShellScreen): HyprlandMonitor {
@@ -131,7 +230,10 @@ Singleton {
     }
 
     function reloadDynamicConfs(): void {
-        extras.batchMessage(["keyword bindlni ,Caps_Lock,global,symmetria:refreshDevices", "keyword bindlni ,Num_Lock,global,symmetria:refreshDevices"]);
+        // locked + non-consuming + ignore-mods (the old `bindlni`): refresh the
+        // lock indicators on every press, under any modifier, without eating the key.
+        const options = "{ locked = true, non_consuming = true, ignore_mods = true }";
+        evalLua(["Caps_Lock", "Num_Lock"].map(key => `hl.unbind(${luaString(key)}) hl.bind(${luaString(key)}, hl.dsp.global("symmetria:refreshDevices"), ${options})`).join(" "));
     }
 
     function handleUrgent(addr: string): void {
@@ -189,7 +291,7 @@ Singleton {
             return;
 
         Toaster.toast(windowClass, windowTitle || qsTr("Window is requesting attention"), "notification_important", Toast.Warning, 7000, "", "", function () {
-            root.dispatch(`focuswindow address:${fullAddr}`);
+            root.focusWindow(fullAddr);
         });
     }
 

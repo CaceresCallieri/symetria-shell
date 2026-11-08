@@ -376,10 +376,12 @@ fi
 # Uses is_terminal_class() as single source of truth for terminal detection.
 
 if is_terminal_class "$CLASS_LOWER"; then
-    SHORTCUT="CTRL SHIFT, V"
+    SHORTCUT_MODS="CTRL SHIFT"
 else
-    SHORTCUT="CTRL, V"
+    SHORTCUT_MODS="CTRL"
 fi
+SHORTCUT_KEY="V"
+SHORTCUT="$SHORTCUT_MODS, $SHORTCUT_KEY"
 echo "[STT:INJ03] shortcut resolved | class_lower=$CLASS_LOWER | shortcut=$SHORTCUT" >&2
 
 # ── Diagnostics: current focus and clipboard state ───────────────────────────
@@ -408,10 +410,19 @@ echo "[STT:INJ06] sleeping 150ms for clipboard propagation..." >&2
 sleep 0.15
 
 stt_log "inject" "paste-send | shortcut=$SHORTCUT addr=$ADDRESS"
-echo "[STT:INJ07] sending paste: hyprctl dispatch sendshortcut $SHORTCUT, address:$ADDRESS" >&2
-PASTE_RESULT=$(hyprctl dispatch sendshortcut "$SHORTCUT, address:$ADDRESS" 2>&1)
+# Hyprland 0.57+: `hyprctl dispatch` takes a Lua dispatcher expression; the old
+# `sendshortcut CTRL, V, address:...` is a Lua syntax error (exit 7). The mods,
+# the key and the hex address cannot hold a quote, so no Lua escaping is needed.
+PASTE_DISPATCHER="hl.dsp.send_shortcut({ mods = \"$SHORTCUT_MODS\", key = \"$SHORTCUT_KEY\", window = \"address:$ADDRESS\" })"
+echo "[STT:INJ07] sending paste: hyprctl dispatch $PASTE_DISPATCHER" >&2
+PASTE_RESULT=$(hyprctl dispatch "$PASTE_DISPATCHER" 2>&1)
 PASTE_CODE=$?
 echo "[STT:INJ07] paste result | exit=$PASTE_CODE | output=$PASTE_RESULT" >&2
+
+# Hyprland answers "ok"; anything else is an error text, even with exit 0.
+if [ "$PASTE_CODE" -eq 0 ] && [ "$PASTE_RESULT" != "ok" ]; then
+    PASTE_CODE=1
+fi
 
 if [ "$PASTE_CODE" -ne 0 ]; then
     notify_failure "STT Inject Failed" "sendshortcut paste failed (exit $PASTE_CODE). Text saved to clipboard."

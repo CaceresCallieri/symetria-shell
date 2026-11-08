@@ -46,7 +46,7 @@ Scope {
 
     function confirm(): void {
         if (windowAddress)
-            Hypr.dispatch(`killwindow address:${windowAddress}`);
+            Hypr.killWindow(windowAddress);
         dismiss();
     }
 

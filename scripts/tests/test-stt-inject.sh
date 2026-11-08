@@ -74,17 +74,17 @@ run_inject() {
 
 generic_result=$(run_inject "firefox")
 [[ "$generic_result" == '{"path":"paste","success":true,"downgraded":false,"submitted":false}' ]]
-grep -qF 'dispatch sendshortcut CTRL, V, address:0xabc' "$MOCK_LOG"
+grep -qF 'dispatch hl.dsp.send_shortcut({ mods = "CTRL", key = "V", window = "address:0xabc" })' "$MOCK_LOG"
 
 : > "$MOCK_LOG"
 terminal_result=$(run_inject "ghostty")
 [[ "$terminal_result" == '{"path":"paste","success":true,"downgraded":false,"submitted":false}' ]]
-grep -qF 'dispatch sendshortcut CTRL SHIFT, V, address:0xabc' "$MOCK_LOG"
+grep -qF 'dispatch hl.dsp.send_shortcut({ mods = "CTRL SHIFT", key = "V", window = "address:0xabc" })' "$MOCK_LOG"
 
 : > "$MOCK_LOG"
 submit_result=$(run_inject "firefox" "submit")
 [[ "$submit_result" == '{"path":"paste","success":true,"downgraded":true,"submitted":false}' ]]
-grep -qF 'dispatch sendshortcut CTRL, V, address:0xabc' "$MOCK_LOG"
+grep -qF 'dispatch hl.dsp.send_shortcut({ mods = "CTRL", key = "V", window = "address:0xabc" })' "$MOCK_LOG"
 
 : > "$MOCK_LOG"
 python - "$TEST_ROOT/nvim.sock" <<'PY'

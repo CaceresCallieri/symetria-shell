@@ -7,6 +7,62 @@
 
 namespace symmetria::internal::hypr {
 
+namespace {
+
+// Hyprland answers "ok" to a request that worked. A Lua error in `eval` or
+// `dispatch` comes back as text on a socket that worked, so a connection
+// success alone hides it. Hyprland 0.57 made that the common failure: every
+// hyprlang-era request turned into a Lua syntax error.
+bool isHyprlandOk(const QByteArray& response) {
+    return response.trimmed() == "ok";
+}
+
+QString luaStringLiteral(const QString& value) {
+    QString escaped;
+    escaped.reserve(value.size() + 2);
+    for (const auto character : value) {
+        if (character == '\\' || character == '"') {
+            escaped += '\\';
+            escaped += character;
+        } else if (character.unicode() < 0x20 || character.unicode() == 0x7f) {
+            escaped += QString("\\%1").arg(static_cast<int>(character.unicode()), 3, 10, QChar(u'0'));
+        } else {
+            escaped += character;
+        }
+    }
+    return '"' + escaped + '"';
+}
+
+// Lua literal for one option value. Hyprland 0.57's typed config rejects 0/1
+// for a boolean option, so callers pass real booleans for those.
+QString luaValueLiteral(const QVariant& value) {
+    switch (value.typeId()) {
+        case QMetaType::Bool:
+            return value.toBool() ? "true" : "false";
+        case QMetaType::Int:
+        case QMetaType::UInt:
+        case QMetaType::LongLong:
+        case QMetaType::ULongLong:
+        case QMetaType::Double:
+        case QMetaType::Float:
+            return value.toString();
+        default:
+            return luaStringLiteral(value.toString());
+    }
+}
+
+// `hl.config({ general = { gaps_in = 0 } })` for the option "general:gaps_in".
+QString luaConfigCall(const QString& option, const QVariant& value) {
+    const auto path = option.split(':');
+    auto table = luaValueLiteral(value);
+    for (auto index = path.size(); index-- > 0;) {
+        table = QString("{ %1 = %2 }").arg(path.at(index), table);
+    }
+    return QString("hl.config(%1)").arg(table);
+}
+
+} // namespace
+
 HyprExtras::HyprExtras(QObject* parent)
     : QObject(parent)
     , m_requestSocket("")
@@ -60,9 +116,9 @@ void HyprExtras::message(const QString& message) {
         return;
     }
 
-    makeRequest(message, [](bool success, const QByteArray& res) {
-        if (!success) {
-            qWarning() << "HyprExtras::message: request error:" << QString::fromUtf8(res);
+    makeRequest(message, [message](bool success, const QByteArray& res) {
+        if (!success || !isHyprlandOk(res)) {
+            qWarning() << "HyprExtras::message: Hyprland rejected" << message << "->" << QString::fromUtf8(res);
         }
     });
 }
@@ -84,17 +140,20 @@ void HyprExtras::applyOptions(const QVariantHash& options) {
         return;
     }
 
-    QString request = "[[BATCH]]";
+    // Hyprland 0.57 removed `keyword`; options are set through Lua `hl.config`.
+    // One `eval` carries every call: Lua needs no separator between statements,
+    // and `[[BATCH]]` would split a Lua string on its `;`.
+    QStringList configCalls;
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
-        request += QString("keyword %1 %2;").arg(it.key(), it.value().toString());
+        configCalls << luaConfigCall(it.key(), it.value());
     }
+    const auto request = "eval " + configCalls.join(' ');
 
-    makeRequest(request, [this](bool success, const QByteArray& res) {
-        if (success) {
-            refreshOptions();
-        } else {
-            qWarning() << "HyprExtras::applyOptions: request error" << QString::fromUtf8(res);
+    makeRequest(request, [this, request](bool success, const QByteArray& res) {
+        if (!success || !isHyprlandOk(res)) {
+            qWarning() << "HyprExtras::applyOptions: Hyprland rejected" << request << "->" << QString::fromUtf8(res);
         }
+        refreshOptions();
     });
 }
 
@@ -114,8 +173,9 @@ void HyprExtras::refreshOptions() {
 
         for (const auto& o : std::as_const(options)) {
             const auto obj = o.toObject();
-            const auto key = obj.value("value").toString();
-            const auto value = obj.value("data").toObject().value("current").toVariant();
+            // Hyprland 0.57 shape: { "name": "general:gaps_in", "current": ... }.
+            const auto key = obj.value("name").toString();
+            const auto value = obj.value("current").toVariant();
             if (m_options.value(key) != value) {
                 dirty = true;
                 m_options.insert(key, value);

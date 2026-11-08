@@ -13,15 +13,17 @@ Singleton {
     property alias enabled: props.enabled
 
     function setDynamicConfs(): void {
+        // Booleans stay booleans: Hyprland 0.57's typed Lua config rejects 0/1
+        // for a boolean option (HyprExtras::applyOptions builds `hl.config`).
         Hypr.extras.applyOptions({
-            "animations:enabled": 0,
-            "decoration:shadow:enabled": 0,
-            "decoration:blur:enabled": 0,
+            "animations:enabled": false,
+            "decoration:shadow:enabled": false,
+            "decoration:blur:enabled": false,
             "general:gaps_in": 0,
             "general:gaps_out": 0,
             "general:border_size": 1,
             "decoration:rounding": 0,
-            "general:allow_tearing": 1
+            "general:allow_tearing": true
         });
     }
 
@@ -40,7 +42,8 @@ Singleton {
     PersistentProperties {
         id: props
 
-        property bool enabled: Hypr.options["animations:enabled"] === 0
+        // `descriptions` reports booleans since Hyprland 0.57 (0/1 before).
+        property bool enabled: Hypr.options["animations:enabled"] === false
 
         reloadableId: "gameMode"
     }

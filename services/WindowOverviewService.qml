@@ -86,7 +86,7 @@ Singleton {
             // Clear both halves explicitly. The selected window receives the
             // exact captured pair after focus changes, while Escape restores it
             // to this source window.
-            Hypr.dispatch("fullscreenstate 0 0 set");
+            Hypr.setFocusedWindowFullscreenState(0, 0);
             // The fullscreen event normally arrives first and restarts this
             // timer. This run is the fallback if the event is lost.
             revealSettleTimer.restart();
@@ -156,7 +156,7 @@ Singleton {
             if (token !== root._actionToken || !root._addressExists(address))
                 return;
 
-            Hypr.dispatch(`focuswindow address:${address}`);
+            Hypr.focusWindow(address);
 
             if (root._hasFullscreenState(fullscreen, fullscreenClient)) {
                 root._focusRestoreToken = token;
@@ -329,7 +329,7 @@ Singleton {
                 const internal = root._focusRestoreInternal;
                 const client = root._focusRestoreClient;
                 root._clearPendingFocusRestore();
-                Hypr.dispatch(`fullscreenstate ${internal} ${client} set`);
+                Hypr.setFocusedWindowFullscreenState(internal, client);
                 return;
             }
 
