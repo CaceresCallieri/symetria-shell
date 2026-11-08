@@ -253,8 +253,8 @@ Singleton {
 
         onLoaded: {
             try {
-                const parsed = JSON.parse(text());
-                root.chordGroups = validateGroups(expandWorkspaceGroups(parsed));
+                root._parsedChordsFile = JSON.parse(text());
+                root._rebuildChordGroups();
             } catch (e) {
                 console.error("[KeyChords] Failed to parse chords.json:", e.message);
             }
@@ -262,11 +262,40 @@ Singleton {
 
         onLoadFailed: err => {
             if (err === FileViewError.FileNotFound) {
+                root._parsedChordsFile = null;
                 root.chordGroups = {};
             } else {
                 console.warn("[KeyChords] Failed to read chords.json:", FileViewError.toString(err));
             }
         }
+    }
+
+    // intentional var: the last parsed chords.json object, kept so a catalog
+    // change can re-expand the workspace menus without re-reading the file.
+    property var _parsedChordsFile: null
+
+    function _rebuildChordGroups(): void {
+        if (_parsedChordsFile)
+            chordGroups = validateGroups(expandWorkspaceGroups(_parsedChordsFile));
+    }
+
+    // `"_workspaces": "catalog"` menus follow the compositor's catalog live.
+    Connections {
+        target: WorkspaceCatalog
+
+        function onEntriesChanged(): void {
+            if (root._parsedChordsFile?._workspaces === "catalog")
+                root._rebuildChordGroups();
+        }
+    }
+
+    /// The `_workspaces` list of a parsed chords.json: the inline array, or the
+    /// compositor's workspace catalog when the value is the string "catalog"
+    /// (see WorkspaceCatalog.qml). null when neither applies.
+    function _workspaceEntries(parsed: var): var {
+        if (parsed?._workspaces === "catalog")
+            return WorkspaceCatalog.chordWorkspaces();
+        return parsed && Array.isArray(parsed._workspaces) ? parsed._workspaces : null;
     }
 
     /// Validate and sanitize parsed JSON into clean chord groups.
@@ -312,7 +341,9 @@ Singleton {
     /// source, so the workspace set is defined ONCE instead of copy-pasted into
     /// every menu (switch / send / move). A group opts in by declaring an
     /// `expand` object instead of an inline `chords` array; it is generated from
-    /// the top-level `_workspaces` array. Groups without `expand` pass through
+    /// the top-level `_workspaces` array, or from the compositor's workspace
+    /// catalog when `_workspaces` is the string "catalog" (one list for the
+    /// compositor and the shell). Groups without `expand` pass through
     /// untouched (and `_workspaces` itself is dropped later by validateGroups,
     /// since it has no `chords`).
     ///
@@ -324,12 +355,14 @@ Singleton {
     ///   "_workspaces": [ { "key": "S", "label": "symmetria", "ws": "name:symmetria" } ],
     ///   "workspace": { "title": "Switch", "expand": {
     ///       "command": "switch_workspace.sh {ws}",
-    ///       "specialCommand": "hyprctl dispatch togglespecialworkspace {special}" } }
+    ///       "specialCommand": "hyprctl dispatch 'hl.dsp.workspace.toggle_special(\"{special}\")'" } }
     function expandWorkspaceGroups(parsed: var): var {
-        const workspaces = parsed && Array.isArray(parsed._workspaces) ? parsed._workspaces : null;
+        const workspaces = _workspaceEntries(parsed);
         if (!workspaces)
             return parsed;
-        if (workspaces.length === 0)
+        // An empty catalog is normal until WorkspaceCatalog's first read lands;
+        // onEntriesChanged re-expands then.
+        if (workspaces.length === 0 && Array.isArray(parsed._workspaces))
             console.warn("[KeyChords] _workspaces is empty — expand menus will be dropped");
 
         const out = {};

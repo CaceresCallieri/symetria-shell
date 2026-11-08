@@ -290,8 +290,8 @@ default, you must create it manually.
                 },
                 {
                     "timeout": 300,
-                    "idleAction": "dpms off",
-                    "returnAction": "dpms on"
+                    "idleAction": "hl.dsp.dpms({ action = \"off\" })",
+                    "returnAction": "hl.dsp.dpms({ action = \"on\" })"
                 },
                 {
                     "timeout": 600,

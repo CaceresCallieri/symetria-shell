@@ -618,7 +618,7 @@ Singleton {
     // Session-scoped Hyprland keybinds
     // ─────────────────────────────────────────────────────────────────────────
     // These Alt combos only make sense while an STT session exists, so they
-    // are registered dynamically (hyprctl keyword bind) when a job appears
+    // are registered dynamically (Lua `hl.bind` through Hypr.evalLua) when a job appears
     // and removed when it goes away — outside a session the keys pass through
     // to applications. Alt+V (pasteTranscription) stays a static global bind
     // in the Hyprland config because it is useful when idle.
@@ -630,14 +630,14 @@ Singleton {
     // so there is no unbind/rebind churn across the restart animation.
 
     // [key, stt IPC function] pairs. Kept in sync with the comment block in
-    // ~/.dotfiles/.config/hypr/keybindings.conf (STT section).
+    // ~/.dotfiles/.config/hypr/keybindings.lua (STT section).
     readonly property var _sessionBinds: [["X", "cancel"], ["R", "restart"], ["space", "pause"], ["S", "mode clipboard"]   // S = Save to clipboard (not submit — that's Return)
         , ["I", "mode inject"], ["Return", "mode submit"], ["W", "hints"]]
 
     onActiveChanged: active ? _registerSessionBinds() : _unregisterSessionBinds()
 
-    function _unbindCmd(bind: var): string {
-        return `keyword unbind ALT,${bind[0]}`;
+    function _sessionBindKeys(bind: var): string {
+        return `ALT + ${bind[0]}`;
     }
 
     function _ipcCommand(target: string): string {
@@ -645,20 +645,21 @@ Singleton {
     }
 
     function _registerSessionBinds(): void {
-        // unbind-then-bind in one batch: idempotent. Hyprland allows duplicate
+        // unbind-then-bind in one request: idempotent. Hyprland allows duplicate
         // binds on the same combo (which would double-fire the IPC command),
         // so a leftover bind from a crashed shell must be cleared first.
         const ipcCommand = _ipcCommand("stt");
-        const cmds = _sessionBinds.map(b => `${_unbindCmd(b)} ; keyword bind ALT,${b[0]},exec,${ipcCommand} ${b[1]}`);
-        Quickshell.execDetached(["hyprctl", "--batch", cmds.join(" ; ")]);
+        Hypr.evalLua(_sessionBinds.map(b => Hypr.rebindToCommandLua(_sessionBindKeys(b), `${ipcCommand} ${b[1]}`, "")).join(" "));
     }
 
     function _unregisterSessionBinds(): void {
+        // The unbinds also remove the config's recorder binds on Alt+Space and
+        // Alt+X, so those two are restored here.
         const recorderIpcCommand = _ipcCommand("recorder");
-        const commands = _sessionBinds.map(_unbindCmd);
-        commands.push(`keyword bindd ALT,space,Pause/Resume recording,exec,${recorderIpcCommand} pause`);
-        commands.push(`keyword bindd ALT,X,Cancel recording,exec,${recorderIpcCommand} cancel`);
-        Quickshell.execDetached(["hyprctl", "--batch", commands.join(" ; ")]);
+        const statements = _sessionBinds.map(b => Hypr.unbindLua(_sessionBindKeys(b)));
+        statements.push(Hypr.rebindToCommandLua("ALT + space", `${recorderIpcCommand} pause`, `{ description = ${Hypr.luaString("Pause/Resume recording")} }`));
+        statements.push(Hypr.rebindToCommandLua("ALT + X", `${recorderIpcCommand} cancel`, `{ description = ${Hypr.luaString("Cancel recording")} }`));
+        Hypr.evalLua(statements.join(" "));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

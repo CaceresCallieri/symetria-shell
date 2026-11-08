@@ -17,7 +17,7 @@ Item {
     required property ShellScreen screen
 
     // Workspace tracking - direct lookup like bar/Workspaces.qml pattern
-    readonly property int workspaceId: Hypr.monitorFor(screen).activeWorkspace?.id ?? 1
+    readonly property int workspaceId: Hypr.workspaceKey(Hypr.monitorFor(screen).activeWorkspace) || 1
     readonly property string workspaceName: Hypr.monitorFor(screen).activeWorkspace?.name ?? ""
 
     // Fix 2: Readiness checks to prevent race condition during initialization

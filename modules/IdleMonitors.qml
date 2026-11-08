@@ -24,9 +24,14 @@ Scope {
             lock.lock.locked = true;
         } else if (action === "unlock")
             lock.lock.locked = false;
-        else if (typeof action === "string")
+        else if (typeof action === "string") {
+            // Hyprland 0.57+ dispatches Lua: "hl.dsp.dpms({ action = \"off\" })".
+            // A hyprlang string such as "dpms off" is a Lua syntax error that
+            // Hyprland rejects without a trace here, so name it in the log.
+            if (!action.startsWith("hl."))
+                console.warn(`[IdleMonitors] idle action "${action}" is not a Hyprland Lua dispatcher (expected "hl.dsp...."); Hyprland 0.57+ rejects it`);
             Hypr.dispatch(action);
-        else
+        } else
             Quickshell.execDetached(action);
     }
 

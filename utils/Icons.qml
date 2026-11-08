@@ -1,6 +1,7 @@
 pragma Singleton
 
 import qs.config
+import qs.services
 import Quickshell
 import Quickshell.Services.Notifications
 import QtQuick
@@ -331,6 +332,12 @@ Singleton {
     function getSpecialWsIcon(name: string): string {
         name = name.toLowerCase().slice("special:".length);
 
+        // The compositor's workspace catalog wins over the bar's own list, so a
+        // workspace defined in the Hyprland config needs no second entry here.
+        const catalogIcon = WorkspaceCatalog.iconFor(name, "special");
+        if (catalogIcon)
+            return catalogIcon;
+
         const configIcon = _lookupIconInList(name, Config.bar.workspaces.specialWorkspaceIcons);
         if (configIcon)
             return configIcon;
@@ -347,7 +354,7 @@ Singleton {
     }
 
     function getNamedWsIcon(name: string): string {
-        return _lookupIconInList(name, Config.bar.workspaces.namedWorkspaceIcons);
+        return WorkspaceCatalog.iconFor(name, "named") || _lookupIconInList(name, Config.bar.workspaces.namedWorkspaceIcons);
     }
 
     function romanize(num: int): string {

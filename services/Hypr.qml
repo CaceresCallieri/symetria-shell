@@ -19,7 +19,7 @@ Singleton {
     readonly property HyprlandToplevel activeToplevel: Hyprland.activeToplevel?.wayland?.activated ? Hyprland.activeToplevel : null
     readonly property HyprlandWorkspace focusedWorkspace: Hyprland.focusedWorkspace
     readonly property HyprlandMonitor focusedMonitor: Hyprland.focusedMonitor
-    readonly property int activeWsId: focusedWorkspace?.id ?? 1
+    readonly property int activeWsId: workspaceKey(focusedWorkspace) || 1
 
     readonly property HyprKeyboard keyboard: extras.devices.keyboards.find(kb => kb.main) ?? null
     readonly property bool capsLock: keyboard?.capsLock ?? false
@@ -40,12 +40,155 @@ Singleton {
 
     signal configReloaded
 
-    function dispatch(request: string): void {
-        Hyprland.dispatch(request);
+    // ── Hyprland requests (Hyprland 0.57+) ──────────────────────────
+    //
+    // Hyprland 0.57 removed hyprlang. `dispatch <x>` evaluates `hl.dispatch(<x>)`,
+    // so <x> must be a Lua dispatcher expression; the old `dispatch workspace 1`
+    // is a Lua syntax error that fails without a trace in this shell's log.
+    // `keyword` is gone too; `eval <lua>` replaces it. Every request this shell
+    // sends is built by the helpers below, so call sites never write Lua by hand.
+    // Dispatcher argument shapes: Hyprland src/config/lua/bindings/
+    // LuaBindingsDispatchers.cpp; the API list: /usr/share/hypr/stubs/hl.meta.lua.
+
+    /// Quote `value` as a Lua string literal. Interpolate every value through
+    /// this — a raw quote or backslash in a window title or name breaks the
+    /// expression. Control characters become decimal escapes (`\ddd`), which
+    /// Lua reads without ambiguity because they are always three digits.
+    function luaString(value: var): string {
+        const escaped = String(value).replace(/[\\"]/g, "\\$&").replace(/[\x00-\x1f\x7f]/g, character => "\\" + character.charCodeAt(0).toString().padStart(3, "0"));
+        return `"${escaped}"`;
+    }
+
+    /// Run one Lua dispatcher expression, e.g. `hl.dsp.event("name")`.
+    /// Prefer the named helpers below; this is the escape hatch for config
+    /// strings (idle actions) that are already Lua.
+    function dispatch(luaDispatcher: string): void {
+        Hyprland.dispatch(luaDispatcher);
+    }
+
+    /// Run Lua code inside Hyprland — the replacement for `hyprctl keyword`.
+    /// Several statements may share one call; Lua needs no separator between
+    /// them. Do not use `[[BATCH]]` for Lua: it splits on every `;`.
+    function evalLua(luaCode: string): void {
+        extras.message(`eval ${luaCode}`);
+    }
+
+    /// The Hyprland selector of a window address, with or without `0x`.
+    function windowSelector(address: string): string {
+        return `address:${address.startsWith("0x") ? address : `0x${address}`}`;
+    }
+
+    /// The Hyprland selector of a workspace name. Numbered workspaces are
+    /// selected by number, special ones keep their `special:` prefix, and every
+    /// other name needs `name:`.
+    function workspaceSelector(workspaceName: string): string {
+        if (/^\d+$/.test(workspaceName) || workspaceName.startsWith("special:"))
+            return workspaceName;
+        return `name:${workspaceName}`;
+    }
+
+    /// Switch to a workspace selector (`3`, `name:music`, `r+1`, `e-1`).
+    function focusWorkspace(selector: string): void {
+        dispatch(`hl.dsp.focus({ workspace = ${luaString(selector)} })`);
+    }
+
+    /// Toggle a special workspace by its bare name. "" or "special" is
+    /// Hyprland's default special workspace.
+    function toggleSpecialWorkspace(name: string): void {
+        const bareName = name.startsWith("special:") ? name.slice(8) : name;
+        dispatch(bareName === "" || bareName === "special" ? "hl.dsp.workspace.toggle_special()" : `hl.dsp.workspace.toggle_special(${luaString(bareName)})`);
+    }
+
+    function focusWindow(address: string): void {
+        dispatch(`hl.dsp.focus({ window = ${luaString(windowSelector(address))} })`);
+    }
+
+    function moveWindowToWorkspace(address: string, workspace: string, follow: bool): void {
+        dispatch(`hl.dsp.window.move({ workspace = ${luaString(workspace)}, follow = ${follow}, window = ${luaString(windowSelector(address))} })`);
+    }
+
+    function toggleWindowFloating(address: string): void {
+        dispatch(`hl.dsp.window.float({ action = "toggle", window = ${luaString(windowSelector(address))} })`);
+    }
+
+    function toggleWindowPin(address: string): void {
+        dispatch(`hl.dsp.window.pin({ action = "toggle", window = ${luaString(windowSelector(address))} })`);
+    }
+
+    /// Kill the window's client (the old `killwindow`), not a polite close.
+    function killWindow(address: string): void {
+        dispatch(`hl.dsp.window.kill({ window = ${luaString(windowSelector(address))} })`);
+    }
+
+    /// Set the focused window's fullscreen state (the old `fullscreenstate
+    /// <internal> <client> set`). 0 none, 1 maximized, 2 fullscreen.
+    function setFocusedWindowFullscreenState(internalState: int, clientState: int): void {
+        dispatch(`hl.dsp.window.fullscreen_state({ internal = ${internalState}, client = ${clientState}, action = "set" })`);
+    }
+
+    /// Enter a submap by name; "reset" leaves every submap.
+    function setSubmap(name: string): void {
+        dispatch(`hl.dsp.submap(${luaString(name)})`);
+    }
+
+    /// Lua that binds `keys` (Hyprland form, e.g. "ALT + X") to a shell command,
+    /// after removing any bind already on that combo. Hyprland keeps duplicate
+    /// binds and fires them all, so the unbind keeps this idempotent. `options`
+    /// is a Lua table literal of HL.BindOptions, e.g. `{ description = "..." }`.
+    function rebindToCommandLua(keys: string, command: string, options: string): string {
+        return `hl.unbind(${luaString(keys)}) hl.bind(${luaString(keys)}, hl.dsp.exec_cmd(${luaString(command)})${options ? `, ${options}` : ""})`;
+    }
+
+    function unbindLua(keys: string): string {
+        return `hl.unbind(${luaString(keys)})`;
     }
 
     function monitorFor(screen: ShellScreen): HyprlandMonitor {
         return Hyprland.monitorFor(screen);
+    }
+
+    // ── Workspace keys ───────────────────────────────────────────────
+    //
+    // WORKAROUND: Hyprland 0.57 gives named and special workspaces no numeric
+    // id (`"id": null` in `hyprctl workspaces -j`; they are keyed by a string
+    // `address`), and Quickshell 0.3.2 then reports `id === -1` for every one of
+    // them. This shell keys workspaces by int everywhere — bar slots, the
+    // occupancy map, per-workspace window filters, wallpapers — so all named
+    // workspaces collapsed into one bar slot and their windows mixed in every
+    // filter. workspaceKey() restores one unique int per workspace, the
+    // pre-0.57 contract: the real id for a numbered workspace, a stable negative
+    // key for any other. Read a workspace's identity through it, never `.id`.
+    // Remove once the shell keys workspaces by name (or Quickshell's `address`)
+    // instead of by int.
+
+    /// Unique int key of a Quickshell workspace (or a `lastIpcObject.workspace`
+    /// JSON object); 0 for none. Numbered workspaces keep their id.
+    function workspaceKey(workspace: var): int {
+        if (!workspace)
+            return 0;
+        if (workspace.id > 0)
+            return workspace.id;
+        return workspaceKeyForName(workspace.name ?? "");
+    }
+
+    /// Key of a workspace by name. Catalog workspaces (WorkspaceCatalog) get
+    /// keys in catalog order, so the bar's ascending sort shows them in that
+    /// order; any other name hashes into a disjoint negative range.
+    function workspaceKeyForName(name: string): int {
+        if (/^\d+$/.test(name))
+            return parseInt(name, 10);
+        if (name === "")
+            return 0;
+        const catalogIndex = WorkspaceCatalog.entries.findIndex(entry => entry.kind === "named" && entry.name === name);
+        if (catalogIndex >= 0)
+            return -100000 + catalogIndex;
+        // FNV-1a: stable across restarts, so a key never changes under a binding.
+        let hash = 2166136261;
+        for (const character of name) {
+            hash ^= character.codePointAt(0);
+            hash = Math.imul(hash, 16777619) >>> 0;
+        }
+        return -50000 - (hash % 49999);
     }
 
     // ── Workspace lookup helpers ─────────────────────────────────────
@@ -60,7 +203,7 @@ Singleton {
     // intentional var return: Hyprland workspace proxy is nullable and
     // identity-unstable, so it does not fit a stable QML type alias.
     function workspaceById(id: int): var {
-        return Hyprland.workspaces.values.find(w => w.id === id) ?? null;
+        return Hyprland.workspaces.values.find(w => root.workspaceKey(w) === id) ?? null;
     }
 
     // Build the { [wsId]: hasWindows } occupancy map. Workspaces.qml needs it;
@@ -68,7 +211,7 @@ Singleton {
     // rather than moving back into its one caller.
     function occupiedMap(): var {
         return Hyprland.workspaces.values.reduce((acc, w) => {
-            acc[w.id] = w.lastIpcObject.windows > 0;
+            acc[root.workspaceKey(w)] = w.lastIpcObject.windows > 0;
             return acc;
         }, {});
     }
@@ -95,23 +238,26 @@ Singleton {
         }
 
         const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0);
-        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name);
+        // Named workspaces stay visible while empty when the catalog or the
+        // bar's icon list declares them.
+        const catalogNames = WorkspaceCatalog.entries.filter(entry => entry.kind === "named").map(entry => entry.name);
+        const namedWsNames = [...catalogNames, ...Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)];
         const namedWs = regularAndNamed.filter(w => namedWsNames.includes(w.name));
 
-        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])];
+        let ids = [...new Set([...occupiedWs.map(w => root.workspaceKey(w)), ...namedWs.map(w => root.workspaceKey(w))])];
 
         if (!ids.includes(activeWsId))
             ids.push(activeWsId);
 
         if (includeSpecial) {
             for (const sw of specialWs)
-                ids.push(sw.id);
+                ids.push(root.workspaceKey(sw));
             ids = [...new Set(ids)];
         }
 
         const nameById = {};
         for (const w of all)
-            nameById[w.id] = w.name;
+            nameById[root.workspaceKey(w)] = w.name;
 
         return ids.sort((a, b) => {
             const catA = _wsSortCategory(a, nameById[a] ?? "");
@@ -131,7 +277,10 @@ Singleton {
     }
 
     function reloadDynamicConfs(): void {
-        extras.batchMessage(["keyword bindlni ,Caps_Lock,global,symmetria:refreshDevices", "keyword bindlni ,Num_Lock,global,symmetria:refreshDevices"]);
+        // locked + non-consuming + ignore-mods (the old `bindlni`): refresh the
+        // lock indicators on every press, under any modifier, without eating the key.
+        const options = "{ locked = true, non_consuming = true, ignore_mods = true }";
+        evalLua(["Caps_Lock", "Num_Lock"].map(key => `hl.unbind(${luaString(key)}) hl.bind(${luaString(key)}, hl.dsp.global("symmetria:refreshDevices"), ${options})`).join(" "));
     }
 
     function handleUrgent(addr: string): void {
@@ -189,7 +338,7 @@ Singleton {
             return;
 
         Toaster.toast(windowClass, windowTitle || qsTr("Window is requesting attention"), "notification_important", Toast.Warning, 7000, "", "", function () {
-            root.dispatch(`focuswindow address:${fullAddr}`);
+            root.focusWindow(fullAddr);
         });
     }
 

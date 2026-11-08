@@ -102,7 +102,7 @@ Item {
         onClicked: {
             const addr = root.client?.lastIpcObject?.address;
             if (addr)
-                Hypr.dispatch(`focuswindow address:${addr}`);
+                Hypr.focusWindow(addr);
         }
     }
 

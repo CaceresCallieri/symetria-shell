@@ -85,14 +85,14 @@ Item {
                 if (root.ws < 0) {
                     const wsObj = Hypr.workspaceById(root.ws);
                     if (wsObj)
-                        Hypr.dispatch(`workspace name:${wsObj.name}`);
+                        Hypr.focusWorkspace(Hypr.workspaceSelector(wsObj.name));
                 } else {
-                    Hypr.dispatch(`workspace ${root.ws}`);
+                    Hypr.focusWorkspace(String(root.ws));
                 }
             } else if (event.x < content.labelWidth) {
                 // Only toggle special workspace when clicking on the label area,
                 // not on app icons gaps or the fullscreen indicator
-                Hypr.dispatch("togglespecialworkspace special");
+                Hypr.toggleSpecialWorkspace("special");
             }
         }
     }

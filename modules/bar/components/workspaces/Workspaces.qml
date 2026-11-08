@@ -14,7 +14,7 @@ Item {
     required property ShellScreen screen
 
     readonly property bool onSpecial: (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor)?.lastIpcObject.specialWorkspace.name !== ""
-    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.monitorFor(screen)?.activeWorkspace?.id ?? 1) : Hypr.activeWsId
+    readonly property int activeWsId: Config.bar.workspaces.perMonitorWorkspaces ? (Hypr.workspaceKey(Hypr.monitorFor(screen)?.activeWorkspace) || 1) : Hypr.activeWsId
 
     // Monitor focus detection for indicator dots (hidden with single monitor)
     readonly property bool multiMonitor: Quickshell.screens.length > 1
@@ -24,7 +24,9 @@ Item {
     // Computation centralized in Hypr.occupiedMap() — it was shared with the
     // merged agentbar, which went out with Symmetria IDE.
     readonly property var occupied: Hypr.occupiedMap()
-    readonly property int groupOffset: Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown
+    // A named workspace has a negative key (Hypr.workspaceKey); keep the first
+    // numbered group then instead of paging to negative slot numbers.
+    readonly property int groupOffset: activeWsId > 0 ? Math.floor((activeWsId - 1) / Config.bar.workspaces.shown) * Config.bar.workspaces.shown : 0
 
     // In fixed mode return a static [1..shown] window; otherwise delegate to the
     // shared Hypr.displayedWorkspaceIds() (special workspaces excluded — the top
