@@ -133,7 +133,8 @@ Item {
             spacing: 0
 
             Component.onCompleted: {
-                wsId = modelData.id;
+                // Hypr.workspaceKey: special workspaces have no numeric id since Hyprland 0.57.
+                wsId = Hypr.workspaceKey(modelData);
                 icon = Icons.getSpecialWsIcon(modelData.name);
                 hasWindows = Config.bar.workspaces.showWindowsOnSpecialWorkspaces && modelData.lastIpcObject.windows > 0;
             }
@@ -142,14 +143,11 @@ Item {
             Connections {
                 target: ws.modelData
 
-                function onIdChanged(): void {
-                    if (ws.modelData)
-                        ws.wsId = ws.modelData.id;
-                }
-
                 function onNameChanged(): void {
-                    if (ws.modelData)
+                    if (ws.modelData) {
+                        ws.wsId = Hypr.workspaceKey(ws.modelData);
                         ws.icon = Icons.getSpecialWsIcon(ws.modelData.name);
+                    }
                 }
 
                 function onLastIpcObjectChanged(): void {

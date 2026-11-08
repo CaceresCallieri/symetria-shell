@@ -82,8 +82,12 @@ Singleton {
             // The writer rewrites the file in place, so a read can land mid-write.
             // Keep the last good list then; the completed write triggers another
             // change notification.
+            // Hyprland rewrites the file on every config reload; reassign only on
+            // a real change so consumers (an open chord menu) are not reset.
             try {
-                root.entries = root._parseEntries(text());
+                const parsedEntries = root._parseEntries(text());
+                if (JSON.stringify(parsedEntries) !== JSON.stringify(root.entries))
+                    root.entries = parsedEntries;
             } catch (error) {
                 console.warn(`[WorkspaceCatalog] ignoring unreadable ${root.path}: ${error.message}`);
             }

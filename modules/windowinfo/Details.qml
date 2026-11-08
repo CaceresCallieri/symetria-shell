@@ -60,7 +60,8 @@ ColumnLayout {
 
     Detail {
         icon: "workspaces"
-        text: qsTr("Workspace: %1 (%2)").arg(root.client?.workspace.name ?? -1).arg(root.client?.workspace.id ?? -1)
+        // Name only: Hyprland 0.57 gives named and special workspaces no numeric id.
+        text: qsTr("Workspace: %1").arg(root.client?.workspace.name ?? "?")
         color: Colours.palette.m3secondary
     }
 
