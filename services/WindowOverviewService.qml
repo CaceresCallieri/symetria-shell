@@ -75,7 +75,7 @@ Singleton {
         _clearPendingFocusRestore();
         const revealToken = ++_actionToken;
         targetMonitorName = monitor.name;
-        targetWorkspaceId = workspace.id;
+        targetWorkspaceId = Hypr.workspaceKey(workspace);
         sourceAddress = address;
         sourceFullscreen = ipc.fullscreen ?? 0;
         sourceFullscreenClient = ipc.fullscreenClient ?? sourceFullscreen;
@@ -174,7 +174,7 @@ Singleton {
             return;
 
         const monitorName = Hypr.focusedMonitor?.name ?? "";
-        const workspaceId = Hypr.focusedWorkspace?.id ?? -1;
+        const workspaceId = Hypr.workspaceKey(Hypr.focusedWorkspace) || -1;
         if (monitorName !== targetMonitorName || workspaceId !== targetWorkspaceId) {
             cancel();
             return;

@@ -19,7 +19,7 @@ Singleton {
     readonly property HyprlandToplevel activeToplevel: Hyprland.activeToplevel?.wayland?.activated ? Hyprland.activeToplevel : null
     readonly property HyprlandWorkspace focusedWorkspace: Hyprland.focusedWorkspace
     readonly property HyprlandMonitor focusedMonitor: Hyprland.focusedMonitor
-    readonly property int activeWsId: focusedWorkspace?.id ?? 1
+    readonly property int activeWsId: workspaceKey(focusedWorkspace) || 1
 
     readonly property HyprKeyboard keyboard: extras.devices.keyboards.find(kb => kb.main) ?? null
     readonly property bool capsLock: keyboard?.capsLock ?? false
@@ -147,6 +147,50 @@ Singleton {
         return Hyprland.monitorFor(screen);
     }
 
+    // ── Workspace keys ───────────────────────────────────────────────
+    //
+    // WORKAROUND: Hyprland 0.57 gives named and special workspaces no numeric
+    // id (`"id": null` in `hyprctl workspaces -j`; they are keyed by a string
+    // `address`), and Quickshell 0.3.2 then reports `id === -1` for every one of
+    // them. This shell keys workspaces by int everywhere — bar slots, the
+    // occupancy map, per-workspace window filters, wallpapers — so all named
+    // workspaces collapsed into one bar slot and their windows mixed in every
+    // filter. workspaceKey() restores one unique int per workspace, the
+    // pre-0.57 contract: the real id for a numbered workspace, a stable negative
+    // key for any other. Read a workspace's identity through it, never `.id`.
+    // Remove once the shell keys workspaces by name (or Quickshell's `address`)
+    // instead of by int.
+
+    /// Unique int key of a Quickshell workspace (or a `lastIpcObject.workspace`
+    /// JSON object); 0 for none. Numbered workspaces keep their id.
+    function workspaceKey(workspace: var): int {
+        if (!workspace)
+            return 0;
+        if (workspace.id > 0)
+            return workspace.id;
+        return workspaceKeyForName(workspace.name ?? "");
+    }
+
+    /// Key of a workspace by name. Catalog workspaces (WorkspaceCatalog) get
+    /// keys in catalog order, so the bar's ascending sort shows them in that
+    /// order; any other name hashes into a disjoint negative range.
+    function workspaceKeyForName(name: string): int {
+        if (/^\d+$/.test(name))
+            return parseInt(name, 10);
+        if (name === "")
+            return 0;
+        const catalogIndex = WorkspaceCatalog.entries.findIndex(entry => entry.kind === "named" && entry.name === name);
+        if (catalogIndex >= 0)
+            return -100000 + catalogIndex;
+        // FNV-1a: stable across restarts, so a key never changes under a binding.
+        let hash = 2166136261;
+        for (const character of name) {
+            hash ^= character.codePointAt(0);
+            hash = Math.imul(hash, 16777619) >>> 0;
+        }
+        return -50000 - (hash % 49999);
+    }
+
     // ── Workspace lookup helpers ─────────────────────────────────────
     //
     // Single source of truth for the .find() lookups that previously lived
@@ -159,7 +203,7 @@ Singleton {
     // intentional var return: Hyprland workspace proxy is nullable and
     // identity-unstable, so it does not fit a stable QML type alias.
     function workspaceById(id: int): var {
-        return Hyprland.workspaces.values.find(w => w.id === id) ?? null;
+        return Hyprland.workspaces.values.find(w => root.workspaceKey(w) === id) ?? null;
     }
 
     // Build the { [wsId]: hasWindows } occupancy map. Workspaces.qml needs it;
@@ -167,7 +211,7 @@ Singleton {
     // rather than moving back into its one caller.
     function occupiedMap(): var {
         return Hyprland.workspaces.values.reduce((acc, w) => {
-            acc[w.id] = w.lastIpcObject.windows > 0;
+            acc[root.workspaceKey(w)] = w.lastIpcObject.windows > 0;
             return acc;
         }, {});
     }
@@ -194,23 +238,26 @@ Singleton {
         }
 
         const occupiedWs = regularAndNamed.filter(w => w.lastIpcObject.windows > 0);
-        const namedWsNames = Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name);
+        // Named workspaces stay visible while empty when the catalog or the
+        // bar's icon list declares them.
+        const catalogNames = WorkspaceCatalog.entries.filter(entry => entry.kind === "named").map(entry => entry.name);
+        const namedWsNames = [...catalogNames, ...Config.bar.workspaces.namedWorkspaceIcons.map(n => n.name)];
         const namedWs = regularAndNamed.filter(w => namedWsNames.includes(w.name));
 
-        let ids = [...new Set([...occupiedWs.map(w => w.id), ...namedWs.map(w => w.id)])];
+        let ids = [...new Set([...occupiedWs.map(w => root.workspaceKey(w)), ...namedWs.map(w => root.workspaceKey(w))])];
 
         if (!ids.includes(activeWsId))
             ids.push(activeWsId);
 
         if (includeSpecial) {
             for (const sw of specialWs)
-                ids.push(sw.id);
+                ids.push(root.workspaceKey(sw));
             ids = [...new Set(ids)];
         }
 
         const nameById = {};
         for (const w of all)
-            nameById[w.id] = w.name;
+            nameById[root.workspaceKey(w)] = w.name;
 
         return ids.sort((a, b) => {
             const catA = _wsSortCategory(a, nameById[a] ?? "");

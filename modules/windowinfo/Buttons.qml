@@ -78,8 +78,9 @@ ColumnLayout {
 
                 Button {
                     required property int index
-                    readonly property int wsId: Math.floor((Hypr.activeWsId - 1) / 10) * 10 + index + 1
-                    readonly property bool isCurrent: root.client?.workspace.id === wsId
+                    // The numbered group of the active workspace; the first group on a named one.
+                    readonly property int wsId: (Hypr.activeWsId > 0 ? Math.floor((Hypr.activeWsId - 1) / 10) * 10 : 0) + index + 1
+                    readonly property bool isCurrent: Hypr.workspaceKey(root.client?.workspace) === wsId
 
                     color: isCurrent ? Colours.tPalette.m3surfaceContainerHighest : Colours.pillStyle(Colours.palette.m3surfaceContainerHigh, Colours.glass.subtle).background
                     contentColor: Colours.palette.m3onSurface

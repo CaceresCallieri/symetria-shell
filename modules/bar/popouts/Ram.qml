@@ -75,8 +75,9 @@ Column {
         if (!workspace)
             return "";
 
-        // Special workspaces (negative ID)
-        if (workspace.id < 0) {
+        // Named and special workspaces. Hyprland 0.57 gives them no numeric id,
+        // so the name decides; a numbered workspace's name is its number.
+        if (!/^\d+$/.test(workspace.name ?? "")) {
             if (workspace.name.startsWith("special:")) {
                 // Special workspace - use configured icon with fallbacks
                 return Utils.Icons.getSpecialWsIcon(workspace.name);
@@ -87,7 +88,7 @@ Column {
         }
 
         // Regular numeric workspace - convert to Roman numeral
-        return Utils.Icons.romanize(workspace.id);
+        return Utils.Icons.romanize(parseInt(workspace.name, 10));
     }
 
     // Section 1 — RAM summary.
