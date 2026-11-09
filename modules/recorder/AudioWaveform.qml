@@ -64,7 +64,7 @@ Item {
     property real animationTime: 0
 
     NumberAnimation on animationTime {
-        running: (root.displayState === "processing" || root.displayState === "grace") && root.active
+        running: root.displayState === "processing" && root.active
         from: 0
         to: 6000
         duration: 100000
@@ -117,7 +117,7 @@ Item {
 
     // ── Processing wave data (offsets + opacities) ──────────────
     readonly property var processingWaveData: {
-        if ((root.displayState !== "processing" && root.displayState !== "grace") || !root.active)
+        if (root.displayState !== "processing" || !root.active)
             return {
                 offsets: [],
                 opacities: []
@@ -169,7 +169,7 @@ Item {
                 readonly property real targetHeight: {
                     const cfg = root.audioConfig;
 
-                    if (root.displayState === "processing" || root.displayState === "grace") {
+                    if (root.displayState === "processing") {
                         const procCfg = root.processingConfig;
                         const waveMultiplier = root.processingWaveOffsets[index] ?? 1.0;
                         const boostedHeight = procCfg.baseHeightBoost * (cfg.maxBarHeight - cfg.minBarHeight);
@@ -182,7 +182,7 @@ Item {
                 }
 
                 readonly property real waveOpacity: {
-                    if (root.displayState === "processing" || root.displayState === "grace") {
+                    if (root.displayState === "processing") {
                         const opacity = root.processingWaveOpacities[index];
                         if (opacity !== undefined)
                             return opacity;
@@ -206,7 +206,7 @@ Item {
                 // That only fires on data arrival (~10Hz), leaving 90ms static
                 // gaps between updates — bars snap instead of gliding.
                 FrameAnimation {
-                    running: root.active && (root.displayState === "recording" || root.displayState === "processing" || root.displayState === "grace")
+                    running: root.active && (root.displayState === "recording" || root.displayState === "processing")
                     onTriggered: {
                         const delta = bar.targetHeight - bar.smoothedHeight;
                         if (Math.abs(delta) > 0.1)

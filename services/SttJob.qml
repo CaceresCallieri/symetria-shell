@@ -25,7 +25,9 @@ QtObject {
     // ── Public properties ──────────────────────────────────────────────
 
     /// Current state: "idle", "recording", "paused", "processing", "transcribed",
-    ///   "grace", "delivering", "confirming", "error", "success"
+    ///   "delivering", "error", "success".
+    ///   NOTE: "confirming" is display-only — Content.qml maps "delivering"
+    ///   to a confirming label; no code path ever assigns it as a raw state.
     readonly property string state: _state
 
     /// Audio level (0.0-1.0) during recording
@@ -34,9 +36,14 @@ QtObject {
     /// Whether currently recording
     readonly property bool recording: _state === "recording"
 
+    /// Recording, but the microphone has not delivered a single non-zero
+    /// sample for the current segment yet. A Bluetooth headset mic returns
+    /// digital zeros for ~1-3 s while WirePlumber flips it from A2DP to HFP;
+    /// words spoken in that window are lost, so the UI tells the user to wait.
+    readonly property bool waitingForMicrophone: _state === "recording" && !_segmentHasAudio
+
     /// Elapsed recording time in seconds
     readonly property real elapsedSeconds: _currentElapsed
-    readonly property int graceRemainingMs: _graceRemainingMs
     readonly property string projectName: _mesuraProjectName
 
     /// Error detail properties
@@ -84,11 +91,10 @@ QtObject {
     property string _mesuraProjectName: ""
     property string _mesuraDeliveryCommandId: ""
     property string _mesuraToastDedupeKey: ""
-    property bool _mesuraTranscriptStored: false
-    property bool _mesuraClipboardFallbackStarted: false
+    property bool _transcriptStored: false
+    property bool _mesuraTerminalHandled: false
+    property bool _mesuraRecoveredToClipboard: false
     property bool _applyingMesuraSnapshot: false
-    property int _graceRemainingMs: 0
-    property real _graceDeadlineMs: 0
 
     // ── Signals ───────────────────────────────────��────────────────────
 
@@ -123,6 +129,20 @@ QtObject {
 
     property string _state: "idle"
     property real _audioLevel: 0.0
+
+    // Microphone liveness, fed by levelMonitorProcess. Digital silence (every
+    // sample exactly 0) is what a dead capture delivers — e.g. the PipeWire
+    // bluez5 HFP bug that kills every other headset mic session, leaving a
+    // ~0.5 s WAV of zeros. A real mic, even in a quiet room, never reads 0.0000
+    // RMS for a whole recording. _segmentHasAudio drives the UI hint and resets
+    // per segment (a resume can flip the headset profile again); the session
+    // pair gates transcription in _submitForTranscription(). The monitor is a
+    // second pw-record on the same source, so it can die while the real
+    // capture keeps going; _levelMonitorDied makes its verdict inconclusive.
+    property bool _segmentHasAudio: false
+    property bool _sessionHasAudio: false
+    property int _sessionLevelReadings: 0
+    property bool _levelMonitorDied: false
     property string _transcribedText: ""
     property string _partialTranscript: ""
 
@@ -309,11 +329,11 @@ QtObject {
     /// restart() relies on the no-animation behaviour: it wants a seamless
     /// atomic swap, so _job is kept alive (and closing stays false) until the
     /// new job is ready, at which point _startInternal reassigns _job and
-    /// destroys this old job directly. Setting closing=true here would
-    /// prematurely trigger Bar.qml's declarative _showEmbed binding (which is
-    /// true when !closing), collapsing the embed without a subsequent re-raise
-    /// because the binding only re-evaluates when _job or its closing flag
-    /// changes — and _job never transitions back through null in the restart flow.
+    /// destroys this old job directly. Setting closing=true here would drop
+    /// the service into wind-down mode mid-swap: setDeliveryChoice ignores a
+    /// closing job, so the new job's early mode traffic would be lost — and
+    /// nothing would recover it, because _job never transitions back through
+    /// null in the restart flow.
     /// @param dropRecovery  When true, also delete the on-disk recovery copy —
     ///   a hard discard, used by a live-recording cancel and by restart(). When
     ///   false, the recovery copy is left in place so a failed transcription
@@ -378,7 +398,7 @@ QtObject {
             return;
         if (_manualClipboardFallback && mode !== "clipboard")
             return;
-        if (_mesuraIntegrated && _state !== "recording" && _state !== "paused" && _state !== "processing" && _state !== "transcribed" && _state !== "grace")
+        if (_mesuraIntegrated && _state !== "recording" && _state !== "paused" && _state !== "processing" && _state !== "transcribed")
             return;
         if (_activeDeliveryChoice === mode)
             return;
@@ -387,9 +407,9 @@ QtObject {
 
     function _canonicalMesuraPhase(): string {
         if (_state === "transcribed")
-            return "grace";
+            return "processing";
         if (_state === "success")
-            return "completed";
+            return _mesuraRecoveredToClipboard ? "failed" : "completed";
         if (_state === "error")
             return "failed";
         if (_state === "idle")
@@ -408,62 +428,42 @@ QtObject {
             _finishMesuraWithClipboardFallback();
             return;
         }
-        if (!_mesuraIntegrated) {
-            _startDeliveryChain();
-            return;
-        }
-        _graceDeadlineMs = Date.now() + 3000;
-        _graceRemainingMs = 3000;
-        _state = "grace";
-        graceTimer.start();
-    }
-
-    function sendNow(): void {
-        if (_state !== "grace")
-            return;
-        graceTimer.stop();
-        _graceRemainingMs = 0;
         _startDeliveryChain();
     }
 
-    function _handleMesuraReceipt(receipt: var): void {
-        if (!_mesuraIntegrated || receipt?.sessionId !== sessionId || receipt?.commandId !== _mesuraDeliveryCommandId)
+    function _handleMesuraSessionSnapshot(session: var): void {
+        if (!_mesuraIntegrated || session?.sessionId !== sessionId || _mesuraTerminalHandled)
             return;
-        if (_state === "success" || _mesuraClipboardFallbackStarted)
+        if (_state !== "delivering" && _state !== "confirming")
             return;
-        mesuraDeliveryTimer.stop();
-        if (receipt.outcome === "copied" || receipt.outcome === "inserted" || receipt.outcome === "confirmation-pending" || receipt.outcome === "turn-running") {
-            _storeMesuraTranscriptOnce();
-            if (_ranWlCopy) {
-                _pendingCliphistDelete = _transcribedText;
-                cliphistDeleteTimer.restart();
-            }
-            _showMesuraSuccessToast(receipt);
+        if (session.phase === "completed") {
+            _mesuraTerminalHandled = true;
+            deliveryRecoveryTimer.stop();
+            _showMesuraSuccessToast();
             _state = "success";
             return;
         }
-        _finishMesuraWithClipboardFallback();
+        if (session.phase === "failed")
+            _finishMesuraWithClipboardFallback();
     }
 
-    function _showMesuraSuccessToast(receipt: var): void {
-        const dedupeKey = `${receipt.commandId}:${receipt.outcome}:${receipt.action ?? ""}`;
+    function _showMesuraSuccessToast(): void {
+        const deliveryKey = _mesuraDeliveryCommandId !== "" ? _mesuraDeliveryCommandId : "clipboard";
+        const dedupeKey = `${deliveryKey}:success:${_activeDeliveryChoice}`;
         if (_mesuraToastDedupeKey === dedupeKey)
             return;
         _closeMesuraToasts();
         _mesuraToastDedupeKey = dedupeKey;
         let title = "Inserted into chat";
         let icon = "input";
-        if (receipt.outcome === "copied") {
+        if (_activeDeliveryChoice === "clipboard") {
             title = "Copied to clipboard";
             icon = "content_copy";
-        } else if (receipt.outcome === "confirmation-pending" || receipt.outcome === "turn-running" || (receipt.outcome === "inserted" && receipt.action === "submit")) {
+        } else if (_activeDeliveryChoice === "submit") {
             title = "Message sent successfully";
             icon = "send";
-        } else if (receipt.action === "answer") {
-            title = "Answer submitted";
-            icon = "check_circle";
         }
-        Toaster.toast(title, _mesuraProjectName, icon, Toast.Success, 5000, "", `stt-mesura-${sessionId}-success-${receipt.commandId}`);
+        Toaster.toast(title, _mesuraProjectName, icon, Toast.Success, 5000, "", `stt-mesura-${sessionId}-success-${deliveryKey}`);
     }
 
     function _closeMesuraToasts(): void {
@@ -474,19 +474,20 @@ QtObject {
         }
     }
 
-    function _storeMesuraTranscriptOnce(): void {
-        if (_mesuraTranscriptStored || _transcribedText === "")
+    function _storeTranscriptOnce(): void {
+        if (_transcriptStored || _transcribedText === "")
             return;
-        _mesuraTranscriptStored = true;
+        _transcriptStored = true;
         TranscriptionStore.add(_transcribedText);
     }
 
     function _finishMesuraWithClipboardFallback(): void {
-        mesuraDeliveryTimer.stop();
-        _storeMesuraTranscriptOnce();
-        if (_mesuraClipboardFallbackStarted)
+        deliveryRecoveryTimer.stop();
+        _storeTranscriptOnce();
+        if (_mesuraTerminalHandled)
             return;
-        _mesuraClipboardFallbackStarted = true;
+        _mesuraTerminalHandled = true;
+        _mesuraRecoveredToClipboard = true;
         if (_transcribedText === "") {
             _state = "success";
             return;
@@ -496,12 +497,12 @@ QtObject {
     }
 
     function _sendMesuraDelivery(): void {
-        if (_state !== "delivering" && _state !== "confirming")
+        if ((_state !== "delivering" && _state !== "confirming") || _mesuraTerminalHandled)
             return;
-        if (MesuraDictation.deliver(job)) {
-            mesuraDeliveryTimer.start();
+        deliveryRecoveryTimer.restart();
+        if (MesuraDictation.deliver(job))
             return;
-        }
+        deliveryRecoveryTimer.stop();
         _finishMesuraWithClipboardFallback();
     }
 
@@ -693,6 +694,7 @@ QtObject {
         args.push(segmentPath);
         recordProcess.command = args;
         recordProcess.running = true;
+        _segmentHasAudio = false;
         // The level monitor records from the same node so the meter reflects
         // what the transcriber actually hears (script treats "" as default).
         levelMonitorProcess.command = [job._levelMonitorScript, captureSource];
@@ -733,6 +735,20 @@ QtObject {
         if (_segmentFiles.length === 0) {
             console.error("[STT:D05] NO segments — aborting");
             _setErrorState("internal", "No audio segments", "Recording may have failed", false);
+            return;
+        }
+
+        // Digital silence for the whole session means the capture was dead,
+        // not quiet. Sending it anyway makes gpt-4o-transcribe hallucinate a
+        // short plausible sentence ("¿De dónde son los vecinos?") that then
+        // gets delivered as if the user had said it. Gated on at least one
+        // reading, and on the monitor surviving, so a monitor that never ran
+        // or died early cannot block a good take. A STALLED monitor (the HFP
+        // bug freezes both streams) does not exit, so it still counts.
+        if (_sessionLevelReadings > 0 && !_sessionHasAudio && !_levelMonitorDied) {
+            Logger.log("qml", "stt", "no-audio | id=" + sessionId + " readings=" + _sessionLevelReadings + " — mic delivered only digital silence, not transcribing");
+            _cleanupTempFiles();
+            _setErrorState("silence", "No audio from microphone", "The mic sent only silence — record again", true);
             return;
         }
 
@@ -838,13 +854,13 @@ QtObject {
         Logger.log("qml", "stt", "delivery-start | id=" + sessionId + " mode=" + effectiveMode + " textLen=" + _transcribedText.length);
 
         if (_mesuraIntegrated) {
-            MesuraDictation.ensureDeliveryCommandId(job);
             if (effectiveMode === "clipboard") {
                 _ranWlCopy = true;
                 _clipboardModeOnly = true;
                 clipboardProcess.command = ["wl-copy", _transcribedText];
                 clipboardProcess.running = true;
             } else {
+                MesuraDictation.ensureDeliveryCommandId(job);
                 _ranWlCopy = false;
                 _clipboardModeOnly = false;
                 _sendMesuraDelivery();
@@ -934,7 +950,7 @@ QtObject {
             console.log("[STT:D14] inject SKIPPED — no target | id:", sessionId);
             // Still record the transcription so it's reachable via the Transcriptions
             // tab and Alt+V, even though we couldn't deliver to a target window.
-            TranscriptionStore.add(job._transcribedText);
+            _storeTranscriptOnce();
             _injectionPath = "";
             _injectionDowngraded = false;
             _injectionSubmitted = false;
@@ -1094,16 +1110,16 @@ QtObject {
         successTimer.stop();
         processingTimeoutTimer.stop();
         autoRetryTimer.stop();
-        graceTimer.stop();
         mesuraProgressTimer.stop();
-        mesuraDeliveryTimer.stop();
+        deliveryRecoveryTimer.stop();
         _removalTimer.stop();
         cliphistDeleteTimer.stop();
     }
 
-    /// Trigger animated removal — called by SttService orchestrator.
-    /// Starts the per-job removal timer so the bar-embed close animation
-    /// (via _activeJob.closing in Bar.qml) completes before the job is destroyed.
+    /// Trigger delayed removal — called by SttService orchestrator.
+    /// Starts the per-job removal timer so destruction is not synchronous
+    /// with finished(): bindings reacting to the job's final state change
+    /// get one frame to settle before the object is destroyed.
     function startRemoval(): void {
         _removalTimer.start();
     }
@@ -1165,9 +1181,9 @@ QtObject {
         } else {
             successTimer.stop();
         }
-        // `transcribed` is an internal bridge state. The next synchronous
-        // readyForDelivery handler initializes the full three-second grace
-        // snapshot, so publishing here would flash a false zero countdown.
+        // `transcribed` is an internal bridge state used only while an exact
+        // Mesura reservation is still pending. Delivery starts synchronously
+        // once that reservation is accepted.
         if (_mesuraIntegrated && _state !== "transcribed")
             MesuraDictation.updateState(job);
     }
@@ -1205,19 +1221,6 @@ QtObject {
         }
     }
 
-    readonly property Timer graceTimer: Timer {
-        interval: 100
-        repeat: true
-        onTriggered: {
-            job._graceRemainingMs = Math.max(0, Math.round(job._graceDeadlineMs - Date.now()));
-            MesuraDictation.updateState(job);
-            if (job._graceRemainingMs <= 0) {
-                stop();
-                job._startDeliveryChain();
-            }
-        }
-    }
-
     readonly property Timer mesuraProgressTimer: Timer {
         interval: 250
         repeat: true
@@ -1225,8 +1228,8 @@ QtObject {
         onTriggered: MesuraDictation.updateState(job)
     }
 
-    readonly property Timer mesuraDeliveryTimer: Timer {
-        interval: 17000
+    readonly property Timer deliveryRecoveryTimer: Timer {
+        interval: 6500
         onTriggered: job._finishMesuraWithClipboardFallback()
     }
 
@@ -1244,7 +1247,8 @@ QtObject {
         }
     }
 
-    // Animated removal delay — outlasts the bar-embed close animation in Bar.qml
+    // Animated removal delay — paces destruction one beat past the job's
+    // final state change so reacting bindings settle first
     readonly property Timer _removalTimer: Timer {
         interval: Appearance.anim.durations.normal + 50
         onTriggered: SttService._finalizeRemoval(job)
@@ -1324,11 +1328,27 @@ QtObject {
     // Audio level monitor. command is assigned in _startRecording() so the
     // monitor targets the same PipeWire source as the actual capture.
     readonly property Process levelMonitorProcess: Process {
+        // stop()/pause()/cancel set _pendingRecordAction BEFORE stopping the
+        // monitor, so an exit with no pending action while recording is a
+        // death, not a teardown.
+        onExited: (code, status) => {
+            if (job._state === "recording" && job._pendingRecordAction === "") {
+                job._levelMonitorDied = true;
+                Logger.log("qml", "stt", "level-monitor-died | id=" + job.sessionId + " code=" + code + " — silence gate disabled for this session");
+            }
+        }
         stdout: SplitParser {
             onRead: data => {
                 const level = parseFloat(data.trim());
-                if (!isNaN(level) && isFinite(level))
+                if (!isNaN(level) && isFinite(level)) {
                     job._audioLevel = Math.min(1.0, Math.max(0.0, level));
+                    job._sessionLevelReadings++;
+                    if (level > 0 && !job._segmentHasAudio) {
+                        job._segmentHasAudio = true;
+                        job._sessionHasAudio = true;
+                        Logger.log("qml", "stt", "mic-live | id=" + job.sessionId + " after=" + ((Date.now() - job._recordingStartTime) / 1000).toFixed(1) + "s");
+                    }
+                }
             }
         }
     }
@@ -1436,6 +1456,7 @@ QtObject {
                 // the user clearly didn't need it. Safe even if nothing was
                 // persisted (rm -f swallows missing-file errors).
                 job._cleanupRecovery();
+                job._storeTranscriptOnce();
                 job.readyForDelivery();
             } else {
                 if (code === 0 && job._transcribedText === "") {
@@ -1488,25 +1509,30 @@ QtObject {
                 // _injectionPath/_Down/_Submitted keep their defaults — this job
                 // is freshly created and no inject step ran.
                 if (job._mesuraIntegrated) {
-                    job._storeMesuraTranscriptOnce();
-                    job._mesuraClipboardFallbackStarted = true;
+                    job._storeTranscriptOnce();
+                    job._mesuraTerminalHandled = true;
+                    job._mesuraRecoveredToClipboard = true;
                     Toaster.toast("Clipboard copy failed", "The transcript remains in Transcriptions.", "error", Toast.Error);
                     job._state = "success";
                 } else if (job._manualClipboardFallback) {
-                    TranscriptionStore.add(job._transcribedText);
+                    job._storeTranscriptOnce();
                     job._setErrorState("clipboard", "Clipboard write failed", "The transcript remains available in Transcriptions", false);
                 } else {
-                    TranscriptionStore.add(job._transcribedText);
+                    job._storeTranscriptOnce();
                     job._state = "success";
                 }
                 return;
             }
             if (job._mesuraIntegrated) {
-                job._sendMesuraDelivery();
+                job._pendingCliphistDelete = job._transcribedText;
+                job.cliphistDeleteTimer.restart();
+                job._mesuraTerminalHandled = true;
+                job._showMesuraSuccessToast();
+                job._state = "success";
                 return;
             }
             if (job._manualClipboardFallback) {
-                TranscriptionStore.add(job._transcribedText);
+                job._storeTranscriptOnce();
                 job._state = "success";
                 return;
             }
@@ -1629,7 +1655,7 @@ QtObject {
             //      lets the wl-paste --watch daemon write the entry to
             //      cliphist's db before we try to remove it. The
             //      Transcriptions tab is unaffected — different store.
-            TranscriptionStore.add(job._transcribedText);
+            job._storeTranscriptOnce();
             if (job._ranWlCopy) {
                 job._pendingCliphistDelete = job._transcribedText;
                 job.cliphistDeleteTimer.restart();

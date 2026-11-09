@@ -8,9 +8,10 @@ import QtQuick
 
 /// Drawer wrapper for the recorder module.
 ///
-/// Uses DrawerVertical for the slide-down animation. Merge mode is handled
-/// implicitly: RecorderRoot.qml sets visibilities.recorder = false when merge
-/// activates, which makes shouldBeActive false → drawer animates closed.
+/// Uses DrawerVertical for the slide-down animation. The drawer is the only
+/// recorder surface: it opens and closes purely through
+/// visibilities.recorder, which RecorderRoot derives from the Mesura
+/// session state.
 ///
 /// Handles both audio recorder and STT modes — the Content component
 /// determines which mode-specific UI to show based on RecordingSessionManager.

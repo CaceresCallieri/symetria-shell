@@ -40,13 +40,17 @@ Item {
         if (mode === "audio" && s === "saving")
             return "processing";
         if (mode === "stt" && s === "transcribed")
-            return SttService.mesuraReservationPending(job?.sessionId ?? "") ? "processing" : "grace";
+            return "processing";
         if (mode === "stt" && (s === "delivering" || s === "confirming"))
             return "confirming";
         return s;
     }
 
     readonly property real audioLevel: job?.audioLevel ?? 0
+    // STT only: the mic is open but has delivered nothing but zeros so far
+    // (a Bluetooth headset switching to HFP). AudioRecorderJob lacks the
+    // property, so audio mode reads false.
+    readonly property bool waitingForMicrophone: mode === "stt" && (job?.waitingForMicrophone ?? false)
     readonly property real elapsedSeconds: job?.elapsedSeconds ?? 0
     property real confirmationPulse: 1
 
@@ -91,10 +95,6 @@ Item {
             "processing": {
                 icon: "hourglass_top",
                 iconColor: Colours.palette.m3secondary
-            },
-            "grace": {
-                icon: "timer",
-                iconColor: Colours.palette.m3primary
             },
             "confirming": {
                 icon: "send",
@@ -216,7 +216,7 @@ Item {
             // ── Compact row: [timer] · [waveform] · [mode icon] ───
             FadeTransition {
                 Layout.alignment: Qt.AlignHCenter
-                show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing" || root.displayState === "grace" || root.displayState === "confirming"
+                show: root.displayState === "recording" || root.displayState === "paused" || root.displayState === "processing" || root.displayState === "confirming"
 
                 RowLayout {
                     id: compactRow
@@ -226,7 +226,7 @@ Item {
                     // Elapsed timer
                     StyledText {
                         opacity: root.displayState === "paused" ? 0.55 : 1.0
-                        text: root.displayState === "grace" ? "0:" + Math.ceil((root.job?.graceRemainingMs ?? 0) / 1000).toString().padStart(2, "0") : RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
+                        text: RecordingSessionManager.formatElapsedTime(root.elapsedSeconds)
                         font.pointSize: Appearance.font.size.small * 0.88
                         font.family: Appearance.font.family.mono
                         color: Colours.palette.m3outline
@@ -253,6 +253,15 @@ Item {
                         containerHeight: root.audioBarContainerHeight
                         active: root.visible && root.visibilities.recorder && RecordingSessionManager.shellOwnsSttPresentation
                         sessionId: root.job?.sessionId ?? ""
+                    }
+
+                    // Words spoken before this disappears are lost — the
+                    // capture is still digital silence.
+                    StyledText {
+                        visible: root.waitingForMicrophone
+                        text: "Mic starting…"
+                        font.pointSize: Appearance.font.size.small * 0.88
+                        color: Colours.palette.m3tertiary
                     }
 
                     StyledText {
@@ -300,27 +309,13 @@ Item {
                         onClicked: RecordingSessionManager.cycleDeliveryMode()
                     }
 
-                    IconButton {
-                        visible: root.mode === "stt" && root.displayState === "grace"
-                        icon: "send"
-                        type: IconButton.Tonal
-                        toggle: false
-                        raised: true
-                        inactiveOnColour: Colours.palette.m3confirm
-                        Accessible.role: Accessible.Button
-                        Accessible.name: "Send now"
-                        onClicked: SttService.sendNow()
-                    }
-
                     // Inline vocab-hint count sibling — placed after the
                     // delivery pill. Previously tried as an anchored child
-                    // floating above-right of the pill; that works in the
-                    // drawer but gets clipped in the bar embed because
-                    // recordingCenterContainer in Bar.qml uses clip: true
-                    // (needed for the horizontal reveal animation) and the
-                    // bar's layer-shell surface caps the vertical extent.
-                    // Keeping the two surfaces consistent is more valuable
-                    // than optimizing the drawer placement separately.
+                    // floating above-right of the pill; the bar's layer-shell
+                    // surface caps the vertical extent, so the drawer keeps
+                    // the same inline placement for consistency across
+                    // recorder surfaces rather than optimizing this one
+                    // placement separately.
                     VocabHintBadge {
                         id: vocabBadge
                         Layout.alignment: Qt.AlignTop

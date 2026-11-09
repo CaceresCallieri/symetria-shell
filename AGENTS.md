@@ -96,7 +96,7 @@ python3 -m pytest scripts/tests -q  # whole suite, never scoped — see below
 **Three ways to silently break these lines.**
 1. Never rewrite `/usr/lib/qt6/bin/qmllint` as a bare `qmllint`. On Arch that resolves to Qt 5.15's tool, which exits 255 with no output on ~93% of this repo. The same trap applies to `qmlformat`.
 2. Never drop `xargs -r`. `run-qmlformat.sh` sweeps *every* tracked file when called with no arguments, so without `-r` a docs-only change turns the change gate into a full-repo sweep that still reads as change-scoped.
-3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the recorder's bar embed broke two of its tests while every other check stayed green.
+3. Never scope `pyrefly` or `pytest` to changed files. A changed signature breaks callers the diff never touched; the committed baseline is what narrows `pyrefly` to new errors. `pytest` is unscoped for a sharper reason: `scripts/tests/test_mesura_dictation.py` asserts over the **source text of QML files**, so a `.qml` edit breaks a `.py` test and a `.py`-scoped run never sees it. That is not hypothetical — deleting the dictation recorder's embed in the bar (the waveform pill it used to render) broke two of its tests while every other check stayed green.
 
 Suppressions live in `.qmllint.ini` (QML categories, each with its reason), `pyproject.toml` (`per-file-ignores`), and inline `# type: ignore[rule]` comments. Keep an inline suppression's marker short and put its explanation on the line *above* — `ruff format` rewraps long lines and will silently carry a trailing marker onto a different line, voiding it.
 
@@ -175,10 +175,10 @@ git fetch upstream           # Update base (tracks upstream/main)
   the socket of Mesura Code (the separate agent app at `~/projects/mesura-code`). Symmetria IDE
   was the second source and no longer feeds it. `services/AgentService.qml` is therefore NOT the
   bar's service: it is dictation plumbing plus agent notifications, it still spawns
-  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 lands — do not delete it, and
+  `scripts/agent-bridge.py`, and it is load-bearing until issue #64 ("Delete the Symmetria IDE agent pipeline once dictation stops needing a Neovim socket") lands — do not delete it, and
   do not let the bar read it. The bar's session visibility flag is `Visibilities.agentBarHidden`,
   though the `agentbar` IPC verbs that mutate it still live in `AgentService`. Why a bar row can
-  carry no workspace, and what that deleted, is in the file headers of `AgentBarContent.qml`,
+  carry no workspace, and what that deletion removed, is in the file headers of `AgentBarContent.qml`,
   `ProjectGroup.qml` and `SymmetriaThreads.qml`.
 
 ## Configuration
@@ -224,7 +224,7 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Transparency compensation** — Components outside the unified `Backgrounds` system appear darker (50% vs 22.5% black). Must manually compute `generalBackgroundAlpha × transparency.base`. → `docs/qml-pitfalls.md`
 
-**XOR mask inversion** — The drawers window input region uses XOR. Expanding `mainRect` SHRINKS the clickable area. The bar must stay OUTSIDE `mainRect` to receive input. → `docs/qml-pitfalls.md`
+**XOR mask inversion** — The drawers window input region uses XOR. Expanding `mainRect` SHRINKS the clickable area. The bar must stay OUTSIDE `mainRect` to receive input. Corollary: every `Panels` child is turned into a `Subtract` Region, so a child whose width OR height reaches 0 carves nothing and the pointer is never delivered there — with no error. Invisible hover zones must floor both dimensions while they are live. → `docs/qml-pitfalls.md`
 
 **Cursor shadowing** — A `visible: true` MouseArea at highest z-order shadows ALL `cursorShape` settings below it, even when `enabled: false`. Overlay MouseAreas need both `enabled` and `visible` guards. → `docs/qml-pitfalls.md`
 
@@ -240,11 +240,11 @@ These are hard-won lessons from past bugs. Each is a brief summary — full expl
 
 **Hypr.activeToplevel null on fresh start** — The Wayland activation guard in `Hypr.qml` may filter out the active toplevel at shell startup before the `activated` protocol event arrives. Fall back to raw `Hyprland.activeToplevel` when you only need Hyprland window identity (address, class, PID) rather than confirmed Wayland activation. → `docs/qml-pitfalls.md`
 
-**Layer-shell focus restoration race** — A layer-shell window with `WlrKeyboardFocus.Exclusive` triggers focus restoration on unmap (wlroots restores whoever held focus before the layer mapped). Synchronous focus dispatches (`Hypr.focusWindow`) lose to the restoration. Always `hide()` first, then `Qt.callLater(() => Hypr.focusWindow(...))`. Dispatchers that don't require an active focus target (e.g. `Hypr.killWindow`) are unaffected.
+**Layer-shell focus restoration race** — A layer-shell window with `WlrKeyboardFocus.Exclusive` triggers focus restoration on unmap (wlroots restores whoever held focus before the layer mapped). Synchronous focus dispatches (`Hypr.focusWindow`) lose to the restoration. Always `hide()` first, then `Qt.callLater(() => Hypr.focusWindow(...))`. Dispatchers that don't require an active focus target (e.g. `Hypr.killWindow`) are unaffected. → `docs/qml-pitfalls.md`
 
 **Hyprland requests are Lua (0.57+)** — `dispatch <x>` evaluates `hl.dispatch(<x>)` and `keyword` is gone (`eval <lua>`). A hyprlang string (`workspace 3`, `keyword bind ...`) is a Lua syntax error that fails with no trace in `qs log`. Build every request through the helpers in `services/Hypr.qml` (`focusWorkspace`, `focusWindow`, `evalLua`, `luaString` for every interpolated value); never hand-write a dispatcher string at a call site. Argument shapes: `/usr/share/hypr/stubs/hl.meta.lua` and Hyprland's `LuaBindingsDispatchers.cpp`.
 
-**Never read a workspace's `.id`** — Hyprland 0.57 gives named and special workspaces no numeric id, and Quickshell reports `-1` for all of them, so an `.id` comparison matches every named workspace at once. Use `Hypr.workspaceKey(workspace)` (or `Hypr.workspaceKeyForName(name)`), which keeps one unique int per workspace. The named workspaces themselves come from the compositor's catalog (`services/WorkspaceCatalog.qml`). → `docs/qml-pitfalls.md`
+**Never read a workspace's `.id`** — Hyprland 0.57 gives named and special workspaces no numeric id, and Quickshell reports `-1` for all of them, so an `.id` comparison matches every named workspace at once. Use `Hypr.workspaceKey(workspace)` (or `Hypr.workspaceKeyForName(name)`), which keeps one unique int per workspace. The named workspaces themselves come from the compositor's catalog (`services/WorkspaceCatalog.qml`).
 
 **Electron tray icons ship pixmap bytes, and older builds share one id** — Electron apps register an embedded pixmap (no file path), and older Electron builds all use SNI id `chrome_status_icon_1`, which `SystemTrayItem` cannot tell apart (it exposes neither bus name nor PID). Current Discord registers `discord_status_icon_1` (verified 2026-10-12); Heroic and Altus are unverified. Do NOT auto-theme them via id heuristics. Override per app with `bar.tray.iconSubs`, matched on `id` or `title`. → `docs/tray-icon-theming.md`
 
@@ -290,7 +290,7 @@ Detailed documentation in `docs/` — read on-demand when working on specific ar
 
 **Investigations:**
 - `*.investigation.md` files — Debug session logs for past issues
-- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH. Feeds dictation and notifications only — NOT the agent bar
+- [`agent-state-diagnostics.md`](docs/agent-state-diagnostics.md) — Symmetria IDE's hook → bridge → QML pipeline: stuck-state watchdog, SIGUSR1 dump, `agentbar diagnose` IPC, remote agents over SSH (bar rendering removed with the IDE; the doc keeps the bridge's tunnel setup and detection). Feeds dictation and notifications only — NOT the agent bar
 
 ## Updating from Upstream
 

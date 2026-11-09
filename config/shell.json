@@ -135,14 +135,12 @@
         {
           "icon": "mat:lightbulb",
           "name": "special"
-        },
+        }
+      ],
+      "namedWorkspaceIcons": [
         {
-          "icon": "mat:phone",
-          "name": "communications"
-        },
-        {
-          "icon": "mat:auto_stories",
-          "name": "note-taking"
+          "icon": "mat:target",
+          "name": "fps-game"
         }
       ]
     },
@@ -543,7 +541,7 @@
     }
   },
   "agentbar": {
-    "enabled": true,
+    "enabled": false,
     "sizes": {
       "innerHeight": 18
     }
