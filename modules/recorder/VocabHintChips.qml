@@ -4,6 +4,7 @@ import qs.components
 import qs.components.controls
 import qs.services
 import qs.config
+import Quickshell
 import QtQuick
 
 /// Vocabulary hint chip row for STT sessions.
@@ -17,8 +18,14 @@ Row {
 
     spacing: Appearance.spacing.smaller
 
+    // ScriptModel, not a bare array: sessionVocabHints is re-assigned on every
+    // add/remove, and a plain JS array model resets ALL delegates (the
+    // docs/qml-pitfalls.md Repeater pitfall) — chips hold hover state, so an
+    // unrelated chip would visibly flicker when a sibling is deleted.
     Repeater {
-        model: SttService.sessionVocabHints
+        model: ScriptModel {
+            values: SttService.sessionVocabHints
+        }
 
         StyledRect {
             id: hintChipBg

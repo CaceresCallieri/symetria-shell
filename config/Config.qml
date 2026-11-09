@@ -234,16 +234,28 @@ Singleton {
                 showBluetooth: bar.status.showBluetooth,
                 showBattery: bar.status.showBattery,
                 showPowerProfile: bar.status.showPowerProfile,
-                showLockStatus: bar.status.showLockStatus
+                showLockStatus: bar.status.showLockStatus,
+                showDictationStatus: bar.status.showDictationStatus
             },
             clock: {
                 showIcon: bar.clock.showIcon
             },
+            date: {
+                showIcon: bar.date.showIcon
+            },
             sizes: {
                 innerWidth: bar.sizes.innerWidth,
+                iconSize: bar.sizes.iconSize,
+                edgePadding: bar.sizes.edgePadding,
                 trayMenuWidth: bar.sizes.trayMenuWidth,
                 batteryWidth: bar.sizes.batteryWidth,
-                networkWidth: bar.sizes.networkWidth
+                networkWidth: bar.sizes.networkWidth,
+                weatherWidth: bar.sizes.weatherWidth,
+                updatesWidth: bar.sizes.updatesWidth,
+                updatesProgressWidth: bar.sizes.updatesProgressWidth,
+                updatesPasswordWidth: bar.sizes.updatesPasswordWidth,
+                ramWidth: bar.sizes.ramWidth,
+                calendarWidth: bar.sizes.calendarWidth
             },
             timePill: {
                 showClock: bar.timePill.showClock,
@@ -262,7 +274,8 @@ Singleton {
         return {
             thickness: border.thickness,
             sideThickness: border.sideThickness,
-            rounding: border.rounding
+            rounding: border.rounding,
+            keepAliveMargin: border.keepAliveMargin
         };
     }
 
@@ -363,6 +376,7 @@ Singleton {
             commands: {
                 logout: session.commands.logout,
                 shutdown: session.commands.shutdown,
+                suspend: session.commands.suspend,
                 hibernate: session.commands.hibernate,
                 reboot: session.commands.reboot
             },
@@ -467,6 +481,8 @@ Singleton {
             gpuType: services.gpuType,
             visualiserBars: services.visualiserBars,
             audioIncrement: services.audioIncrement,
+            brightnessIncrement: services.brightnessIncrement,
+            minBrightness: services.minBrightness,
             maxVolume: services.maxVolume,
             defaultPlayer: services.defaultPlayer,
             playerAliases: services.playerAliases
@@ -510,11 +526,26 @@ Singleton {
             apiKey: stt.apiKey,
             backend: stt.backend,
             model: stt.model,
+            longAudioModel: stt.longAudioModel,
+            longAudioThresholdSec: stt.longAudioThresholdSec,
+            mode: stt.mode,
             autoHideDelay: stt.autoHideDelay,
             processingTimeout: stt.processingTimeout,
             deliveryMode: stt.deliveryMode,
             voiceTag: stt.voiceTag,
             vocabularyHints: stt.vocabularyHints,
+            streaming: {
+                backend: stt.streaming.backend,
+                showPartials: stt.streaming.showPartials,
+                partialInterval: stt.streaming.partialInterval,
+                local: {
+                    engine: stt.streaming.local.engine,
+                    model: stt.streaming.local.model,
+                    device: stt.streaming.local.device,
+                    computeType: stt.streaming.local.computeType,
+                    resident: stt.streaming.local.resident
+                }
+            },
             recording: {
                 format: stt.recording.format,
                 sampleRate: stt.recording.sampleRate,
