@@ -15,11 +15,20 @@ import struct
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 SHELL_ROOT = Path(__file__).resolve().parents[1]
 MAX_MESSAGE_BYTES = 1024 * 1024
+
+
+def run_cli(entry_point: Callable[[], None]) -> None:
+    try:
+        entry_point()
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        print(f"Symmetria screen sharing: {error}", file=sys.stderr)
+        sys.exit(1)
 
 
 def command(arguments: list[str], timeout: float = 5, **kwargs: Any) -> bytes:
@@ -402,6 +411,8 @@ def serve(
             while b"\n" in buffer:
                 line, buffer = buffer.split(b"\n", 1)
                 message = json.loads(line)
+                if not isinstance(message, dict):
+                    raise ValueError("Invalid shell message")
                 if message.get("token") != token:
                     raise ValueError("Invalid screen-sharing request token")
                 if message.get("type") in ("cancel", "confirm"):
@@ -481,8 +492,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-        print(f"Symmetria screen sharing: {error}", file=sys.stderr)
-        sys.exit(1)
+    run_cli(main)

@@ -21,7 +21,22 @@ QtObject {
     readonly property var items: (context.sources?.[mode] ?? []).filter(source => `${source.title} ${source.app} ${source.detail}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())) // intentional var: filtered source objects
     readonly property var current: items[currentIndex] ?? null // intentional var: selected source
     readonly property bool canConfirm: mode === "region" ? output !== null && region !== null : current !== null
-    readonly property string regionSize: output && region ? `${Math.round(output.width * region.width)} × ${Math.round(output.height * region.height)} px` : "Arrastrá para marcar el área que querés compartir."
+    readonly property var regionPixelRect: regionPixels() // intentional var: rounded output-local rectangle or null
+    readonly property string regionSize: regionPixelRect ? `${regionPixelRect.width} × ${regionPixelRect.height} px` : "Arrastrá para marcar el área que querés compartir."
+
+    function regionPixels(): var {
+        if (!output || !region)
+            return null;
+        // Match the adapter: rounding the origin can reduce the remaining pixels.
+        const x = Math.floor(region.x * output.width + 0.5);
+        const y = Math.floor(region.y * output.height + 0.5);
+        return {
+            x,
+            y,
+            width: Math.min(output.width - x, Math.floor(region.width * output.width + 0.5)),
+            height: Math.min(output.height - y, Math.floor(region.height * output.height + 0.5))
+        };
+    }
 
     function load(value: var): void {
         context = value;

@@ -41,7 +41,7 @@ Item {
                 readonly property real cropRight: cropLeft + (crop?.width ?? 0) * stage.width
                 readonly property real cropBottom: cropTop + (crop?.height ?? 0) * stage.height
                 x: index === 1 || index === 3 ? cropLeft : index === 2 ? cropRight : 0
-                y: index === 3 ? cropBottom : index === 0 || index === 2 ? 0 : 0
+                y: index === 3 ? cropBottom : 0
                 width: index === 1 || index === 3 ? cropRight - cropLeft : index === 0 ? cropLeft : stage.width - cropRight
                 height: index === 1 ? cropTop : index === 3 ? stage.height - cropBottom : stage.height
                 color: "#99000000"

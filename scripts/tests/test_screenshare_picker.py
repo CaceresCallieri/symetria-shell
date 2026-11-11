@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -84,6 +85,11 @@ def test_region_uses_logical_geometry_and_half_up_rounding():
     context["outputs"][0]["width"] = 5
     request["region"] = {"x": 0.1, "y": 0, "width": 0.5, "height": 1}
     assert "@1,0,3,1600" in picker.serialize_selection(context, request)
+    request["region"] = {"x": 0.3, "y": 0, "width": 0.7, "height": 1}
+    assert "@2,0,3,1600" in picker.serialize_selection(context, request)
+    context["outputs"][0]["height"] = 5
+    request["region"] = {"x": 0.3, "y": 0.3, "width": 0.7, "height": 0.7}
+    assert "@2,2,3,3" in picker.serialize_selection(context, request)
 
 
 @pytest.mark.parametrize(
@@ -154,6 +160,10 @@ with socket.socket(socket.AF_UNIX) as connection:
  if mode=="bad-token":
   file.write(b'{"type":"cancel","token":"foreign"}\\n')
   sys.exit(0)
+ if mode.startswith("non-object-"):
+  value={"array":[],"null":None,"string":"text","boolean":True,"number":42}[mode.removeprefix("non-object-")]
+  file.write((json.dumps(value)+"\\n").encode())
+  sys.exit(0)
  if mode=="cancel": send({"type":"cancel"})
  else:
   send({"type":"confirm","mode":"windows","id":"window:foreign","remember":False})
@@ -177,6 +187,13 @@ with socket.socket(socket.AF_UNIX) as connection:
         ("cancel", ""),
         ("disconnect", ""),
         ("bad-token", ""),
+        ("non-object-array", ""),
+        ("non-object-null", ""),
+        ("non-object-string", ""),
+        ("non-object-boolean", ""),
+        ("non-object-number", ""),
+        ("busy", ""),
+        ("invalid", ""),
     ],
 )
 def test_actual_adapter_cli(tmp_path, mode, expected):
@@ -207,10 +224,9 @@ def test_actual_adapter_cli(tmp_path, mode, expected):
             "grim": "import sys,pathlib\npathlib.Path(sys.argv[-1]).write_bytes(b'preview fixture')",
             "qs": f"import subprocess,sys\nsubprocess.Popen([{sys.executable!r},{str(broker)!r},sys.argv[-2],sys.argv[-1],{mode!r},{str(report)!r}],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\nprint('accepted')",
         }
-        for name, body in commands.items():
-            executable = binary / name
-            executable.write_text(f"#!{sys.executable}\n{body}\n")
-            executable.chmod(0o755)
+        if mode in ("busy", "invalid"):
+            commands["qs"] = f"print({mode!r})"
+        write_fixture_commands(binary, commands)
         # Only the current Python and fixture executables run in this isolated PATH.
         result = subprocess.run(  # noqa: S603
             [sys.executable, str(Path(picker.__file__)), "--allow-token"],
@@ -225,20 +241,76 @@ def test_actual_adapter_cli(tmp_path, mode, expected):
             },
         )
         assert result.stdout == expected
-        assert result.returncode == (1 if mode == "bad-token" else 0), result.stderr
+        rejected = mode in ("bad-token", "busy", "invalid") or mode.startswith(
+            "non-object-"
+        )
+        assert result.returncode == (1 if rejected else 0), result.stderr
+        assert "Traceback" not in result.stderr
         if mode == "bad-token":
             assert "Invalid screen-sharing request token" in result.stderr
+        if mode.startswith("non-object-"):
+            assert "Invalid shell message" in result.stderr
         assert not list(root.glob("symmetria-share-*"))
-        if mode not in ("disconnect", "bad-token"):
+        if mode != "disconnect" and not rejected:
             observed = json.loads(report.read_text())
             assert observed["passed"]
             assert observed["context"]["rememberDefault"]
 
 
-def test_qml_keyboard_and_region_components():
+def write_fixture_commands(binary, commands):
+    for name, body in commands.items():
+        executable = binary / name
+        executable.write_text(f"#!{sys.executable}\n{body}\n")
+        executable.chmod(0o755)
+
+
+def test_manager_cli_reports_refusal_without_traceback(tmp_path):
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    config = tmp_path / "config"
+    desktop_environment = f"XDG_CONFIG_HOME={config}\nXDG_DATA_HOME={tmp_path / 'data'}"
+    write_fixture_commands(
+        binary,
+        {
+            "systemctl": f"import sys\nprint({desktop_environment!r} if 'show-environment' in sys.argv else '0')",
+            "qs": "print('{\"ready\":false}')",
+        },
+    )
+    # All desktop entry points resolve to the isolated fixture executables.
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(Path(picker.__file__).with_name("configure-screenshare-picker.py")),
+            "enable",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"]},
+    )
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert result.stderr == (
+        "Symmetria screen sharing: The native picker is unavailable or busy.\n"
+    )
+    assert not config.exists()
+
+
+def test_qml_keyboard_region_and_request_lifecycle(tmp_path):
     runner = Path("/usr/lib/qt6/bin/qmltestrunner")
     if not runner.exists():
         pytest.skip("Qt6 qmltestrunner is unavailable")
+    imports = tmp_path / "imports"
+    shutil.copytree(Path(__file__).parent / "fixtures/screenshare-imports", imports)
+    native = imports / "NativeShare"
+    native.mkdir()
+    (native / "qmldir").write_text(
+        "module NativeShare\nsingleton ScreenShare 1.0 ScreenShare.qml\n"
+    )
+    # Only transport types are fake. Load the unchanged production singleton.
+    (native / "ScreenShare.qml").symlink_to(
+        Path(picker.__file__).parents[1] / "services/ScreenShare.qml"
+    )
     # The runner path is the installed Qt6 test executable.
     result = subprocess.run(  # noqa: S603
         [
@@ -257,6 +329,7 @@ def test_qml_keyboard_and_region_components():
             **os.environ,
             "QT_QPA_PLATFORM": "offscreen",
             "QT_QUICK_BACKEND": "software",
+            "QML2_IMPORT_PATH": str(imports),
         },
     )
     assert result.returncode == 0, result.stdout + result.stderr

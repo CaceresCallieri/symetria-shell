@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from screenshare_picker import command, shell_ipc
+from screenshare_picker import command, run_cli, shell_ipc
 
 SOURCE = Path(__file__).resolve().parent
 NATIVE_PICKER = SOURCE / "screenshare_picker.py"
@@ -224,4 +224,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run_cli(main)

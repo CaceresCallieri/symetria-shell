@@ -269,14 +269,8 @@ KeyboardController {
                 checked: selection.remember
                 Accessible.name: "Recordar esta selección"
                 onToggled: selection.remember = checked
-                Rectangle {
-                    anchors.fill: parent
-                    anchors.margins: -3
-                    color: "transparent"
-                    radius: height / 2
-                    border.width: 2
-                    border.color: Colours.palette.m3onSurface
-                    visible: rememberControl.activeFocus
+                FocusRing {
+                    target: rememberControl
                 }
             }
         }

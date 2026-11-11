@@ -189,4 +189,38 @@ TestCase {
             }
         }
     }
+
+    function test_region_label_matches_clamped_pixel_geometry() {
+        selection.load({
+            outputs: [
+                {
+                    name: "small",
+                    width: 5,
+                    height: 5
+                }
+            ],
+            sources: {},
+            preferredOutput: "small"
+        });
+        selection.region = {
+            x: 0.3,
+            y: 0.3,
+            width: 0.7,
+            height: 0.7
+        };
+        compare(selection.regionPixelRect.x, 2);
+        compare(selection.regionPixelRect.y, 2);
+        compare(selection.regionPixelRect.width, 3);
+        compare(selection.regionPixelRect.height, 3);
+        compare(selection.regionSize, "3 × 3 px");
+        selection.region = {
+            x: 0.1,
+            y: 0,
+            width: 0.5,
+            height: 1
+        };
+        compare(selection.regionSize, "3 × 5 px");
+        selection.region = null;
+        compare(selection.regionPixelRect, null);
+    }
 }

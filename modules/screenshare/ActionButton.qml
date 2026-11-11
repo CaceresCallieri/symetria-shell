@@ -36,14 +36,8 @@ Button {
             radius: width / 2
             color: root.hovered ? "#ff786f" : "#ff5f57"
         }
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -3
-            color: "transparent"
-            radius: height / 2
-            border.width: 2
-            border.color: Colours.palette.m3onSurface
-            visible: root.activeFocus
+        FocusRing {
+            target: root
         }
     }
 
