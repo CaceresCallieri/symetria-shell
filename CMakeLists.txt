@@ -64,6 +64,11 @@ if("shell" IN_LIST ENABLE_MODULES)
         install(DIRECTORY ${dir} DESTINATION "${INSTALL_QSCONFDIR}")
     endforeach()
     install(FILES shell.qml LICENSE DESTINATION "${INSTALL_QSCONFDIR}")
+    install(PROGRAMS
+        scripts/screenshare_picker.py
+        scripts/configure-screenshare-picker.py
+        DESTINATION "${INSTALL_QSCONFDIR}/scripts"
+    )
 endif()
 
 # Clear Quickshell QML cache after install to prevent stale bytecode.
