@@ -93,4 +93,5 @@ jobs:
       # `uv tool install pyrefly` puts on a developer machine.
       - name: Run pyrefly
         if: ${{ !cancelled() }}
-        run: nix develop .#lint --command uvx pyrefly@1.2.0 check
+        # Pyrefly resolves test imports inside the isolated uvx environment.
+        run: nix develop .#lint --command uvx --with pytest pyrefly@1.2.0 check
