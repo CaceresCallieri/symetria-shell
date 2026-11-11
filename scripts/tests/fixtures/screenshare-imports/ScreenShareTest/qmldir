@@ -1,0 +1,2 @@
+module ScreenShareTest
+singleton Bridge 1.0 Bridge.qml

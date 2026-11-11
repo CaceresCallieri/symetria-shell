@@ -18,6 +18,7 @@ import "modules/keycaster"
 import "modules/keychords" as KeyChordsModule
 import "modules/killconfirm" as KillConfirmModule
 import "modules/windowoverview" as WindowOverviewModule
+import "modules/screenshare" as ScreenShareModule
 import Quickshell
 import Quickshell.Io
 import QtQuick
@@ -59,6 +60,7 @@ ShellRoot {
     }
     WindowOverviewModule.Wrapper {}
     WindowOverviewModule.OverviewSurface {}
+    ScreenShareModule.Wrapper {}
     Lock {
         id: lock
     }
