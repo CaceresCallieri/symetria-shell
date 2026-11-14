@@ -649,11 +649,13 @@ Singleton {
 
     function _unregisterSessionBinds(): void {
         // The unbinds also remove the config's recorder binds on Alt+Space and
-        // Alt+X, so those two are restored here.
+        // Alt+X. The config's symmetria_bind_recorder_keys binds them again, so
+        // they keep yielding to Mesura Code dictation (keybindings.lua); a config
+        // without it gets plain binds back.
         const recorderIpcCommand = _ipcCommand("recorder");
         const statements = _sessionBinds.map(b => Hypr.unbindLua(_sessionBindKeys(b)));
-        statements.push(Hypr.rebindToCommandLua("ALT + space", `${recorderIpcCommand} pause`, `{ description = ${Hypr.luaString("Pause/Resume recording")} }`));
-        statements.push(Hypr.rebindToCommandLua("ALT + X", `${recorderIpcCommand} cancel`, `{ description = ${Hypr.luaString("Cancel recording")} }`));
+        const plainRecorderBinds = [Hypr.rebindToCommandLua("ALT + space", `${recorderIpcCommand} pause`, `{ description = ${Hypr.luaString("Pause/Resume recording")} }`), Hypr.rebindToCommandLua("ALT + X", `${recorderIpcCommand} cancel`, `{ description = ${Hypr.luaString("Cancel recording")} }`)];
+        statements.push(`if symmetria_bind_recorder_keys then symmetria_bind_recorder_keys() else ${plainRecorderBinds.join(" ")} end`);
         Hypr.evalLua(statements.join(" "));
     }
 
