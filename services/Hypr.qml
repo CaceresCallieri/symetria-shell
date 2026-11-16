@@ -8,6 +8,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
+import "../utils/WorkspaceOrdering.js" as WorkspaceOrdering
 
 Singleton {
     id: root
@@ -37,6 +38,11 @@ Singleton {
     property string _lastUrgentAddr: ""
     property real _lastUrgentTime: 0
     property list<string> _pendingUrgentRetries: []
+    // Identity keys must not determine display order. Quickshell 0.3.2 loses
+    // named workspace IDs, so read the compositor's creation order separately.
+    // intentional var: ordered IPC identities {id, name}.
+    property var _workspaceOrder: []
+    property bool _workspaceOrderPending: false
 
     signal configReloaded
 
@@ -171,9 +177,8 @@ Singleton {
         return workspaceKeyForName(workspace.name ?? "");
     }
 
-    /// Key of a workspace by name. Catalog workspaces (WorkspaceCatalog) get
-    /// keys in catalog order, so the bar's ascending sort shows them in that
-    /// order; any other name hashes into a disjoint negative range.
+    /// Identity key of a workspace by name, independent of display order.
+    /// Catalog names use one negative range; other names use a disjoint range.
     function workspaceKeyForName(name: string): int {
         if (/^\d+$/.test(name))
             return parseInt(name, 10);
@@ -222,9 +227,8 @@ Singleton {
     // - activeWsId: ensured to appear even if empty, so the active slot never
     //   collapses out of the pill.
     //
-    // Sort order: named (negative) → regular (positive). The simple ascending
-    // sort the top bar originally used is preserved because named (negative)
-    // IDs naturally precede positive ones.
+    // Match Hyprland's e/m selectors instead of sorting synthetic identity keys.
+    // The catalog controls icons and empty named slots, never navigation order.
     function displayedWorkspaceIds(activeWsId: int): var {
         const all = Hyprland.workspaces.values;
         const regularAndNamed = all.filter(w => !w.name.startsWith("special:"));
@@ -241,23 +245,15 @@ Singleton {
         if (!ids.includes(activeWsId))
             ids.push(activeWsId);
 
-        const nameById = {};
-        for (const w of all)
-            nameById[root.workspaceKey(w)] = w.name;
-
-        return ids.sort((a, b) => {
-            const catA = _wsSortCategory(a, nameById[a] ?? "");
-            const catB = _wsSortCategory(b, nameById[b] ?? "");
-            if (catA !== catB)
-                return catA - catB;
-            return a - b;
-        });
+        const order = root._workspaceOrder.map(workspace => root.workspaceKey(workspace));
+        // A model event can arrive before the IPC reply. Keep unmatched slots
+        // visible until that reply includes them, rather than dropping them.
+        return [...order.filter(id => ids.includes(id)), ...ids.filter(id => !order.includes(id))];
     }
 
-    function _wsSortCategory(wsId: int, wsName: string): int {
-        if (wsId < 0)
-            return 0;
-        return 1;
+    function refreshWorkspaceOrder(): void {
+        root._workspaceOrderPending = true;
+        workspaceOrderRefresh.restart();
     }
 
     function reloadDynamicConfs(): void {
@@ -372,6 +368,8 @@ Singleton {
 
         function onRawEvent(event: HyprlandEvent): void {
             const n = event.name;
+            if (n.includes("workspace") || n === "configreloaded")
+                root.refreshWorkspaceOrder();
             if (n.endsWith("v2"))
                 return;
 
@@ -394,6 +392,42 @@ Singleton {
             } else if (n.includes("window") || n.includes("group") || ["pin", "fullscreen", "changefloatingmode", "minimize"].includes(n)) {
                 Hyprland.refreshToplevels();
             }
+        }
+    }
+
+    Timer {
+        id: workspaceOrderRefresh
+        interval: 0
+        onTriggered: {
+            if (!workspaceOrderProcess.running) {
+                root._workspaceOrderPending = false;
+                workspaceOrderProcess.running = true;
+            }
+        }
+    }
+
+    Process {
+        id: workspaceOrderProcess
+        command: ["hyprctl", "-j", "workspaces"]
+        running: true
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const order = WorkspaceOrdering.fromSnapshot(JSON.parse(text));
+                    if (JSON.stringify(order) !== JSON.stringify(root._workspaceOrder))
+                        root._workspaceOrder = order;
+                } catch (error) {
+                    console.warn(`[Hypr] ignoring unreadable workspace order: ${error.message}`);
+                }
+            }
+        }
+
+        onExited: (code, status) => {
+            if (code !== 0)
+                console.warn(`[Hypr] workspace order query failed: ${code}`);
+            if (root._workspaceOrderPending)
+                workspaceOrderRefresh.restart();
         }
     }
 

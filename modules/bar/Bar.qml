@@ -322,6 +322,8 @@ Item {
             const specialWs = mon?.lastIpcObject.specialWorkspace.name;
             if (specialWs?.length > 0)
                 Hypr.toggleSpecialWorkspace(specialWs);
+            else if (Config.bar.workspaces.showOnlyOccupied)
+                Hypr.focusWorkspace(`e${angleDelta.y > 0 ? "-" : "+"}1`);
             else if (angleDelta.y < 0 || (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.workspaceKey(mon.activeWorkspace) : Hypr.activeWsId) > 1)
                 Hypr.focusWorkspace(`r${angleDelta.y > 0 ? "-" : "+"}1`);
             return;
