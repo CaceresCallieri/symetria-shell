@@ -10,6 +10,15 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
+def extract_function(source, name, indentation=4):
+    prefix = " " * indentation
+    match = re.search(
+        rf"^{prefix}function {name}\(.*?^{prefix}}}$", source, re.M | re.S
+    )
+    assert match is not None, f"Missing production function: {name}"
+    return match.group()
+
+
 def test_workspace_order_and_navigation(tmp_path):
     runner = Path("/usr/lib/qt6/bin/qmltestrunner")
     if not runner.exists():
@@ -19,6 +28,8 @@ def test_workspace_order_and_navigation(tmp_path):
     (module / "qmldir").write_text(
         "module WorkspaceTest\n"
         "HyprHarness 1.0 HyprHarness.qml\n"
+        "BarHarness 1.0 BarHarness.qml\n"
+        "singleton Hypr 1.0 Hypr.qml\n"
         "singleton Hyprland 1.0 Hyprland.qml\n"
         "singleton Config 1.0 Config.qml\n"
         "singleton WorkspaceCatalog 1.0 WorkspaceCatalog.qml\n"
@@ -63,15 +74,11 @@ def test_workspace_order_and_navigation(tmp_path):
         "displayedWorkspaceIds",
         "refreshWorkspaceOrder",
     ):
-        match = re.search(rf"^    function {name}\(.*?^    }}$", source, re.M | re.S)
-        assert match is not None, f"Missing production function: {name}"
-        functions.append(match.group())
-    event_handler = re.search(
-        r"^        function onRawEvent\(.*?^        }$", source, re.M | re.S
-    )
-    assert event_handler is not None
+        functions.append(extract_function(source, name))
     functions.append(
-        event_handler.group().replace("event: HyprlandEvent", "event: var")
+        extract_function(source, "onRawEvent", 8).replace(
+            "event: HyprlandEvent", "event: var"
+        )
     )
     transport = source[
         source.index("    Timer {\n        id: workspaceOrderRefresh") : source.index(
@@ -82,11 +89,28 @@ def test_workspace_order_and_navigation(tmp_path):
         "import QtQuick\nimport WorkspaceTest\n"
         'import "../WorkspaceOrdering.js" as WorkspaceOrdering\n'
         "Item {\nid: root\nproperty var _workspaceOrder: []\n"
+        "property var calls: []\nproperty int activeWsId: 1\n"
+        "property var focusedMonitor: null\nproperty var screenMonitor: null\n"
+        "function monitorFor(screen) { return screenMonitor }\n"
+        'function focusWorkspace(selector) { calls = [...calls, {action: "focus", selector: selector}] }\n'
+        'function toggleSpecialWorkspace(name) { calls = [...calls, {action: "special", name: name}] }\n'
         "property bool _workspaceOrderPending: false\n"
         "property alias orderProcess: workspaceOrderProcess\n"
         "signal configReloaded()\nfunction reloadDynamicConfs() {}\n"
         + "\n".join(functions)
         + transport
+        + "\n}\n"
+    )
+    (module / "Hypr.qml").write_text(
+        "pragma Singleton\nimport QtQuick\nimport WorkspaceTest\nHyprHarness {}\n"
+    )
+    # Execute the actual wheel entry point, with only outgoing IPC recorded.
+    bar_source = (REPOSITORY_ROOT / "modules/bar/Bar.qml").read_text()
+    (module / "BarHarness.qml").write_text(
+        "import QtQuick\nimport WorkspaceTest\nItem {\n"
+        "property var screen: ({width: 400})\n"
+        "Item { id: centerLoader; x: 100; width: 100 }\n"
+        + extract_function(bar_source, "handleWheel")
         + "\n}\n"
     )
     (tmp_path / "WorkspaceOrdering.js").symlink_to(
@@ -111,11 +135,3 @@ def test_workspace_order_and_navigation(tmp_path):
         },
     )
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_dynamic_wheel_uses_the_keyboard_workspace_order():
-    source = (REPOSITORY_ROOT / "modules/bar/Bar.qml").read_text()
-    assert (
-        "else if (Config.bar.workspaces.showOnlyOccupied)\n"
-        '                Hypr.focusWorkspace(`e${angleDelta.y > 0 ? "-" : "+"}1`);'
-    ) in source

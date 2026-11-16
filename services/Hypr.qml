@@ -368,7 +368,11 @@ Singleton {
 
         function onRawEvent(event: HyprlandEvent): void {
             const n = event.name;
-            if (n.includes("workspace") || n === "configreloaded")
+            // Match Hyprland v0.57.2's workspace postEvent sites. Filtering only
+            // create/destroy/rename/move missed changeworkspaceid, which left
+            // numbered slots misordered after an ID change. Include ID changes.
+            // Focus changes leave navigation order unchanged.
+            if (/^(create|destroy|rename|move)workspace(v2)?$/.test(n) || n === "changeworkspaceid" || n === "configreloaded")
                 root.refreshWorkspaceOrder();
             if (n.endsWith("v2"))
                 return;

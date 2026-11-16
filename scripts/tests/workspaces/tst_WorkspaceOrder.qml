@@ -11,6 +11,10 @@ TestCase {
         id: hypr
     }
 
+    BarHarness {
+        id: bar
+    }
+
     function workspace(name, id, windows) {
         return {
             name: name,
@@ -43,6 +47,7 @@ TestCase {
             }
         };
         hypr._workspaceOrder = [];
+        Hypr.calls = [];
     }
 
     function test_transport_startup_and_coalesced_events() {
@@ -57,6 +62,260 @@ TestCase {
         tryCompare(hypr.orderProcess, "starts", previousStarts + 1);
         hypr.orderProcess.finish(JSON.stringify([workspace("files", -1, 1), workspace("agents", -1, 1)]), 0);
         compare(names(hypr._workspaceOrder), ["agents", "files"]);
+        wait(10);
+        compare(hypr.orderProcess.starts, previousStarts + 1);
+        verify(!hypr.orderProcess.running);
+    }
+
+    function test_config_reload_refreshes_workspace_order() {
+        const previousStarts = hypr.orderProcess.starts;
+        hypr.onRawEvent({
+            name: "configreloaded"
+        });
+        tryCompare(hypr.orderProcess, "starts", previousStarts + 1);
+        hypr.orderProcess.finish("[]", 0);
+    }
+
+    function test_focus_events_do_not_query_workspace_order() {
+        const previousStarts = hypr.orderProcess.starts;
+        hypr.onRawEvent({
+            name: "workspace"
+        });
+        hypr.onRawEvent({
+            name: "workspacev2"
+        });
+        wait(10);
+        compare(hypr.orderProcess.starts, previousStarts);
+        verify(!hypr.orderProcess.running);
+    }
+
+    function test_refresh_events_data() {
+        return ["createworkspace", "createworkspacev2", "destroyworkspace", "destroyworkspacev2", "renameworkspace", "moveworkspace", "moveworkspacev2", "changeworkspaceid"].map(name => ({
+                    tag: name,
+                    name: name
+                }));
+    }
+
+    function test_refresh_events(data) {
+        const previousStarts = hypr.orderProcess.starts;
+        hypr.onRawEvent({
+            name: data.name
+        });
+        tryCompare(hypr.orderProcess, "starts", previousStarts + 1);
+        hypr.orderProcess.finish("[]", 0);
+    }
+
+    function test_workspace_id_change_updates_numeric_order() {
+        const original = [workspace("5", 5, 1), workspace("9", 9, 1)];
+        Hyprland.workspaces = {
+            values: original
+        };
+        hypr._workspaceOrder = WorkspaceOrdering.fromSnapshot(original);
+        compare(hypr.displayedWorkspaceIds(5), [5, 9]);
+        const changed = [original[0], workspace("1", 1, 1)];
+        Hyprland.workspaces = {
+            values: changed
+        };
+        hypr.onRawEvent({
+            name: "changeworkspaceid"
+        });
+        tryCompare(hypr.orderProcess, "running", true);
+        hypr.orderProcess.finish(JSON.stringify(changed), 0);
+        compare(hypr.displayedWorkspaceIds(1), [1, 5]);
+    }
+
+    function wheelMonitor(id, special) {
+        return {
+            activeWorkspace: workspace(id > 0 ? String(id) : "agents", id, 1),
+            lastIpcObject: {
+                specialWorkspace: {
+                    name: special
+                }
+            }
+        };
+    }
+
+    function test_wheel_data() {
+        return [
+            {
+                tag: "dynamic-left-named",
+                dynamic: true,
+                key: -1,
+                delta: 120,
+                expected: [
+                    {
+                        action: "focus",
+                        selector: "e-1"
+                    }
+                ]
+            },
+            {
+                tag: "dynamic-right-named",
+                dynamic: true,
+                key: -1,
+                delta: -120,
+                expected: [
+                    {
+                        action: "focus",
+                        selector: "e+1"
+                    }
+                ]
+            },
+            {
+                tag: "fixed-left",
+                dynamic: false,
+                key: 3,
+                delta: 120,
+                expected: [
+                    {
+                        action: "focus",
+                        selector: "r-1"
+                    }
+                ]
+            },
+            {
+                tag: "fixed-right",
+                dynamic: false,
+                key: 3,
+                delta: -120,
+                expected: [
+                    {
+                        action: "focus",
+                        selector: "r+1"
+                    }
+                ]
+            },
+            {
+                tag: "fixed-first-left",
+                dynamic: false,
+                key: 1,
+                delta: 120,
+                expected: []
+            },
+            {
+                tag: "fixed-named-left",
+                dynamic: false,
+                key: -1,
+                delta: 120,
+                expected: []
+            },
+            {
+                tag: "fixed-named-right",
+                dynamic: false,
+                key: -1,
+                delta: -120,
+                expected: [
+                    {
+                        action: "focus",
+                        selector: "r+1"
+                    }
+                ]
+            },
+            {
+                tag: "dynamic-horizontal",
+                dynamic: true,
+                key: -1,
+                delta: 0,
+                expected: []
+            },
+            {
+                tag: "fixed-horizontal",
+                dynamic: false,
+                key: 3,
+                delta: 0,
+                expected: []
+            },
+            {
+                tag: "special-horizontal",
+                dynamic: true,
+                key: -1,
+                delta: 0,
+                special: "special:music",
+                expected: []
+            },
+            {
+                tag: "dynamic-special",
+                dynamic: true,
+                key: -1,
+                delta: 120,
+                special: "special:music",
+                expected: [
+                    {
+                        action: "special",
+                        name: "special:music"
+                    }
+                ]
+            },
+            {
+                tag: "fixed-special",
+                dynamic: false,
+                key: 1,
+                delta: -120,
+                special: "special:special",
+                expected: [
+                    {
+                        action: "special",
+                        name: "special:special"
+                    }
+                ]
+            },
+            {
+                tag: "disabled",
+                dynamic: true,
+                key: -1,
+                delta: -120,
+                disabled: true,
+                expected: []
+            }
+        ];
+    }
+
+    function test_wheel(data) {
+        Config.bar = {
+            scrollActions: {
+                workspaces: !data.disabled
+            },
+            workspaces: {
+                showOnlyOccupied: data.dynamic,
+                perMonitorWorkspaces: true
+            }
+        };
+        Hypr.screenMonitor = wheelMonitor(data.key, data.special ?? "");
+        bar.handleWheel(150, Qt.point(120, data.delta));
+        compare(Hypr.calls, data.expected);
+    }
+
+    function test_wheel_uses_the_selected_monitor() {
+        Hypr.screenMonitor = wheelMonitor(1, "");
+        Hypr.focusedMonitor = wheelMonitor(3, "");
+        Hypr.activeWsId = 3;
+        Config.bar = {
+            scrollActions: {
+                workspaces: true
+            },
+            workspaces: {
+                showOnlyOccupied: false,
+                perMonitorWorkspaces: true
+            }
+        };
+        bar.handleWheel(150, Qt.point(0, 120));
+        compare(Hypr.calls, []);
+        Config.bar = {
+            scrollActions: {
+                workspaces: true
+            },
+            workspaces: {
+                showOnlyOccupied: false,
+                perMonitorWorkspaces: false
+            }
+        };
+        bar.handleWheel(150, Qt.point(0, 120));
+        compare(Hypr.calls, [
+            {
+                action: "focus",
+                selector: "r-1"
+            }
+        ]);
     }
 
     function test_event_during_query_gets_a_followup_snapshot() {
