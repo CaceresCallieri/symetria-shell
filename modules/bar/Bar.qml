@@ -315,13 +315,15 @@ Item {
     function handleWheel(x: real, angleDelta: point): void {
         // Centre section — workspaces
         if (x >= centerLoader.x && x <= centerLoader.x + centerLoader.width) {
-            if (!Config.bar.scrollActions.workspaces)
+            if (!Config.bar.scrollActions.workspaces || angleDelta.y === 0)
                 return;
 
             const mon = (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.monitorFor(screen) : Hypr.focusedMonitor);
             const specialWs = mon?.lastIpcObject.specialWorkspace.name;
             if (specialWs?.length > 0)
                 Hypr.toggleSpecialWorkspace(specialWs);
+            else if (Config.bar.workspaces.showOnlyOccupied)
+                Hypr.focusWorkspace(`e${angleDelta.y > 0 ? "-" : "+"}1`);
             else if (angleDelta.y < 0 || (Config.bar.workspaces.perMonitorWorkspaces ? Hypr.workspaceKey(mon.activeWorkspace) : Hypr.activeWsId) > 1)
                 Hypr.focusWorkspace(`r${angleDelta.y > 0 ? "-" : "+"}1`);
             return;
