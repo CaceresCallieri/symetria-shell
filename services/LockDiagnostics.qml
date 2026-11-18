@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import qs.utils
 import Quickshell
+import Quickshell.Io
 import QtQuick
 
 // Lock-screen lifecycle observability.
@@ -26,8 +27,7 @@ import QtQuick
 //
 // CONTRACT: every public method is fire-and-forget and exception-guarded. A
 // logging failure must NEVER block or break lock/unlock. All disk writes go
-// through Quickshell.execDetached (never synchronous), base64-encoded to avoid
-// shell-quoting hazards (same idiom as services/SttJob.qml).
+// run asynchronously. FileView serializes heartbeat updates and replaces the file atomically.
 Singleton {
     id: root
 
@@ -55,10 +55,17 @@ Singleton {
     // noteLocked(). Empty → "unknown".
     property string pendingReason: ""
 
-    // Per-screen ScreencopyView content state: { "<screen name>": <bool> }.
-    // `screencopyHealthy` aggregates this so the watchdog can distinguish a
-    // wedged-but-alive surface (locked && !healthy) from a clean lock.
-    property var surfaces: ({})
+    // Track instances through output assignment and removal. The screen name
+    // can arrive after construction and can be shared during output teardown.
+    property list<QtObject> lockSurfaces: []
+    readonly property var surfaces: {
+        const states = {};
+        for (const surface of root.lockSurfaces) {
+            if (surface)
+                states[surface.screenName] = (states[surface.screenName] ?? true) && surface.captureReady;
+        }
+        return states;
+    }
 
     readonly property bool screencopyHealthy: {
         const keys = Object.keys(root.surfaces);
@@ -106,15 +113,13 @@ Singleton {
     }
 
     // Mirror the real WlSessionLock.locked property. Wired from Lock.qml's
-    // onLockedChanged so this is always accurate regardless of which path
+    // onLockStateChanged so this is always accurate regardless of which path
     // triggered the transition.
     function noteLocked(value: bool): void {
         try {
             if (value === root.locked)
                 return;
             root.locked = value;
-            if (!value)
-                root.surfaces = ({}); // drop stale per-screen health on unlock
             root.log(value ? "lock_engaged" : "lock_released", {
                 reason: root.pendingReason || "unknown"
             });
@@ -148,42 +153,26 @@ Singleton {
 
     // --- Surface / ScreencopyView hooks (called from LockSurface) ----------
 
-    function markSurfaceCreated(screenName: string): void {
-        try {
-            // Clone, not mutate-in-place: reassigning the same object reference
-            // would NOT fire surfacesChanged, leaving screencopyHealthy stale.
-            const s = Object.assign({}, root.surfaces);
-            s[screenName] = false; // created but no frame yet
-            root.surfaces = s;
-            root.log("surface_created", {
-                screen: screenName
-            });
-            root._writeHeartbeat();
-        } catch (e) {
-            console.warn("[LockDiagnostics] markSurfaceCreated failed:", e);
-        }
+    function markSurfaceCreated(surface: QtObject): void {
+        root.lockSurfaces = [...root.lockSurfaces, surface];
+        root.log("surface_created", {
+            screen: surface.screenName
+        });
+        root._writeHeartbeat();
     }
 
-    function markSurfaceDestroyed(screenName: string): void {
-        try {
-            const s = Object.assign({}, root.surfaces);
-            delete s[screenName];
-            root.surfaces = s;
-            root.log("surface_destroyed", {
-                screen: screenName
-            });
-        } catch (e) {
-            console.warn("[LockDiagnostics] markSurfaceDestroyed failed:", e);
-        }
+    function markSurfaceDestroyed(surface: QtObject): void {
+        root.lockSurfaces = root.lockSurfaces.filter(item => item && item !== surface);
+        root.log("surface_destroyed", {
+            screen: surface.screenName
+        });
+        root._writeHeartbeat();
     }
 
     // hasContent flipped on a screen's background ScreencopyView. A frame that
     // never arrives (stays false while locked) is the blank-capture signature.
     function markScreencopy(screenName: string, hasContent: bool): void {
         try {
-            const s = Object.assign({}, root.surfaces);
-            s[screenName] = hasContent;
-            root.surfaces = s;
             root.log("screencopy", {
                 screen: screenName,
                 hasContent
@@ -210,11 +199,18 @@ Singleton {
                 screencopyHealthy: root.screencopyHealthy,
                 surfaces: root.surfaces
             };
-            const b64 = TextEncoding.base64(JSON.stringify(hb));
-            Quickshell.execDetached(["sh", "-c", `printf '%s' '${b64}' | base64 -d > '${root.heartbeatPath}'`]);
+            heartbeat.setText(JSON.stringify(hb));
         } catch (e) {
             console.warn("[LockDiagnostics] heartbeat failed:", e);
         }
+    }
+
+    FileView {
+        id: heartbeat
+
+        path: root.heartbeatPath
+        atomicWrites: true
+        preload: false
     }
 
     Timer {

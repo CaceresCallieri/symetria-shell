@@ -52,7 +52,7 @@ Wired into:
   and **`resume`** (via `LogindManager.resumed()`, a signal nothing previously
   used — it anchors `sinceResumeMs` on every later event).
 - `modules/lock/Lock.qml` — mirrors the real `WlSessionLock.locked` via
-  `onLockedChanged` (single source of truth) and annotates the reason
+  `onLockStateChanged` (single source of truth) and annotates the reason
   (shortcut/IPC/idle/sleep/logind).
 - `modules/lock/LockSurface.qml` — per-screen `surface_created`/`surface_destroyed`
   and the **`screencopy` hasContent** transitions (the blank-capture smoking gun).
@@ -64,7 +64,7 @@ Wired into:
 Independent of `qs` (so it survives a shell crash). Tails the heartbeat and
 flags a stuck lock when, **while locked**: the heartbeat mtime goes stale
 (qs dead / event loop stalled), the recorded pid dies, or `screencopyHealthy`
-stays false too long (wedged blank surface). On a verdict it appends a
+stays false too long (wedged blank surface). A confirmed unlocked response from Hyprland vetoes the alert. If Hyprland is unreachable, the watchdog uses the heartbeat verdict. An unreadable heartbeat does not rearm an existing alert. On a verdict it appends a
 `watchdog_stuck` event and best-effort `notify-send`s. It does **not**
 auto-recover — recovery is still the manual `recover` alias from a TTY.
 

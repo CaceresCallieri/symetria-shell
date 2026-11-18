@@ -29,10 +29,12 @@ WlSessionLockSurface {
     // re-adds outputs across suspend/resume — the prime suspect window.
     readonly property string screenName: root.screen?.name ?? "unknown"
 
+    readonly property alias captureReady: background.hasContent
+
     color: "transparent"
 
-    Component.onCompleted: LockDiagnostics.markSurfaceCreated(root.screenName)
-    Component.onDestruction: LockDiagnostics.markSurfaceDestroyed(root.screenName)
+    Component.onCompleted: LockDiagnostics.markSurfaceCreated(root)
+    Component.onDestruction: LockDiagnostics.markSurfaceDestroyed(root)
 
     Connections {
         target: root.lock

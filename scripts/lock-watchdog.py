@@ -116,14 +116,25 @@ def notify(reason: str) -> None:
 def read_heartbeat():
     """Return (data: dict, mtime: float) or (None, None) if absent/unreadable."""
     try:
-        mtime = os.path.getmtime(HEARTBEAT)
         with open(HEARTBEAT, encoding="utf-8") as fh:
-            return json.load(fh), mtime
+            return json.load(fh), os.fstat(fh.fileno()).st_mtime
     except FileNotFoundError:
         return None, None
     except Exception as exc:
         print(f"[lock-watchdog] read_heartbeat failed: {exc}", file=sys.stderr)
         return None, None
+
+
+def compositor_unlocked() -> bool:
+    """Veto an alarm only when Hyprland explicitly reports an unlocked session."""
+    try:
+        result = subprocess.run(
+            ["hyprctl", "-j", "locked"], capture_output=True, timeout=2, check=True
+        )
+        state = json.loads(result.stdout)
+        return isinstance(state, dict) and state.get("locked") is False
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
 
 
 def pid_alive(pid) -> bool:
@@ -158,8 +169,10 @@ def main() -> int:
         time.sleep(POLL_SECS)
         data, mtime = read_heartbeat()
 
-        # No heartbeat, or session not locked -> clean state, reset episode.
-        if not data or not data.get("locked"):
+        # An incomplete sample from an older writer must not rearm an alarm.
+        if not isinstance(data, dict) or not isinstance(data.get("locked"), bool):
+            continue
+        if not data["locked"]:
             if alarm_latched:
                 log_event("watchdog_cleared")
             observed_fresh = False
@@ -193,6 +206,10 @@ def main() -> int:
                 unhealthy_since = None
 
         if reason and not alarm_latched:
+            if compositor_unlocked():
+                observed_fresh = False
+                unhealthy_since = None
+                continue
             alarm_latched = True
             log_event(
                 "watchdog_stuck",

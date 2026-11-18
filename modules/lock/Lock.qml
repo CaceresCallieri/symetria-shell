@@ -37,8 +37,8 @@ Scope {
         // changes between the `unlock` signal and the animation's closing
         // PropertyAction, so cancelling on any transition cannot shorten the
         // window the failsafe exists to cover.
-        onLockedChanged: {
-            LockDiagnostics.noteLocked(locked);
+        onLockStateChanged: {
+            LockDiagnostics.noteLocked(lock.locked);
             unlockFailsafe.stop();
         }
 
