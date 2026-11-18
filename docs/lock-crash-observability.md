@@ -51,8 +51,7 @@ Wired into:
 - `modules/IdleMonitors.qml` — idle actions (`idle_action`), `about_to_sleep`,
   and **`resume`** (via `LogindManager.resumed()`, a signal nothing previously
   used — it anchors `sinceResumeMs` on every later event).
-- `modules/lock/Lock.qml` — mirrors the real `WlSessionLock.locked` via
-  `onLockStateChanged` (single source of truth) and annotates the reason
+- `modules/lock/Lock.qml` — mirrors the real `WlSessionLock.locked` after the lock-state and secure-state signals and annotates the reason
   (shortcut/IPC/idle/sleep/logind).
 - `modules/lock/LockSurface.qml` — per-screen `surface_created`/`surface_destroyed`
   and the **`screencopy` hasContent** transitions (the blank-capture smoking gun).

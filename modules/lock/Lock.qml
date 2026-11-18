@@ -37,8 +37,16 @@ Scope {
         // changes between the `unlock` signal and the animation's closing
         // PropertyAction, so cancelling on any transition cannot shorten the
         // window the failsafe exists to cover.
-        onLockStateChanged: {
+        // WORKAROUND: Quickshell 0.3.2 can omit lockStateChanged on unlock.
+        // secureStateChanged arrives before locked clears. Read after dispatch.
+        // Remove the extra signal once Quickshell emits both locked edges.
+        function syncDiagnostics(): void {
             LockDiagnostics.noteLocked(lock.locked);
+        }
+
+        onSecureStateChanged: Qt.callLater(lock.syncDiagnostics)
+        onLockStateChanged: {
+            Qt.callLater(lock.syncDiagnostics);
             unlockFailsafe.stop();
         }
 
@@ -68,7 +76,7 @@ Scope {
     // Pam.qml's two call sites are authenticated), so the timer merely completes
     // a teardown something already asked for. What it must never do is complete
     // a teardown for a lock cycle that has since ended — see the cancellation in
-    // `onLockedChanged` above. When the animation wins the race, setting
+    // `onLockStateChanged` above. When the animation wins the race, setting
     // `locked = false` twice is a no-op.
     //
     // PLACEMENT IS LOAD-BEARING — do NOT move this back inside WlSessionLock.

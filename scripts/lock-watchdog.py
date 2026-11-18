@@ -170,14 +170,17 @@ def main() -> int:
         data, mtime = read_heartbeat()
 
         # An incomplete sample from an older writer must not rearm an alarm.
-        if not isinstance(data, dict) or not isinstance(data.get("locked"), bool):
-            continue
-        if not data["locked"]:
+        if (isinstance(data, dict) and data.get("locked") is False) or (
+            alarm_latched and compositor_unlocked()
+        ):
             if alarm_latched:
                 log_event("watchdog_cleared")
             observed_fresh = False
             unhealthy_since = None
             alarm_latched = False
+            continue
+
+        if not isinstance(data, dict) or data.get("locked") is not True:
             continue
 
         # locked == true from here on.

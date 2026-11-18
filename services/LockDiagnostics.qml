@@ -26,8 +26,8 @@ import QtQuick
 // screencopy never recovers). See docs/hyprlock-crash-observability.md.
 //
 // CONTRACT: every public method is fire-and-forget and exception-guarded. A
-// logging failure must NEVER block or break lock/unlock. All disk writes go
-// run asynchronously. FileView serializes heartbeat updates and replaces the file atomically.
+// log() appends through execDetached. Heartbeat requests coalesce while an
+// asynchronous atomic FileView write is in flight.
 Singleton {
     id: root
 
@@ -113,7 +113,7 @@ Singleton {
     }
 
     // Mirror the real WlSessionLock.locked property. Wired from Lock.qml's
-    // onLockStateChanged so this is always accurate regardless of which path
+    // deferred lock and secure signal handlers regardless of which path
     // triggered the transition.
     function noteLocked(value: bool): void {
         try {
@@ -191,6 +191,14 @@ Singleton {
     // catches a wedged-but-alive surface. We rewrite the file on every state
     // change AND on a 2s timer while locked, so a frozen mtime is meaningful.
     function _writeHeartbeat(): void {
+        heartbeat.pending = true;
+        Qt.callLater(root._flushHeartbeat);
+    }
+
+    function _flushHeartbeat(): void {
+        if (!heartbeat.pending || heartbeat.writing)
+            return;
+        heartbeat.pending = false;
         try {
             const hb = {
                 ts: root._isoNow(),
@@ -199,8 +207,15 @@ Singleton {
                 screencopyHealthy: root.screencopyHealthy,
                 surfaces: root.surfaces
             };
-            heartbeat.setText(JSON.stringify(hb));
+            const payload = JSON.stringify(hb);
+            // FileView skips identical content without emitting saved().
+            if (payload === heartbeat.lastPayload)
+                return;
+            heartbeat.lastPayload = payload;
+            heartbeat.writing = true;
+            heartbeat.setText(payload);
         } catch (e) {
+            heartbeat.writing = false;
             console.warn("[LockDiagnostics] heartbeat failed:", e);
         }
     }
@@ -208,6 +223,18 @@ Singleton {
     FileView {
         id: heartbeat
 
+        property bool pending
+        property bool writing
+        property string lastPayload
+
+        function finishWrite(): void {
+            writing = false;
+            if (pending)
+                Qt.callLater(root._flushHeartbeat);
+        }
+
+        onSaved: finishWrite()
+        onSaveFailed: finishWrite()
         path: root.heartbeatPath
         atomicWrites: true
         preload: false
