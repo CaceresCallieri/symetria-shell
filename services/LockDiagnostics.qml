@@ -25,7 +25,6 @@ import QtQuick
 // process cannot self-report (true qs death, or a wedged surface whose
 // screencopy never recovers). See docs/hyprlock-crash-observability.md.
 //
-// CONTRACT: every public method is fire-and-forget and exception-guarded. A
 // log() appends through execDetached. Heartbeat requests coalesce while an
 // asynchronous atomic FileView write is in flight.
 Singleton {
